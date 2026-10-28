@@ -4,6 +4,14 @@ Working notes and known issues. Newest first.
 
 ## 2026-10-29
 
+### Context
+
+- og.trakt.tv launched publicly today. Routes are still missing and the app is changing daily.
+- Treat disappearing UI and hydration errors as possible og launch bugs first: re-test with the toolkit disabled before
+  changing our mount logic.
+- Keep selectors semantic and mounting defensive. Do not build features on routes og has not shipped yet; revisit
+  season/episode/chart pages once the routes settle.
+
 ### Verified
 
 - v0.1.1 trailer works in the real browser (Tampermonkey + user's client ID).
