@@ -104,3 +104,18 @@ export function templateVars(meta, selection = {}) {
     episode: selection.episode,
   };
 }
+
+/**
+ * Merge API seasons with the rendered ones. The API usually has the counts; if a
+ * season comes back without one, keep the number the page showed rather than
+ * turning the episode picker back into a free-text field.
+ */
+export function mergeSeasons(primary, fallback = []) {
+  const rendered = new Map(fallback.map((season) => [season.number, season]));
+  return primary
+    .map((season) => ({
+      number: season.number,
+      episodes: season.episodes ?? rendered.get(season.number)?.episodes ?? null,
+    }))
+    .sort((a, b) => a.number - b.number);
+}

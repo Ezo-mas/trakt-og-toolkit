@@ -3,7 +3,7 @@ import { addCustomLink, removeCustomLink, getCustomLinks, setClientId, getClient
 import { toast } from './ui/shell.js';
 
 const PLACEHOLDER_HELP =
-  'Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id}';
+  'Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id} {plural}';
 
 /** Ask for a "Label | URL template" pair and store it. */
 export function promptAddCustomLink() {

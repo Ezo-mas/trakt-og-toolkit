@@ -3,7 +3,8 @@
 A userscript for [og.trakt.tv](https://og.trakt.tv) that adds the useful old-Trakt bits og doesn't have — without
 reusing og's session or its internal endpoints.
 
-**Status:** v0.1 — the Watch & Links panel. Ratings, playback progress and the season chart are next.
+**Status:** v0.1.1 — the Watch & Links panel, with a fixed trailer player and reliable episode pickers. Ratings,
+playback progress and the season chart are next.
 
 ## Install
 
@@ -21,9 +22,11 @@ A panel under the summary stats, above the full-width sections. It reads the TMD
 renders, so it needs no API key and no login:
 
 - **TMDb**, **IMDb** and **JustWatch** links, plus a link back to the classic Trakt page.
-- **Season/episode pickers** for shows, built from og's season cards. The choice is remembered per show.
+- **Season/episode pickers** for shows, with real episode counts (Trakt API when a client ID is set, og's season
+  cards otherwise). The choice is remembered per show.
 - **Custom links** with `{placeholders}` that follow the picker (see below).
-- **Watch trailer** — pulls the official trailer from the Trakt API and plays it in a modal.
+- **Watch trailer** — pulls the official trailer from the Trakt API and plays it in a modal, with an “Open on
+  YouTube” fallback if the embed is blocked.
 
 ### Trailers need a Trakt client ID
 
@@ -49,22 +52,35 @@ userscript menu: **Trakt OG Toolkit: set API client ID**.
 
 ## Custom links
 
-Menu → **add custom link**, then enter `Label | URL`. Placeholders are filled from the page and the picker:
+Menu → **add custom link**, then type `Label | URL`. The label is what the chip shows; everything after the first
+`|` is the URL template. You can also press **+ Add link** in the panel.
 
-| Placeholder | Value |
-| --- | --- |
-| `{title}` | Title without the year |
-| `{year}` | Release year |
-| `{tmdb}` | TMDb id |
-| `{imdb}` | IMDb id (`tt…`) |
-| `{type}` | `tv` or `movie` |
-| `{season}`, `{episode}` | Current picker values |
-| `{id}` | Trakt id or slug from the URL |
-| `{plural}` | `shows` or `movies` |
+```text
+My service | https://example.com/watch/{tmdb}?s={season}&e={episode}
+```
 
-Example: `My service | https://example.com/watch/{tmdb}?s={season}&e={episode}`
+Placeholders are filled from the page and the season/episode picker:
 
-Links whose placeholders can't be filled are hidden. Only `http(s)` URLs are accepted.
+| Placeholder | Value | Example |
+| --- | --- | --- |
+| `{title}` | Title without the year | `Breaking Bad` |
+| `{year}` | Release year | `2008` |
+| `{tmdb}` | TMDb id | `1396` |
+| `{imdb}` | IMDb id | `tt0903747` |
+| `{type}` | `tv` for shows, `movie` for films | `tv` |
+| `{season}` | Selected season (shows only) | `1` |
+| `{episode}` | Selected episode (shows only) | `1` |
+| `{id}` | Trakt slug or id from the URL | `breaking-bad` |
+| `{plural}` | `shows` or `movies` | `shows` |
+
+Notes:
+
+- Names are lowercase and case-sensitive: `{tmdb}`, not `{TMDb}`.
+- Values are URL-encoded for you, so `{title}` becomes `Breaking%20Bad`. Don't encode them yourself.
+- A link is hidden on pages where one of its placeholders has no value — a `{season}` link won't appear on a movie.
+  This is intentional, so one template works across shows and films.
+- Only `http://` and `https://` templates are accepted.
+- Manage links from the menu: **add custom link** and **remove custom link**. They're stored per browser, not synced.
 
 ## Development
 

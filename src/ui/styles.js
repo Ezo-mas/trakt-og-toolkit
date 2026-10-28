@@ -201,36 +201,48 @@ export const CSS = String.raw`
 
 .ogt-modal__box {
   position: relative;
-  inline-size: min(100%, 1100px);
+  inline-size: min(100%, 1100px, calc((100vh - 96px) * 16 / 9));
+  inline-size: min(100%, 1100px, calc((100dvh - 96px) * 16 / 9));
   aspect-ratio: 16 / 9;
   border-radius: 8px;
   background: #000;
   box-shadow: 0 12px 48px rgb(0 0 0 / 55%);
-  overflow: hidden;
 }
 
 .ogt-modal__box iframe {
   inline-size: 100%;
   block-size: 100%;
   border: 0;
+  border-radius: 8px;
 }
 
-.ogt-modal__close {
+.ogt-modal__bar {
   position: absolute;
-  inset-block-start: -40px;
+  inset-block-end: calc(100% + 8px);
   inset-inline-end: 0;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+
+.ogt-modal__close,
+.ogt-modal__link {
   padding: 6px 10px;
   border: 0;
   border-radius: 4px;
-  background: rgb(255 255 255 / 14%);
+  background: rgb(0 0 0 / 62%);
   color: #fff;
-  font: 500 13px/1 system-ui, sans-serif;
+  font: 500 12px/1 system-ui, sans-serif;
+  text-decoration: none;
   cursor: pointer;
+  backdrop-filter: blur(4px);
 }
 
 .ogt-modal__close:hover,
-.ogt-modal__close:focus-visible {
-  background: rgb(255 255 255 / 26%);
+.ogt-modal__close:focus-visible,
+.ogt-modal__link:hover,
+.ogt-modal__link:focus-visible {
+  background: rgb(0 0 0 / 84%);
   outline: 2px solid #fff;
 }
 

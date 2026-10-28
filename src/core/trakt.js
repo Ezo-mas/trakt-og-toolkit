@@ -44,15 +44,19 @@ export async function getTrailer(kind, id) {
   return { key: youtubeId(pick.url), title: pick.title || 'Trailer' };
 }
 
-/** Seasons with their aired episode counts (season 0 is specials). */
+/** Seasons with their episode counts (season 0 is specials). `extended=full` is what adds the counts. */
 export async function getSeasons(id) {
-  const seasons = await apiGet(`/shows/${encodeURIComponent(id)}/seasons`);
+  const seasons = await apiGet(`/shows/${encodeURIComponent(id)}/seasons?extended=full`);
   if (!Array.isArray(seasons)) return [];
   return seasons
     .filter((season) => Number.isInteger(season.number))
     .map((season) => ({
       number: season.number,
-      episodes: Number.isInteger(season.aired_episodes) ? season.aired_episodes : null,
+      episodes: Number.isInteger(season.episode_count)
+        ? season.episode_count
+        : Number.isInteger(season.aired_episodes)
+          ? season.aired_episodes
+          : null,
     }))
     .sort((a, b) => a.number - b.number);
 }

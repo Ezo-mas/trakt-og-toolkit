@@ -19,7 +19,7 @@ import {
 import { getTrailer, getSeasons, isAuthError } from '../../core/trakt.js';
 import { showTrailer, toast } from '../../ui/shell.js';
 import { promptAddCustomLink } from '../../actions.js';
-import { readTitleData, readSeasons, templateVars } from './data.js';
+import { readTitleData, readSeasons, mergeSeasons, templateVars } from './data.js';
 
 const PANEL_ID = 'ogt-watch-now';
 const TITLE_ID = 'ogt-watch-now-title';
@@ -262,7 +262,7 @@ function createPanel(meta) {
     getSeasons(meta.id)
       .then((list) => {
         if (cancelled || !list.length) return;
-        seasons = list;
+        seasons = mergeSeasons(list, seasons);
         renderControls();
       })
       .catch((error) => {

@@ -47,12 +47,12 @@ export function toast(message, { duration = 3200 } = {}) {
  * A minimal modal. Returns a close function; it restores focus to whatever was
  * focused before opening and closes on Escape or a backdrop click.
  */
-export function showModal({ label, content, onClose }) {
+export function showModal({ label, content, actions = [], onClose }) {
   const previouslyFocused = document.activeElement;
   const box = el('div', { class: 'ogt-modal__box', role: 'dialog', 'aria-modal': 'true', 'aria-label': label }, content);
 
   const close = el('button', { class: 'ogt-modal__close', type: 'button', text: 'Close' });
-  box.append(close);
+  box.append(el('div', { class: 'ogt-modal__bar' }, ...actions, close));
 
   const root = el('div', { class: 'ogt-modal' }, box);
 
@@ -85,12 +85,24 @@ export function showModal({ label, content, onClose }) {
 export function showTrailer({ key, title }) {
   if (!key) return null;
 
+  // og sets <meta name="referrer" content="same-origin">, which strips the Referer
+  // on the cross-origin iframe request and makes YouTube refuse to play (error 153).
+  // referrerpolicy on the iframe overrides the document policy for that request.
   const frame = el('iframe', {
-    src: `https://www.youtube-nocookie.com/embed/${key}?autoplay=1&rel=0`,
+    src: `https://www.youtube.com/embed/${key}?autoplay=1&rel=0`,
     title: title || 'Trailer',
-    allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture',
+    referrerpolicy: 'strict-origin-when-cross-origin',
+    allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen',
     allowfullscreen: true,
   });
 
-  return showModal({ label: title || 'Trailer', content: frame });
+  const openOnYouTube = el('a', {
+    class: 'ogt-modal__link',
+    href: `https://www.youtube.com/watch?v=${key}`,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+    text: 'Open on YouTube',
+  });
+
+  return showModal({ label: title || 'Trailer', content: frame, actions: [openOnYouTube] });
 }

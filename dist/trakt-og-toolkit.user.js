@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Trakt OG Toolkit
 // @namespace    https://github.com/trakt-og-toolkit
-// @version      0.1.0
+// @version      0.1.1
 // @description  Watch links, trailers and (soon) ratings helpers for og.trakt.tv.
 // @author       Trakt OG Toolkit contributors
 // @license      MIT
@@ -23,7 +23,7 @@
 (() => {
   // src/meta.js
   var NAME = "Trakt OG Toolkit";
-  var VERSION = "0.1.0";
+  var VERSION = "0.1.1";
 
   // src/ui/styles.js
   var CSS = String.raw`
@@ -228,36 +228,48 @@
 
 .ogt-modal__box {
   position: relative;
-  inline-size: min(100%, 1100px);
+  inline-size: min(100%, 1100px, calc((100vh - 96px) * 16 / 9));
+  inline-size: min(100%, 1100px, calc((100dvh - 96px) * 16 / 9));
   aspect-ratio: 16 / 9;
   border-radius: 8px;
   background: #000;
   box-shadow: 0 12px 48px rgb(0 0 0 / 55%);
-  overflow: hidden;
 }
 
 .ogt-modal__box iframe {
   inline-size: 100%;
   block-size: 100%;
   border: 0;
+  border-radius: 8px;
 }
 
-.ogt-modal__close {
+.ogt-modal__bar {
   position: absolute;
-  inset-block-start: -40px;
+  inset-block-end: calc(100% + 8px);
   inset-inline-end: 0;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+
+.ogt-modal__close,
+.ogt-modal__link {
   padding: 6px 10px;
   border: 0;
   border-radius: 4px;
-  background: rgb(255 255 255 / 14%);
+  background: rgb(0 0 0 / 62%);
   color: #fff;
-  font: 500 13px/1 system-ui, sans-serif;
+  font: 500 12px/1 system-ui, sans-serif;
+  text-decoration: none;
   cursor: pointer;
+  backdrop-filter: blur(4px);
 }
 
 .ogt-modal__close:hover,
-.ogt-modal__close:focus-visible {
-  background: rgb(255 255 255 / 26%);
+.ogt-modal__close:focus-visible,
+.ogt-modal__link:hover,
+.ogt-modal__link:focus-visible {
+  background: rgb(0 0 0 / 84%);
   outline: 2px solid #fff;
 }
 
@@ -342,11 +354,11 @@
       toastRoot = null;
     }, duration);
   }
-  function showModal({ label, content, onClose }) {
+  function showModal({ label, content, actions = [], onClose }) {
     const previouslyFocused = document.activeElement;
     const box = el("div", { class: "ogt-modal__box", role: "dialog", "aria-modal": "true", "aria-label": label }, content);
     const close = el("button", { class: "ogt-modal__close", type: "button", text: "Close" });
-    box.append(close);
+    box.append(el("div", { class: "ogt-modal__bar" }, ...actions, close));
     const root = el("div", { class: "ogt-modal" }, box);
     const onKey = (event) => {
       if (event.key === "Escape") {
@@ -372,12 +384,20 @@
   function showTrailer({ key, title }) {
     if (!key) return null;
     const frame = el("iframe", {
-      src: `https://www.youtube-nocookie.com/embed/${key}?autoplay=1&rel=0`,
+      src: `https://www.youtube.com/embed/${key}?autoplay=1&rel=0`,
       title: title || "Trailer",
-      allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture",
+      referrerpolicy: "strict-origin-when-cross-origin",
+      allow: "autoplay; encrypted-media; picture-in-picture; fullscreen",
       allowfullscreen: true
     });
-    return showModal({ label: title || "Trailer", content: frame });
+    const openOnYouTube = el("a", {
+      class: "ogt-modal__link",
+      href: `https://www.youtube.com/watch?v=${key}`,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      text: "Open on YouTube"
+    });
+    return showModal({ label: title || "Trailer", content: frame, actions: [openOnYouTube] });
   }
 
   // src/core/router.js
@@ -843,11 +863,11 @@
     return { key: youtubeId(pick.url), title: pick.title || "Trailer" };
   }
   async function getSeasons(id) {
-    const seasons = await apiGet(`/shows/${encodeURIComponent(id)}/seasons`);
+    const seasons = await apiGet(`/shows/${encodeURIComponent(id)}/seasons?extended=full`);
     if (!Array.isArray(seasons)) return [];
     return seasons.filter((season) => Number.isInteger(season.number)).map((season) => ({
       number: season.number,
-      episodes: Number.isInteger(season.aired_episodes) ? season.aired_episodes : null
+      episodes: Number.isInteger(season.episode_count) ? season.episode_count : Number.isInteger(season.aired_episodes) ? season.aired_episodes : null
     })).sort((a, b) => a.number - b.number);
   }
   function isAuthError(error) {
@@ -860,7 +880,7 @@
   }
 
   // src/actions.js
-  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id}";
+  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id} {plural}";
   function promptAddCustomLink() {
     const answer = window.prompt(
       `Add a custom link as "Label | URL".
@@ -988,6 +1008,13 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       season: selection.season,
       episode: selection.episode
     };
+  }
+  function mergeSeasons(primary, fallback = []) {
+    const rendered = new Map(fallback.map((season) => [season.number, season]));
+    return primary.map((season) => ({
+      number: season.number,
+      episodes: season.episodes ?? rendered.get(season.number)?.episodes ?? null
+    })).sort((a, b) => a.number - b.number);
   }
 
   // src/features/watch-now/index.js
@@ -1193,7 +1220,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       }
       getSeasons(meta.id).then((list) => {
         if (cancelled || !list.length) return;
-        seasons = list;
+        seasons = mergeSeasons(list, seasons);
         renderControls();
       }).catch((error) => {
         debugError("season lookup failed", error);
