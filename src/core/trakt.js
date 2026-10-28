@@ -60,3 +60,10 @@ export async function getSeasons(id) {
 export function isAuthError(error) {
   return error instanceof MissingClientIdError || (error instanceof HttpError && error.status === 401);
 }
+
+/** Cheap round-trip used by the menu's connection test. */
+export async function ping() {
+  const started = Date.now();
+  await apiGet('/shows/breaking-bad', { ttl: 0 });
+  return Date.now() - started;
+}

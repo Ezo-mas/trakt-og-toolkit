@@ -853,6 +853,11 @@
   function isAuthError(error) {
     return error instanceof MissingClientIdError || error instanceof HttpError && error.status === 401;
   }
+  async function ping() {
+    const started = Date.now();
+    await apiGet("/shows/breaking-bad", { ttl: 0 });
+    return Date.now() - started;
+  }
 
   // src/actions.js
   var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id}";
@@ -1253,6 +1258,22 @@ ${ATTRIBUTION}
 MIT licensed.`);
     });
     GM_registerMenuCommand("Trakt OG Toolkit: set API client ID", promptClientId);
+    GM_registerMenuCommand("Trakt OG Toolkit: test API connection", async () => {
+      if (!getClientId()) {
+        toast('No client ID yet — use "set API client ID" first.');
+        return;
+      }
+      toast("Testing the Trakt API…", { duration: 1500 });
+      try {
+        const ms = await ping();
+        toast(`Trakt API OK — ${ms} ms.`);
+        console.info(`[OGT] Trakt API OK in ${ms} ms`);
+      } catch (error) {
+        const reason = error?.status === 401 || error?.status === 403 ? "the client ID was rejected" : error?.status ? `HTTP ${error.status}` : error?.message || "network error";
+        toast(`Trakt API failed — ${reason}.`);
+        console.warn("[OGT] Trakt API failed", error);
+      }
+    });
     GM_registerMenuCommand("Trakt OG Toolkit: add custom link", promptAddCustomLink);
     GM_registerMenuCommand("Trakt OG Toolkit: remove custom link", promptRemoveCustomLink);
     GM_registerMenuCommand("Trakt OG Toolkit: toggle debug logging", () => {
