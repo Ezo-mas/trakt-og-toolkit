@@ -60,7 +60,7 @@ function createPanel(meta) {
   const timers = [];
   let selection = getSelection(meta.kind, meta.id) || { season: null, episode: null };
 
-  const linksRow = el('div', { class: 'ogt-row', role: 'list' });
+  const linksRow = el('div', { class: 'ogt-row' });
   const controlsRow = el('div', { class: 'ogt-row', hidden: true });
 
   const node = el(
@@ -283,7 +283,6 @@ function createPanel(meta) {
 
   function onRefresh() {
     renderLinks();
-    if (controlsRow.hidden) loadSeasons();
   }
 
   renderLinks();

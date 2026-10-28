@@ -164,6 +164,12 @@
   outline-offset: 1px;
 }
 
+/* The episode fallback is a number input, not a select. */
+.ogt-panel input.ogt-select {
+  padding-inline-end: 9px;
+  background-image: none;
+}
+
 .ogt-hint {
   margin: 0;
   color: var(--ogt-muted);
@@ -1009,7 +1015,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     let seasons = [];
     const timers = [];
     let selection = getSelection(meta.kind, meta.id) || { season: null, episode: null };
-    const linksRow = el("div", { class: "ogt-row", role: "list" });
+    const linksRow = el("div", { class: "ogt-row" });
     const controlsRow = el("div", { class: "ogt-row", hidden: true });
     const node = el(
       "section",
@@ -1202,7 +1208,6 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     }
     function onRefresh() {
       renderLinks();
-      if (controlsRow.hidden) loadSeasons();
     }
     renderLinks();
     renderControls();

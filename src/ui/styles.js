@@ -138,6 +138,12 @@ export const CSS = String.raw`
   outline-offset: 1px;
 }
 
+/* The episode fallback is a number input, not a select. */
+.ogt-panel input.ogt-select {
+  padding-inline-end: 9px;
+  background-image: none;
+}
+
 .ogt-hint {
   margin: 0;
   color: var(--ogt-muted);
