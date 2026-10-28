@@ -22,6 +22,7 @@
 
 (() => {
   // src/meta.js
+  var NAME = "Trakt OG Toolkit";
   var VERSION = "0.1.0";
 
   // src/ui/styles.js
@@ -1180,10 +1181,21 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     function loadSeasons() {
       if (meta.kind !== "show") return;
       seasons = readSeasons(document);
-      if (seasons.length) {
-        renderControls();
+      if (seasons.length) renderControls();
+      if (!getClientId()) {
+        if (!seasons.length) retryFromDom();
         return;
       }
+      getSeasons(meta.id).then((list) => {
+        if (cancelled || !list.length) return;
+        seasons = list;
+        renderControls();
+      }).catch((error) => {
+        debugError("season lookup failed", error);
+        if (!cancelled && !seasons.length) retryFromDom();
+      });
+    }
+    function retryFromDom() {
       let attempt = 0;
       const retry = () => {
         if (cancelled) return;
@@ -1194,17 +1206,8 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
         }
         attempt += 1;
         if (attempt < 4) timers.push(setTimeout(retry, 400 * attempt));
-        else loadSeasonsFromApi();
       };
       timers.push(setTimeout(retry, 400));
-    }
-    function loadSeasonsFromApi() {
-      if (cancelled || !getClientId() || seasons.length) return;
-      getSeasons(meta.id).then((list) => {
-        if (cancelled || seasons.length || !list.length) return;
-        seasons = list;
-        renderControls();
-      }).catch((error) => debugError("season lookup failed", error));
     }
     function onRefresh() {
       renderLinks();
@@ -1240,8 +1243,15 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
   };
 
   // src/menu.js
+  var ATTRIBUTION = `${NAME} uses Trakt but is not endorsed or certified by Trakt.`;
   function registerMenu(getRouteKey = () => location.pathname) {
     if (typeof GM_registerMenuCommand !== "function") return;
+    GM_registerMenuCommand("Trakt OG Toolkit: about", () => {
+      toast(`${NAME} v${VERSION}`, { duration: 5e3 });
+      console.info(`[OGT] ${NAME} v${VERSION}
+${ATTRIBUTION}
+MIT licensed.`);
+    });
     GM_registerMenuCommand("Trakt OG Toolkit: set API client ID", promptClientId);
     GM_registerMenuCommand("Trakt OG Toolkit: add custom link", promptAddCustomLink);
     GM_registerMenuCommand("Trakt OG Toolkit: remove custom link", promptRemoveCustomLink);

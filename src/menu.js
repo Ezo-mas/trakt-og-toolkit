@@ -3,12 +3,18 @@ import { promptAddCustomLink, promptRemoveCustomLink, promptClientId } from './a
 import { applyDebugSetting, isDebug, setDebug, getClientId, getCustomLinks } from './settings.js';
 import { cacheSize, clearCache } from './core/http.js';
 import { toast } from './ui/shell.js';
-import { VERSION } from './meta.js';
+import { NAME, VERSION } from './meta.js';
+
+const ATTRIBUTION = `${NAME} uses Trakt but is not endorsed or certified by Trakt.`;
 
 /** @param {() => string} getRouteKey */
 export function registerMenu(getRouteKey = () => location.pathname) {
   if (typeof GM_registerMenuCommand !== 'function') return;
 
+  GM_registerMenuCommand('Trakt OG Toolkit: about', () => {
+    toast(`${NAME} v${VERSION}`, { duration: 5000 });
+    console.info(`[OGT] ${NAME} v${VERSION}\n${ATTRIBUTION}\nMIT licensed.`);
+  });
   GM_registerMenuCommand('Trakt OG Toolkit: set API client ID', promptClientId);
   GM_registerMenuCommand('Trakt OG Toolkit: add custom link', promptAddCustomLink);
   GM_registerMenuCommand('Trakt OG Toolkit: remove custom link', promptRemoveCustomLink);

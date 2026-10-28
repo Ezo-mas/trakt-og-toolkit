@@ -27,17 +27,25 @@ renders, so it needs no API key and no login:
 
 ### Trailers need a Trakt client ID
 
-Trailers use a public Trakt API endpoint, which needs a `trakt-api-key`. Any user can create one for free:
+Trailers use a public Trakt API endpoint, which needs a `trakt-api-key`. Any user can create one for free at
+<https://developer.trakt.tv/apps/new>:
 
-1. Open <https://app.trakt.tv/settings/apps> → **New Application**.
-2. Name it anything. The redirect URI can be anything (this script never redirects; it only calls public endpoints).
-3. Copy the **Client ID**.
+| Field | Value |
+| --- | --- |
+| App name | `OG Toolkit` (or `Trakt OG Toolkit`) |
+| Description | `Userscript for og.trakt.tv: watch links, trailers and rating helpers. Public API endpoints only.` |
+| App type | **Development** — currently the only option |
+| Redirect URIs | `http://localhost:5173/callback` — the form wants one; this script never uses it |
+| Allowed origins | leave empty (GM_xmlhttpRequest bypasses CORS); `http://localhost:5173` only if you use the fetch fallback |
 
-The first time you press **Watch trailer**, the panel asks for it. You can change it later from the userscript menu:
-**Trakt OG Toolkit: set API client ID**.
+Then copy the **Client ID**. Never copy the Client Secret into the script — nothing here needs it.
 
-A client ID is public — it is not a secret. If you fork this and want the script to work without the prompt, put it in
-`DEFAULT_CLIENT_ID` in `src/config.js`.
+A Development app only lets you (and people you add) sign in with OAuth. That is fine for this script: it calls
+public endpoints with the client ID and does not sign anyone in yet. For a published script, leave
+`DEFAULT_CLIENT_ID` empty and let each user bring their own client ID, as the prompt already does.
+
+The first time you press **Watch trailer**, the panel asks for the client ID. You can change it later from the
+userscript menu: **Trakt OG Toolkit: set API client ID**.
 
 ## Custom links
 
@@ -114,6 +122,15 @@ src/
 3. Inline ratings distribution from `/shows/:id/ratings`
 4. Playback progress manager (`/sync/playback`)
 5. Season ratings chart
+
+## Trakt API compliance
+
+- Only documented, public Trakt endpoints — no HTML fetching, no internal og endpoints, no session reuse.
+- Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with `Retry-After` on 429.
+- Nothing is uploaded, resold or redistributed; the script has no backend.
+- Season data prefers the API when a client ID is present; rendered cards are the fallback.
+
+Trakt OG Toolkit uses Trakt but is not endorsed or certified by Trakt.
 
 ## Licence and credits
 

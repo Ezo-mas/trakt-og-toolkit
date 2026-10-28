@@ -245,16 +245,34 @@ function createPanel(meta) {
     }
   }
 
-  /** Season cards can be lazy-rendered, so re-read the DOM for a moment. */
+  /** Trakt's API policy asks apps to use documented endpoints rather than read the site. When a client
+   *  ID is configured, the API is the source of truth; the rendered season cards are only the instant
+   *  first paint (and the fallback when there is no key). */
   function loadSeasons() {
     if (meta.kind !== 'show') return;
 
     seasons = readSeasons(document);
-    if (seasons.length) {
-      renderControls();
+    if (seasons.length) renderControls();
+
+    if (!getClientId()) {
+      if (!seasons.length) retryFromDom();
       return;
     }
 
+    getSeasons(meta.id)
+      .then((list) => {
+        if (cancelled || !list.length) return;
+        seasons = list;
+        renderControls();
+      })
+      .catch((error) => {
+        debugError('season lookup failed', error);
+        if (!cancelled && !seasons.length) retryFromDom();
+      });
+  }
+
+  /** Season cards can be lazy-rendered, so re-read the DOM for a moment. */
+  function retryFromDom() {
     let attempt = 0;
     const retry = () => {
       if (cancelled) return;
@@ -265,20 +283,8 @@ function createPanel(meta) {
       }
       attempt += 1;
       if (attempt < 4) timers.push(setTimeout(retry, 400 * attempt));
-      else loadSeasonsFromApi();
     };
     timers.push(setTimeout(retry, 400));
-  }
-
-  function loadSeasonsFromApi() {
-    if (cancelled || !getClientId() || seasons.length) return;
-    getSeasons(meta.id)
-      .then((list) => {
-        if (cancelled || seasons.length || !list.length) return;
-        seasons = list;
-        renderControls();
-      })
-      .catch((error) => debugError('season lookup failed', error));
   }
 
   function onRefresh() {
