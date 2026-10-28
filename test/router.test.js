@@ -1,0 +1,55 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { parseRoute } from '../src/core/router.js';
+
+test('title pages', () => {
+  assert.deepEqual(
+    { name: 'title', kind: 'show', id: 'breaking-bad' },
+    pick(parseRoute('/shows/breaking-bad'), ['name', 'kind', 'id']),
+  );
+  assert.deepEqual(
+    { name: 'title', kind: 'movie', id: '13' },
+    pick(parseRoute('/movies/13'), ['name', 'kind', 'id']),
+  );
+});
+
+test('trailing slash and query are ignored by the key', () => {
+  assert.equal(parseRoute('/shows/1388/').key, '/shows/1388');
+});
+
+test('season and episode pages', () => {
+  const season = parseRoute('/shows/breaking-bad/seasons/5');
+  assert.equal(season.name, 'season');
+  assert.equal(season.season, 5);
+  assert.equal(season.episode, null);
+
+  const episode = parseRoute('/shows/breaking-bad/seasons/5/episodes/14');
+  assert.equal(episode.name, 'episode');
+  assert.equal(episode.season, 5);
+  assert.equal(episode.episode, 14);
+});
+
+test('sub-pages keep the title id', () => {
+  const stats = parseRoute('/shows/breaking-bad/stats');
+  assert.equal(stats.name, 'stats');
+  assert.equal(stats.kind, 'show');
+  assert.equal(stats.id, 'breaking-bad');
+});
+
+test('chart pages are not titles', () => {
+  for (const path of ['/shows/trending', '/movies/boxoffice', '/shows/watched/weekly', '/movies/popular']) {
+    const route = parseRoute(path);
+    assert.equal(route.name, 'chart', path);
+    assert.equal(route.id, null, path);
+  }
+});
+
+test('non-title routes', () => {
+  for (const path of ['/', '/dashboard', '/users/me', '/search']) {
+    assert.equal(parseRoute(path).name, 'other', path);
+  }
+});
+
+function pick(object, keys) {
+  return Object.fromEntries(keys.map((key) => [key, object[key]]));
+}

@@ -1,0 +1,17 @@
+{
+  "name": "trakt-og-toolkit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Userscript that adds the useful old-Trakt features to og.trakt.tv.",
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10",
+    "happy-dom": "^21.0.4"
+  }
+}
