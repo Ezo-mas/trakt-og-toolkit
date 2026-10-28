@@ -1,7 +1,7 @@
 # Trakt OG Toolkit
 
-A userscript for [og.trakt.tv](https://og.trakt.tv) that adds the useful old-Trakt bits og doesn't have — without
-reusing og's session or its internal endpoints.
+An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds the useful old-Trakt bits og doesn't have
+— without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
 **Status:** v0.1.1 — the Watch & Links panel, with a fixed trailer player and reliable episode pickers. Ratings,
 playback progress and the season chart are next.
@@ -97,6 +97,9 @@ npm test          # unit + happy-dom integration tests
 curl -sSL https://og.trakt.tv/shows/breaking-bad -o /tmp/show.html
 node scripts/live-check.mjs /tmp/show.html https://og.trakt.tv/shows/breaking-bad
 ```
+
+For a fast manual loop, see `NOTES.md`: Violentmonkey's **Track external edits** reloads the script and page on every
+`npm run watch` rebuild.
 
 ### Layout
 
