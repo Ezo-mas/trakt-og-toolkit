@@ -11,12 +11,13 @@ import { createRouter, parseRoute } from './core/router.js';
 import { createFeatureHost } from './features/host.js';
 import { waitForPageReady, watchModuleResources } from './core/hydration.js';
 import { customLinks } from './features/custom-links/index.js';
+import { seasonChart } from './features/season-chart/index.js';
 import { registerMenu } from './menu.js';
 import { applyDebugSetting } from './settings.js';
 import { info, warn } from './core/log.js';
 import { cacheSize } from './core/http.js';
 
-const FEATURES = [customLinks];
+const FEATURES = [customLinks, seasonChart];
 
 function isSvelteKit() {
   return Boolean(

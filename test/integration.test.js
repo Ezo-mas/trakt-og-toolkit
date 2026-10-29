@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
-import { SHOW_HTML, MOVIE_HTML } from './fixtures.js';
+import { SHOW_HTML, MOVIE_HTML, SEASON_HTML } from './fixtures.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -142,4 +142,30 @@ test('leaving a title page removes the panel', async (t) => {
   await wait(300);
 
   assert.equal(panel(document), null);
+});
+
+test('season pages mount the episode chart before the episode list and remove it on navigation', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
+    html: SEASON_HTML,
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  const chart = document.getElementById('ogt-season-chart');
+  assert.ok(chart, 'season chart is mounted');
+  assert.equal(document.querySelector('section.episodes').previousElementSibling, chart);
+  assert.equal(chart.querySelectorAll('svg a').length, 4, 'one chart link per rated episode');
+
+  window.history.pushState({}, '', '/dashboard');
+  await wait(300);
+  assert.equal(document.getElementById('ogt-season-chart'), null, 'chart is removed on navigation');
+});
+
+test('show title pages do not mount the season chart', async (t) => {
+  const { window, document } = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
+  t.after(() => window.close());
+  await wait(50);
+
+  assert.equal(document.getElementById('ogt-season-chart'), null);
 });

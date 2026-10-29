@@ -1230,6 +1230,319 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     }
   };
 
+  // src/features/season-chart/data.js
+  var CHART_WIDTH = 720;
+  var CHART_HEIGHT = 180;
+  var PLOT = { left: 38, right: 12, top: 12, bottom: 30 };
+  function episodeNumber(value) {
+    const match = value.match(/x\s*(\d+)\s*$/i);
+    return match ? Number(match[1]) : null;
+  }
+  function percent(value) {
+    const match = value.match(/(\d+(?:\.\d+)?)\s*%/);
+    return match ? Number(match[1]) : null;
+  }
+  function sortEpisodes(episodes) {
+    return episodes.sort((a, b) => a.number - b.number);
+  }
+  function readSeasonEpisodes(doc) {
+    const episodes = [];
+    for (const row of doc.querySelectorAll("section.episodes article.row")) {
+      const heading = row.querySelector(".titles h3");
+      const number = episodeNumber(text(heading?.querySelector(".number")));
+      const links = heading?.querySelectorAll("a") || [];
+      const titleLink = links[links.length - 1];
+      if (number == null || !titleLink) continue;
+      episodes.push({
+        number,
+        title: text(titleLink),
+        rating: percent(text(row.querySelector(".rating-trigger .value"))),
+        votes: null,
+        href: titleLink.getAttribute("href")
+      });
+    }
+    return sortEpisodes(episodes);
+  }
+  function mapApiEpisodes(episodes, { showId, season, fallback = [] }) {
+    const fallbackByNumber = new Map(fallback.map((item) => [item.number, item]));
+    const mapped = [];
+    for (const episode of Array.isArray(episodes) ? episodes : []) {
+      const number = Number(episode.number);
+      if (!Number.isInteger(number)) continue;
+      const rendered = fallbackByNumber.get(number);
+      const rating = episode.rating == null ? null : Number(episode.rating) * 10;
+      const href = rendered?.href || `/shows/${encodeURIComponent(showId)}/seasons/${encodeURIComponent(season)}/episodes/${number}`;
+      mapped.push({
+        number,
+        title: episode.title || rendered?.title || "",
+        rating: Number.isFinite(rating) ? rating : null,
+        votes: episode.votes == null ? null : Number(episode.votes),
+        href
+      });
+    }
+    return sortEpisodes(mapped);
+  }
+  function ratedEpisodes(episodes) {
+    return episodes.filter((episode) => Number.isFinite(episode.rating) && episode.rating > 0).sort((a, b) => a.number - b.number);
+  }
+  function averageRating(episodes) {
+    const included = ratedEpisodes(episodes).filter((episode) => episode.votes == null || episode.votes >= 10);
+    if (!included.length) return null;
+    if (included.every((episode) => Number.isFinite(episode.votes))) {
+      const votes = included.reduce((sum, episode) => sum + episode.votes, 0);
+      if (votes) {
+        return included.reduce((sum, episode) => sum + episode.rating * episode.votes, 0) / votes;
+      }
+    }
+    return included.reduce((sum, episode) => sum + episode.rating, 0) / included.length;
+  }
+  function axisBottom(episodes) {
+    const rated = ratedEpisodes(episodes);
+    if (!rated.length) return 50;
+    const lowest = Math.min(...rated.map((episode) => episode.rating));
+    return Math.min(50, Math.floor(lowest / 10) * 10);
+  }
+  function chartGeometry(episodes, allEpisodes = episodes, average = averageRating(episodes)) {
+    const rated = ratedEpisodes(episodes);
+    const allNumbers = allEpisodes.map((episode) => episode.number).filter(Number.isFinite);
+    const first = allNumbers.length ? Math.min(...allNumbers) : 1;
+    const last = allNumbers.length ? Math.max(...allNumbers) : first;
+    const bottom = axisBottom(rated);
+    const plotWidth = CHART_WIDTH - PLOT.left - PLOT.right;
+    const plotHeight = CHART_HEIGHT - PLOT.top - PLOT.bottom;
+    const x = (number) => PLOT.left + (last === first ? plotWidth / 2 : (number - first) / (last - first) * plotWidth);
+    const y = (rating) => PLOT.top + (100 - rating) / (100 - bottom) * plotHeight;
+    return {
+      width: CHART_WIDTH,
+      height: CHART_HEIGHT,
+      plot: PLOT,
+      axisBottom: bottom,
+      ticks: Array.from({ length: (100 - bottom) / 10 + 1 }, (_, i) => bottom + i * 10),
+      points: rated.map((episode) => ({ episode, x: x(episode.number), y: y(episode.rating) })),
+      averageY: average == null ? null : y(average)
+    };
+  }
+
+  // src/features/season-chart/api.js
+  async function getSeasonEpisodes(id, season) {
+    const episodes = await apiGet(
+      `/shows/${encodeURIComponent(id)}/seasons/${encodeURIComponent(season)}?extended=full`
+    );
+    return Array.isArray(episodes) ? episodes : [];
+  }
+
+  // src/features/season-chart/styles.js
+  var CSS2 = String.raw`
+.ogt-season-chart__summary {
+  margin: 0 0 8px;
+  color: var(--ogt-fg);
+}
+
+.ogt-season-chart__svg {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 720px;
+  block-size: auto;
+  overflow: visible;
+}
+
+.ogt-season-chart__gridline {
+  stroke: light-dark(#dedede, #484848);
+  stroke-width: 1;
+}
+
+.ogt-season-chart__axis,
+.ogt-season-chart__episode-number {
+  fill: light-dark(#767676, #a7a7a7);
+  font: 11px system-ui, sans-serif;
+}
+
+.ogt-season-chart__episode-number {
+  text-anchor: middle;
+}
+
+.ogt-season-chart__average {
+  stroke: light-dark(#767676, #a7a7a7);
+  stroke-dasharray: 5 4;
+  stroke-width: 1.5;
+}
+
+.ogt-season-chart__line {
+  fill: none;
+  stroke: var(--brand-primary, #ed1c24);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-width: 2.5;
+}
+
+.ogt-season-chart__point {
+  fill: var(--brand-primary, #ed1c24);
+  stroke: var(--brand-primary, #ed1c24);
+  stroke-width: 2;
+}
+
+.ogt-season-chart__point--low-votes {
+  fill: var(--ogt-surface);
+}
+
+.ogt-season-chart a:focus-visible {
+  outline: none;
+}
+
+.ogt-season-chart a:focus-visible .ogt-season-chart__point {
+  stroke: light-dark(#111111, #ffffff);
+  stroke-width: 4;
+}
+`;
+
+  // src/features/season-chart/index.js
+  var PANEL_ID2 = "ogt-season-chart";
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function svg(tag, attributes = {}, content = "") {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
+    if (content) node.textContent = content;
+    return node;
+  }
+  function formatPercent(value) {
+    return `${Number(value.toFixed(1))}%`;
+  }
+  function episodeName(episode) {
+    return `Episode ${episode.number}: ${episode.title}, ${formatPercent(episode.rating)}`;
+  }
+  function voteLabel(votes) {
+    return votes == null ? "votes unknown" : `${new Intl.NumberFormat("en-US").format(votes)} votes`;
+  }
+  function summary(episodes, average) {
+    const rated = ratedEpisodes(episodes);
+    if (!rated.length) return `Season average: ${average == null ? "—" : formatPercent(average)}`;
+    const best = rated.reduce((current, episode) => episode.rating > current.rating ? episode : current);
+    const worst = rated.reduce((current, episode) => episode.rating < current.rating ? episode : current);
+    const averageText = average == null ? "—" : formatPercent(average);
+    return `Season average: ${averageText} · Best: ${episodeName(best)} · Worst: ${episodeName(worst)}`;
+  }
+  function drawChart(chart, episodes, average) {
+    const geometry = chartGeometry(episodes, episodes, average);
+    const { width, height, plot, ticks, points, averageY } = geometry;
+    chart.replaceChildren();
+    chart.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    for (const tick of ticks) {
+      const y = plot.top + (100 - tick) / (100 - geometry.axisBottom) * (height - plot.top - plot.bottom);
+      chart.append(
+        svg("line", {
+          class: "ogt-season-chart__gridline",
+          x1: plot.left,
+          x2: width - plot.right,
+          y1: y,
+          y2: y
+        }),
+        svg("text", { class: "ogt-season-chart__axis", x: plot.left - 7, y: y + 4, "text-anchor": "end" }, `${tick}%`)
+      );
+    }
+    if (averageY != null) {
+      chart.append(
+        svg("line", {
+          class: "ogt-season-chart__average",
+          x1: plot.left,
+          x2: width - plot.right,
+          y1: averageY,
+          y2: averageY
+        })
+      );
+    }
+    if (points.length > 1) {
+      chart.append(
+        svg("polyline", {
+          class: "ogt-season-chart__line",
+          points: points.map(({ x, y }) => `${x},${y}`).join(" ")
+        })
+      );
+    }
+    for (const { episode, x, y } of points) {
+      const label = `${episodeName(episode)}, ${voteLabel(episode.votes)}`;
+      const link = svg("a", { href: episode.href || "#", tabindex: "0", "aria-label": label });
+      const dot = svg("circle", {
+        class: `ogt-season-chart__point${episode.votes != null && episode.votes < 10 ? " ogt-season-chart__point--low-votes" : ""}`,
+        cx: x,
+        cy: y,
+        r: 5
+      });
+      link.append(svg("title", {}, label), dot);
+      chart.append(link, svg("text", { class: "ogt-season-chart__episode-number", x, y: height - 7 }, String(episode.number)));
+    }
+  }
+  function createPanel2(episodes) {
+    let cancelled = false;
+    let currentEpisodes = episodes;
+    const headingId = `${PANEL_ID2}-title`;
+    const summaryLine = el("p", { class: "ogt-season-chart__summary" });
+    const chart = svg("svg", {
+      class: "ogt-season-chart__svg",
+      role: "group",
+      "aria-label": "Episode ratings by episode number"
+    });
+    const node = el(
+      "section",
+      { class: "ogt-panel ogt-season-chart", id: PANEL_ID2, "aria-labelledby": headingId },
+      el("div", { class: "ogt-head" }, el("h2", { class: "ogt-title", id: headingId, text: "Episode ratings" })),
+      summaryLine,
+      chart
+    );
+    function render(nextEpisodes) {
+      if (cancelled) return;
+      currentEpisodes = nextEpisodes;
+      const rated = ratedEpisodes(currentEpisodes);
+      const average = averageRating(currentEpisodes);
+      node.hidden = rated.length < 2;
+      summaryLine.textContent = summary(currentEpisodes, average);
+      drawChart(chart, currentEpisodes, average);
+    }
+    render(currentEpisodes);
+    return {
+      node,
+      render,
+      destroy() {
+        cancelled = true;
+        node.remove();
+      }
+    };
+  }
+  var seasonChart = {
+    id: "season-chart",
+    css: CSS2,
+    match(route) {
+      return route.kind === "show" && route.name === "season";
+    },
+    mount(route) {
+      if (document.getElementById(PANEL_ID2)) return null;
+      const episodesSection = document.querySelector("section.episodes");
+      if (!episodesSection) return null;
+      const fallback = readSeasonEpisodes(document);
+      const panel = createPanel2(fallback);
+      episodesSection.parentElement.insertBefore(panel.node, episodesSection);
+      if (getClientId()) {
+        getSeasonEpisodes(route.id, route.season).then((episodes) => {
+          if (episodes.length) {
+            panel.render(mapApiEpisodes(episodes, {
+              showId: route.id,
+              season: route.season,
+              fallback
+            }));
+          }
+        }).catch((error) => {
+          if (!panel.node.isConnected) return;
+          debugError("season episode lookup failed", error);
+        });
+      }
+      return {
+        node: panel.node,
+        destroy() {
+          panel.destroy();
+        }
+      };
+    }
+  };
+
   // src/menu.js
   var ATTRIBUTION = `${NAME} uses Trakt but is not endorsed or certified by Trakt.`;
   function registerMenu(getRouteKey = () => location.pathname) {
@@ -1265,9 +1578,9 @@ MIT licensed.`);
       toast(next ? "Debug logging on — check the console." : "Debug logging off.");
     });
     GM_registerMenuCommand("Trakt OG Toolkit: diagnostics", () => {
-      const summary = `v${VERSION} · ${getRouteKey()} · client ID ${getClientId() ? "set" : "missing"} · ${getCustomLinks().length} custom links · ${cacheSize()} cached responses`;
-      toast(summary);
-      console.info("[OGT]", summary);
+      const summary2 = `v${VERSION} · ${getRouteKey()} · client ID ${getClientId() ? "set" : "missing"} · ${getCustomLinks().length} custom links · ${cacheSize()} cached responses`;
+      toast(summary2);
+      console.info("[OGT]", summary2);
     });
     GM_registerMenuCommand("Trakt OG Toolkit: clear API cache", () => {
       clearCache();
@@ -1276,7 +1589,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks];
+  var FEATURES = [customLinks, seasonChart];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))

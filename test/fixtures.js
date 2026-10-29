@@ -65,3 +65,38 @@ export const MOVIE_HTML = `
     </div></div>
   </section>
 </main>`;
+
+export const SEASON_HTML = `
+<main id="content">
+  <section class="episodes" aria-labelledby="episodes">
+    <div class="heading"><h2 id="episodes"><strong>7</strong> Episodes</h2></div>
+    <article class="row" aria-labelledby="episode-73484">
+      <div class="rating-trigger"><span class="value">80%</span></div>
+      <div class="info"><div class="titles"><h3 id="episode-73484">
+        <a href="/shows/breaking-bad/seasons/1/episodes/3"><span class="number">1x03</span></a>
+        <a href="/shows/breaking-bad/seasons/1/episodes/3">…And the Bag's in the River</a>
+      </h3></div></div>
+    </article>
+    <article class="row" aria-labelledby="episode-73482">
+      <div class="rating-trigger"><span class="value">83%</span></div>
+      <div class="info"><div class="titles"><h3 id="episode-73482">
+        <a href="/shows/breaking-bad/seasons/1/episodes/1"><span class="number">1x01</span></a>
+        <a href="/shows/breaking-bad/seasons/1/episodes/1">Pilot</a>
+      </h3></div></div>
+    </article>
+    <article class="row" aria-labelledby="episode-73485">
+      <div class="rating-trigger"><span class="value">79%</span></div>
+      <div class="info"><div class="titles"><h3 id="episode-73485">
+        <a href="/shows/breaking-bad/seasons/1/episodes/4"><span class="number">1x04</span></a>
+        <a href="/shows/breaking-bad/seasons/1/episodes/4">Cancer Man</a>
+      </h3></div></div>
+    </article>
+    <article class="row" aria-labelledby="episode-73483">
+      <div class="rating-trigger"><span class="value">81%</span></div>
+      <div class="info"><div class="titles"><h3 id="episode-73483">
+        <a href="/shows/breaking-bad/seasons/1/episodes/2"><span class="number">1x02</span></a>
+        <a href="/shows/breaking-bad/seasons/1/episodes/2">Cat's in the Bag...</a>
+      </h3></div></div>
+    </article>
+  </section>
+</main>`;

@@ -3,8 +3,8 @@
 An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds the useful old-Trakt bits og doesn't have
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
-**Status:** v0.1.4: a custom links panel with season and episode pickers, and a hydration-safe mount. Playback progress,
-season ratings and the season chart are next; see [PLAN.md](PLAN.md).
+**Status:** v0.1.4: a custom links panel with season and episode pickers, a season ratings chart, and a hydration-safe
+mount. Playback progress is next; see [PLAN.md](PLAN.md).
 
 ## Install
 
@@ -23,6 +23,12 @@ A compact panel under the summary stats with user-configured links to your own s
 - **Custom links** — add your own `Label | URL` templates with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{season}`, `{episode}`.
 - **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}`. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
 - **Examples**: Plex, Jellyfin, Sonarr, Radarr, or any streaming/library service og doesn't link to.
+
+### Season chart
+
+On a show's season page, an episode ratings chart shows the shape of the season. It uses the Trakt API when a client
+ID is set and og's displayed ratings otherwise; episodes with fewer than 10 votes appear as hollow points and do not
+affect the average.
 
 ### Trakt client ID (optional for now)
 
@@ -119,6 +125,7 @@ src/
   features/
     host.js            mounts/unmounts features per route
     custom-links/      the panel (index.js) and its DOM readers (data.js)
+    season-chart/      episode ratings chart and API/data helpers
   ui/                  injected CSS and toasts
 ```
 
