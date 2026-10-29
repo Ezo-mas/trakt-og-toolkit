@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Trakt OG Toolkit
 // @namespace    https://github.com/trakt-og-toolkit
-// @version      0.1.2
+// @version      0.1.3
 // @description  Watch links, trailers and (soon) ratings helpers for og.trakt.tv.
 // @author       Ezo-mas
 // @license      MIT
@@ -23,7 +23,7 @@
 (() => {
   // src/meta.js
   var NAME = "Trakt OG Toolkit";
-  var VERSION = "0.1.2";
+  var VERSION = "0.1.3";
 
   // src/ui/styles.js
   var CSS = String.raw`
