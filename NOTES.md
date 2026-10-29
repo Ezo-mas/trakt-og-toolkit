@@ -18,7 +18,7 @@ Working notes and known issues. Newest first.
 - Episode pickers now get real counts from `/shows/:id/seasons?extended=full`.
 - 21 tests passing (`npm test`).
 
-### Open: og UI disappears after the page finishes loading
+### Fixed in v0.1.2 (needs a logged-in retest): og UI disappears after load
 
 On a movie page (observed on *The Dog Stars*, 2026), these og elements render during load and then vanish:
 
@@ -26,25 +26,23 @@ On a movie page (observed on *The Dog Stars*, 2026), these og elements render du
 - the purple `ADD TO HISTORY` button,
 - the blue `LISTED ON / Watchlist` button (the library button).
 
-`CHECK IN` stays. The console also shows Svelte's `hydration_mismatch` error.
+`CHECK IN` stayed, and the console showed Svelte's `hydration_mismatch`.
 
-Hypotheses, in order:
+Reproduced in Brave/Chromium (Playwright, logged out):
 
-1. **Our early DOM insert confuses Svelte hydration.** The panel is inserted under `#overview .top` at
-   `DOMContentLoaded`, possibly while SvelteKit is still hydrating. Svelte 5 may bail out of hydrating that subtree and
-   client-render it, dropping blocks that only exist in the server HTML (e.g. session-dependent buttons). The panel
-   itself may be removed at the same time.
-2. **Unrelated og bug.** The hydration mismatch may happen without the userscript, and the disappearing buttons may be
-   og's own behavior.
+- Without the toolkit: no `hydration_mismatch`.
+- With the toolkit: the panel was inserted at ~700 ms, long before SvelteKit hydrated (~1.9 s), and the mismatch appeared.
+- Delaying the first mount to `load` + 750 ms on SvelteKit pages removed the mismatch, and the panel still mounted.
 
-Diagnosis tomorrow:
+Changes:
 
-1. Disable the toolkit (or Tampermonkey for `og.trakt.tv`) and reload the same page. If the buttons still disappear,
-   it is og.
-2. If the toolkit is the cause, try mounting only after hydration instead of at `DOMContentLoaded` — e.g. after
-   `window.load` plus a `requestAnimationFrame`/idle delay — and confirm the panel still survives SPA navigation.
-3. If early insertion is required for layout, test inserting the panel after the summary subtree has hydrated rather
-   than inside it.
+- `whenHeadReady()` waits for `<head>` before booting. A real `document-start` injection (Brave) was throwing at
+  `injectStyles()` because neither `<head>` nor `<html>` existed yet; the whole script aborted.
+- The feature host opens only after `load` + 750 ms on SvelteKit pages, so nothing is inserted into the tree while
+  Svelte is hydrating. Non-Svelte pages (and the happy-dom tests) still mount immediately.
+
+Still to verify on Zen/Firefox with a logged-in session: whether `WATCH NOW`, `ADD TO HISTORY` and `LISTED ON` survive
+now. If they still vanish without the toolkit, it is an og launch bug.
 
 Do not chase the `Security Error: ... may not load or link to file:///` message: the bundle has no `file:` references,
 and the error points at og's inline script (`injectedScript` line 290/369).

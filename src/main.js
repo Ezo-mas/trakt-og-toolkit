@@ -16,6 +16,15 @@ import { info } from './core/log.js';
 import { cacheSize } from './core/http.js';
 
 const FEATURES = [watchNow];
+const INITIAL_MOUNT_DELAY_MS = 750;
+
+function isSvelteKit() {
+  return Boolean(
+    document.body?.hasAttribute('data-sveltekit-preload-data') ||
+      document.body?.hasAttribute('data-sveltekit-preload-code') ||
+      Object.keys(window).some((key) => key.startsWith('__sveltekit_')),
+  );
+}
 
 function start() {
   applyDebugSetting();
@@ -23,17 +32,47 @@ function start() {
 
   const host = createFeatureHost(FEATURES);
   let route = parseRoute();
+  let canMount = false;
+
+  const sync = () => {
+    if (canMount) host(route);
+  };
 
   createRouter({
     onRoute(next) {
       route = next;
-      host(next);
+      sync();
     },
     // Every settled DOM change: re-mounts anything the app re-rendered away.
-    onSettle() {
-      host(route);
-    },
+    onSettle: sync,
   });
+
+  const openGate = () => {
+    if (canMount) return;
+    canMount = true;
+    host(route);
+  };
+
+  // SvelteKit finishes hydrating after `load`. Inserting into its DOM before
+  // that makes Svelte report a hydration mismatch and can drop SSR-only blocks,
+  // so give the app a moment on SvelteKit pages. Other pages mount immediately.
+  const scheduleMount = () => {
+    if (!isSvelteKit()) {
+      openGate();
+      return;
+    }
+    if (document.readyState === 'complete') {
+      setTimeout(openGate, INITIAL_MOUNT_DELAY_MS);
+    } else {
+      window.addEventListener('load', () => setTimeout(openGate, INITIAL_MOUNT_DELAY_MS), { once: true });
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scheduleMount, { once: true });
+  } else {
+    scheduleMount();
+  }
 
   registerMenu(() => route.key);
 
@@ -47,4 +86,35 @@ function start() {
   info(`v${VERSION} loaded on ${location.host}`);
 }
 
-start();
+/**
+ * Userscript managers with `document-start` can run before <head> exists. The
+ * styles need a parent and the router observes documentElement, so wait for the
+ * root instead of throwing away the whole boot.
+ */
+function whenHeadReady(callback) {
+  if (document.head) {
+    callback();
+    return;
+  }
+
+  let done = false;
+  const run = () => {
+    if (done) return;
+    done = true;
+    cleanup();
+    callback();
+  };
+  const cleanup = () => {
+    observer.disconnect();
+    document.removeEventListener('DOMContentLoaded', run);
+  };
+  const observer = new MutationObserver(() => {
+    if (document.head) run();
+  });
+
+  observer.observe(document, { childList: true, subtree: true });
+  document.addEventListener('DOMContentLoaded', run, { once: true });
+}
+
+whenHeadReady(start);
+
