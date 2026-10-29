@@ -3,7 +3,7 @@
 An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds the useful old-Trakt bits og doesn't have
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
-**Status:** v0.1.2 — the Watch & Links panel, with a fixed trailer player, reliable episode pickers and a hydration-safe
+**Status:** v0.1.3 — the Watch & Links panel, with a fixed trailer player, reliable episode pickers and a hydration-safe
 mount. Ratings, playback progress and the season chart are next.
 
 ## Install
