@@ -12,7 +12,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | # | Feature | Needs | Can run in parallel with |
 |---|---|---|---|
 | 0 | Foundation (shared CSS hook, exported `apiGet`) | — | done |
-| 1 | Season and episode ratings + season chart | client ID | 3, 4, 2 (phase A) |
+| 1 | Season chart | client ID optional | done |
 | 2 | Playback progress manager | OAuth | 1, 3, 4 |
 | 3 | Metadata links | nothing (maybe client ID) | 1, 2, 4 |
 | 4 | Custom link presets | nothing | 1, 2, 3 |
@@ -71,37 +71,30 @@ VIP features, scheduled e-mail exports, bug-fix patches for the classic site.
 
 ---
 
-## 1. Season and episode ratings + season chart
+## 1. Season chart
 
-**Goal:** on a show's seasons pages, show how each season and episode rated, and a chart of episode ratings across a
-season. og shows a single rating per page; classic Trakt users want the spread.
+**Status:** done (DOM fallback verified in a browser; API path and Firefox not yet checked).
 
-**Where:** `/shows/:id` (season cards), `/shows/:id/seasons`, `/shows/:id/seasons/:season`. og also has
-`/shows/:id/seasons/all`; check what it shows before adding to it.
+**Already in og (checked 2026-10-29 on Breaking Bad):** every season card shows its rating (e.g. 90%), the season
+page header shows the season rating, and every episode row shows its rating (e.g. 83%). Don't add badges for those.
 
-**Data (public, client ID only):**
+**Goal:** a line chart of episode ratings on the season page (`/shows/:id/seasons/:season`), so the shape of a season
+is visible at a glance. og doesn't have one.
 
-- `GET /shows/:id/seasons?extended=full` → each season's `rating` and `votes`.
-- `GET /shows/:id/seasons/:season?extended=full` → each episode's `rating`, `votes`, `title`, `first_aired`.
-- Optional for the chart: `GET /shows/:id/seasons/:season/episodes/:episode/stats` → `watchers`, `comments`. One call
-  per episode: only for the season being viewed, after the ratings render, and skip it for seasons over ~30 episodes.
+**Data:** `GET /shows/:id/seasons/:season?extended=full` → each episode's `rating` (0–10), `votes`, `title`. Without a
+client ID, read the rows instead: `section.episodes article.row`, `.titles .number` (`1x01`), `.rating-trigger .value`
+(`83%`). Rows can be re-sorted by the user, so sort by episode number.
 
-**Build:**
+**Build:** a panel inserted before `section.episodes`; an SVG line with a dot per episode linking to it; a fixed-ish Y
+scale (top 100%, bottom 50% or lower if needed) so seasons compare honestly; a dashed season-average line; hollow dots
+for episodes under 10 votes, left out of the average; keyboard-focusable dots and light/dark colours.
 
-1. **Season averages:** a small badge on each season card (rating % and vote count). Also a show-wide weighted average
-   (sum of rating×votes / sum of votes), labelled clearly so it isn't confused with Trakt's own show rating.
-2. **Episode ratings:** on a season page, a rating next to each episode row if og doesn't already show one. Check first.
-3. **Season chart:** an SVG line chart on the season page. X is episode number, Y is rating (fixed scale, not
-   auto-zoomed, so seasons compare honestly). Hover/focus shows episode title, rating and votes. Clicking a point opens
-   that episode. Optional second series for watchers on its own axis, off by default. It must work with keyboard and
-   in light and dark mode.
-4. Episodes with few votes (under ~10) get a hollow point and are left out of averages, so one 10/10 vote doesn't skew
-   the line.
+**Later:**
 
-**Later (needs OAuth from feature 2):** personal ratings next to the community ones, via `GET /sync/ratings/episodes`.
-
-**Agent split:** one agent does 1–2 first, then 3, since 3 reuses the same data. 3 can also be a second agent once
-`api.js` and `data.js` from 1 are merged.
+- A watchers or comments series from `GET /shows/:id/seasons/:season/episodes/:episode/stats` (one call per
+  episode, so only for the viewed season and only on demand).
+- Vote counts next to og's episode percentages (og shows the % only).
+- Personal ratings on the chart once OAuth exists (feature 2): `GET /sync/ratings/episodes`.
 
 ## 2. Playback progress manager
 
