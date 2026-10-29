@@ -114,7 +114,7 @@ test('sign-in shows the device code in a toast and keeps it there while pending'
   assert.match(window.document.body.textContent, /Signed in to Trakt\./);
 });
 
-test('sign-in copies the device code with GM_setClipboard and says so', async (t) => {
+test('sign-in copies the device code, opens the activation page and says so', async (t) => {
   const window = new Window({ url: 'https://og.trakt.tv/' });
   t.after(() => window.close());
   const data = new Map([['trakt.clientId', 'client'], ['trakt.oauth.redirectUri', 'http://localhost:5173/callback']]);
@@ -125,6 +125,8 @@ test('sign-in copies the device code with GM_setClipboard and says so', async (t
   window.GM_setValue = (k, v) => data.set(k, v);
   window.GM_deleteValue = (k) => data.delete(k);
   window.GM_setClipboard = (text, type) => copied.push([text, type]);
+  const opened = [];
+  window.GM_openInTab = (url, options) => opened.push([url, options.active]);
   window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
   window.prompt = (message, initial) => initial;
   window.GM_xmlhttpRequest = (r) => {
@@ -141,5 +143,6 @@ test('sign-in copies the device code with GM_setClipboard and says so', async (t
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
   await menus.get('sign in')();
   assert.deepEqual(copied, [['ABCD1234', 'text']]);
-  assert.match(toastAtFirstPoll, /Code ABCD1234 copied; paste it at https:\/\/auth\.trakt\.tv\/activate/);
+  assert.deepEqual(opened, [['https://auth.trakt.tv/activate', true]]);
+  assert.match(toastAtFirstPoll, /Code ABCD1234 copied; paste it at https:\/\/auth\.trakt\.tv\/activate \(opened in a new tab\)/);
 });

@@ -16,6 +16,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @grant        GM_setClipboard
+// @grant        GM_openInTab
 // @connect      api.trakt.tv
 // @connect      auth.trakt.tv
 // @noframes
@@ -1825,6 +1826,15 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       return false;
     }
   }
+  function openTab(url) {
+    if (typeof GM_openInTab !== "function") return false;
+    try {
+      GM_openInTab(url, { active: true, insert: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }
   function registerAuthMenu() {
     GM_registerMenuCommand("Trakt OG Toolkit: sign in", async () => {
       if (!getClientId()) {
@@ -1849,10 +1859,14 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
         await signIn({
           // A long toast instead of a native prompt, so the page keeps working while polling.
           // The next sign-in message (signed in, cancelled, expired, …) replaces it.
-          onCode: ({ user_code, verification_url }) => toast(
-            `${copyText(user_code) ? `Code ${user_code} copied; paste it` : `Enter ${user_code}`} at ${verification_url}, then come back. Use "cancel sign-in" in the menu to stop.`,
-            { duration: CODE_TOAST_MS }
-          ),
+          onCode: ({ user_code, verification_url }) => {
+            const copied = copyText(user_code);
+            const opened = openTab(verification_url);
+            toast(
+              `${copied ? `Code ${user_code} copied; paste it` : `Enter ${user_code}`} at ${verification_url}${opened ? " (opened in a new tab)" : ""}, then come back. Use "cancel sign-in" in the menu to stop.`,
+              { duration: CODE_TOAST_MS }
+            );
+          },
           // Pending and slow-down are expected while waiting; keep the code on screen.
           onMessage: (message) => {
             if (!QUIET.has(message)) toast(message);
