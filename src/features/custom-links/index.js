@@ -8,9 +8,19 @@
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
 import { fillTemplate, missingPlaceholders } from '../../core/text.js';
-import { getSelection, setSelection, getCustomLinks, getClientId } from '../../settings.js';
-import { promptAddCustomLink } from '../../actions.js';
-import { readTitleData, readSeasons, mergeSeasons, templateVars } from './data.js';
+import { getSelection, setSelection, getCustomLinks, setCustomLinks, getClientId } from '../../settings.js';
+import {
+  addPresets,
+  filterPresetsByKind,
+  mergeSeasons,
+  moveLink,
+  presetAlreadyAdded,
+  readSeasons,
+  readTitleData,
+  templateVars,
+  validateCustomLinks,
+} from './data.js';
+import { PRESETS } from './presets.js';
 import { getSeasons } from '../../core/trakt.js';
 
 const PANEL_ID = 'ogt-custom-links';
@@ -52,8 +62,16 @@ function createPanel(meta) {
   const timers = [];
   let selection = getSelection(meta.kind, meta.id) || { season: null, episode: null };
 
-  const linksRow = el('div', { class: 'ogt-row' });
+  const linksRow = el('div', { class: 'ogt-row ogt-links' });
   const controlsRow = el('div', { class: 'ogt-row', hidden: true });
+  const actionsRow = el('div', { class: 'ogt-row ogt-link-actions' });
+  const tools = el('div', { class: 'ogt-link-tools', hidden: true });
+  const editor = el('div', { class: 'ogt-editor', hidden: true });
+  const presetChecklist = el('div', { class: 'ogt-presets', hidden: true });
+  tools.append(editor, presetChecklist);
+  const presetsButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Add presets…' });
+  const editButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Edit links' });
+  actionsRow.append(presetsButton, editButton);
 
   const node = el(
     'section',
@@ -66,6 +84,8 @@ function createPanel(meta) {
     ),
     linksRow,
     controlsRow,
+    actionsRow,
+    tools,
   );
 
   const vars = () => templateVars(meta, selection);
@@ -96,10 +116,220 @@ function createPanel(meta) {
       linksRow.append(chip({ label: entry.label, href: fillTemplate(entry.url, values), template: entry.url }));
     }
 
-    const add = el('button', { class: 'ogt-chip', type: 'button', text: '+ Add link' });
-    add.addEventListener('click', () => promptAddCustomLink());
-    linksRow.append(add);
   }
+
+  let currentView = null;
+  let returnFocus = null;
+  let draft = [];
+  let nextDraftId = 0;
+  let selectedPresets = new Set();
+
+  function closeTools() {
+    currentView = null;
+    tools.hidden = true;
+    editor.hidden = true;
+    presetChecklist.hidden = true;
+    const target = returnFocus;
+    returnFocus = null;
+    target?.focus();
+  }
+
+  function renderEditor(focusKey) {
+    editor.replaceChildren();
+    const list = el('div', { class: 'ogt-editor-list' });
+    for (const [index, entry] of draft.entries()) {
+      const labelInput = el('input', {
+        class: 'ogt-editor-input',
+        type: 'text',
+        value: entry.label,
+        'aria-label': 'Link label',
+        'data-focus': `${entry.id}-label`,
+      });
+      labelInput.addEventListener('input', () => {
+        entry.label = labelInput.value;
+      });
+      const urlInput = el('input', {
+        class: 'ogt-editor-input',
+        type: 'text',
+        value: entry.url,
+        'aria-label': 'Link URL',
+        'data-focus': `${entry.id}-url`,
+      });
+      urlInput.addEventListener('input', () => {
+        entry.url = urlInput.value;
+      });
+
+      const up = el('button', {
+        class: 'ogt-mini-button',
+        type: 'button',
+        text: '↑',
+        'aria-label': 'Move up',
+        disabled: index === 0,
+        'data-focus': `${entry.id}-up`,
+      });
+      up.addEventListener('click', () => {
+        draft = moveLink(draft, index, -1);
+        renderEditor(`${entry.id}-up`);
+      });
+      const down = el('button', {
+        class: 'ogt-mini-button',
+        type: 'button',
+        text: '↓',
+        'aria-label': 'Move down',
+        disabled: index === draft.length - 1,
+        'data-focus': `${entry.id}-down`,
+      });
+      down.addEventListener('click', () => {
+        draft = moveLink(draft, index, 1);
+        renderEditor(`${entry.id}-down`);
+      });
+      const remove = el('button', {
+        class: 'ogt-mini-button',
+        type: 'button',
+        text: 'Delete',
+        'aria-label': 'Delete link',
+      });
+      remove.addEventListener('click', () => {
+        draft = draft.filter((link) => link.id !== entry.id);
+        const nextEntry = draft[Math.min(index, draft.length - 1)];
+        renderEditor(nextEntry ? `${nextEntry.id}-label` : 'add-link');
+      });
+
+      list.append(
+        el(
+          'div',
+          { class: 'ogt-editor-row' },
+          el('label', { class: 'ogt-editor-field' }, 'Label', labelInput),
+          el('label', { class: 'ogt-editor-field' }, 'URL', urlInput),
+          el('div', { class: 'ogt-editor-actions' }, up, down, remove),
+        ),
+      );
+    }
+
+    const error = el('p', { class: 'ogt-editor-error', role: 'alert', hidden: true });
+    const add = el('button', {
+      class: 'ogt-chip',
+      type: 'button',
+      text: 'Add link',
+      'data-focus': 'add-link',
+    });
+    add.addEventListener('click', () => {
+      const entry = { id: nextDraftId++, label: '', url: '' };
+      draft.push(entry);
+      renderEditor(`${entry.id}-label`);
+    });
+    const save = el('button', { class: 'ogt-chip', type: 'button', text: 'Save links' });
+    save.addEventListener('click', () => {
+      const errors = validateCustomLinks(draft);
+      if (errors.length) {
+        const first = errors[0];
+        error.textContent = first.message;
+        error.hidden = false;
+        const entry = draft[first.index];
+        editor.querySelector(`[data-focus="${entry.id}-${first.field}"]`)?.focus();
+        return;
+      }
+
+      setCustomLinks(draft.map(({ label, url }) => ({ label: label.trim(), url: url.trim() })));
+      renderLinks();
+      if (meta.kind === 'show' && needsSelection()) {
+        if (seasons.length) renderControls();
+        else loadSeasons();
+      } else {
+        controlsRow.hidden = true;
+      }
+      closeTools();
+    });
+    const cancel = el('button', { class: 'ogt-chip', type: 'button', text: 'Cancel' });
+    cancel.addEventListener('click', closeTools);
+
+    editor.append(
+      el('div', { class: 'ogt-editor-list-wrap' }, list),
+      error,
+      el('div', { class: 'ogt-row ogt-editor-footer' }, add, save, cancel),
+    );
+    if (focusKey) editor.querySelector(`[data-focus="${focusKey}"]`)?.focus();
+  }
+
+  function openEditor() {
+    currentView = 'editor';
+    returnFocus = editButton;
+    draft = getCustomLinks().map((link) => ({ ...link, id: nextDraftId++ }));
+    tools.hidden = false;
+    editor.hidden = false;
+    presetChecklist.hidden = true;
+    renderEditor(draft.length ? `${draft[0].id}-label` : 'add-link');
+  }
+
+  function renderPresetChecklist() {
+    const links = getCustomLinks();
+    const presets = filterPresetsByKind(PRESETS, meta.kind);
+    const list = el('div', { class: 'ogt-preset-list' });
+    selectedPresets = new Set();
+
+    for (const [index, preset] of presets.entries()) {
+      const added = presetAlreadyAdded(links, preset);
+      const checkbox = el('input', {
+        type: 'checkbox',
+        value: preset.url,
+        disabled: added,
+        'aria-label': preset.label,
+      });
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) selectedPresets.add(preset.url);
+        else selectedPresets.delete(preset.url);
+      });
+      const label = el(
+        'label',
+        { class: 'ogt-preset-item', for: `ogt-preset-${index}` },
+        checkbox,
+        el('span', { text: preset.label }),
+        added ? el('span', { class: 'ogt-preset-added', text: 'added' }) : null,
+      );
+      checkbox.id = `ogt-preset-${index}`;
+      list.append(label);
+    }
+
+    const error = el('p', { class: 'ogt-hint', text: 'Choose the services you want to add.' });
+    const confirm = el('button', { class: 'ogt-chip', type: 'button', text: 'Add selected' });
+    confirm.addEventListener('click', () => {
+      const selected = presets.filter((preset) => selectedPresets.has(preset.url));
+      if (selected.length) {
+        setCustomLinks(addPresets(getCustomLinks(), selected));
+        renderLinks();
+      }
+      closeTools();
+    });
+    const cancel = el('button', { class: 'ogt-chip', type: 'button', text: 'Cancel' });
+    cancel.addEventListener('click', closeTools);
+    presetChecklist.replaceChildren(
+      el('div', { class: 'ogt-preset-list-wrap' }, list),
+      error,
+      el('div', { class: 'ogt-row ogt-editor-footer' }, confirm, cancel),
+    );
+  }
+
+  function openPresets() {
+    currentView = 'presets';
+    returnFocus = presetsButton;
+    tools.hidden = false;
+    editor.hidden = true;
+    presetChecklist.hidden = false;
+    renderPresetChecklist();
+    const firstChoice = presetChecklist.querySelector('input[type="checkbox"]:not(:disabled)');
+    (firstChoice || presetChecklist.querySelector('button'))?.focus();
+  }
+
+  function onKeyDown(event) {
+    if (event.key === 'Escape' && currentView) {
+      event.preventDefault();
+      closeTools();
+    }
+  }
+
+  presetsButton.addEventListener('click', openPresets);
+  editButton.addEventListener('click', openEditor);
+  node.addEventListener('keydown', onKeyDown);
 
   function needsSelection() {
     return getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));

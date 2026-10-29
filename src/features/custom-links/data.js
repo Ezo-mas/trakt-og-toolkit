@@ -119,3 +119,46 @@ export function mergeSeasons(primary, fallback = []) {
     }))
     .sort((a, b) => a.number - b.number);
 }
+
+export function filterPresetsByKind(presets, kind) {
+  return presets.filter((preset) => preset.kinds.includes(kind));
+}
+
+export function presetAlreadyAdded(links, preset) {
+  return links.some((link) => link.url === preset.url);
+}
+
+export function addPresets(links, presets) {
+  const urls = new Set(links.map((link) => link.url));
+  const additions = [];
+  for (const preset of presets) {
+    if (urls.has(preset.url)) continue;
+    urls.add(preset.url);
+    additions.push({ label: preset.label, url: preset.url });
+  }
+  return [...links, ...additions];
+}
+
+export function moveLink(links, index, direction) {
+  const next = [...links];
+  const target = index + direction;
+  if (index < 0 || index >= next.length || target < 0 || target >= next.length) return next;
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}
+
+export function validateCustomLinks(links) {
+  const errors = [];
+  for (const [index, link] of links.entries()) {
+    if (!String(link.label || '').trim()) errors.push({ index, field: 'label', message: 'A label is required.' });
+    if (!String(link.url || '').trim()) {
+      errors.push({ index, field: 'url', message: 'A URL is required.' });
+      continue;
+    }
+
+    if (!/^https?:\/\//i.test(String(link.url).trim())) {
+      errors.push({ index, field: 'url', message: 'URL must start with http:// or https://.' });
+    }
+  }
+  return errors;
+}

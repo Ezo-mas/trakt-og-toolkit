@@ -20,7 +20,8 @@ It matches `https://og.trakt.tv/*` and `http://localhost:5173|5174/*` for develo
 
 A compact panel under the summary stats with user-configured links to your own services.
 
-- **Custom links** — add your own `Label | URL` templates with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{season}`, `{episode}`.
+- **Custom links** — manage your `Label | URL` templates in the inline editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{season}`, `{episode}`.
+- **Search presets** — optionally add Letterboxd, Rotten Tomatoes, Metacritic, Wikipedia, Stremio, Plex, AniList and MyAnimeList links.
 - **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}`. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
 - **Examples**: Plex, Jellyfin, Sonarr, Radarr, or any streaming/library service og doesn't link to.
 
@@ -80,8 +81,12 @@ saved playback, not watched history. There is no control to set progress manuall
 
 ## Custom links
 
-Menu → **add custom link**, then type `Label | URL`. The label is what the chip shows; everything after the first
-`|` is the URL template. You can also press **+ Add link** in the panel.
+Use **Edit links** in the panel to add, rename, reorder or remove links. Choose **Add presets…** to select optional
+service searches; nothing is enabled until you check it and confirm. Presets can be edited like any other link.
+
+The menu commands **add custom link** and **remove custom link** remain available when the panel is not on screen.
+The add command asks for `Label | URL`; the label is what the chip shows and everything after the first `|` is the URL
+template.
 
 ```text
 My service | https://example.com/watch/{tmdb}?s={season}&e={episode}
@@ -107,8 +112,8 @@ Notes:
 - Values are URL-encoded for you, so `{title}` becomes `Breaking%20Bad`. Don't encode them yourself.
 - A link is hidden on pages where one of its placeholders has no value — a `{season}` link won't appear on a movie.
   This is intentional, so one template works across shows and films.
-- Only `http://` and `https://` templates are accepted.
-- Manage links from the menu: **add custom link** and **remove custom link**. They're stored per browser, not synced.
+- URL templates must start with `http://` or `https://`.
+- Links are stored per browser, not synced. The inline editor checks that each saved link has a label and an HTTP(S) URL.
 
 ## Development
 
