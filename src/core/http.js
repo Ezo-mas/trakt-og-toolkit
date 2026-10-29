@@ -1,5 +1,4 @@
 /** Small request layer: cross-origin via GM_xmlhttpRequest, with a queue and GET cache. */
-import { debugError } from './log.js';
 
 export class HttpError extends Error {
   constructor(message, status, body) {
@@ -31,7 +30,7 @@ function release() {
   else active -= 1;
 }
 
-function rawRequest({ method = 'GET', url, headers = {}, body = null, timeout = DEFAULT_TIMEOUT }) {
+function rawRequest({ method = 'GET', url, headers = {}, body = null, timeout = DEFAULT_TIMEOUT, signal }) {
   const gmRequest =
     typeof GM_xmlhttpRequest === 'function'
       ? GM_xmlhttpRequest
@@ -41,7 +40,7 @@ function rawRequest({ method = 'GET', url, headers = {}, body = null, timeout = 
 
   if (!gmRequest) {
     // Dev fallback. Pages without CORS headers will fail; that is expected.
-    return fetch(url, { method, headers, body }).then(async (response) => ({
+    return fetch(url, { method, headers, body, signal }).then(async (response) => ({
       status: response.status,
       headers: response.headers,
       text: await response.text(),
@@ -49,16 +48,21 @@ function rawRequest({ method = 'GET', url, headers = {}, body = null, timeout = 
   }
 
   return new Promise((resolve, reject) => {
-    gmRequest({
+    if (signal?.aborted) return reject(new HttpError('Request cancelled', 0, null));
+    let handle;
+    const abort = () => { handle?.abort(); reject(new HttpError('Request cancelled', 0, null)); };
+    const finish = (callback, value) => { signal?.removeEventListener('abort', abort); callback(value); };
+    signal?.addEventListener('abort', abort, { once: true });
+    handle = gmRequest({
       method,
       url,
       headers,
       data: body,
       timeout,
-      onload: (response) => resolve({ status: response.status, headers: response.responseHeaders, text: response.responseText }),
-      onerror: () => reject(new HttpError(`Network error for ${url}`, 0, null)),
-      ontimeout: () => reject(new HttpError(`Timed out for ${url}`, 0, null)),
-      onabort: () => reject(new HttpError(`Aborted ${url}`, 0, null)),
+      onload: (response) => finish(resolve, { status: response.status, headers: response.responseHeaders, text: response.responseText }),
+      onerror: () => finish(reject, new HttpError(`Network error for ${url}`, 0, null)),
+      ontimeout: () => finish(reject, new HttpError(`Timed out for ${url}`, 0, null)),
+      onabort: () => finish(reject, new HttpError(`Aborted ${url}`, 0, null)),
     });
   });
 }
@@ -73,7 +77,7 @@ export async function request(options) {
     for (;;) {
       const response = await rawRequest(options);
       const retryable = response.status === 429 || response.status >= 500;
-      if (!retryable || attempt >= MAX_RETRIES) return response;
+      if (!retryable || attempt >= (options.retries ?? MAX_RETRIES)) return response;
 
       const retryAfter = Number(headerValue(response.headers, 'retry-after'));
       const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 10000) : 1000 * (attempt + 1);

@@ -63,7 +63,21 @@ export function removeValue(key) {
 
 export const STORAGE = {
   clientId: 'trakt.clientId',
+  tokens: 'trakt.oauth.tokens',
+  redirectUri: 'trakt.oauth.redirectUri',
   customLinks: 'watch.customLinks',
   debug: 'debug',
   selection: (kind, id) => `selection.${kind}.${id}`,
 };
+
+/** OAuth credentials must never use the page-readable localStorage fallback. */
+export function getPrivateValue(key) {
+  return backend ? backend.get(key, null) : null;
+}
+export function setPrivateValue(key, value) {
+  if (!backend) throw new Error('OAuth requires userscript GM storage.');
+  backend.set(key, value);
+}
+export function removePrivateValue(key) {
+  backend?.remove(key);
+}

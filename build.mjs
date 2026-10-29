@@ -23,6 +23,7 @@ ${matches.map((match) => `// @match        ${match}`).join('\n')}
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @connect      api.trakt.tv
+// @connect      auth.trakt.tv
 // @noframes
 // ==/UserScript==
 `;

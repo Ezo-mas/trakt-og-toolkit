@@ -2,6 +2,7 @@
 import { promptAddCustomLink, promptRemoveCustomLink, promptClientId } from './actions.js';
 import { applyDebugSetting, isDebug, setDebug, getClientId, getCustomLinks } from './settings.js';
 import { cacheSize, clearCache } from './core/http.js';
+import { registerAuthMenu } from './oauth-menu.js';
 import { ping } from './core/trakt.js';
 import { toast } from './ui/shell.js';
 import { NAME, VERSION } from './meta.js';
@@ -11,6 +12,8 @@ const ATTRIBUTION = `${NAME} uses Trakt but is not endorsed or certified by Trak
 /** @param {() => string} getRouteKey */
 export function registerMenu(getRouteKey = () => location.pathname) {
   if (typeof GM_registerMenuCommand !== 'function') return;
+
+  registerAuthMenu();
 
   GM_registerMenuCommand('Trakt OG Toolkit: about', () => {
     toast(`${NAME} v${VERSION}`, { duration: 5000 });

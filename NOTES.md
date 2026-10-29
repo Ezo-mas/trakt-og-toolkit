@@ -4,6 +4,31 @@ Working notes and known issues. Newest first.
 
 ## 2026-10-29
 
+### OAuth device flow (feature 2, phase A)
+
+- Checked the current official [authentication guide](https://developer.trakt.tv/docs/authentication-oauth),
+  [PKCE guide](https://developer.trakt.tv/docs/pkce), and endpoint contracts in
+  [trakt/api-help](https://github.com/trakt/api-help/blob/28e57aa64da82139abc4185fda4096adc8352ca3/projects/api/src/contracts/oauth/index.ts)
+  (retrieved 2026-10-29, commit `28e57aa64da82139abc4185fda4096adc8352ca3`).
+- The current device token schema marks `client_secret` optional and deprecated. No secret is requested, stored,
+  or sent. PKCE is documented for authorization-code redirects, with no challenge/verifier fields in the device
+  schemas; this implementation retains device flow without inventing a PKCE device extension.
+- All OAuth calls now belong on **auth.trakt.tv**, including refresh and revocation; resource calls stay on
+  api.trakt.tv. Added the userscript `@connect` permission for the auth host.
+- Refresh requires the app's registered `redirect_uri` in the documented schema. The sign-in menu asks for it,
+  despite the device flow having no redirect page. Refresh tokens rotate and are single-use: one shared refresh
+  promise prevents concurrent calls from consuming the same token twice.
+- Device status codes: 400 pending, 404 invalid, 409 already used, 410 expired, 418 denied, 429 slow down. The HTTP
+  layer already supports POST bodies; only cancellation and opt-out of automatic retries were needed. Polling
+  waits the server interval and adds five seconds on 429, stopping at the server lifetime or cancellation.
+- Tokens use GM storage only, never the page's localStorage fallback. Auth errors discard remote bodies and
+  original errors, so `debugError` cannot dump credentials. No tokens or secrets are put in URLs or messages.
+- Phase A has menu actions only; there is no new route, page fixture, playback badge or progress manager.
+  Existing DOM integration tests remain relevant; OAuth tests use mocked GM requests and deterministic timers.
+- Real sign-in, actual refresh/revocation against Trakt, and Firefox/Chromium extension behavior remain unverified;
+  no user credentials or account were available. API assumptions above were checked against official source docs,
+  not a live authenticated exchange.
+
 ### Context
 
 - og.trakt.tv launched publicly today and is changing daily. Its source is public at
