@@ -52,16 +52,20 @@ export async function ping() {
 
 
 /** Authenticated requests never enter the public response cache. */
-export async function apiAuth(method, path, body) {
+export async function apiAuth(method, path, body, { extended } = {}) {
   if (!/^\/(?!\/)/.test(path) || /[?#]/.test(path) || path.includes('://')) {
     throw authError('Authenticated API paths must be relative and contain no query.');
   }
+  if (extended !== undefined && (method !== 'GET' || extended !== 'images')) {
+    throw authError('Unsupported authenticated query option.');
+  }
+  const requestPath = extended === 'images' ? `${path}?extended=images` : path;
   let tokens = readTokens();
   if (!tokens) throw authError('Signed out; sign in to Trakt.');
   if (tokens.expires_at <= Date.now() + 60000) {
     tokens = await refreshTokens();
   }
-  const send = (t) => privateRequest(`${API.base}${path}`, {
+  const send = (t) => privateRequest(`${API.base}${requestPath}`, {
     method, headers: {
       'Content-Type': 'application/json', 'trakt-api-version': API.version,
       'trakt-api-key': t.client_id, Authorization: `Bearer ${t.access_token}`,

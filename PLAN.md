@@ -13,7 +13,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 |---|---|---|---|
 | 0 | Foundation (shared CSS hook, exported `apiGet`) | — | done |
 | 1 | Season chart | client ID optional | done |
-| 2 | Playback progress manager | OAuth (phase A done) | phase B next |
+| 2 | Playback progress manager | OAuth | done |
 | 3 | Metadata links | nothing (maybe client ID) | 1, 2, 4 |
 | 4 | Custom link presets | done | 1, 2, 3 |
 | 5 | Small extras (pronunciation, poster rating corners) | varies | after 1–4 |
@@ -101,11 +101,11 @@ for episodes under 10 votes, left out of the average; keyboard-focusable dots an
 **Goal:** see and manage partially watched movies and episodes (what a media player left paused). og has no UI for
 this: its Progress page only has Watching, Rewatching and Dropped tabs.
 
-**This needs signing in to Trakt**, which the toolkit doesn't do yet, so it has two phases.
+**This needs signing in to Trakt** using the toolkit’s own OAuth connection (phase A).
 
 ### Phase A: OAuth (blocks phase B)
 
-**Status:** done. Verified live against Trakt (sign-in, refresh, 401 retry, revoke) and in Violentmonkey; see NOTES.md. Phase B is not implemented.
+**Status:** done. Verified live against Trakt (sign-in, refresh, 401 retry, revoke) and in Violentmonkey; see NOTES.md. Phase B is below.
 
 **Current API docs:** device flow no longer requires a client secret; OAuth uses `auth.trakt.tv`. PKCE is documented for the redirect-based authorization-code flow only. See NOTES.md for sources. The secret requirement below is superseded by these current docs.
 
@@ -120,6 +120,9 @@ this: its Progress page only has Watching, Rewatching and Dropped tabs.
 - Never read og's session cookie or its `/api/` endpoints. The toolkit signs in on its own.
 
 ### Phase B: the feature
+
+**Status:** done: movie/episode badges and an on-demand paused-playback section above og’s user progress list.
+Verified 2026-10-29 on a real account in Violentmonkey (badge, overview load, delete); see NOTES.md.
 
 - Data: `GET /sync/playback/movies` and `/sync/playback/episodes` (progress %, `paused_at`, ids). Clear one with
   `DELETE /sync/playback/:id`.

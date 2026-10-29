@@ -4,7 +4,7 @@ An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds th
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
 **Status:** v0.1.4: a custom links panel with season and episode pickers, a season ratings chart, and a hydration-safe
-mount. Playback progress is next; see [PLAN.md](PLAN.md).
+mount. Development also includes OAuth and a paused-playback manager; see [PLAN.md](PLAN.md) for validation status.
 
 ## Install
 
@@ -65,7 +65,19 @@ No client secret is needed with Trakt's current device API.
 Access and refresh tokens stay in the userscript manager's GM storage, separate from og's login. Tokens refresh
 on authenticated use before expiry, and sign-out attempts revocation and always clears local tokens. If revocation
 fails, remove the app connection in Trakt settings. This requires a userscript manager; OAuth never falls back to
-page localStorage. This phase supplies authentication only; playback UI will follow separately.
+page localStorage. The playback manager below uses this connection.
+
+## Paused playback
+
+After signing in through the toolkit menu, movie and episode pages with saved playback show a percentage bar and
+**Clear** action. On your og **Progress** page, the **Paused playback** section loads movies and episodes only when
+its **Load paused playback** button is pressed. It uses your toolkit Trakt account, which can differ from og’s login.
+
+The list shows posters (when available), titles, progress and paused dates, newest first. Clear one item, select
+several and **Clear selected**, or enter an age and **Clear older items** (strictly older than that many elapsed days).
+Every deletion asks for confirmation with the item count. Bulk actions report partial failures and refresh the list.
+**Refresh paused playback** checks for changes made elsewhere; cached data lasts about a minute. Clearing removes
+saved playback, not watched history. There is no control to set progress manually.
 
 ## Custom links
 
@@ -166,8 +178,7 @@ src/
 
 ## Roadmap
 
-See [PLAN.md](PLAN.md). In short: playback progress, average season/episode ratings, a season chart, metadata links, then
-smaller extras. og already ships the ratings distribution (on `/stats`) and trailers, so those are not planned.
+See [PLAN.md](PLAN.md) for completed work and upcoming metadata links, custom link presets, and smaller extras. og already ships the ratings distribution (on `/stats`) and trailers, so those are not planned.
 
 ## Trakt API compliance
 

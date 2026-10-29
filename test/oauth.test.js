@@ -191,6 +191,15 @@ test('authenticated requests, refresh, sign-out and sanitized failures', async (
     assert.doesNotMatch(JSON.stringify(output), /private-access|private-refresh/);
     await assert.rejects(apiAuth('GET', '/users/me?token=private-access'), /no query/);
   });
+  await t.test('image extension uses a fixed non-secret GET option', async () => {
+    reset(); stored(); mock(() => ({ status: 200, body: [] }));
+    await apiAuth('GET', '/sync/playback/movies', undefined, { extended: 'images' });
+    assert.equal(calls[0].url, 'https://api.trakt.tv/sync/playback/movies?extended=images');
+    assert.equal(calls[0].headers.Authorization, 'Bearer private-access');
+    await assert.rejects(apiAuth('POST', '/sync/playback/movies', {}, { extended: 'images' }), /Unsupported/);
+    await assert.rejects(apiAuth('GET', '/sync/playback/movies', undefined, { extended: 'private-access' }), /Unsupported/);
+    assert.equal(calls.length, 1);
+  });
   await t.test('tokens are bound to client ID', async () => {
     reset(); stored(); setClientId('different'); assert.equal(oauth.isSignedIn(), false);
     await assert.rejects(apiAuth('GET', '/users/me'), /Signed out/);

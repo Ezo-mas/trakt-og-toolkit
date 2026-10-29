@@ -3,7 +3,7 @@
  *
  * Adds the parts of classic Trakt that og.trakt.tv doesn't have (yet), without
  * reusing og's session or internal endpoints: everything here is either plain
- * DOM work or a public Trakt API call with the user's own client ID.
+ * DOM work or a documented Trakt API call with the user's own app and OAuth connection.
  */
 import { VERSION } from './meta.js';
 import { injectStyles } from './ui/shell.js';
@@ -11,13 +11,14 @@ import { createRouter, parseRoute } from './core/router.js';
 import { createFeatureHost } from './features/host.js';
 import { waitForPageReady, watchModuleResources } from './core/hydration.js';
 import { customLinks } from './features/custom-links/index.js';
+import { playback } from './features/playback/index.js';
 import { seasonChart } from './features/season-chart/index.js';
 import { registerMenu } from './menu.js';
 import { applyDebugSetting } from './settings.js';
 import { info, warn } from './core/log.js';
 import { cacheSize } from './core/http.js';
 
-const FEATURES = [customLinks, seasonChart];
+const FEATURES = [customLinks, seasonChart, playback];
 
 function isSvelteKit() {
   return Boolean(
@@ -42,6 +43,8 @@ function start() {
   const sync = () => {
     if (canMount && host) host(route);
   };
+
+  document.addEventListener('ogt:authchange', sync);
 
   const openGate = () => {
     if (canMount) return;

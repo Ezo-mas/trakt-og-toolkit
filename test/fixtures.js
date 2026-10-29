@@ -100,3 +100,21 @@ export const SEASON_HTML = `
     </article>
   </section>
 </main>`;
+
+/** Source-derived fallback: SummaryFrame/EpisodePage and ProgressList at trakt-og
+ * 3bc2aae65d1a17d5c57360706b3f6745fcd10319. Live capture blocked by environment policy.
+ * Keep provenance explicit; these are not captured live account pages. */
+export const PLAYBACK_EPISODE_HTML = `
+<main id="content">
+  <section class="fanart-header with-stats"><div class="summary-title"><h1>Breaking Bad · Pilot</h1></div></section>
+  <section class="summary-frame"><div class="container"><div class="columns">
+    <aside class="sidebar" aria-label="Pilot"></aside>
+    <div class="info" id="overview"><div class="top"><div class="details"><p>Pilot overview.</p></div><div class="actions"></div></div></div>
+  </div></div></section>
+</main>`;
+export const PLAYBACK_PROGRESS_HTML = `
+<main id="content">
+  <nav aria-label="Progress"><a href="/users/tester/progress">Watching</a><a href="/users/tester/progress/rewatching">Rewatching</a><a href="/users/tester/progress/dropped">Dropped</a></nav>
+  <section class="phone-strip" aria-label="Progress totals"></section>
+  <section class="progress watched" aria-label="Watching" aria-busy="false"><div class="empty">No shows.</div></section>
+</main>`;

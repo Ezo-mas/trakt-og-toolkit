@@ -64,6 +64,7 @@ function saveTokens(text, clientId) {
 export function clearTokens() {
   generation += 1;
   removePrivateValue(STORAGE.tokens);
+  if (typeof document !== 'undefined') document.dispatchEvent(new Event('ogt:authchange'));
 }
 
 /** One rotating refresh token may be consumed only once, even with concurrent 401s. */
@@ -161,6 +162,7 @@ export async function signIn({ onCode = () => {}, onMessage = () => {} } = {}) {
       if (Date.now() >= deadline) { emit(DEVICE_MESSAGES[410]); return; }
       if (result.status === 200) {
         saveTokens(result.text, clientId);
+        if (typeof document !== 'undefined') document.dispatchEvent(new Event('ogt:authchange'));
         emit('Signed in to Trakt.');
         return;
       }
