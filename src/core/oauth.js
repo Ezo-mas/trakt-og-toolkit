@@ -92,9 +92,17 @@ export function refreshTokens() {
       if (r.status !== 200) throw authError('Trakt session expired; sign in again.', r.status);
       return saveTokens(r.text, t.client_id);
     } catch (error) {
-      if (epoch === generation) clearTokens();
-      if (epoch !== generation && error?.status === 502) throw authError('Signed out locally; token revocation failed.', 502);
-      throw authError('Trakt session expired; sign in again.');
+      if (epoch !== generation) {
+        if (error?.status === 502) throw authError('Signed out locally; token revocation failed.', 502);
+        throw authError('Trakt session expired; sign in again.');
+      }
+      if (error?.status === 400 || error?.status === 401) {
+        clearTokens();
+        throw authError('Trakt session expired; sign in again.', error.status);
+      }
+      // Network failures, rate limits and server errors do not reject the grant.
+      // Retain the session so a later action can retry the refresh.
+      throw authError('Could not refresh your Trakt session; try again.', error?.status || 0);
     } finally { refreshFlight = null; }
   })();
   return refreshFlight;
@@ -114,6 +122,12 @@ function wait(ms, signal) {
 
 /** Sequential polling, no transport retries: 429 belongs to this state machine. */
 export async function signIn({ onCode = () => {}, onMessage = () => {} } = {}) {
+  let lastMessage;
+  const emit = (message) => {
+    if (message === lastMessage) return;
+    lastMessage = message;
+    onMessage(message);
+  };
   cancelSignIn();
   const controller = new AbortController();
   device = controller;
@@ -141,23 +155,23 @@ export async function signIn({ onCode = () => {}, onMessage = () => {} } = {}) {
     while (current()) {
       await wait(Math.min(interval, Math.max(0, deadline - Date.now())), signal);
       if (!current()) return;
-      if (Date.now() >= deadline) { onMessage(DEVICE_MESSAGES[410]); return; }
+      if (Date.now() >= deadline) { emit(DEVICE_MESSAGES[410]); return; }
       const result = await post('/device/token', { code: code.device_code, client_id: clientId }, signal);
       if (!current()) return;
-      if (Date.now() >= deadline) { onMessage(DEVICE_MESSAGES[410]); return; }
+      if (Date.now() >= deadline) { emit(DEVICE_MESSAGES[410]); return; }
       if (result.status === 200) {
         saveTokens(result.text, clientId);
-        onMessage('Signed in to Trakt.');
+        emit('Signed in to Trakt.');
         return;
       }
-      onMessage(DEVICE_MESSAGES[result.status] || 'Trakt sign-in failed; start again.');
+      emit(DEVICE_MESSAGES[result.status] || 'Trakt sign-in failed; start again.');
       if (result.status === 429) interval += 5000;
       else if (result.status !== 400) return;
     }
   } catch {
-    if (current()) onMessage('Trakt sign-in failed; check your client ID and connection.');
+    if (current()) emit('Trakt sign-in failed; check your client ID and connection.');
   } finally {
-    if (signal.aborted) onMessage('Trakt sign-in cancelled.');
+    if (signal.aborted) emit('Trakt sign-in cancelled.');
     if (device === controller) device = null;
   }
 }

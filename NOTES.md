@@ -4,6 +4,14 @@ Working notes and known issues. Newest first.
 
 ## 2026-10-29
 
+### OAuth review fixes
+
+- Sign-in accepts any non-empty registered redirect URI and defaults to the README's
+  `http://localhost:5173/callback`. It is passed to refresh; device authorization still does not redirect.
+- Only explicit refresh rejection (HTTP 400/401) clears the session. Network errors, timeouts, rate limits,
+  server errors, and malformed success responses preserve stored tokens and show a safe retry message.
+- Polling notifications appear only when their state changes; repeated pending or slow-down replies stay quiet.
+
 ### OAuth device flow (feature 2, phase A)
 
 - Checked the current official [authentication guide](https://developer.trakt.tv/docs/authentication-oauth),

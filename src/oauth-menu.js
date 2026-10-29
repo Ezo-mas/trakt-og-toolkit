@@ -12,9 +12,9 @@ export function registerAuthMenu() {
     // Refresh's documented payload requires the app's registered redirect URI,
     // even though device authorization itself never redirects the browser.
     const uri = window.prompt('Enter the redirect URI registered for your Trakt app (used for token refresh).',
-      getPrivateValue(STORAGE.redirectUri) || '');
+      getPrivateValue(STORAGE.redirectUri) || 'http://localhost:5173/callback');
     if (uri === null) return;
-    if (!/^https:\/\/[^\s]+$/.test(uri.trim())) { toast('Enter your registered HTTPS redirect URI.'); return; }
+    if (!uri.trim()) { toast('Enter the redirect URI registered for your Trakt app.'); return; }
     try {
       setPrivateValue(STORAGE.redirectUri, uri.trim());
       await signIn({

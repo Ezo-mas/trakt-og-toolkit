@@ -45,3 +45,35 @@ test('private credentials never fall back to page localStorage', () => {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
 });
+
+test('sign-in accepts registered redirect values and pre-fills the README default', async (t) => {
+  for (const value of [undefined, 'http://localhost:5173/callback', ' custom-app:callback ', '   ', null]) {
+    await t.test(`redirect input ${String(value)}`, async (t) => {
+      const window = new Window({ url: 'https://og.trakt.tv/' });
+      t.after(() => window.close());
+      const data = new Map([['trakt.clientId', 'client']]);
+      const menus = new Map();
+      const requests = [];
+      window.GM_getValue = (k, fallback) => data.get(k) ?? fallback;
+      window.GM_setValue = (k, v) => data.set(k, v);
+      window.GM_deleteValue = (k) => data.delete(k);
+      window.GM_registerMenuCommand = (name, callback) => menus.set(name, callback);
+      window.prompt = (message, initial) => {
+        assert.match(message, /redirect URI/);
+        assert.equal(initial, 'http://localhost:5173/callback');
+        return value === undefined ? initial : value;
+      };
+      window.GM_xmlhttpRequest = (r) => {
+        requests.push(r);
+        r.onload({ status: 404, responseText: '{}', responseHeaders: '' });
+      };
+      window.document.write('<html><head></head><body></body></html>');
+      window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
+      window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
+      await menus.get('Trakt OG Toolkit: sign in')();
+      const accepted = value !== null && (value === undefined || value.trim().length > 0);
+      assert.equal(requests.length, accepted ? 1 : 0);
+      assert.equal(data.get('trakt.oauth.redirectUri'), accepted ? (value ?? 'http://localhost:5173/callback').trim() : undefined);
+    });
+  }
+});

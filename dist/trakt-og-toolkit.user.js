@@ -1075,9 +1075,15 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
         if (r.status !== 200) throw authError("Trakt session expired; sign in again.", r.status);
         return saveTokens(r.text, t.client_id);
       } catch (error) {
-        if (epoch === generation) clearTokens();
-        if (epoch !== generation && error?.status === 502) throw authError("Signed out locally; token revocation failed.", 502);
-        throw authError("Trakt session expired; sign in again.");
+        if (epoch !== generation) {
+          if (error?.status === 502) throw authError("Signed out locally; token revocation failed.", 502);
+          throw authError("Trakt session expired; sign in again.");
+        }
+        if (error?.status === 400 || error?.status === 401) {
+          clearTokens();
+          throw authError("Trakt session expired; sign in again.", error.status);
+        }
+        throw authError("Could not refresh your Trakt session; try again.", error?.status || 0);
       } finally {
         refreshFlight = null;
       }
@@ -1102,6 +1108,12 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
   async function signIn({ onCode = () => {
   }, onMessage = () => {
   } } = {}) {
+    let lastMessage;
+    const emit = (message) => {
+      if (message === lastMessage) return;
+      lastMessage = message;
+      onMessage(message);
+    };
     cancelSignIn();
     const controller = new AbortController();
     device = controller;
@@ -1129,28 +1141,28 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
         await wait(Math.min(interval, Math.max(0, deadline - Date.now())), signal);
         if (!current()) return;
         if (Date.now() >= deadline) {
-          onMessage(DEVICE_MESSAGES[410]);
+          emit(DEVICE_MESSAGES[410]);
           return;
         }
         const result = await post("/device/token", { code: code.device_code, client_id: clientId }, signal);
         if (!current()) return;
         if (Date.now() >= deadline) {
-          onMessage(DEVICE_MESSAGES[410]);
+          emit(DEVICE_MESSAGES[410]);
           return;
         }
         if (result.status === 200) {
           saveTokens(result.text, clientId);
-          onMessage("Signed in to Trakt.");
+          emit("Signed in to Trakt.");
           return;
         }
-        onMessage(DEVICE_MESSAGES[result.status] || "Trakt sign-in failed; start again.");
+        emit(DEVICE_MESSAGES[result.status] || "Trakt sign-in failed; start again.");
         if (result.status === 429) interval += 5e3;
         else if (result.status !== 400) return;
       }
     } catch {
-      if (current()) onMessage("Trakt sign-in failed; check your client ID and connection.");
+      if (current()) emit("Trakt sign-in failed; check your client ID and connection.");
     } finally {
-      if (signal.aborted) onMessage("Trakt sign-in cancelled.");
+      if (signal.aborted) emit("Trakt sign-in cancelled.");
       if (device === controller) device = null;
     }
   }
@@ -1811,11 +1823,11 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       }
       const uri = window.prompt(
         "Enter the redirect URI registered for your Trakt app (used for token refresh).",
-        getPrivateValue(STORAGE.redirectUri) || ""
+        getPrivateValue(STORAGE.redirectUri) || "http://localhost:5173/callback"
       );
       if (uri === null) return;
-      if (!/^https:\/\/[^\s]+$/.test(uri.trim())) {
-        toast("Enter your registered HTTPS redirect URI.");
+      if (!uri.trim()) {
+        toast("Enter the redirect URI registered for your Trakt app.");
         return;
       }
       try {

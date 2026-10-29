@@ -41,7 +41,7 @@ season cards, and the upcoming features need one. Any user can create one for fr
 | App name | `OG Toolkit` (or `Trakt OG Toolkit`) |
 | Description | `Userscript for og.trakt.tv: custom links and rating helpers. Public API endpoints only.` |
 | App type | **Development** — currently the only option |
-| Redirect URIs | `http://localhost:5173/callback` — the form wants one; this script never uses it |
+| Redirect URIs | `http://localhost:5173/callback` — must match the value entered at sign-in; used when refreshing tokens |
 | Allowed origins | leave empty (GM_xmlhttpRequest bypasses CORS); `http://localhost:5173` only if you use the fetch fallback |
 
 Then copy the **Client ID**. Never copy the Client Secret into the script — current Trakt device authentication does not need it.
@@ -55,8 +55,8 @@ Set it from the userscript menu: **Trakt OG Toolkit: set API client ID**.
 ## Optional Trakt sign-in
 
 The userscript menu now supports **sign in**, **cancel sign-in**, **sign out**, and **show signed-in user**.
-Set your own API client ID first. Sign-in asks for your app's registered HTTPS redirect URI (needed for token
-refresh), then displays a device code and Trakt verification URL. Open that URL in another tab and authorize the
+Set your own API client ID first. Sign-in asks for your app's registered redirect URI (needed for token refresh),
+pre-filled with `http://localhost:5173/callback`, then displays a device code and Trakt verification URL. Open that URL in another tab and authorize the
 code; press OK to continue waiting, or Cancel to stop. You can also stop polling from the cancel sign-in menu.
 No client secret is needed with Trakt's current device API.
 

@@ -67,6 +67,22 @@ test('device polling and token security', async (t) => {
       assert.equal(new URL(r.url).search, ''); assert.equal(r.body.client_secret, undefined);
     }
   });
+  await t.test('polling messages appear only when the state changes', async (t) => {
+    reset(); t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 100000 });
+    const statuses = [400, 400, 429, 429, 400, 200];
+    mock((r) => r.url.endsWith('/code') ? { status: 200, body: { ...codes, expires_in: 100 } } :
+      { status: statuses.shift(), body: token() });
+    const messages = [];
+    const flow = oauth.signIn({ onMessage: (m) => messages.push(m) });
+    await settle();
+    for (const delay of [2000, 2000, 2000, 7000, 12000, 12000]) {
+      t.mock.timers.tick(delay); await settle();
+    }
+    await flow;
+    assert.equal(calls.length, 7);
+    assert.deepEqual(messages, [oauth.DEVICE_MESSAGES[400], oauth.DEVICE_MESSAGES[429],
+      oauth.DEVICE_MESSAGES[400], 'Signed in to Trakt.']);
+  });
   await t.test('local expiration respects expires_in', async (t) => {
     reset(); t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 100000 });
     mock((r) => r.url.endsWith('/code') ? { status: 200, body: { ...codes, expires_in: 3 } } : { status: 400 });
@@ -117,6 +133,35 @@ test('authenticated requests, refresh, sign-out and sanitized failures', async (
       assert.equal(oauth.isSignedIn(), false);
       assert.equal(calls.filter((r) => r.url.endsWith('/token')).length, failure === 'proactive-retry' ? 2 : 1);
       assert.ok(calls.length <= 4);
+    });
+  }
+  for (const failure of ['network', 'timeout', 429, 500, 503, 'malformed']) {
+    await t.test(`refresh retains tokens after ${failure} and permits a later retry`, async () => {
+      reset(); stored(Date.now());
+      const before = structuredClone(storage.get(STORAGE.tokens));
+      mock(() => typeof failure === 'number' ? { status: failure, body: token() } :
+        failure === 'malformed' ? { status: 200, body: {} } : null);
+      const auth = apiAuth('GET', '/users/me');
+      const rejected = assert.rejects(auth, /Could not refresh.*try again/);
+      await settle();
+      if (failure === 'network') calls[0].onerror();
+      if (failure === 'timeout') calls[0].ontimeout();
+      await rejected;
+      assert.deepEqual(storage.get(STORAGE.tokens), before);
+      assert.equal(oauth.isSignedIn(), true);
+      assert.equal(calls.length, 1);
+      mock((r) => r.url.endsWith('/token') ? { status: 200, body: token('recovered', 'recovered-refresh') } :
+        { status: 200, body: { username: 'tester' } });
+      assert.equal((await apiAuth('GET', '/users/me')).username, 'tester');
+      assert.equal(storage.get(STORAGE.tokens).refresh_token, 'recovered-refresh');
+    });
+  }
+  for (const status of [400, 401]) {
+    await t.test(`explicit refresh rejection ${status} clears tokens`, async () => {
+      reset(); stored(Date.now()); mock(() => ({ status, body: token() }));
+      await assert.rejects(apiAuth('GET', '/users/me'), /sign in again/);
+      assert.equal(storage.has(STORAGE.tokens), false);
+      assert.equal(oauth.isSignedIn(), false);
     });
   }
   await t.test('sign-out revokes with JSON and clears stored tokens', async () => {
