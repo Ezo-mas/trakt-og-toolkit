@@ -3,8 +3,8 @@
 An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds the useful old-Trakt bits og doesn't have
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
-**Status:** v0.1.1 — the Watch & Links panel, with a fixed trailer player and reliable episode pickers. Ratings,
-playback progress and the season chart are next.
+**Status:** v0.1.2 — the Watch & Links panel, with a fixed trailer player, reliable episode pickers and a hydration-safe
+mount. Ratings, playback progress and the season chart are next.
 
 ## Install
 
@@ -87,9 +87,13 @@ Notes:
 ```bash
 npm install
 npm run build     # dist/trakt-og-toolkit.user.js
-npm run watch     # rebuild on change
+npm run dev       # watch + localhost:8787 for Violentmonkey tracking
 npm test          # unit + happy-dom integration tests
 ```
+
+`npm run dev` starts the esbuild watcher and a no-cache server for `dist/` in one terminal. Install the script from
+`http://localhost:8787/trakt-og-toolkit.user.js` once in Violentmonkey, click **Track external edits**, and keep the
+installer tab open. Every rebuild is picked up automatically. See `NOTES.md` for details.
 
 `npm test` runs the built bundle against trimmed copies of og's markup. To check it against a real page:
 
@@ -97,9 +101,6 @@ npm test          # unit + happy-dom integration tests
 curl -sSL https://og.trakt.tv/shows/breaking-bad -o /tmp/show.html
 node scripts/live-check.mjs /tmp/show.html https://og.trakt.tv/shows/breaking-bad
 ```
-
-For a fast manual loop, see `NOTES.md`: Violentmonkey's **Track external edits** reloads the script and page on every
-`npm run watch` rebuild.
 
 ### Layout
 

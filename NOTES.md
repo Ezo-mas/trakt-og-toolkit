@@ -47,15 +47,15 @@ now. If they still vanish without the toolkit, it is an og launch bug.
 Do not chase the `Security Error: ... may not load or link to file:///` message: the bundle has no `file:` references,
 and the error points at og's inline script (`injectedScript` line 290/369).
 
-### Next: dev environment
+### Dev environment
 
 Use Violentmonkey's **Track external edits** rather than the Tampermonkey update-URL loop:
 
-1. `npm run watch` rebuilds `dist/trakt-og-toolkit.user.js`.
-2. Serve the folder with `npx http-server dist -p 8787 -c-1`.
-3. Open `http://localhost:8787/trakt-og-toolkit.user.js` in Violentmonkey and click **Track external edits**
+1. `npm run dev` starts the esbuild watcher and serves `dist/` on `http://localhost:8787`.
+2. Open `http://localhost:8787/trakt-og-toolkit.user.js` in Violentmonkey and click **Track external edits**
    (enable **Reload tab** too).
-4. Keep the installer tab open; every rebuild is picked up and the og tab reloads.
+3. Keep the installer tab open; every rebuild is picked up and the og tab reloads.
+4. Use `PORT=8788 npm run dev` if 8787 is taken.
 
 No version bump and no manual "check for updates". Disable the Tampermonkey copy while doing this so only one panel
 mounts. Keep Tampermonkey for release smoke tests.

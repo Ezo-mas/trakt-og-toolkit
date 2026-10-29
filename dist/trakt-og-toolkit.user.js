@@ -3,7 +3,7 @@
 // @namespace    https://github.com/trakt-og-toolkit
 // @version      0.1.2
 // @description  Watch links, trailers and (soon) ratings helpers for og.trakt.tv.
-// @author       Trakt OG Toolkit contributors
+// @author       Ezo-mas
 // @license      MIT
 // @match        https://og.trakt.tv/*
 // @match        http://localhost:5173/*
