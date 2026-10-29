@@ -2107,19 +2107,22 @@
         status.textContent = "No paused items selected.";
         return;
       }
-      const result = await playbackApi.clearItems(ids, (message) => window.confirm(message));
+      const result = await playbackApi.clearItems(ids, (message2) => window.confirm(message2));
       if (result.cancelled || !alive()) return;
       selected.clear();
       const summary2 = `${result.cleared.length} cleared${result.failed.length ? `; ${result.failed.length} failed — try again` : ""}.`;
       items = [];
       render();
+      let message = summary2;
       try {
         await read(true);
-        status.textContent = summary2;
       } catch (error) {
         debugError("playback refresh failed", error);
-        if (alive()) status.textContent = `${summary2} Could not refresh playback; try Refresh.`;
+        message = `${summary2} Could not refresh playback; try Refresh.`;
       }
+      if (!alive()) return;
+      if (!overview && node.hidden) toast(`Paused playback: ${message}`);
+      else status.textContent = message;
     }
     async function onClick(event) {
       const target = event.target.closest("button[data-action]");

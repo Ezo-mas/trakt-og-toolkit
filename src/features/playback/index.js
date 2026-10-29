@@ -1,6 +1,7 @@
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
 import { isSignedIn } from '../../core/trakt.js';
+import { toast } from '../../ui/shell.js';
 import { playbackApi } from './api.js';
 import { matchesRoute, olderThan } from './data.js';
 import { CSS } from './styles.js';
@@ -80,11 +81,16 @@ function createPanel(route) {
     const summary = `${result.cleared.length} cleared${result.failed.length ? `; ${result.failed.length} failed — try again` : ''}.`;
     // Never leave deleted rows displayed as if they were still current.
     items = []; render();
-    try { await read(true); status.textContent = summary; }
+    let message = summary;
+    try { await read(true); }
     catch (error) {
       debugError('playback refresh failed', error);
-      if (alive()) status.textContent = `${summary} Could not refresh playback; try Refresh.`;
+      message = `${summary} Could not refresh playback; try Refresh.`;
     }
+    if (!alive()) return;
+    // A cleared badge hides its own panel, so its status line would never be seen.
+    if (!overview && node.hidden) toast(`Paused playback: ${message}`);
+    else status.textContent = message;
   }
   async function onClick(event) {
     const target = event.target.closest('button[data-action]');

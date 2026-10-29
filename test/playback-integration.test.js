@@ -77,6 +77,7 @@ test('movie and episode badges match exact media and clear the playback entry', 
       assert.match(b.confirmations[0], /1 item\?/);
       assert.equal(b.calls.filter((r) => r.method === 'DELETE')[0].url, `https://api.trakt.tv/sync/playback/${episode ? 102 : 101}`);
       assert.equal(panel(b.document).hidden, true);
+      assert.match(b.document.querySelector('.ogt-toast').textContent, /Paused playback: 1 cleared\./);
     });
   }
 });
