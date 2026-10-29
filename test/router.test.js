@@ -53,3 +53,10 @@ test('non-title routes', () => {
 function pick(object, keys) {
   return Object.fromEntries(keys.map((key) => [key, object[key]]));
 }
+
+test('user progress routes include tab and sort variants', () => {
+  for (const path of ['/users/tester/progress', '/users/tester/progress/rewatching/title/asc']) {
+    assert.equal(parseRoute(path).name, 'progress'); assert.equal(parseRoute(path).id, 'tester');
+  }
+  assert.equal(parseRoute('/users/tester/history').name, 'other');
+});

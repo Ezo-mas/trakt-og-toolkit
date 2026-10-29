@@ -13,6 +13,37 @@ Working notes and known issues. Newest first.
 - Cloudflare in front of Trakt returns 403 to Node's default user agent. Browsers are fine; scripts and tests
   that hit the real API must send a `User-Agent`.
 
+### Playback manager (feature 2, phase B)
+
+- Checked official [sync endpoint contracts](https://github.com/trakt/api-help/blob/28e57aa64da82139abc4185fda4096adc8352ca3/projects/api/src/contracts/sync/index.ts)
+  and playback response schemas at `28e57aa64da82139abc4185fda4096adc8352ca3` on 2026-10-29.
+  GET `/sync/playback/movies` returns `{ id, progress, paused_at, type, movie }`; episodes return
+  `{ id, progress, paused_at, type, episode, show }`. The top-level ID is the playback ID, not the media ID.
+  DELETE `/sync/playback/:id` returns 204; invalid IDs return 404. Progress is already a 0–100 percentage.
+- Pagination is opt-in: omitting page/limit returns the entire set. This lets both lists load in just two calls.
+  Posters require `extended=images`; images are string arrays, may omit the HTTPS scheme, and episode entries
+  use the parent show's poster. Missing images get a placeholder; only HTTPS media.trakt.tv images are displayed.
+- `apiAuth` previously rejected all query strings. It still rejects raw query strings, but now has a fourth
+  options argument accepting only `{ extended: 'images' }` on GET. Credentials remain in headers, never URLs.
+- Placement checked against [trakt-og](https://github.com/trakt/trakt-og/tree/3bc2aae65d1a17d5c57360706b3f6745fcd10319)
+  routes `movies/[id]`, `shows/[id]/seasons/[season]/episodes/[episode]`, and
+  `users/[id]/progress/[[type=progressType]]/[...sort]`. ProgressList renders `section.progress` and Watching,
+  Rewatching and Dropped tabs; ProgressPage reads watched/up-next progress, not paused playback. Its loader allows
+  only the og user's own progress page. The new section sits immediately above that list, with an explicit toolkit
+  account label because og and toolkit may be signed in to different Trakt accounts. Its Load button fetches on demand.
+  Badges go after `.summary-frame #overview .top`, through the existing hydration-gated feature host.
+- Playback cache/deduplication is memory-only for 60 seconds, independent of the public GET cache. Auth-change
+  events discard private cached/in-flight results, remove signed-out UI, and stop queued deletes after a session
+  change. Deletes confirm the deduplicated item count, run at most four authenticated requests concurrently through
+  the shared HTTP queue, invalidate cached data, report partial failures and reload the list.
+- Network policy denied live requests to og.trakt.tv (movie, episode and progress attempts returned 403). No new
+  live HTML could be captured. Movie integration tests reuse the existing trimmed markup; new episode and progress
+  fixtures are explicitly source-derived mirrors of EpisodePage/SummaryFrame/ProgressList at the og commit above.
+  They are not claimed as live captures. Real account fetches/deletes and live Firefox/Chromium extension testing
+  remain unverified. A local headless Chromium check with mocked account data passed overview rendering, confirmed
+  age-based deletion and list refresh; this does not establish live userscript-manager compatibility. No scrobble/pause
+  requests or manual progress setting were implemented.
+
 ### OAuth review fixes
 
 - Sign-in accepts any non-empty registered redirect URI and defaults to the README's

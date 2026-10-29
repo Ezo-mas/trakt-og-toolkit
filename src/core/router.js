@@ -33,6 +33,8 @@ const TITLE_PATH = /^\/(shows|movies)\/([^/]+)(?:\/(.*))?$/;
 
 export function parseRoute(pathname = location.pathname) {
   const path = pathname.replace(/\/+$/, '') || '/';
+  const progress = path.match(/^\/users\/([^/]+)\/progress(?:\/.*)?$/);
+  if (progress) return { name: 'progress', kind: null, id: progress[1], path, key: path };
   const match = path.match(TITLE_PATH);
 
   if (!match) {

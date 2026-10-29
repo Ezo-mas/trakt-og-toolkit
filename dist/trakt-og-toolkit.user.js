@@ -290,6 +290,8 @@
   var TITLE_PATH = /^\/(shows|movies)\/([^/]+)(?:\/(.*))?$/;
   function parseRoute(pathname = location.pathname) {
     const path = pathname.replace(/\/+$/, "") || "/";
+    const progress = path.match(/^\/users\/([^/]+)\/progress(?:\/.*)?$/);
+    if (progress) return { name: "progress", kind: null, id: progress[1], path, key: path };
     const match = path.match(TITLE_PATH);
     if (!match) {
       return { name: "other", kind: null, id: null, path, key: path };
@@ -1050,6 +1052,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
   function clearTokens() {
     generation += 1;
     removePrivateValue(STORAGE.tokens);
+    if (typeof document !== "undefined") document.dispatchEvent(new Event("ogt:authchange"));
   }
   function refreshTokens() {
     if (refreshFlight) return refreshFlight;
@@ -1156,6 +1159,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
         }
         if (result.status === 200) {
           saveTokens(result.text, clientId);
+          if (typeof document !== "undefined") document.dispatchEvent(new Event("ogt:authchange"));
           emit("Signed in to Trakt.");
           return;
         }
@@ -1228,16 +1232,20 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     await apiGet("/shows/breaking-bad", { ttl: 0 });
     return Date.now() - started;
   }
-  async function apiAuth(method, path, body) {
+  async function apiAuth(method, path, body, { extended } = {}) {
     if (!/^\/(?!\/)/.test(path) || /[?#]/.test(path) || path.includes("://")) {
       throw authError("Authenticated API paths must be relative and contain no query.");
     }
+    if (extended !== void 0 && (method !== "GET" || extended !== "images")) {
+      throw authError("Unsupported authenticated query option.");
+    }
+    const requestPath = extended === "images" ? `${path}?extended=images` : path;
     let tokens = readTokens();
     if (!tokens) throw authError("Signed out; sign in to Trakt.");
     if (tokens.expires_at <= Date.now() + 6e4) {
       tokens = await refreshTokens();
     }
-    const send = (t) => privateRequest(`${API.base}${path}`, {
+    const send = (t) => privateRequest(`${API.base}${requestPath}`, {
       method,
       headers: {
         "Content-Type": "application/json",
@@ -1501,6 +1509,335 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     }
   };
 
+  // src/features/playback/data.js
+  var DAY = 24 * 60 * 60 * 1e3;
+  function posterUrl(value) {
+    if (typeof value !== "string" || !value) return null;
+    try {
+      const url = new URL(value.startsWith("https://") ? value : `https://${value}`);
+      return url.protocol === "https:" && url.hostname === "media.trakt.tv" ? url.href : null;
+    } catch {
+      return null;
+    }
+  }
+  function mapPlayback(rows, kind) {
+    const mapped = [];
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const media = kind === "movie" ? row?.movie : row?.show;
+      const episode = row?.episode;
+      if (!Number.isSafeInteger(row?.id) || row.id <= 0 || !media?.ids || typeof row.progress !== "number" || !Number.isFinite(row.progress) || row.progress < 0 || row.progress > 100 || !Number.isFinite(Date.parse(row.paused_at))) continue;
+      if (kind === "episode" && (!Number.isInteger(episode?.season) || episode.season < 0 || !Number.isInteger(episode?.number) || episode.number < 1)) continue;
+      const slug = media.ids.slug || media.ids.trakt;
+      if (!slug) continue;
+      const root = `/${kind === "movie" ? "movies" : "shows"}/${encodeURIComponent(slug)}`;
+      mapped.push({
+        id: row.id,
+        kind,
+        ids: { ...media.ids },
+        season: kind === "episode" ? episode.season : null,
+        episode: kind === "episode" ? episode.number : null,
+        title: kind === "movie" ? media.title || "Untitled movie" : `${media.title || "Untitled show"} · ${episode.season}×${String(episode.number).padStart(2, "0")} · ${episode.title || "Untitled episode"}`,
+        href: kind === "movie" ? root : `${root}/seasons/${episode.season}/episodes/${episode.number}`,
+        poster: posterUrl(media.images?.poster?.[0]),
+        progress: row.progress,
+        pausedAt: row.paused_at,
+        pausedMs: Date.parse(row.paused_at)
+      });
+    }
+    return sortPlayback(mapped);
+  }
+  function sortPlayback(items) {
+    return [...items].sort((a, b) => b.pausedMs - a.pausedMs || a.id - b.id);
+  }
+  function olderThan(items, days, now = Date.now()) {
+    if (String(days).trim() === "" || !Number.isFinite(Number(days)) || Number(days) < 0) return [];
+    const cutoff = now - Number(days) * DAY;
+    return items.filter((item) => Number.isFinite(item.pausedMs) && item.pausedMs < cutoff);
+  }
+  function matchesRoute(item, route) {
+    const kind = route.name === "episode" ? "episode" : route.kind;
+    return item.kind === kind && [item.ids.slug, item.ids.trakt].some((id) => id != null && String(id) === route.id) && (kind !== "episode" || item.season === route.season && item.episode === route.episode);
+  }
+
+  // src/features/playback/api.js
+  var TTL = 6e4;
+  function createPlaybackApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
+    const cache2 = /* @__PURE__ */ new Map();
+    const flights = /* @__PURE__ */ new Map();
+    let revision = 0;
+    let session = 0;
+    function invalidate() {
+      revision += 1;
+      cache2.clear();
+      flights.clear();
+    }
+    function resetSession() {
+      session += 1;
+      invalidate();
+    }
+    async function load(kind, { force = false } = {}) {
+      if (!signedIn()) {
+        resetSession();
+        return [];
+      }
+      if (force) invalidate();
+      const hit = cache2.get(kind);
+      if (hit && hit.until > now()) return hit.items;
+      if (flights.has(kind)) return flights.get(kind);
+      const rev = revision;
+      const epoch = session;
+      const flight = (async () => {
+        const rows = await auth("GET", `/sync/playback/${kind === "movie" ? "movies" : "episodes"}`, void 0, { extended: "images" });
+        if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
+        if (!Array.isArray(rows)) throw new Error("Invalid playback response.");
+        const items = mapPlayback(rows, kind);
+        if (rev === revision) cache2.set(kind, { items, until: now() + TTL });
+        return items;
+      })();
+      flights.set(kind, flight);
+      try {
+        return await flight;
+      } finally {
+        if (flights.get(kind) === flight) flights.delete(kind);
+      }
+    }
+    async function loadAll({ force = false } = {}) {
+      if (force) invalidate();
+      const [movies, episodes] = await Promise.all([load("movie"), load("episode")]);
+      return sortPlayback([...movies, ...episodes]);
+    }
+    async function clearItems(ids, confirm) {
+      const unique = [...new Set(ids)];
+      if (unique.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new Error("Invalid playback ID.");
+      if (!signedIn()) throw new Error("Sign in to Trakt first.");
+      const epoch = session;
+      if (!unique.length || !confirm(`Clear paused playback for ${unique.length} item${unique.length === 1 ? "" : "s"}? This cannot be undone.`)) {
+        return { cancelled: true, cleared: [], failed: [] };
+      }
+      let cursor = 0;
+      const cleared = [];
+      const failed = [];
+      try {
+        await Promise.all(Array.from({ length: Math.min(4, unique.length) }, async () => {
+          while (cursor < unique.length) {
+            const id = unique[cursor++];
+            if (session !== epoch || !signedIn()) {
+              failed.push(id);
+              continue;
+            }
+            try {
+              await auth("DELETE", `/sync/playback/${id}`);
+              cleared.push(id);
+            } catch {
+              failed.push(id);
+            }
+          }
+        }));
+      } finally {
+        invalidate();
+      }
+      return { cancelled: false, cleared, failed };
+    }
+    return { load, loadAll, clearItems, invalidate, resetSession };
+  }
+  var playbackApi = createPlaybackApi();
+  if (typeof document !== "undefined") document.addEventListener("ogt:authchange", () => playbackApi.resetSession());
+
+  // src/features/playback/styles.js
+  var CSS2 = String.raw`
+.ogt-playback { color: var(--ogt-fg); }
+.ogt-playback__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 8px; }
+.ogt-playback__list { list-style: none; padding: 0; margin: 0; }
+.ogt-playback__item { display: flex; align-items: center; gap: 12px; padding-block: 8px; border-block-end: 1px solid light-dark(#ddd, #444); }
+.ogt-playback__poster { inline-size: 42px; block-size: 63px; object-fit: cover; background: light-dark(#eee, #333); flex-shrink: 0; }
+.ogt-playback__details { flex: 1; min-inline-size: 0; }
+.ogt-playback__date { display: block; font-size: .85em; color: light-dark(#555, #bbb); }
+.ogt-playback__meter { inline-size: 90px; accent-color: var(--brand-primary, #ed1c24); }
+.ogt-playback__days { inline-size: 5em; }
+.ogt-playback [hidden] { display: none; }
+`;
+
+  // src/features/playback/index.js
+  var ID = "ogt-playback";
+  var percent = (value) => `${Number(value.toFixed(1))}%`;
+  var button = (label, action) => el("button", { class: "ogt-chip", type: "button", text: label, dataset: { action } });
+  function createPanel2(route) {
+    const overview = route.name === "progress";
+    const kind = route.name === "episode" ? "episode" : "movie";
+    let destroyed = false;
+    let busy = false;
+    let items = [];
+    let loaded = false;
+    const selected = /* @__PURE__ */ new Set();
+    const status = el("p", { class: "ogt-hint", role: "status", "aria-live": "polite" });
+    const content = el("div");
+    const node = el(
+      "section",
+      { id: ID, class: "ogt-panel ogt-playback", "aria-labelledby": `${ID}-title`, hidden: !overview },
+      el("h2", { class: "ogt-title", id: `${ID}-title`, text: overview ? "Paused playback" : "Playback progress" }),
+      ...overview ? [
+        el("p", { class: "ogt-hint", text: "Your paused movies and episodes from the toolkit’s Trakt account." }),
+        button("Load paused playback", "load")
+      ] : [],
+      status,
+      content
+    );
+    function alive() {
+      return !destroyed && isSignedIn();
+    }
+    function lock(next) {
+      busy = next;
+      node.setAttribute("aria-busy", String(next));
+      for (const input of node.querySelectorAll("button, input")) input.disabled = next;
+    }
+    function render() {
+      if (!alive()) return;
+      content.replaceChildren();
+      if (!overview) {
+        const item = items.find((row) => matchesRoute(row, route));
+        node.hidden = !item;
+        if (!item) return;
+        const clear2 = button("Clear", "one");
+        clear2.dataset.id = String(item.id);
+        content.append(el(
+          "div",
+          { class: "ogt-playback__tools" },
+          el("span", { text: `${percent(item.progress)} paused` }),
+          el("progress", { class: "ogt-playback__meter", max: 100, value: item.progress, "aria-label": "Saved playback progress" }),
+          clear2
+        ));
+        return;
+      }
+      node.querySelector('[data-action="load"]').textContent = loaded ? "Refresh paused playback" : "Load paused playback";
+      if (!loaded) return;
+      for (const id of selected) if (!items.some((row) => row.id === id)) selected.delete(id);
+      if (!items.length) {
+        content.append(el("p", { class: "ogt-hint", text: "No paused playback." }));
+        return;
+      }
+      const all = el("input", { type: "checkbox", dataset: { action: "all" }, checked: items.every((row) => selected.has(row.id)), "aria-label": "Select all paused items" });
+      const tools = el(
+        "div",
+        { class: "ogt-playback__tools" },
+        el("label", {}, all, " Select all"),
+        button("Clear selected", "selected"),
+        el("label", {}, "Older than ", el("input", { class: "ogt-select ogt-playback__days", type: "number", min: 0, step: 1, value: 30, "aria-label": "Age in days" }), " days"),
+        button("Clear older items", "age")
+      );
+      const list = el("ul", { class: "ogt-playback__list" });
+      for (const item of items) {
+        const clear2 = button("Clear", "one");
+        clear2.dataset.id = String(item.id);
+        const poster = item.poster ? el("img", { class: "ogt-playback__poster", src: item.poster, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }) : el("span", { class: "ogt-playback__poster", "aria-hidden": true });
+        list.append(el(
+          "li",
+          { class: "ogt-playback__item" },
+          el("input", { type: "checkbox", dataset: { id: item.id, action: "select" }, checked: selected.has(item.id), "aria-label": `Select ${item.title}` }),
+          poster,
+          el(
+            "div",
+            { class: "ogt-playback__details" },
+            el("a", { href: item.href, text: item.title }),
+            el("span", { text: ` · ${percent(item.progress)}` }),
+            el("time", { class: "ogt-playback__date", datetime: item.pausedAt, text: `Paused ${new Date(item.pausedMs).toLocaleString()}` })
+          ),
+          clear2
+        ));
+      }
+      content.append(tools, list);
+    }
+    async function read(force = false) {
+      items = overview ? await playbackApi.loadAll({ force }) : await playbackApi.load(kind, { force });
+      if (!alive()) return;
+      loaded = true;
+      render();
+    }
+    async function clear(ids) {
+      if (!ids.length) {
+        status.textContent = "No paused items selected.";
+        return;
+      }
+      const result = await playbackApi.clearItems(ids, (message) => window.confirm(message));
+      if (result.cancelled || !alive()) return;
+      selected.clear();
+      const summary2 = `${result.cleared.length} cleared${result.failed.length ? `; ${result.failed.length} failed — try again` : ""}.`;
+      items = [];
+      render();
+      try {
+        await read(true);
+        status.textContent = summary2;
+      } catch (error) {
+        debugError("playback refresh failed", error);
+        if (alive()) status.textContent = `${summary2} Could not refresh playback; try Refresh.`;
+      }
+    }
+    async function onClick(event) {
+      const target = event.target.closest("button[data-action]");
+      if (!target || !node.contains(target) || busy || !alive()) return;
+      const action = target.dataset.action;
+      lock(true);
+      try {
+        if (action === "load") {
+          status.textContent = "Loading paused playback…";
+          await read(true);
+          if (alive()) status.textContent = "";
+        } else if (action === "one") await clear([Number(target.dataset.id)]);
+        else if (action === "selected") await clear([...selected]);
+        else if (action === "age") {
+          const days = node.querySelector('[aria-label="Age in days"]').value;
+          if (days.trim() === "" || !Number.isInteger(Number(days)) || Number(days) < 0) {
+            status.textContent = "Enter a whole number of days, zero or greater.";
+          } else await clear(olderThan(items, days).map((row) => row.id));
+        }
+      } catch (error) {
+        debugError("playback request failed", error);
+        if (alive()) status.textContent = "Could not load paused playback; try again.";
+      } finally {
+        if (alive()) lock(false);
+      }
+    }
+    function onChange(event) {
+      const input = event.target;
+      if (input.dataset.action === "all") {
+        selected.clear();
+        if (input.checked) for (const row of items) selected.add(row.id);
+        for (const box of node.querySelectorAll('[data-action="select"]')) box.checked = input.checked;
+      } else if (input.dataset.action === "select") {
+        if (input.checked) selected.add(Number(input.dataset.id));
+        else selected.delete(Number(input.dataset.id));
+        node.querySelector('[data-action="all"]').checked = items.every((row) => selected.has(row.id));
+      }
+    }
+    node.addEventListener("click", onClick);
+    node.addEventListener("change", onChange);
+    if (!overview) {
+      read().catch((error) => {
+        if (alive()) debugError("playback badge lookup failed", error);
+      });
+    }
+    return { node, destroy() {
+      destroyed = true;
+      node.removeEventListener("click", onClick);
+      node.removeEventListener("change", onChange);
+      node.remove();
+    } };
+  }
+  var playback = {
+    id: "playback",
+    css: CSS2,
+    match(route) {
+      return isSignedIn() && (route.name === "progress" || route.kind === "movie" && route.name === "title" || route.name === "episode");
+    },
+    mount(route) {
+      if (document.getElementById(ID)) return null;
+      const anchor = route.name === "progress" ? document.querySelector("section.progress") : document.querySelector(".summary-frame #overview .top");
+      if (!anchor?.parentElement) return null;
+      const panel = createPanel2(route);
+      anchor.parentElement.insertBefore(panel.node, route.name === "progress" ? anchor : anchor.nextSibling);
+      return panel;
+    }
+  };
+
   // src/features/season-chart/data.js
   var CHART_WIDTH = 720;
   var CHART_HEIGHT = 180;
@@ -1509,7 +1846,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     const match = value.match(/x\s*(\d+)\s*$/i);
     return match ? Number(match[1]) : null;
   }
-  function percent(value) {
+  function percent2(value) {
     const match = value.match(/(\d+(?:\.\d+)?)\s*%/);
     return match ? Number(match[1]) : null;
   }
@@ -1527,7 +1864,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       episodes.push({
         number,
         title: text(titleLink),
-        rating: percent(text(row.querySelector(".rating-trigger .value"))),
+        rating: percent2(text(row.querySelector(".rating-trigger .value"))),
         votes: null,
         href: titleLink.getAttribute("href")
       });
@@ -1603,7 +1940,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
   }
 
   // src/features/season-chart/styles.js
-  var CSS2 = String.raw`
+  var CSS3 = String.raw`
 .ogt-season-chart__summary {
   margin: 0 0 8px;
   color: var(--ogt-fg);
@@ -1742,7 +2079,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       chart.append(link, svg("text", { class: "ogt-season-chart__episode-number", x, y: height - 7 }, String(episode.number)));
     }
   }
-  function createPanel2(episodes) {
+  function createPanel3(episodes) {
     let cancelled = false;
     let currentEpisodes = episodes;
     const headingId = `${PANEL_ID2}-title`;
@@ -1780,7 +2117,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
   }
   var seasonChart = {
     id: "season-chart",
-    css: CSS2,
+    css: CSS3,
     match(route) {
       return route.kind === "show" && route.name === "season";
     },
@@ -1789,7 +2126,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       const episodesSection = document.querySelector("section.episodes");
       if (!episodesSection) return null;
       const fallback = readSeasonEpisodes(document);
-      const panel = createPanel2(fallback);
+      const panel = createPanel3(fallback);
       episodesSection.parentElement.insertBefore(panel.node, episodesSection);
       if (getClientId()) {
         getSeasonEpisodes(route.id, route.season).then((episodes) => {
@@ -1946,7 +2283,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart];
+  var FEATURES = [customLinks, seasonChart, playback];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))
@@ -1961,6 +2298,7 @@ MIT licensed.`);
     const sync = () => {
       if (canMount && host) host(route);
     };
+    document.addEventListener("ogt:authchange", sync);
     const openGate = () => {
       if (canMount) return;
       canMount = true;
