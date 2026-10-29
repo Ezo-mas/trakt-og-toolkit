@@ -69,8 +69,6 @@ export function parseRoute(pathname = location.pathname) {
   return { name, kind, id, rest, season, episode, path, key: path };
 }
 
-export const isTitlePage = (route) => route.name === 'title';
-
 /**
  * Watch SvelteKit's client-side navigation.
  *

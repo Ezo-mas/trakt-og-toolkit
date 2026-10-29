@@ -9,14 +9,14 @@ import { VERSION } from './meta.js';
 import { injectStyles } from './ui/shell.js';
 import { createRouter, parseRoute } from './core/router.js';
 import { createFeatureHost } from './features/host.js';
-import { watchNow } from './features/watch-now/index.js';
+import { waitForPageReady, watchModuleResources } from './core/hydration.js';
+import { customLinks } from './features/custom-links/index.js';
 import { registerMenu } from './menu.js';
 import { applyDebugSetting } from './settings.js';
-import { info } from './core/log.js';
+import { info, warn } from './core/log.js';
 import { cacheSize } from './core/http.js';
 
-const FEATURES = [watchNow];
-const INITIAL_MOUNT_DELAY_MS = 750;
+const FEATURES = [customLinks];
 
 function isSvelteKit() {
   return Boolean(
@@ -27,45 +27,69 @@ function isSvelteKit() {
 }
 
 function start() {
-  applyDebugSetting();
-  injectStyles();
+  // Start watching SvelteKit module loads before the resource timing buffer
+  // can evict them; the gate uses this map instead of a browser-specific
+  // buffer-size override.
+  const moduleWatch = watchModuleResources();
 
-  const host = createFeatureHost(FEATURES);
+  applyDebugSetting();
+
   let route = parseRoute();
+  let host = null;
   let canMount = false;
 
   const sync = () => {
-    if (canMount) host(route);
+    if (canMount && host) host(route);
   };
-
-  createRouter({
-    onRoute(next) {
-      route = next;
-      sync();
-    },
-    // Every settled DOM change: re-mounts anything the app re-rendered away.
-    onSettle: sync,
-  });
 
   const openGate = () => {
     if (canMount) return;
     canMount = true;
-    host(route);
+    moduleWatch.stop();
+
+    // Nothing above this point touches og's DOM: styles and the router are
+    // created only once the page has finished hydrating.
+    injectStyles(FEATURES.map((feature) => feature.css).filter(Boolean));
+    host = createFeatureHost(FEATURES);
+    createRouter({
+      onRoute(next) {
+        route = next;
+        sync();
+      },
+      // Every settled DOM change: re-mounts anything the app re-rendered away.
+      onSettle: sync,
+    });
+    sync();
   };
 
-  // SvelteKit finishes hydrating after `load`. Inserting into its DOM before
-  // that makes Svelte report a hydration mismatch and can drop SSR-only blocks,
-  // so give the app a moment on SvelteKit pages. Other pages mount immediately.
+  // SvelteKit loads route modules after `load` and hydrates afterwards.
+  // Inserting into its DOM before hydration makes Svelte report a mismatch and
+  // drop server-rendered blocks (including session-only buttons), so wait for
+  // the current route's modules to settle instead of guessing a delay.
+  // Other pages mount immediately.
   const scheduleMount = () => {
     if (!isSvelteKit()) {
       openGate();
       return;
     }
-    if (document.readyState === 'complete') {
-      setTimeout(openGate, INITIAL_MOUNT_DELAY_MS);
-    } else {
-      window.addEventListener('load', () => setTimeout(openGate, INITIAL_MOUNT_DELAY_MS), { once: true });
-    }
+
+    const startGate = () =>
+      waitForPageReady({
+        earlyEntries: moduleWatch.entries,
+        onReady(reason) {
+          info(`initial mount after hydration (${reason})`);
+          openGate();
+        },
+        onTimeout(reason) {
+          warn(`hydration wait: ${reason}; mounting anyway`);
+          openGate();
+        },
+      });
+
+    // The watcher has been collecting since document-start, so the gate can
+    // start at `load` without racing the browser's resource timing buffer.
+    if (document.readyState === 'complete') startGate();
+    else window.addEventListener('load', startGate, { once: true });
   };
 
   if (document.readyState === 'loading') {

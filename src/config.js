@@ -15,31 +15,3 @@ export const API = {
 
 /** Public GETs change slowly; eight hours keeps the API budget small. */
 export const CACHE_TTL = 8 * 60 * 60 * 1000;
-
-/** Default links offered in the Watch Now panel. */
-export const DEFAULT_LINKS = [
-  {
-    id: 'tmdb',
-    label: 'TMDb',
-    url: 'https://www.themoviedb.org/{type}/{tmdb}',
-    needs: 'tmdb',
-  },
-  {
-    id: 'imdb',
-    label: 'IMDb',
-    url: 'https://www.imdb.com/title/{imdb}/',
-    needs: 'imdb',
-  },
-  {
-    id: 'justwatch',
-    label: 'JustWatch',
-    url: 'https://www.justwatch.com/us/search?q={title}',
-    needs: 'title',
-  },
-  {
-    id: 'trakt',
-    label: 'Trakt',
-    url: 'https://trakt.tv/{plural}/{id}',
-    needs: 'id',
-  },
-];

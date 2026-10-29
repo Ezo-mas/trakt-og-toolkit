@@ -10,10 +10,6 @@ export function fillTemplate(template, vars) {
   });
 }
 
-export function hasPlaceholder(template, key) {
-  return new RegExp(`\\{${key}\\}`).test(template);
-}
-
 /** Placeholder names in `template` that have no value in `vars`. */
 export function missingPlaceholders(template, vars) {
   const missing = [];
@@ -22,12 +18,6 @@ export function missingPlaceholders(template, vars) {
     if ((value === undefined || value === null || value === '') && !missing.includes(key)) missing.push(key);
   }
   return missing;
-}
-
-/** "https://youtu.be/abc123", ".../watch?v=abc123", ".../embed/abc123" -> abc123 */
-export function youtubeId(url) {
-  const match = String(url || '').match(/(?:youtu\.be\/|v=|embed\/)([\w-]{11})/);
-  return match ? match[1] : null;
 }
 
 /** Strip a trailing "(2008)" and surrounding whitespace from a heading. */

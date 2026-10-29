@@ -69,6 +69,14 @@ export const CSS = String.raw`
   border-block-start: 1px solid var(--ogt-border);
 }
 
+.ogt-hint {
+  margin: 0;
+  padding: 8px 0;
+  color: var(--ogt-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .ogt-chip {
   display: inline-flex;
   align-items: center;
@@ -89,22 +97,6 @@ export const CSS = String.raw`
   border-color: var(--ogt-accent);
   color: var(--ogt-accent);
   outline: none;
-}
-
-.ogt-chip--primary {
-  border-color: var(--ogt-accent);
-  background: var(--ogt-accent);
-  color: #fff;
-}
-
-.ogt-chip--primary:hover,
-.ogt-chip--primary:focus-visible {
-  background: light-dark(#c61017, #ff3b42);
-  color: #fff;
-}
-
-.ogt-chip[data-ogt-missing] {
-  display: none;
 }
 
 .ogt-field {
@@ -144,22 +136,6 @@ export const CSS = String.raw`
   background-image: none;
 }
 
-.ogt-hint {
-  margin: 0;
-  color: var(--ogt-muted);
-  font-size: 12px;
-}
-
-.ogt-hint button {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ogt-accent);
-  font: inherit;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
 .ogt-toast {
   position: fixed;
   inset-block-end: 24px;
@@ -188,73 +164,10 @@ export const CSS = String.raw`
   transform: none;
 }
 
-.ogt-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483002;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgb(0 0 0 / 82%);
-}
-
-.ogt-modal__box {
-  position: relative;
-  inline-size: min(100%, 1100px, calc((100vh - 96px) * 16 / 9));
-  inline-size: min(100%, 1100px, calc((100dvh - 96px) * 16 / 9));
-  aspect-ratio: 16 / 9;
-  border-radius: 8px;
-  background: #000;
-  box-shadow: 0 12px 48px rgb(0 0 0 / 55%);
-}
-
-.ogt-modal__box iframe {
-  inline-size: 100%;
-  block-size: 100%;
-  border: 0;
-  border-radius: 8px;
-}
-
-.ogt-modal__bar {
-  position: absolute;
-  inset-block-end: calc(100% + 8px);
-  inset-inline-end: 0;
-  z-index: 2;
-  display: flex;
-  gap: 8px;
-}
-
-.ogt-modal__close,
-.ogt-modal__link {
-  padding: 6px 10px;
-  border: 0;
-  border-radius: 4px;
-  background: rgb(0 0 0 / 62%);
-  color: #fff;
-  font: 500 12px/1 system-ui, sans-serif;
-  text-decoration: none;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-}
-
-.ogt-modal__close:hover,
-.ogt-modal__close:focus-visible,
-.ogt-modal__link:hover,
-.ogt-modal__link:focus-visible {
-  background: rgb(0 0 0 / 84%);
-  outline: 2px solid #fff;
-}
-
 @media (max-width: 768px) {
   .ogt-panel {
     margin: 16px 0;
     padding: 14px;
-  }
-
-  .ogt-modal__box {
-    aspect-ratio: auto;
-    block-size: min(70vh, 420px);
   }
 }
 `;

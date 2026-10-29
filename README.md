@@ -3,8 +3,8 @@
 An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds the useful old-Trakt bits og doesn't have
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
-**Status:** v0.1.3 — the Watch & Links panel, with a fixed trailer player, reliable episode pickers and a hydration-safe
-mount. Ratings, playback progress and the season chart are next.
+**Status:** v0.1.4: a custom links panel with season and episode pickers, and a hydration-safe mount. Playback progress,
+season ratings and the season chart are next; see [PLAN.md](PLAN.md).
 
 ## Install
 
@@ -16,27 +16,24 @@ It matches `https://og.trakt.tv/*` and `http://localhost:5173|5174/*` for develo
 
 ## What it does
 
-### Watch & Links panel (title pages)
+### Custom links panel (title pages)
 
-A panel under the summary stats, above the full-width sections. It reads the TMDb and IMDb ids that og already
-renders, so it needs no API key and no login:
+A compact panel under the summary stats with user-configured links to your own services.
 
-- **TMDb**, **IMDb** and **JustWatch** links, plus a link back to the classic Trakt page.
-- **Season/episode pickers** for shows, with real episode counts (Trakt API when a client ID is set, og's season
-  cards otherwise). The choice is remembered per show.
-- **Custom links** with `{placeholders}` that follow the picker (see below).
-- **Watch trailer** — pulls the official trailer from the Trakt API and plays it in a modal, with an “Open on
-  YouTube” fallback if the embed is blocked.
+- **Custom links** — add your own `Label | URL` templates with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{season}`, `{episode}`.
+- **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}`. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
+- **Examples**: Plex, Jellyfin, Sonarr, Radarr, or any streaming/library service og doesn't link to.
 
-### Trailers need a Trakt client ID
+### Trakt client ID (optional for now)
 
-Trailers use a public Trakt API endpoint, which needs a `trakt-api-key`. Any user can create one for free at
+The panel works without one. With a client ID, the episode pickers get exact counts from the Trakt API instead of og's
+season cards, and the upcoming features need one. Any user can create one for free at
 <https://developer.trakt.tv/apps/new>:
 
 | Field | Value |
 | --- | --- |
 | App name | `OG Toolkit` (or `Trakt OG Toolkit`) |
-| Description | `Userscript for og.trakt.tv: watch links, trailers and rating helpers. Public API endpoints only.` |
+| Description | `Userscript for og.trakt.tv: custom links and rating helpers. Public API endpoints only.` |
 | App type | **Development** — currently the only option |
 | Redirect URIs | `http://localhost:5173/callback` — the form wants one; this script never uses it |
 | Allowed origins | leave empty (GM_xmlhttpRequest bypasses CORS); `http://localhost:5173` only if you use the fetch fallback |
@@ -47,8 +44,7 @@ A Development app only lets you (and people you add) sign in with OAuth. That is
 public endpoints with the client ID and does not sign anyone in yet. For a published script, leave
 `DEFAULT_CLIENT_ID` empty and let each user bring their own client ID, as the prompt already does.
 
-The first time you press **Watch trailer**, the panel asks for the client ID. You can change it later from the
-userscript menu: **Trakt OG Toolkit: set API client ID**.
+Set it from the userscript menu: **Trakt OG Toolkit: set API client ID**.
 
 ## Custom links
 
@@ -108,21 +104,22 @@ node scripts/live-check.mjs /tmp/show.html https://og.trakt.tv/shows/breaking-ba
 src/
   main.js              entry point, router wiring
   meta.js              name, version, hosts
-  config.js            API base, cache TTL, default links
+  config.js            API base, cache TTL, default client ID
   settings.js          GM storage (client id, custom links, selections)
   actions.js           prompts shared by the menu and the panel
   menu.js              userscript menu commands
   core/
-    dom.js             el(), waitFor(), debounce()
+    dom.js             el(), debounce(), text()
     router.js          og path parsing + SPA navigation
+    hydration.js       waits for SvelteKit to hydrate before the first mount
     http.js            GM_xmlhttpRequest wrapper, queue, GET cache
     trakt.js           public Trakt API calls
     store.js           GM_getValue with a localStorage fallback
     text.js            template + URL helpers
   features/
     host.js            mounts/unmounts features per route
-    watch-now/         the panel
-  ui/                  injected CSS, toasts, modal
+    custom-links/      the panel (index.js) and its DOM readers (data.js)
+  ui/                  injected CSS and toasts
 ```
 
 ### Design notes
@@ -135,13 +132,16 @@ src/
   ids og already prints (TMDb/IMDb) and the season cards' episode counts.
 - **Selectors.** Only semantic classes (`.summary-frame`, `#overview`, `.top`, `.subtitle`) — never `svelte-*` hashes.
 
+## Known issues
+
+- og's native ratings strip (the row of IMDb, Rotten Tomatoes, TMDb, Trakt, popcorn and JustWatch scores) can disappear
+  on Gecko browsers. It reproduces with this toolkit disabled, so it is an og bug, not something the toolkit mounts or
+  removes. The custom links panel is unaffected.
+
 ## Roadmap
 
-1. ~~Watch & Links panel~~ (done)
-2. Average season/episode ratings in season headers
-3. Inline ratings distribution from `/shows/:id/ratings`
-4. Playback progress manager (`/sync/playback`)
-5. Season ratings chart
+See [PLAN.md](PLAN.md). In short: playback progress, average season/episode ratings, a season chart, metadata links, then
+smaller extras. og already ships the ratings distribution (on `/stats`) and trailers, so those are not planned.
 
 ## Trakt API compliance
 

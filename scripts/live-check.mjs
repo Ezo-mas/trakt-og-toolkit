@@ -5,13 +5,13 @@
  *   node scripts/live-check.mjs /tmp/show.html https://og.trakt.tv/shows/breaking-bad
  *
  * It loads the HTML in happy-dom, injects the userscript and prints what the
- * Watch Now panel ended up with. Not part of `npm test` because it needs network
+ * custom links panel ended up with. Not part of `npm test` because it needs network
  * (or a saved page) and a real client ID for the API-backed parts.
  */
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 
-const file = process.argv[2] || '/tmp/opencode/show.html';
+const file = process.argv[2] || '/tmp/show.html';
 const url = process.argv[3] || 'https://og.trakt.tv/shows/breaking-bad';
 
 const html = readFileSync(file, 'utf8')
@@ -33,16 +33,16 @@ window.eval(bundle);
 document.dispatchEvent(new window.Event('DOMContentLoaded'));
 await new Promise((resolve) => setTimeout(resolve, 800));
 
-const panel = document.getElementById('ogt-watch-now');
+const panel = document.getElementById('ogt-custom-links');
 console.log('URL        ', url);
 console.log('panel      ', Boolean(panel));
 console.log('after      ', panel?.previousElementSibling?.className ?? '(none)');
-for (const chip of document.querySelectorAll('#ogt-watch-now .ogt-chip')) {
+for (const chip of document.querySelectorAll('#ogt-custom-links .ogt-chip')) {
   console.log(`chip       ${chip.textContent.trim()} -> ${chip.getAttribute('href')}`);
 }
-const seasons = document.querySelector('#ogt-watch-now select[aria-label="Season"]');
+const seasons = document.querySelector('#ogt-custom-links select[aria-label="Season"]');
 console.log('seasons    ', seasons ? [...seasons.options].map((o) => o.textContent).join(', ') : '(none)');
-const episodes = document.querySelector('#ogt-watch-now select[aria-label="Episode"]');
+const episodes = document.querySelector('#ogt-custom-links select[aria-label="Episode"]');
 console.log('episodes   ', episodes ? episodes.options.length : '(none)');
 
 window.close();

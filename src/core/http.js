@@ -129,5 +129,3 @@ export function clearCache(prefix) {
 export function cacheSize() {
   return cache.size;
 }
-
-export { debugError };

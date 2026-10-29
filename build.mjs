@@ -1,21 +1,20 @@
 import { build, context } from 'esbuild';
 import { readFileSync, mkdirSync } from 'node:fs';
-import { DIR, VERSION } from './src/meta.js';
+import { NAME, DIR, VERSION, HOST, DEV_MATCHES } from './src/meta.js';
 
 const watch = process.argv.includes('--watch');
 mkdirSync('dist', { recursive: true });
 
-/** Userscript metadata. Keep @match in sync with src/meta.js DIR/DEV_MATCHES. */
+/** Userscript metadata. Name, version and hosts come from src/meta.js. */
+const matches = [`https://${HOST}/*`, ...DEV_MATCHES.map((host) => `http://${host}/*`)];
 const header = `// ==UserScript==
-// @name         Trakt OG Toolkit
+// @name         ${NAME}
 // @namespace    https://github.com/trakt-og-toolkit
 // @version      ${VERSION}
-// @description  Watch links, trailers and (soon) ratings helpers for og.trakt.tv.
+// @description  Brings back the useful classic-Trakt extras on og.trakt.tv.
 // @author       Ezo-mas
 // @license      MIT
-// @match        https://og.trakt.tv/*
-// @match        http://localhost:5173/*
-// @match        http://localhost:5174/*
+${matches.map((match) => `// @match        ${match}`).join('\n')}
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -24,7 +23,6 @@ const header = `// ==UserScript==
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @connect      api.trakt.tv
-// @connect      www.youtube-nocookie.com
 // @noframes
 // ==/UserScript==
 `;

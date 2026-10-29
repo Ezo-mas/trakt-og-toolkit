@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeSeasons } from '../src/features/watch-now/data.js';
+import { mergeSeasons } from '../src/features/custom-links/data.js';
 
 test('mergeSeasons keeps API counts', () => {
   const merged = mergeSeasons([{ number: 1, episodes: 7 }], [{ number: 1, episodes: 99 }]);

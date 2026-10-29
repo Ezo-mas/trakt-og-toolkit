@@ -1,4 +1,10 @@
-/** Mount features for the current route and keep them mounted across re-renders. */
+/**
+ * Mount features for the current route and keep them mounted across re-renders.
+ *
+ * A feature is `{ id, css?, match(route), mount(route) }`. `mount` returns
+ * `{ node, destroy }` once it has inserted its node, or null to be retried on
+ * the next DOM change (e.g. while og is still rendering the page).
+ */
 import { isDetached } from '../core/dom.js';
 import { debugError } from '../core/log.js';
 

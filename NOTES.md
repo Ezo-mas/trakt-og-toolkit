@@ -6,17 +6,69 @@ Working notes and known issues. Newest first.
 
 ### Context
 
-- og.trakt.tv launched publicly today. Routes are still missing and the app is changing daily.
-- Treat disappearing UI and hydration errors as possible og launch bugs first: re-test with the toolkit disabled before
-  changing our mount logic.
-- Keep selectors semantic and mounting defensive. Do not build features on routes og has not shipped yet; revisit
-  season/episode/chart pages once the routes settle.
+- og.trakt.tv launched publicly today and is changing daily. Its source is public at
+  [trakt/trakt-og](https://github.com/trakt/trakt-og); check there before building anything.
+- og's source now has routes for seasons, a single season, episodes, `/seasons/all` and `/stats` (title, season and
+  episode). Confirm each one is live on og.trakt.tv before a feature depends on it.
+- Treat disappearing UI as a possible og launch bug first: re-test with the toolkit disabled before changing mount logic.
+- Keep selectors semantic (`.summary-frame`, `#overview`, `.top`) and mounting defensive. Never use `svelte-*` hashes.
+- The feature plan lives in `PLAN.md`.
 
-### Verified
+### Already in og, do not rebuild
 
-- v0.1.1 trailer works in the real browser (Tampermonkey + user's client ID).
-- Episode pickers now get real counts from `/shows/:id/seasons?extended=full`.
-- 21 tests passing (`npm test`).
+Checked against the trakt-og source:
+
+- Ratings distribution chart: `/movies/:id/stats`, `/shows/:id/stats`, season and episode `/stats`.
+- Trailers and videos: `/videos` subpages and og's own `VideoPopup`. The toolkit's trailer player is removed.
+- External links to IMDb, TMDb, JustWatch, Wikipedia and socials, and the external ratings strip.
+- Profile cover images, lists pages (personal, collaborations, liked, official), the header and search.
+
+### v0.1.4: cleanup
+
+- The panel is **custom links only**: the trailer player, YouTube modal, `getTrailer` and the `youtube-nocookie`
+  `@connect` are gone. The feature moved from `features/watch-now/` to `features/custom-links/`, and the panel id is now
+  `ogt-custom-links`. The storage key is still `watch.customLinks`, so saved links are kept.
+- Fixed the panel's mount handle. It returned a bare function, but the feature host expects `{ node, destroy }`. The
+  host never saw the node and never removed the panel on navigation. In the test harness the old handle hung and memory
+  climbed to ~450 MB in 8 s; the fixed code finishes in ~3 s at ~105 MB. A test now covers leaving a title page.
+- Removed unused helpers (`waitFor`, `on`, `isInternalHref`, `hasPlaceholder`, `youtubeId`, `isTitlePage`,
+  `isAuthError`, `EXAMPLE_LINKS`) and unused CSS (modal, duplicate `.ogt-hint`).
+- The `build.mjs` header now reads name, version and `@match` hosts from `src/meta.js`. Do not change `@namespace`:
+  userscript managers use it to identify the script, and a new one installs a second copy.
+- 24 tests pass (`npm test`).
+
+### Hydration gate (kept)
+
+`src/core/hydration.js` stays. It fixes the real v0.1.2 problem: mounting before SvelteKit hydrates causes
+`hydration_mismatch` and Svelte drops server-rendered blocks. That reproduces in Chromium too.
+
+1. Read `node_ids` from SvelteKit's inline bootstrap script (`kit.start(..., { node_ids: [...] })`).
+2. Wait for the matching `/_app/immutable/nodes/<id>.*.js` resources (`PerformanceObserver` + resource timing).
+3. Wait for SvelteKit `nodes/` + `chunks/` activity to go quiet (300 ms), then settle (600 ms).
+4. Fall back to a 1.5 s settle when the ids cannot be read; hard cap at 15 s.
+
+A `PerformanceObserver` started at document-start keeps its own map of module entries, so Firefox's 250-entry
+resource-timing buffer cannot evict them. Nothing touches og's DOM before `initial mount after hydration` is logged.
+The gate only applies to the first page load; client-side navigation has no hydration.
+
+### og Gecko bug: the ratings strip disappears
+
+The disappearing ratings strip is og's own `RatingsStrip` component. It reproduces with the toolkit disabled on
+Zen/Firefox and works on Brave/Chromium, so it is an og bug. Do not change the toolkit's mount logic for it. If you need
+to confirm, check for a second installed copy of the script first, then A/B test with the toolkit disabled.
+
+### Dev environment
+
+Use Violentmonkey's **Track external edits** rather than the Tampermonkey update-URL loop:
+
+1. `npm run dev` starts the esbuild watcher and serves `dist/` on `http://localhost:8787`.
+2. Open `http://localhost:8787/trakt-og-toolkit.user.js` in Violentmonkey and click **Track external edits**
+   (enable **Reload tab** too).
+3. Keep the installer tab open; every rebuild is picked up and the og tab reloads.
+4. Use `PORT=8788 npm run dev` if 8787 is taken.
+
+No version bump and no manual "check for updates". Disable the Tampermonkey copy while doing this so only one panel
+mounts. Keep Tampermonkey for release smoke tests.
 
 ### Fixed in v0.1.2 (needs a logged-in retest): og UI disappears after load
 
@@ -46,21 +98,3 @@ now. If they still vanish without the toolkit, it is an og launch bug.
 
 Do not chase the `Security Error: ... may not load or link to file:///` message: the bundle has no `file:` references,
 and the error points at og's inline script (`injectedScript` line 290/369).
-
-### Dev environment
-
-Use Violentmonkey's **Track external edits** rather than the Tampermonkey update-URL loop:
-
-1. `npm run dev` starts the esbuild watcher and serves `dist/` on `http://localhost:8787`.
-2. Open `http://localhost:8787/trakt-og-toolkit.user.js` in Violentmonkey and click **Track external edits**
-   (enable **Reload tab** too).
-3. Keep the installer tab open; every rebuild is picked up and the og tab reloads.
-4. Use `PORT=8788 npm run dev` if 8787 is taken.
-
-No version bump and no manual "check for updates". Disable the Tampermonkey copy while doing this so only one panel
-mounts. Keep Tampermonkey for release smoke tests.
-
-### Later
-
-- Season, episode and chart pages do not mount yet (by design; only `route.name === 'title'` matches).
-- Playback progress, average ratings and the season chart are still on the roadmap.

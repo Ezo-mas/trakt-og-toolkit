@@ -34,11 +34,11 @@ function boot({ url, html, storage = {} }) {
   return { window, document, store };
 }
 
-const panel = (document) => document.getElementById('ogt-watch-now');
-const chips = (document) => [...document.querySelectorAll('#ogt-watch-now .ogt-chip')];
+const panel = (document) => document.getElementById('ogt-custom-links');
+const chips = (document) => [...document.querySelectorAll('#ogt-custom-links .ogt-chip')];
 const chip = (document, label) => chips(document).find((node) => node.textContent.trim() === label);
 
-test('mounts under the summary stats with links from the page', async (t) => {
+test('mounts under the summary stats with the add-link button', async (t) => {
   const { window, document } = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
   t.after(() => window.close());
   await wait(50);
@@ -47,33 +47,36 @@ test('mounts under the summary stats with links from the page', async (t) => {
   assert.ok(node, 'panel is mounted');
   assert.equal(node.previousElementSibling?.className, 'top');
 
-  assert.equal(chip(document, 'TMDb').getAttribute('href'), 'https://www.themoviedb.org/tv/1396');
-  assert.equal(chip(document, 'IMDb').getAttribute('href'), 'https://www.imdb.com/title/tt0903747/');
-  assert.equal(chip(document, 'JustWatch').getAttribute('href'), 'https://www.justwatch.com/us/search?q=Breaking%20Bad');
-  assert.equal(chip(document, 'Trakt').getAttribute('href'), 'https://trakt.tv/shows/breaking-bad');
-  assert.ok(document.querySelector('#ogt-watch-now style, head style'), 'styles injected');
-
+  assert.ok(chip(document, '+ Add link'), 'add link button exists');
+  assert.ok(document.querySelector('.ogt-hint'), 'hint text shown when no custom links');
+  assert.equal(document.querySelectorAll('#ogt-custom-links .ogt-field').length, 0, 'no pickers without season-dependent links');
+  assert.ok(document.querySelector('head style'), 'styles injected');
 });
 
-test('season and episode pickers come from the season cards', async (t) => {
-  const { window, document } = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
+test('season and episode pickers come from the season cards when a custom link needs them', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: { 'watch.customLinks': [{ label: 'Mine', url: 'https://e.test/{season}/{episode}' }] },
+  });
   t.after(() => window.close());
   await wait(50);
 
-  const seasonSelect = document.querySelector('#ogt-watch-now select[aria-label="Season"]');
+  const seasonSelect = document.querySelector('#ogt-custom-links select[aria-label="Season"]');
   assert.ok(seasonSelect, 'season select exists');
   assert.deepEqual([...seasonSelect.options].map((o) => o.textContent), ['Season 1', 'Season 2']);
   assert.equal(seasonSelect.value, '1');
 
-  const episodeSelect = () => document.querySelector('#ogt-watch-now select[aria-label="Episode"]');
+  const episodeSelect = () => document.querySelector('#ogt-custom-links select[aria-label="Episode"]');
   assert.equal(episodeSelect().options.length, 7);
 
   seasonSelect.value = '2';
   seasonSelect.dispatchEvent(new window.Event('change'));
 
-  assert.equal(episodeSelect().options.length, 13);
-  assert.equal(episodeSelect().value, '1');
-
+  // Season 2 has 13 episodes, so it renders as an input, not a select
+  const episodeInput = document.querySelector('#ogt-custom-links input[aria-label="Episode"]');
+  assert.ok(episodeInput, 'episode input exists for season 2');
+  assert.equal(episodeInput.value, '1');
 });
 
 test('custom link templates follow the selection and persist it', async (t) => {
@@ -82,17 +85,17 @@ test('custom link templates follow the selection and persist it', async (t) => {
     html: SHOW_HTML,
     storage: { 'watch.customLinks': [{ label: 'Mine', url: 'https://e.test/{tmdb}/{season}/{episode}' }] },
   });
+  t.after(() => window.close());
   await wait(50);
 
   assert.equal(chip(document, 'Mine').getAttribute('href'), 'https://e.test/1396/1/1');
 
-  const seasonSelect = document.querySelector('#ogt-watch-now select[aria-label="Season"]');
+  const seasonSelect = document.querySelector('#ogt-custom-links select[aria-label="Season"]');
   seasonSelect.value = '2';
   seasonSelect.dispatchEvent(new window.Event('change'));
 
   assert.equal(chip(document, 'Mine').getAttribute('href'), 'https://e.test/1396/2/1');
   assert.deepEqual({ ...store.get('selection.show.breaking-bad') }, { season: 2, episode: 1 });
-
 });
 
 test('remounts after the app re-renders the panel away', async (t) => {
@@ -109,27 +112,34 @@ test('remounts after the app re-renders the panel away', async (t) => {
   await wait(700);
 
   assert.ok(panel(document), 'panel comes back');
-  assert.ok(chip(document, 'TMDb'));
-
+  assert.ok(chip(document, '+ Add link'));
 });
 
-test('movie pages get links but no season controls', async (t) => {
+test('movie pages get custom links but no season controls', async (t) => {
   const { window, document } = boot({ url: 'https://og.trakt.tv/movies/the-dark-2005', html: MOVIE_HTML });
   t.after(() => window.close());
   await wait(50);
 
   assert.ok(panel(document));
-  assert.equal(chip(document, 'TMDb').getAttribute('href'), 'https://www.themoviedb.org/movie/8967');
-  const fields = [...document.querySelectorAll('#ogt-watch-now .ogt-field')];
-  assert.equal(fields.length, 2);
-  assert.ok(fields.every((field) => field.hidden), 'season and episode controls stay hidden without seasons');
-  assert.ok(chip(document, 'Watch trailer'), 'movies still get the trailer button');
-
+  assert.ok(chip(document, '+ Add link'));
+  assert.equal(document.querySelectorAll('#ogt-custom-links .ogt-field').length, 0);
 });
 
 test('chart pages are left alone', async (t) => {
   const { window, document } = boot({ url: 'https://og.trakt.tv/shows/trending', html: SHOW_HTML });
   t.after(() => window.close());
   await wait(200);
+  assert.equal(panel(document), null);
+});
+
+test('leaving a title page removes the panel', async (t) => {
+  const { window, document } = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
+  t.after(() => window.close());
+  await wait(50);
+  assert.ok(panel(document));
+
+  window.history.pushState({}, '', '/dashboard');
+  await wait(300);
+
   assert.equal(panel(document), null);
 });

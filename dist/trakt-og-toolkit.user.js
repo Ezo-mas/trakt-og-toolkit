@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Trakt OG Toolkit
 // @namespace    https://github.com/trakt-og-toolkit
-// @version      0.1.3
-// @description  Watch links, trailers and (soon) ratings helpers for og.trakt.tv.
+// @version      0.1.4
+// @description  Brings back the useful classic-Trakt extras on og.trakt.tv.
 // @author       Ezo-mas
 // @license      MIT
 // @match        https://og.trakt.tv/*
@@ -16,14 +16,13 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @connect      api.trakt.tv
-// @connect      www.youtube-nocookie.com
 // @noframes
 // ==/UserScript==
 
 (() => {
   // src/meta.js
   var NAME = "Trakt OG Toolkit";
-  var VERSION = "0.1.3";
+  var VERSION = "0.1.4";
 
   // src/ui/styles.js
   var CSS = String.raw`
@@ -96,6 +95,14 @@
   border-block-start: 1px solid var(--ogt-border);
 }
 
+.ogt-hint {
+  margin: 0;
+  padding: 8px 0;
+  color: var(--ogt-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .ogt-chip {
   display: inline-flex;
   align-items: center;
@@ -116,22 +123,6 @@
   border-color: var(--ogt-accent);
   color: var(--ogt-accent);
   outline: none;
-}
-
-.ogt-chip--primary {
-  border-color: var(--ogt-accent);
-  background: var(--ogt-accent);
-  color: #fff;
-}
-
-.ogt-chip--primary:hover,
-.ogt-chip--primary:focus-visible {
-  background: light-dark(#c61017, #ff3b42);
-  color: #fff;
-}
-
-.ogt-chip[data-ogt-missing] {
-  display: none;
 }
 
 .ogt-field {
@@ -171,22 +162,6 @@
   background-image: none;
 }
 
-.ogt-hint {
-  margin: 0;
-  color: var(--ogt-muted);
-  font-size: 12px;
-}
-
-.ogt-hint button {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--ogt-accent);
-  font: inherit;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
 .ogt-toast {
   position: fixed;
   inset-block-end: 24px;
@@ -215,73 +190,10 @@
   transform: none;
 }
 
-.ogt-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483002;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgb(0 0 0 / 82%);
-}
-
-.ogt-modal__box {
-  position: relative;
-  inline-size: min(100%, 1100px, calc((100vh - 96px) * 16 / 9));
-  inline-size: min(100%, 1100px, calc((100dvh - 96px) * 16 / 9));
-  aspect-ratio: 16 / 9;
-  border-radius: 8px;
-  background: #000;
-  box-shadow: 0 12px 48px rgb(0 0 0 / 55%);
-}
-
-.ogt-modal__box iframe {
-  inline-size: 100%;
-  block-size: 100%;
-  border: 0;
-  border-radius: 8px;
-}
-
-.ogt-modal__bar {
-  position: absolute;
-  inset-block-end: calc(100% + 8px);
-  inset-inline-end: 0;
-  z-index: 2;
-  display: flex;
-  gap: 8px;
-}
-
-.ogt-modal__close,
-.ogt-modal__link {
-  padding: 6px 10px;
-  border: 0;
-  border-radius: 4px;
-  background: rgb(0 0 0 / 62%);
-  color: #fff;
-  font: 500 12px/1 system-ui, sans-serif;
-  text-decoration: none;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-}
-
-.ogt-modal__close:hover,
-.ogt-modal__close:focus-visible,
-.ogt-modal__link:hover,
-.ogt-modal__link:focus-visible {
-  background: rgb(0 0 0 / 84%);
-  outline: 2px solid #fff;
-}
-
 @media (max-width: 768px) {
   .ogt-panel {
     margin: 16px 0;
     padding: 14px;
-  }
-
-  .ogt-modal__box {
-    aspect-ratio: auto;
-    block-size: min(70vh, 420px);
   }
 }
 `;
@@ -324,16 +236,17 @@
 
   // src/ui/shell.js
   var STYLE_ID = "ogt-styles";
-  function injectStyles() {
+  function injectStyles(extra = []) {
     if (document.getElementById(STYLE_ID)) return;
+    const css = [CSS, ...extra].join("\n");
     if (typeof GM_addStyle === "function") {
       try {
-        GM_addStyle(CSS);
+        GM_addStyle(css);
         return;
       } catch {
       }
     }
-    const style = el("style", { id: STYLE_ID, text: CSS });
+    const style = el("style", { id: STYLE_ID, text: css });
     (document.head || document.documentElement).append(style);
   }
   var toastTimer = null;
@@ -353,51 +266,6 @@
       setTimeout(() => toastRoot?.remove(), 200);
       toastRoot = null;
     }, duration);
-  }
-  function showModal({ label, content, actions = [], onClose }) {
-    const previouslyFocused = document.activeElement;
-    const box = el("div", { class: "ogt-modal__box", role: "dialog", "aria-modal": "true", "aria-label": label }, content);
-    const close = el("button", { class: "ogt-modal__close", type: "button", text: "Close" });
-    box.append(el("div", { class: "ogt-modal__bar" }, ...actions, close));
-    const root = el("div", { class: "ogt-modal" }, box);
-    const onKey = (event) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        teardown();
-      }
-    };
-    function teardown() {
-      document.removeEventListener("keydown", onKey, true);
-      root.remove();
-      onClose?.();
-      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus({ preventScroll: true });
-    }
-    root.addEventListener("mousedown", (event) => {
-      if (event.target === root) teardown();
-    });
-    close.addEventListener("click", teardown);
-    document.addEventListener("keydown", onKey, true);
-    document.body.append(root);
-    close.focus({ preventScroll: true });
-    return teardown;
-  }
-  function showTrailer({ key, title }) {
-    if (!key) return null;
-    const frame = el("iframe", {
-      src: `https://www.youtube.com/embed/${key}?autoplay=1&rel=0`,
-      title: title || "Trailer",
-      referrerpolicy: "strict-origin-when-cross-origin",
-      allow: "autoplay; encrypted-media; picture-in-picture; fullscreen",
-      allowfullscreen: true
-    });
-    const openOnYouTube = el("a", {
-      class: "ogt-modal__link",
-      href: `https://www.youtube.com/watch?v=${key}`,
-      target: "_blank",
-      rel: "noopener noreferrer",
-      text: "Open on YouTube"
-    });
-    return showModal({ label: title || "Trailer", content: frame, actions: [openOnYouTube] });
   }
 
   // src/core/router.js
@@ -506,6 +374,9 @@
   function info(...args) {
     console.info(PREFIX, ...args);
   }
+  function warn(...args) {
+    console.warn(PREFIX, ...args);
+  }
   function debugError(label, error) {
     if (verbose) console.warn(PREFIX, label, error);
   }
@@ -561,6 +432,156 @@
     };
   }
 
+  // src/core/hydration.js
+  var QUIET_MS = 300;
+  var SETTLE_MS = 600;
+  var NO_IDS_SETTLE_MS = 1500;
+  var MAX_WAIT_MS = 15e3;
+  function readRouteNodeIds(doc = document) {
+    for (const script of doc.scripts || []) {
+      const source = script.textContent || "";
+      if (!source.includes("node_ids")) continue;
+      const match = /node_ids\s*:\s*\[([0-9,\s]+)\]/.exec(source);
+      if (!match) continue;
+      const ids = match[1].split(",").map((part) => Number(part.trim())).filter((id) => Number.isInteger(id) && id > 0);
+      if (ids.length) return ids;
+    }
+    return [];
+  }
+  function isModuleResource(name) {
+    return /\/_app\/immutable\/(?:nodes|chunks)\/[^/]+\.js(?:\?|$)/.test(name || "");
+  }
+  function routeNodeId(name) {
+    const match = /\/_app\/immutable\/nodes\/(\d+)\.[^/]+\.js(?:\?|$)/.exec(name || "");
+    return match ? Number(match[1]) : null;
+  }
+  function watchModuleResources(win = window) {
+    const entries = /* @__PURE__ */ new Map();
+    const record = (entry) => {
+      const name = entry?.name || "";
+      if (!isModuleResource(name)) return;
+      entries.set(name, entry);
+    };
+    try {
+      for (const entry of win.performance?.getEntriesByType?.("resource") || []) record(entry);
+    } catch {
+    }
+    let observer = null;
+    if (typeof win.PerformanceObserver === "function") {
+      try {
+        observer = new win.PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) record(entry);
+        });
+        observer.observe({ type: "resource", buffered: true });
+      } catch {
+        observer = null;
+      }
+    }
+    return {
+      entries,
+      stop() {
+        observer?.disconnect();
+        observer = null;
+      }
+    };
+  }
+  function waitForPageReady({
+    doc = document,
+    win = window,
+    earlyEntries = null,
+    onReady,
+    onTimeout
+  } = {}) {
+    const ids = readRouteNodeIds(doc);
+    const settleMs = ids.length ? SETTLE_MS : NO_IDS_SETTLE_MS;
+    const seen = /* @__PURE__ */ new Set();
+    let routeReady = ids.length === 0;
+    let finished = false;
+    let quietTimer = null;
+    let settleTimer = null;
+    let maxTimer = null;
+    let observer = null;
+    const clear = (timer) => {
+      if (timer != null) win.clearTimeout(timer);
+      return null;
+    };
+    const cleanup = () => {
+      quietTimer = clear(quietTimer);
+      settleTimer = clear(settleTimer);
+      maxTimer = clear(maxTimer);
+      observer?.disconnect();
+      observer = null;
+    };
+    const finish = (reason, timedOut = false) => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+      if (timedOut) onTimeout?.(reason);
+      else onReady?.(reason);
+    };
+    const armQuiet = () => {
+      settleTimer = clear(settleTimer);
+      quietTimer = clear(quietTimer);
+      quietTimer = win.setTimeout(() => {
+        quietTimer = null;
+        if (!routeReady) return;
+        settleTimer = win.setTimeout(() => {
+          settleTimer = null;
+          finish("module activity settled");
+        }, settleMs);
+      }, QUIET_MS);
+    };
+    const noteEntry = (entry) => {
+      const name = entry?.name || "";
+      if (!isModuleResource(name)) return;
+      const id = routeNodeId(name);
+      if (id != null && ids.includes(id)) {
+        seen.add(id);
+        if (ids.every((value) => seen.has(value))) routeReady = true;
+      }
+      if (routeReady) armQuiet();
+    };
+    const start2 = () => {
+      if (ids.length === 0) routeReady = true;
+      if (earlyEntries) {
+        const entries = typeof earlyEntries.values === "function" ? earlyEntries.values() : earlyEntries;
+        for (const entry of entries) noteEntry(entry);
+      }
+      try {
+        for (const entry of win.performance.getEntriesByType("resource")) noteEntry(entry);
+      } catch {
+      }
+      if (typeof win.PerformanceObserver === "function") {
+        try {
+          observer = new win.PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) noteEntry(entry);
+          });
+          observer.observe({ type: "resource", buffered: true });
+        } catch {
+          observer = null;
+        }
+      }
+      armQuiet();
+      maxTimer = win.setTimeout(() => {
+        maxTimer = null;
+        finish("timed out waiting for the page to settle", true);
+      }, MAX_WAIT_MS);
+    };
+    if (!ids.length && typeof win.performance?.getEntriesByType !== "function") {
+      settleTimer = win.setTimeout(() => finish("no resource timing"), SETTLE_MS);
+      return () => {
+        finished = true;
+        cleanup();
+      };
+    }
+    start2();
+    return () => {
+      if (finished) return;
+      finished = true;
+      cleanup();
+    };
+  }
+
   // src/core/text.js
   function fillTemplate(template, vars) {
     return template.replace(/\{(\w+)\}/g, (_, key) => {
@@ -577,10 +598,6 @@
     }
     return missing;
   }
-  function youtubeId(url) {
-    const match = String(url || "").match(/(?:youtu\.be\/|v=|embed\/)([\w-]{11})/);
-    return match ? match[1] : null;
-  }
   function cleanTitle(value) {
     return String(value || "").replace(/\s*\(\d{4}\)\s*$/, "").trim();
   }
@@ -596,32 +613,6 @@
     version: "2"
   };
   var CACHE_TTL = 8 * 60 * 60 * 1e3;
-  var DEFAULT_LINKS = [
-    {
-      id: "tmdb",
-      label: "TMDb",
-      url: "https://www.themoviedb.org/{type}/{tmdb}",
-      needs: "tmdb"
-    },
-    {
-      id: "imdb",
-      label: "IMDb",
-      url: "https://www.imdb.com/title/{imdb}/",
-      needs: "imdb"
-    },
-    {
-      id: "justwatch",
-      label: "JustWatch",
-      url: "https://www.justwatch.com/us/search?q={title}",
-      needs: "title"
-    },
-    {
-      id: "trakt",
-      label: "Trakt",
-      url: "https://trakt.tv/{plural}/{id}",
-      needs: "id"
-    }
-  ];
 
   // src/core/store.js
   var NS = "ogt:";
@@ -730,6 +721,144 @@
   function applyDebugSetting() {
     setVerbose(isDebug());
     return isVerbose();
+  }
+
+  // src/actions.js
+  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id} {plural}";
+  function promptAddCustomLink() {
+    const answer = window.prompt(
+      `Add a custom link as "Label | URL".
+
+${PLACEHOLDER_HELP}`,
+      "My service | https://example.com/watch/{tmdb}?s={season}&e={episode}"
+    );
+    if (!answer) return null;
+    const separator = answer.indexOf("|");
+    if (separator < 0) {
+      toast('Use "Label | URL" — the | separator is missing.');
+      return null;
+    }
+    const label = answer.slice(0, separator).trim();
+    const url = answer.slice(separator + 1).trim();
+    if (!label || !url) {
+      toast("Both a label and a URL are required.");
+      return null;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      toast("The URL must start with http:// or https://.");
+      return null;
+    }
+    addCustomLink({ label, url });
+    toast(`Link "${label}" added.`);
+    document.dispatchEvent(new CustomEvent("ogt:refresh"));
+    return { label, url };
+  }
+  function promptRemoveCustomLink() {
+    const links = getCustomLinks();
+    if (!links.length) {
+      toast("No custom links to remove.");
+      return;
+    }
+    const answer = window.prompt(
+      `Type the label of the link to remove:
+
+${links.map((entry) => `• ${entry.label}`).join("\n")}`,
+      links[0].label
+    );
+    if (!answer) return;
+    const next = removeCustomLink(answer.trim());
+    if (next.length === links.length) toast(`No link labelled "${answer.trim()}".`);
+    else toast("Link removed.");
+    document.dispatchEvent(new CustomEvent("ogt:refresh"));
+  }
+  function promptClientId() {
+    const answer = window.prompt(
+      "Paste your Trakt API client ID.\n\nCreate a free app at https://app.trakt.tv/settings/apps — the redirect URI can be anything, since this script only calls public endpoints.\n\nCurrent: " + (getClientId() || "(none)"),
+      getClientId()
+    );
+    if (answer === null) return;
+    const clean = setClientId(answer);
+    toast(clean ? "Client ID saved." : "Client ID cleared.");
+    document.dispatchEvent(new CustomEvent("ogt:refresh"));
+  }
+
+  // src/features/custom-links/data.js
+  var TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
+  var IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
+  var SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
+  function readTitleData(doc, route) {
+    const heading = doc.querySelector(".summary-title h1") || doc.querySelector("h1");
+    const rawHeading = headingText(heading);
+    const yearEl = doc.querySelector(".summary-title .year") || doc.querySelector(".year");
+    const year = parseYear(text(yearEl)) || parseYear(rawHeading);
+    let tmdb = null;
+    for (const link of doc.querySelectorAll('a[href*="themoviedb.org/"]')) {
+      const match = link.getAttribute("href")?.match(TMDB_RE);
+      if (match) {
+        tmdb = Number(match[2]);
+        break;
+      }
+    }
+    let imdb = null;
+    for (const link of doc.querySelectorAll('a[href*="imdb.com/title/"]')) {
+      const match = link.getAttribute("href")?.match(IMDB_RE);
+      if (match) {
+        imdb = match[1];
+        break;
+      }
+    }
+    const kind = route.kind === "show" ? "show" : "movie";
+    const fallbackTitle = text(doc.querySelector("title")).replace(/\s*[-–|]\s*Trakt.*$/i, "").replace(/\s*\(\d{4}\)\s*$/, "").trim();
+    return {
+      kind,
+      type: kind === "show" ? "tv" : "movie",
+      plural: kind === "show" ? "shows" : "movies",
+      id: route.id,
+      title: cleanTitle(rawHeading) || fallbackTitle || null,
+      year,
+      tmdb,
+      imdb
+    };
+  }
+  function headingText(heading) {
+    if (!heading) return "";
+    const direct = [...heading.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join(" ").trim();
+    return direct || text(heading);
+  }
+  function readSeasons(doc) {
+    const found = /* @__PURE__ */ new Map();
+    for (const subtitle of doc.querySelectorAll('a[href*="/seasons/"] span.subtitle')) {
+      const link = subtitle.closest("a");
+      const match = link?.getAttribute("href")?.match(SEASON_HREF_RE);
+      if (!match) continue;
+      const number = Number(match[1]);
+      const count = Number(text(subtitle).match(/(\d+)/)?.[1]) || null;
+      const existing = found.get(number);
+      if (!existing || count && (!existing.episodes || count > existing.episodes)) {
+        found.set(number, { number, episodes: count });
+      }
+    }
+    return [...found.values()].sort((a, b) => a.number - b.number);
+  }
+  function templateVars(meta, selection = {}) {
+    return {
+      id: meta.id,
+      plural: meta.plural,
+      type: meta.type,
+      title: meta.title,
+      year: meta.year,
+      tmdb: meta.tmdb,
+      imdb: meta.imdb,
+      season: selection.season,
+      episode: selection.episode
+    };
+  }
+  function mergeSeasons(primary, fallback = []) {
+    const rendered = new Map(fallback.map((season) => [season.number, season]));
+    return primary.map((season) => ({
+      number: season.number,
+      episodes: season.episodes ?? rendered.get(season.number)?.episodes ?? null
+    })).sort((a, b) => a.number - b.number);
   }
 
   // src/core/http.js
@@ -853,15 +982,6 @@
       }
     });
   }
-  async function getTrailer(kind, id) {
-    const plural = kind === "show" ? "shows" : "movies";
-    const videos = await apiGet(`/${plural}/${encodeURIComponent(id)}/videos`);
-    if (!Array.isArray(videos)) return null;
-    const youtube = videos.filter((video) => String(video.site).toLowerCase() === "youtube" && youtubeId(video.url));
-    const pick = youtube.find((v) => /trailer/i.test(v.type) && v.official) || youtube.find((v) => /trailer/i.test(v.type)) || youtube[0];
-    if (!pick) return null;
-    return { key: youtubeId(pick.url), title: pick.title || "Trailer" };
-  }
   async function getSeasons(id) {
     const seasons = await apiGet(`/shows/${encodeURIComponent(id)}/seasons?extended=full`);
     if (!Array.isArray(seasons)) return [];
@@ -870,156 +990,15 @@
       episodes: Number.isInteger(season.episode_count) ? season.episode_count : Number.isInteger(season.aired_episodes) ? season.aired_episodes : null
     })).sort((a, b) => a.number - b.number);
   }
-  function isAuthError(error) {
-    return error instanceof MissingClientIdError || error instanceof HttpError && error.status === 401;
-  }
   async function ping() {
     const started = Date.now();
     await apiGet("/shows/breaking-bad", { ttl: 0 });
     return Date.now() - started;
   }
 
-  // src/actions.js
-  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id} {plural}";
-  function promptAddCustomLink() {
-    const answer = window.prompt(
-      `Add a custom link as "Label | URL".
-
-${PLACEHOLDER_HELP}`,
-      "My service | https://example.com/watch/{tmdb}?s={season}&e={episode}"
-    );
-    if (!answer) return null;
-    const separator = answer.indexOf("|");
-    if (separator < 0) {
-      toast('Use "Label | URL" — the | separator is missing.');
-      return null;
-    }
-    const label = answer.slice(0, separator).trim();
-    const url = answer.slice(separator + 1).trim();
-    if (!label || !url) {
-      toast("Both a label and a URL are required.");
-      return null;
-    }
-    if (!/^https?:\/\//i.test(url)) {
-      toast("The URL must start with http:// or https://.");
-      return null;
-    }
-    addCustomLink({ label, url });
-    toast(`Link "${label}" added.`);
-    document.dispatchEvent(new CustomEvent("ogt:refresh"));
-    return { label, url };
-  }
-  function promptRemoveCustomLink() {
-    const links = getCustomLinks();
-    if (!links.length) {
-      toast("No custom links to remove.");
-      return;
-    }
-    const answer = window.prompt(
-      `Type the label of the link to remove:
-
-${links.map((entry) => `• ${entry.label}`).join("\n")}`,
-      links[0].label
-    );
-    if (!answer) return;
-    const next = removeCustomLink(answer.trim());
-    if (next.length === links.length) toast(`No link labelled "${answer.trim()}".`);
-    else toast("Link removed.");
-    document.dispatchEvent(new CustomEvent("ogt:refresh"));
-  }
-  function promptClientId() {
-    const answer = window.prompt(
-      "Paste your Trakt API client ID.\n\nCreate a free app at https://app.trakt.tv/settings/apps — the redirect URI can be anything, since this script only calls public endpoints.\n\nCurrent: " + (getClientId() || "(none)"),
-      getClientId()
-    );
-    if (answer === null) return;
-    const clean = setClientId(answer);
-    toast(clean ? "Client ID saved." : "Client ID cleared.");
-    document.dispatchEvent(new CustomEvent("ogt:refresh"));
-  }
-
-  // src/features/watch-now/data.js
-  var TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
-  var IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
-  var SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
-  function readTitleData(doc, route) {
-    const heading = doc.querySelector(".summary-title h1") || doc.querySelector("h1");
-    const rawHeading = headingText(heading);
-    const yearEl = doc.querySelector(".summary-title .year") || doc.querySelector(".year");
-    const year = parseYear(text(yearEl)) || parseYear(rawHeading);
-    let tmdb = null;
-    for (const link of doc.querySelectorAll('a[href*="themoviedb.org/"]')) {
-      const match = link.getAttribute("href")?.match(TMDB_RE);
-      if (match) {
-        tmdb = Number(match[2]);
-        break;
-      }
-    }
-    let imdb = null;
-    for (const link of doc.querySelectorAll('a[href*="imdb.com/title/"]')) {
-      const match = link.getAttribute("href")?.match(IMDB_RE);
-      if (match) {
-        imdb = match[1];
-        break;
-      }
-    }
-    const kind = route.kind === "show" ? "show" : "movie";
-    const fallbackTitle = text(doc.querySelector("title")).replace(/\s*[-–|]\s*Trakt.*$/i, "").replace(/\s*\(\d{4}\)\s*$/, "").trim();
-    return {
-      kind,
-      type: kind === "show" ? "tv" : "movie",
-      plural: kind === "show" ? "shows" : "movies",
-      id: route.id,
-      title: cleanTitle(rawHeading) || fallbackTitle || null,
-      year,
-      tmdb,
-      imdb
-    };
-  }
-  function headingText(heading) {
-    if (!heading) return "";
-    const direct = [...heading.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join(" ").trim();
-    return direct || text(heading);
-  }
-  function readSeasons(doc) {
-    const found = /* @__PURE__ */ new Map();
-    for (const subtitle of doc.querySelectorAll('a[href*="/seasons/"] span.subtitle')) {
-      const link = subtitle.closest("a");
-      const match = link?.getAttribute("href")?.match(SEASON_HREF_RE);
-      if (!match) continue;
-      const number = Number(match[1]);
-      const count = Number(text(subtitle).match(/(\d+)/)?.[1]) || null;
-      const existing = found.get(number);
-      if (!existing || count && (!existing.episodes || count > existing.episodes)) {
-        found.set(number, { number, episodes: count });
-      }
-    }
-    return [...found.values()].sort((a, b) => a.number - b.number);
-  }
-  function templateVars(meta, selection = {}) {
-    return {
-      id: meta.id,
-      plural: meta.plural,
-      type: meta.type,
-      title: meta.title,
-      year: meta.year,
-      tmdb: meta.tmdb,
-      imdb: meta.imdb,
-      season: selection.season,
-      episode: selection.episode
-    };
-  }
-  function mergeSeasons(primary, fallback = []) {
-    const rendered = new Map(fallback.map((season) => [season.number, season]));
-    return primary.map((season) => ({
-      number: season.number,
-      episodes: season.episodes ?? rendered.get(season.number)?.episodes ?? null
-    })).sort((a, b) => a.number - b.number);
-  }
-
-  // src/features/watch-now/index.js
-  var PANEL_ID = "ogt-watch-now";
-  var TITLE_ID = "ogt-watch-now-title";
+  // src/features/custom-links/index.js
+  var PANEL_ID = "ogt-custom-links";
+  var TITLE_ID = "ogt-custom-links-title";
   function findMountPoint() {
     const top = document.querySelector(".summary-frame #overview .top") || document.querySelector("#overview .top");
     if (top?.parentElement) return { parent: top.parentElement, before: top.nextSibling };
@@ -1032,9 +1011,9 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
   function seasonLabel(number) {
     return number === 0 ? "Specials" : `Season ${number}`;
   }
-  function chip({ label, href, template, primary = false }) {
+  function chip({ label, href, template }) {
     const link = el("a", {
-      class: primary ? "ogt-chip ogt-chip--primary" : "ogt-chip",
+      class: "ogt-chip",
       href,
       target: "_blank",
       rel: "noopener noreferrer",
@@ -1056,7 +1035,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       el(
         "div",
         { class: "ogt-head" },
-        el("h2", { class: "ogt-title", id: TITLE_ID, text: "Watch & links" }),
+        el("h2", { class: "ogt-title", id: TITLE_ID, text: "Custom links" }),
         el("span", { class: "ogt-badge", text: "og toolkit" })
       ),
       linksRow,
@@ -1074,19 +1053,13 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     function renderLinks() {
       const values = vars();
       linksRow.replaceChildren();
-      for (const entry of DEFAULT_LINKS) {
-        if (entry.needs && (values[entry.needs] === void 0 || values[entry.needs] === null || values[entry.needs] === "")) continue;
-        if (missingPlaceholders(entry.url, values).length) continue;
+      const links = getCustomLinks();
+      if (!links.length) {
         linksRow.append(
-          chip({
-            label: entry.label,
-            href: fillTemplate(entry.url, values),
-            template: entry.url,
-            primary: entry.id === "justwatch"
-          })
+          el("p", { class: "ogt-hint", text: "Add links to your own services: Plex, Jellyfin, Sonarr, or any URL." })
         );
       }
-      for (const entry of getCustomLinks()) {
+      for (const entry of links) {
         if (!/^https?:\/\//i.test(entry.url)) continue;
         if (missingPlaceholders(entry.url, values).length) continue;
         linksRow.append(chip({ label: entry.label, href: fillTemplate(entry.url, values), template: entry.url }));
@@ -1095,6 +1068,9 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       add.addEventListener("click", () => promptAddCustomLink());
       linksRow.append(add);
     }
+    function needsSelection() {
+      return getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
+    }
     function persistSelection() {
       if (selection.season != null) setSelection(meta.kind, meta.id, selection);
     }
@@ -1102,8 +1078,6 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     const episodeSlot = el("span", { class: "ogt-episode" });
     const seasonField = el("label", { class: "ogt-field" }, "Season", seasonSelect);
     const episodeField = el("label", { class: "ogt-field" }, "Episode", episodeSlot);
-    const trailerButton = el("button", { class: "ogt-chip", type: "button", text: "Watch trailer" });
-    trailerButton.addEventListener("click", () => openTrailer(trailerButton));
     let controlsBuilt = false;
     function ensureControls() {
       if (controlsBuilt) return;
@@ -1114,56 +1088,62 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
         renderEpisodeField();
         updateLinkHrefs();
       });
-      controlsRow.replaceChildren(seasonField, episodeField, trailerButton);
+      controlsRow.replaceChildren(seasonField, episodeField);
       controlsBuilt = true;
     }
     function renderEpisodeField() {
       const season = seasons.find((entry) => entry.number === selection.season);
       const count = season?.episodes || null;
-      if (selection.episode == null || count && selection.episode > count) selection.episode = 1;
-      if (count) {
-        const select = el(
-          "select",
-          { class: "ogt-select", "aria-label": "Episode" },
-          Array.from(
-            { length: count },
-            (_, index) => el("option", {
-              value: String(index + 1),
-              text: `Episode ${index + 1}`,
-              selected: index + 1 === selection.episode
-            })
-          )
-        );
-        select.addEventListener("change", () => {
-          selection.episode = Number(select.value) || 1;
-          persistSelection();
-          updateLinkHrefs();
-        });
-        episodeSlot.replaceChildren(select);
+      if (!count || count < 1) {
+        episodeSlot.replaceChildren(el("span", { text: "—" }));
+        selection.episode = null;
         return;
       }
-      const input = el("input", {
-        class: "ogt-select",
-        type: "number",
-        min: "1",
-        value: String(selection.episode || 1),
-        "aria-label": "Episode",
-        style: "inline-size: 5.5rem"
-      });
-      input.addEventListener("change", () => {
-        selection.episode = Math.max(1, Number(input.value) || 1);
+      if (selection.episode == null || selection.episode > count) selection.episode = 1;
+      if (count > 8) {
+        const input = el("input", {
+          class: "ogt-input",
+          type: "number",
+          min: "1",
+          max: String(count),
+          value: String(selection.episode),
+          "aria-label": "Episode"
+        });
+        input.addEventListener("change", () => {
+          const value = Number(input.value);
+          if (Number.isInteger(value) && value >= 1 && value <= count) {
+            selection.episode = value;
+            persistSelection();
+            updateLinkHrefs();
+          } else {
+            input.value = String(selection.episode);
+          }
+        });
+        episodeSlot.replaceChildren(input);
+        return;
+      }
+      const select = el("select", { class: "ogt-select", "aria-label": "Episode" });
+      for (let i = 1; i <= count; i++) {
+        select.append(el("option", { value: String(i), text: `Episode ${i}` }));
+      }
+      select.value = String(selection.episode);
+      select.addEventListener("change", () => {
+        selection.episode = Number(select.value);
         persistSelection();
         updateLinkHrefs();
       });
-      episodeSlot.replaceChildren(input);
+      episodeSlot.replaceChildren(select);
     }
     function renderControls() {
+      const hasSeasons = meta.kind === "show" && seasons.length > 0 && needsSelection();
+      if (!hasSeasons) {
+        controlsRow.hidden = true;
+        return;
+      }
       ensureControls();
-      const hasSeasons = meta.kind === "show" && seasons.length > 0;
-      seasonField.hidden = !hasSeasons;
-      episodeField.hidden = !hasSeasons;
+      seasonField.hidden = false;
+      episodeField.hidden = false;
       controlsRow.hidden = false;
-      if (!hasSeasons) return;
       const available = seasons.map((season) => season.number);
       if (selection.season == null || !available.includes(selection.season)) {
         selection.season = available.includes(1) ? 1 : available[0];
@@ -1177,38 +1157,6 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       renderEpisodeField();
       renderLinks();
       updateLinkHrefs();
-    }
-    async function openTrailer(button) {
-      const label = button.textContent;
-      button.disabled = true;
-      button.textContent = "Loading…";
-      try {
-        if (!getClientId()) {
-          const entered = window.prompt(
-            "Trailers use the free Trakt API and need a client ID.\n\nCreate an app at https://app.trakt.tv/settings/apps (any redirect URI), then paste its Client ID here.",
-            ""
-          );
-          if (!entered) return;
-          setClientId(entered);
-        }
-        const trailer = await getTrailer(meta.kind, meta.id);
-        if (cancelled) return;
-        if (!trailer) {
-          toast("No trailer found for this title.");
-          return;
-        }
-        showTrailer(trailer);
-      } catch (error) {
-        if (cancelled) return;
-        if (isAuthError(error)) toast("Trakt rejected that client ID. Set a valid one from the userscript menu.");
-        else toast("Could not load the trailer.");
-        debugError("trailer failed", error);
-      } finally {
-        if (!cancelled && button.isConnected) {
-          button.disabled = false;
-          button.textContent = label;
-        }
-      }
     }
     function loadSeasons() {
       if (meta.kind !== "show") return;
@@ -1243,33 +1191,41 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     }
     function onRefresh() {
       renderLinks();
+      if (meta.kind === "show" && needsSelection()) {
+        if (seasons.length) renderControls();
+        else loadSeasons();
+      } else {
+        controlsRow.hidden = true;
+      }
     }
     renderLinks();
-    renderControls();
-    loadSeasons();
+    if (meta.kind === "show" && needsSelection()) loadSeasons();
+    else renderControls();
     document.addEventListener("ogt:refresh", onRefresh);
     return {
       node,
       destroy() {
         cancelled = true;
         for (const timer of timers) clearTimeout(timer);
+        timers.length = 0;
         document.removeEventListener("ogt:refresh", onRefresh);
         node.remove();
       }
     };
   }
-  var watchNow = {
-    id: "watch-now",
-    match: (route) => route.name === "title",
+  var customLinks = {
+    id: "custom-links",
+    match(route) {
+      return route.kind === "movie" || route.kind === "show";
+    },
     mount(route) {
       if (document.getElementById(PANEL_ID)) return null;
-      const point = findMountPoint();
-      if (!point) return null;
       const meta = readTitleData(document, route);
-      if (!meta.title && !meta.tmdb && !meta.imdb) return null;
+      if (!meta.id) return null;
+      const mount = findMountPoint();
+      if (!mount) return null;
       const panel = createPanel(meta);
-      if (point.before) point.parent.insertBefore(panel.node, point.before);
-      else point.parent.append(panel.node);
+      mount.parent.insertBefore(panel.node, mount.before);
       return panel;
     }
   };
@@ -1320,45 +1276,55 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [watchNow];
-  var INITIAL_MOUNT_DELAY_MS = 750;
+  var FEATURES = [customLinks];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))
     );
   }
   function start() {
+    const moduleWatch = watchModuleResources();
     applyDebugSetting();
-    injectStyles();
-    const host = createFeatureHost(FEATURES);
     let route = parseRoute();
+    let host = null;
     let canMount = false;
     const sync = () => {
-      if (canMount) host(route);
+      if (canMount && host) host(route);
     };
-    createRouter({
-      onRoute(next) {
-        route = next;
-        sync();
-      },
-      // Every settled DOM change: re-mounts anything the app re-rendered away.
-      onSettle: sync
-    });
     const openGate = () => {
       if (canMount) return;
       canMount = true;
-      host(route);
+      moduleWatch.stop();
+      injectStyles(FEATURES.map((feature) => feature.css).filter(Boolean));
+      host = createFeatureHost(FEATURES);
+      createRouter({
+        onRoute(next) {
+          route = next;
+          sync();
+        },
+        // Every settled DOM change: re-mounts anything the app re-rendered away.
+        onSettle: sync
+      });
+      sync();
     };
     const scheduleMount = () => {
       if (!isSvelteKit()) {
         openGate();
         return;
       }
-      if (document.readyState === "complete") {
-        setTimeout(openGate, INITIAL_MOUNT_DELAY_MS);
-      } else {
-        window.addEventListener("load", () => setTimeout(openGate, INITIAL_MOUNT_DELAY_MS), { once: true });
-      }
+      const startGate = () => waitForPageReady({
+        earlyEntries: moduleWatch.entries,
+        onReady(reason) {
+          info(`initial mount after hydration (${reason})`);
+          openGate();
+        },
+        onTimeout(reason) {
+          warn(`hydration wait: ${reason}; mounting anyway`);
+          openGate();
+        }
+      });
+      if (document.readyState === "complete") startGate();
+      else window.addEventListener("load", startGate, { once: true });
     };
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", scheduleMount, { once: true });

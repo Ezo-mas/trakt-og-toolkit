@@ -24,34 +24,6 @@ export function el(tag, props = {}, ...children) {
   return node;
 }
 
-/** Resolve once `selector` exists under `root`, or return null on timeout. */
-export function waitFor(selector, { root = document, timeout = 10000 } = {}) {
-  const found = root.querySelector(selector);
-  if (found) return Promise.resolve(found);
-
-  return new Promise((resolve) => {
-    let timer;
-    const observer = new MutationObserver(() => {
-      const node = root.querySelector(selector);
-      if (!node) return;
-      cleanup();
-      resolve(node);
-    });
-    const cleanup = () => {
-      observer.disconnect();
-      clearTimeout(timer);
-    };
-    observer.observe(root === document ? document.documentElement : root, {
-      childList: true,
-      subtree: true,
-    });
-    timer = setTimeout(() => {
-      cleanup();
-      resolve(null);
-    }, timeout);
-  });
-}
-
 export function debounce(fn, ms = 200) {
   let timer;
   const wrapped = (...args) => {
@@ -69,19 +41,4 @@ export function isDetached(node) {
 /** Text with whitespace collapsed. */
 export function text(node) {
   return (node?.textContent || '').replace(/\s+/g, ' ').trim();
-}
-
-export function on(target, event, handler, options) {
-  target.addEventListener(event, handler, options);
-  return () => target.removeEventListener(event, handler, options);
-}
-
-/** Only follow same-origin links through the router; leave real links alone. */
-export function isInternalHref(href) {
-  try {
-    const url = new URL(href, location.href);
-    return url.origin === location.origin;
-  } catch {
-    return false;
-  }
 }

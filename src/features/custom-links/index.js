@@ -1,28 +1,20 @@
 /**
- * "Watch & links" panel on title pages.
+ * Custom links panel on title pages.
  *
- * No Trakt auth is needed for the panel itself: the TMDb/IMDb ids come from the
- * rendered stats strip. The trailer needs a client ID (public, free) because it
- * hits the Trakt API, so it asks for one on first use.
+ * Adds user-configured links with template placeholders like {title}, {tmdb},
+ * {season}, {episode}. The links work from the DOM alone; a client ID only
+ * improves the episode counts behind the season/episode pickers.
  */
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
 import { fillTemplate, missingPlaceholders } from '../../core/text.js';
-import { DEFAULT_LINKS } from '../../config.js';
-import {
-  getClientId,
-  setClientId,
-  getCustomLinks,
-  getSelection,
-  setSelection,
-} from '../../settings.js';
-import { getTrailer, getSeasons, isAuthError } from '../../core/trakt.js';
-import { showTrailer, toast } from '../../ui/shell.js';
+import { getSelection, setSelection, getCustomLinks, getClientId } from '../../settings.js';
 import { promptAddCustomLink } from '../../actions.js';
 import { readTitleData, readSeasons, mergeSeasons, templateVars } from './data.js';
+import { getSeasons } from '../../core/trakt.js';
 
-const PANEL_ID = 'ogt-watch-now';
-const TITLE_ID = 'ogt-watch-now-title';
+const PANEL_ID = 'ogt-custom-links';
+const TITLE_ID = 'ogt-custom-links-title';
 
 /** Where the panel belongs: under the summary's stats, above its full-width sections. */
 function findMountPoint() {
@@ -42,9 +34,9 @@ function seasonLabel(number) {
   return number === 0 ? 'Specials' : `Season ${number}`;
 }
 
-function chip({ label, href, template, primary = false }) {
+function chip({ label, href, template }) {
   const link = el('a', {
-    class: primary ? 'ogt-chip ogt-chip--primary' : 'ogt-chip',
+    class: 'ogt-chip',
     href,
     target: '_blank',
     rel: 'noopener noreferrer',
@@ -69,7 +61,7 @@ function createPanel(meta) {
     el(
       'div',
       { class: 'ogt-head' },
-      el('h2', { class: 'ogt-title', id: TITLE_ID, text: 'Watch & links' }),
+      el('h2', { class: 'ogt-title', id: TITLE_ID, text: 'Custom links' }),
       el('span', { class: 'ogt-badge', text: 'og toolkit' }),
     ),
     linksRow,
@@ -91,20 +83,14 @@ function createPanel(meta) {
     const values = vars();
     linksRow.replaceChildren();
 
-    for (const entry of DEFAULT_LINKS) {
-      if (entry.needs && (values[entry.needs] === undefined || values[entry.needs] === null || values[entry.needs] === '')) continue;
-      if (missingPlaceholders(entry.url, values).length) continue;
+    const links = getCustomLinks();
+    if (!links.length) {
       linksRow.append(
-        chip({
-          label: entry.label,
-          href: fillTemplate(entry.url, values),
-          template: entry.url,
-          primary: entry.id === 'justwatch',
-        }),
+        el('p', { class: 'ogt-hint', text: 'Add links to your own services: Plex, Jellyfin, Sonarr, or any URL.' }),
       );
     }
 
-    for (const entry of getCustomLinks()) {
+    for (const entry of links) {
       if (!/^https?:\/\//i.test(entry.url)) continue;
       if (missingPlaceholders(entry.url, values).length) continue;
       linksRow.append(chip({ label: entry.label, href: fillTemplate(entry.url, values), template: entry.url }));
@@ -115,6 +101,10 @@ function createPanel(meta) {
     linksRow.append(add);
   }
 
+  function needsSelection() {
+    return getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
+  }
+
   function persistSelection() {
     if (selection.season != null) setSelection(meta.kind, meta.id, selection);
   }
@@ -123,8 +113,6 @@ function createPanel(meta) {
   const episodeSlot = el('span', { class: 'ogt-episode' });
   const seasonField = el('label', { class: 'ogt-field' }, 'Season', seasonSelect);
   const episodeField = el('label', { class: 'ogt-field' }, 'Episode', episodeSlot);
-  const trailerButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Watch trailer' });
-  trailerButton.addEventListener('click', () => openTrailer(trailerButton));
   let controlsBuilt = false;
 
   function ensureControls() {
@@ -136,60 +124,68 @@ function createPanel(meta) {
       renderEpisodeField();
       updateLinkHrefs();
     });
-    controlsRow.replaceChildren(seasonField, episodeField, trailerButton);
+    controlsRow.replaceChildren(seasonField, episodeField);
     controlsBuilt = true;
   }
 
   function renderEpisodeField() {
     const season = seasons.find((entry) => entry.number === selection.season);
     const count = season?.episodes || null;
-    if (selection.episode == null || (count && selection.episode > count)) selection.episode = 1;
-
-    if (count) {
-      const select = el(
-        'select',
-        { class: 'ogt-select', 'aria-label': 'Episode' },
-        Array.from({ length: count }, (_, index) =>
-          el('option', {
-            value: String(index + 1),
-            text: `Episode ${index + 1}`,
-            selected: index + 1 === selection.episode,
-          }),
-        ),
-      );
-      select.addEventListener('change', () => {
-        selection.episode = Number(select.value) || 1;
-        persistSelection();
-        updateLinkHrefs();
-      });
-      episodeSlot.replaceChildren(select);
+    if (!count || count < 1) {
+      episodeSlot.replaceChildren(el('span', { text: '—' }));
+      selection.episode = null;
       return;
     }
 
-    const input = el('input', {
-      class: 'ogt-select',
-      type: 'number',
-      min: '1',
-      value: String(selection.episode || 1),
-      'aria-label': 'Episode',
-      style: 'inline-size: 5.5rem',
-    });
-    input.addEventListener('change', () => {
-      selection.episode = Math.max(1, Number(input.value) || 1);
+    if (selection.episode == null || selection.episode > count) selection.episode = 1;
+
+    if (count > 8) {
+      const input = el('input', {
+        class: 'ogt-input',
+        type: 'number',
+        min: '1',
+        max: String(count),
+        value: String(selection.episode),
+        'aria-label': 'Episode',
+      });
+      input.addEventListener('change', () => {
+        const value = Number(input.value);
+        if (Number.isInteger(value) && value >= 1 && value <= count) {
+          selection.episode = value;
+          persistSelection();
+          updateLinkHrefs();
+        } else {
+          input.value = String(selection.episode);
+        }
+      });
+      episodeSlot.replaceChildren(input);
+      return;
+    }
+
+    const select = el('select', { class: 'ogt-select', 'aria-label': 'Episode' });
+    for (let i = 1; i <= count; i++) {
+      select.append(el('option', { value: String(i), text: `Episode ${i}` }));
+    }
+    select.value = String(selection.episode);
+    select.addEventListener('change', () => {
+      selection.episode = Number(select.value);
       persistSelection();
       updateLinkHrefs();
     });
-    episodeSlot.replaceChildren(input);
+    episodeSlot.replaceChildren(select);
   }
 
   function renderControls() {
-    ensureControls();
+    const hasSeasons = meta.kind === 'show' && seasons.length > 0 && needsSelection();
+    if (!hasSeasons) {
+      controlsRow.hidden = true;
+      return;
+    }
 
-    const hasSeasons = meta.kind === 'show' && seasons.length > 0;
-    seasonField.hidden = !hasSeasons;
-    episodeField.hidden = !hasSeasons;
+    ensureControls();
+    seasonField.hidden = false;
+    episodeField.hidden = false;
     controlsRow.hidden = false;
-    if (!hasSeasons) return;
 
     const available = seasons.map((season) => season.number);
     if (selection.season == null || !available.includes(selection.season)) {
@@ -207,42 +203,6 @@ function createPanel(meta) {
     // Re-render so templates that need {season}/{episode} appear now that they have values.
     renderLinks();
     updateLinkHrefs();
-  }
-
-  async function openTrailer(button) {
-    const label = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Loading…';
-
-    try {
-      if (!getClientId()) {
-        const entered = window.prompt(
-          'Trailers use the free Trakt API and need a client ID.\n\n' +
-            'Create an app at https://app.trakt.tv/settings/apps (any redirect URI), then paste its Client ID here.',
-          '',
-        );
-        if (!entered) return;
-        setClientId(entered);
-      }
-
-      const trailer = await getTrailer(meta.kind, meta.id);
-      if (cancelled) return;
-      if (!trailer) {
-        toast('No trailer found for this title.');
-        return;
-      }
-      showTrailer(trailer);
-    } catch (error) {
-      if (cancelled) return;
-      if (isAuthError(error)) toast('Trakt rejected that client ID. Set a valid one from the userscript menu.');
-      else toast('Could not load the trailer.');
-      debugError('trailer failed', error);
-    } finally {
-      if (!cancelled && button.isConnected) {
-        button.disabled = false;
-        button.textContent = label;
-      }
-    }
   }
 
   /** Trakt's API policy asks apps to use documented endpoints rather than read the site. When a client
@@ -289,11 +249,17 @@ function createPanel(meta) {
 
   function onRefresh() {
     renderLinks();
+    if (meta.kind === 'show' && needsSelection()) {
+      if (seasons.length) renderControls();
+      else loadSeasons();
+    } else {
+      controlsRow.hidden = true;
+    }
   }
 
   renderLinks();
-  renderControls();
-  loadSeasons();
+  if (meta.kind === 'show' && needsSelection()) loadSeasons();
+  else renderControls();
   document.addEventListener('ogt:refresh', onRefresh);
 
   return {
@@ -301,28 +267,29 @@ function createPanel(meta) {
     destroy() {
       cancelled = true;
       for (const timer of timers) clearTimeout(timer);
+      timers.length = 0;
       document.removeEventListener('ogt:refresh', onRefresh);
       node.remove();
     },
   };
 }
 
-export const watchNow = {
-  id: 'watch-now',
-  match: (route) => route.name === 'title',
+export const customLinks = {
+  id: 'custom-links',
+  match(route) {
+    return route.kind === 'movie' || route.kind === 'show';
+  },
   mount(route) {
     if (document.getElementById(PANEL_ID)) return null;
 
-    const point = findMountPoint();
-    if (!point) return null;
-
     const meta = readTitleData(document, route);
-    if (!meta.title && !meta.tmdb && !meta.imdb) return null;
+    if (!meta.id) return null;
+
+    const mount = findMountPoint();
+    if (!mount) return null;
 
     const panel = createPanel(meta);
-    if (point.before) point.parent.insertBefore(panel.node, point.before);
-    else point.parent.append(panel.node);
-
+    mount.parent.insertBefore(panel.node, mount.before);
     return panel;
   },
 };
