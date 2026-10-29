@@ -114,7 +114,7 @@ test('old-format stored links still load and render unchanged', async (t) => {
 });
 
 test('preset checklist marks existing URLs and adds selected presets to storage', async (t) => {
-  const oldLinks = [{ label: 'Wikipedia', url: 'https://en.wikipedia.org/w/index.php?search={title}' }];
+  const oldLinks = [{ label: 'Metacritic', url: 'https://www.metacritic.com/search/{title}/' }];
   const { window, document, store } = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad',
     html: SHOW_HTML,
@@ -125,9 +125,12 @@ test('preset checklist marks existing URLs and adds selected presets to storage'
 
   const open = chip(document, 'Add presets…');
   open.click();
-  const wikipedia = document.querySelector('.ogt-presets input[aria-label="Wikipedia"]');
-  assert.ok(wikipedia.disabled, 'a preset with the same URL is disabled');
-  assert.equal(document.activeElement, document.querySelector('.ogt-presets input[aria-label="Rotten Tomatoes"]'));
+  const metacritic = document.querySelector('.ogt-presets input[aria-label="Metacritic"]');
+  assert.ok(metacritic.disabled, 'a preset with the same URL is disabled');
+  assert.equal(document.activeElement, document.querySelector('.ogt-presets input[aria-label="Stremio"]'));
+  for (const duplicate of ['Rotten Tomatoes', 'Wikipedia', 'Letterboxd']) {
+    assert.equal(document.querySelector(`.ogt-presets input[aria-label="${duplicate}"]`), null, `og already links ${duplicate}`);
+  }
 
   const stremio = document.querySelector('.ogt-presets input[aria-label="Stremio"]');
   stremio.checked = true;

@@ -21,7 +21,7 @@ It matches `https://og.trakt.tv/*` and `http://localhost:5173|5174/*` for develo
 A compact panel under the summary stats with user-configured links to your own services.
 
 - **Custom links** — manage your `Label | URL` templates in the inline editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{season}`, `{episode}`.
-- **Search presets** — optionally add Letterboxd, Rotten Tomatoes, Metacritic, Wikipedia, Stremio, Plex, AniList and MyAnimeList links.
+- **Search presets** — optionally add Metacritic, Stremio, Plex, AniList and MyAnimeList links (og already links Rotten Tomatoes, Wikipedia and Letterboxd itself).
 - **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}`. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
 - **Examples**: Plex, Jellyfin, Sonarr, Radarr, or any streaming/library service og doesn't link to.
 

@@ -8,8 +8,10 @@ Working notes and known issues. Newest first.
 
 - MyAnimeList's older `/anime.php?q=` search URL returned 404 with a browser-like user agent. The preset uses the current
   `/search/all?q=` route instead; it searches across MAL categories, so anime results may appear alongside other types.
-- The other preset search URLs returned HTTP 200 when checked with a browser-like user agent. The Letterboxd preset is
-  movie-only; AniList and MyAnimeList are offered for both page kinds because og does not reliably identify anime.
+- The other preset search URLs returned HTTP 200 when checked with a browser-like user agent. AniList and MyAnimeList
+  are offered for both page kinds because og does not reliably identify anime.
+- Dropped Letterboxd, Rotten Tomatoes and Wikipedia presets: og's title pages already link all three (checked on
+  movies, shows and two anime titles). Metacritic stays: og shows its score but doesn't link to it.
 - Stremio's official web source defines `/search` and reads the `search` query parameter. Plex's hash search route
   matches a Plex URL example, but curl only checks the hosted app shell for Stremio and Plex because it does not send
   URL fragments. Neither route had a browser click-through check in this environment.
