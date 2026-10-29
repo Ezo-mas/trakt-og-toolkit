@@ -113,3 +113,33 @@ test('sign-in shows the device code in a toast and keeps it there while pending'
   for (const text of shownWhilePending) assert.match(text, /Enter ABCD1234 at https:\/\/auth\.trakt\.tv\/activate/);
   assert.match(window.document.body.textContent, /Signed in to Trakt\./);
 });
+
+test('sign-in copies the device code with GM_setClipboard and says so', async (t) => {
+  const window = new Window({ url: 'https://og.trakt.tv/' });
+  t.after(() => window.close());
+  const data = new Map([['trakt.clientId', 'client'], ['trakt.oauth.redirectUri', 'http://localhost:5173/callback']]);
+  const menus = new Map();
+  const copied = [];
+  let toastAtFirstPoll = '';
+  window.GM_getValue = (k, fallback) => data.get(k) ?? fallback;
+  window.GM_setValue = (k, v) => data.set(k, v);
+  window.GM_deleteValue = (k) => data.delete(k);
+  window.GM_setClipboard = (text, type) => copied.push([text, type]);
+  window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+  window.prompt = (message, initial) => initial;
+  window.GM_xmlhttpRequest = (r) => {
+    if (r.url.endsWith('/device/code')) {
+      r.onload({ status: 200, responseHeaders: '', responseText: JSON.stringify({
+        device_code: 'dev', user_code: 'ABCD1234', verification_url: 'https://auth.trakt.tv/activate', interval: 0.05, expires_in: 30 }) });
+      return;
+    }
+    toastAtFirstPoll = window.document.body.textContent;
+    r.onload({ status: 418, responseHeaders: '', responseText: '' });
+  };
+  window.document.write('<html><head></head><body></body></html>');
+  window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
+  window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
+  await menus.get('sign in')();
+  assert.deepEqual(copied, [['ABCD1234', 'text']]);
+  assert.match(toastAtFirstPoll, /Code ABCD1234 copied; paste it at https:\/\/auth\.trakt\.tv\/activate/);
+});

@@ -154,6 +154,8 @@ export const CSS = String.raw`
   color: light-dark(#fff, #111);
   font: 500 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
   box-shadow: 0 6px 24px rgb(0 0 0 / 28%);
+  pointer-events: auto; /* the container ignores clicks; the text itself stays selectable */
+  user-select: text;
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 160ms ease, transform 160ms ease;

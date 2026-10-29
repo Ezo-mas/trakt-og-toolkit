@@ -15,6 +15,7 @@
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
+// @grant        GM_setClipboard
 // @connect      api.trakt.tv
 // @connect      auth.trakt.tv
 // @noframes
@@ -181,6 +182,8 @@
   color: light-dark(#fff, #111);
   font: 500 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
   box-shadow: 0 6px 24px rgb(0 0 0 / 28%);
+  pointer-events: auto; /* the container ignores clicks; the text itself stays selectable */
+  user-select: text;
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 160ms ease, transform 160ms ease;
@@ -1813,6 +1816,15 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
   // src/oauth-menu.js
   var CODE_TOAST_MS = 10 * 60 * 1e3;
   var QUIET = /* @__PURE__ */ new Set([DEVICE_MESSAGES[400], DEVICE_MESSAGES[429]]);
+  function copyText(text2) {
+    if (typeof GM_setClipboard !== "function") return false;
+    try {
+      GM_setClipboard(text2, "text");
+      return true;
+    } catch {
+      return false;
+    }
+  }
   function registerAuthMenu() {
     GM_registerMenuCommand("Trakt OG Toolkit: sign in", async () => {
       if (!getClientId()) {
@@ -1838,7 +1850,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
           // A long toast instead of a native prompt, so the page keeps working while polling.
           // The next sign-in message (signed in, cancelled, expired, …) replaces it.
           onCode: ({ user_code, verification_url }) => toast(
-            `Enter ${user_code} at ${verification_url}, then come back. Use "cancel sign-in" in the menu to stop.`,
+            `${copyText(user_code) ? `Code ${user_code} copied; paste it` : `Enter ${user_code}`} at ${verification_url}, then come back. Use "cancel sign-in" in the menu to stop.`,
             { duration: CODE_TOAST_MS }
           ),
           // Pending and slow-down are expected while waiting; keep the code on screen.

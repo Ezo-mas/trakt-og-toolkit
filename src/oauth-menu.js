@@ -8,6 +8,17 @@ import { toast } from './ui/shell.js';
 const CODE_TOAST_MS = 10 * 60 * 1000; // Trakt device codes last 10 minutes
 const QUIET = new Set([DEVICE_MESSAGES[400], DEVICE_MESSAGES[429]]);
 
+/** Copy without a page click; menu commands don't count as a user gesture for navigator.clipboard. */
+function copyText(text) {
+  if (typeof GM_setClipboard !== 'function') return false;
+  try {
+    GM_setClipboard(text, 'text');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function registerAuthMenu() {
   GM_registerMenuCommand('Trakt OG Toolkit: sign in', async () => {
     if (!getClientId()) { toast('Set your Trakt client ID first.'); return; }
@@ -24,7 +35,8 @@ export function registerAuthMenu() {
         // A long toast instead of a native prompt, so the page keeps working while polling.
         // The next sign-in message (signed in, cancelled, expired, …) replaces it.
         onCode: ({ user_code, verification_url }) => toast(
-          `Enter ${user_code} at ${verification_url}, then come back. Use "cancel sign-in" in the menu to stop.`,
+          `${copyText(user_code) ? `Code ${user_code} copied; paste it` : `Enter ${user_code}`} at ${verification_url}, ` +
+          'then come back. Use "cancel sign-in" in the menu to stop.',
           { duration: CODE_TOAST_MS }),
         // Pending and slow-down are expected while waiting; keep the code on screen.
         onMessage: (message) => { if (!QUIET.has(message)) toast(message); },
