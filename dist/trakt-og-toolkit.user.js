@@ -121,6 +121,11 @@
   transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 
+.ogt-panel button.ogt-chip {
+  cursor: pointer;
+  font-family: inherit;
+}
+
 .ogt-chip:hover,
 .ogt-chip:focus-visible {
   border-color: var(--ogt-accent);
@@ -165,6 +170,120 @@
   background-image: none;
 }
 
+.ogt-link-tools {
+  margin-block-start: 10px;
+  padding: 10px;
+  border: 1px solid var(--ogt-border);
+  border-radius: 5px;
+  background: var(--ogt-raised);
+}
+
+.ogt-editor-list-wrap,
+.ogt-preset-list-wrap {
+  max-block-size: 240px;
+  overflow: auto;
+}
+
+.ogt-editor-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ogt-editor-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.8fr) minmax(180px, 1.6fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.ogt-editor-field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--ogt-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ogt-editor-input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 7px;
+  border: 1px solid var(--ogt-border);
+  border-radius: 4px;
+  background: var(--ogt-surface);
+  color: var(--ogt-fg);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.ogt-editor-input:focus-visible,
+.ogt-mini-button:focus-visible,
+.ogt-preset-item input:focus-visible {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 1px;
+}
+
+.ogt-editor-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.ogt-mini-button {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 3px 6px;
+  border: 1px solid var(--ogt-border);
+  border-radius: 4px;
+  background: var(--ogt-surface);
+  color: var(--ogt-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ogt-mini-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ogt-editor-footer {
+  margin-block-start: 10px;
+}
+
+.ogt-editor-error {
+  margin: 8px 0 0;
+  color: light-dark(#a00000, #ff8a8a);
+  font-size: 12px;
+}
+
+.ogt-preset-list {
+  display: grid;
+  gap: 4px;
+}
+
+.ogt-preset-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: var(--ogt-fg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ogt-preset-item input {
+  accent-color: var(--ogt-accent);
+}
+
+.ogt-preset-added {
+  color: var(--ogt-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
 .ogt-toast {
   position: fixed;
   inset-block-end: 24px;
@@ -199,6 +318,10 @@
   .ogt-panel {
     margin: 16px 0;
     padding: 14px;
+  }
+
+  .ogt-editor-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 `;
@@ -740,65 +863,6 @@
     return isVerbose();
   }
 
-  // src/actions.js
-  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id} {plural}";
-  function promptAddCustomLink() {
-    const answer = window.prompt(
-      `Add a custom link as "Label | URL".
-
-${PLACEHOLDER_HELP}`,
-      "My service | https://example.com/watch/{tmdb}?s={season}&e={episode}"
-    );
-    if (!answer) return null;
-    const separator = answer.indexOf("|");
-    if (separator < 0) {
-      toast('Use "Label | URL" — the | separator is missing.');
-      return null;
-    }
-    const label = answer.slice(0, separator).trim();
-    const url = answer.slice(separator + 1).trim();
-    if (!label || !url) {
-      toast("Both a label and a URL are required.");
-      return null;
-    }
-    if (!/^https?:\/\//i.test(url)) {
-      toast("The URL must start with http:// or https://.");
-      return null;
-    }
-    addCustomLink({ label, url });
-    toast(`Link "${label}" added.`);
-    document.dispatchEvent(new CustomEvent("ogt:refresh"));
-    return { label, url };
-  }
-  function promptRemoveCustomLink() {
-    const links = getCustomLinks();
-    if (!links.length) {
-      toast("No custom links to remove.");
-      return;
-    }
-    const answer = window.prompt(
-      `Type the label of the link to remove:
-
-${links.map((entry) => `• ${entry.label}`).join("\n")}`,
-      links[0].label
-    );
-    if (!answer) return;
-    const next = removeCustomLink(answer.trim());
-    if (next.length === links.length) toast(`No link labelled "${answer.trim()}".`);
-    else toast("Link removed.");
-    document.dispatchEvent(new CustomEvent("ogt:refresh"));
-  }
-  function promptClientId() {
-    const answer = window.prompt(
-      "Paste your Trakt API client ID.\n\nCreate a free app at https://app.trakt.tv/settings/apps — the redirect URI can be anything, since this script only calls public endpoints.\n\nCurrent: " + (getClientId() || "(none)"),
-      getClientId()
-    );
-    if (answer === null) return;
-    const clean = setClientId(answer);
-    toast(clean ? "Client ID saved." : "Client ID cleared.");
-    document.dispatchEvent(new CustomEvent("ogt:refresh"));
-  }
-
   // src/features/custom-links/data.js
   var TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
   var IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
@@ -877,6 +941,87 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       episodes: season.episodes ?? rendered.get(season.number)?.episodes ?? null
     })).sort((a, b) => a.number - b.number);
   }
+  function filterPresetsByKind(presets, kind) {
+    return presets.filter((preset) => preset.kinds.includes(kind));
+  }
+  function presetAlreadyAdded(links, preset) {
+    return links.some((link) => link.url === preset.url);
+  }
+  function addPresets(links, presets) {
+    const urls = new Set(links.map((link) => link.url));
+    const additions = [];
+    for (const preset of presets) {
+      if (urls.has(preset.url)) continue;
+      urls.add(preset.url);
+      additions.push({ label: preset.label, url: preset.url });
+    }
+    return [...links, ...additions];
+  }
+  function moveLink(links, index, direction) {
+    const next = [...links];
+    const target = index + direction;
+    if (index < 0 || index >= next.length || target < 0 || target >= next.length) return next;
+    [next[index], next[target]] = [next[target], next[index]];
+    return next;
+  }
+  function validateCustomLinks(links) {
+    const errors = [];
+    for (const [index, link] of links.entries()) {
+      if (!String(link.label || "").trim()) errors.push({ index, field: "label", message: "A label is required." });
+      if (!String(link.url || "").trim()) {
+        errors.push({ index, field: "url", message: "A URL is required." });
+        continue;
+      }
+      if (!/^https?:\/\//i.test(String(link.url).trim())) {
+        errors.push({ index, field: "url", message: "URL must start with http:// or https://." });
+      }
+    }
+    return errors;
+  }
+
+  // src/features/custom-links/presets.js
+  var PRESETS = [
+    {
+      label: "Letterboxd",
+      url: "https://letterboxd.com/search/films/?q={title}",
+      kinds: ["movie"]
+    },
+    {
+      label: "Rotten Tomatoes",
+      url: "https://www.rottentomatoes.com/search?search={title}",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "Metacritic",
+      url: "https://www.metacritic.com/search/{title}/",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "Wikipedia",
+      url: "https://en.wikipedia.org/w/index.php?search={title}",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "Stremio",
+      url: "https://web.stremio.com/#/search?search={title}",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "Plex",
+      url: "https://app.plex.tv/desktop/#!/search?query={title}",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "AniList",
+      url: "https://anilist.co/search/anime?search={title}",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "MyAnimeList",
+      url: "https://myanimelist.net/search/all?q={title}",
+      kinds: ["movie", "show"]
+    }
+  ];
 
   // src/core/http.js
   var HttpError = class extends Error {
@@ -1298,8 +1443,16 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     let seasons = [];
     const timers = [];
     let selection = getSelection(meta.kind, meta.id) || { season: null, episode: null };
-    const linksRow = el("div", { class: "ogt-row" });
+    const linksRow = el("div", { class: "ogt-row ogt-links" });
     const controlsRow = el("div", { class: "ogt-row", hidden: true });
+    const actionsRow = el("div", { class: "ogt-row ogt-link-actions" });
+    const tools = el("div", { class: "ogt-link-tools", hidden: true });
+    const editor = el("div", { class: "ogt-editor", hidden: true });
+    const presetChecklist = el("div", { class: "ogt-presets", hidden: true });
+    tools.append(editor, presetChecklist);
+    const presetsButton = el("button", { class: "ogt-chip", type: "button", text: "Add presets…" });
+    const editButton = el("button", { class: "ogt-chip", type: "button", text: "Edit links" });
+    actionsRow.append(presetsButton, editButton);
     const node = el(
       "section",
       { class: "ogt-panel", id: PANEL_ID, "aria-labelledby": TITLE_ID },
@@ -1310,7 +1463,9 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
         el("span", { class: "ogt-badge", text: "og toolkit" })
       ),
       linksRow,
-      controlsRow
+      controlsRow,
+      actionsRow,
+      tools
     );
     const vars = () => templateVars(meta, selection);
     function updateLinkHrefs() {
@@ -1335,10 +1490,205 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
         if (missingPlaceholders(entry.url, values).length) continue;
         linksRow.append(chip({ label: entry.label, href: fillTemplate(entry.url, values), template: entry.url }));
       }
-      const add = el("button", { class: "ogt-chip", type: "button", text: "+ Add link" });
-      add.addEventListener("click", () => promptAddCustomLink());
-      linksRow.append(add);
     }
+    let currentView = null;
+    let returnFocus = null;
+    let draft = [];
+    let nextDraftId = 0;
+    let selectedPresets = /* @__PURE__ */ new Set();
+    function closeTools() {
+      currentView = null;
+      tools.hidden = true;
+      editor.hidden = true;
+      presetChecklist.hidden = true;
+      const target = returnFocus;
+      returnFocus = null;
+      target?.focus();
+    }
+    function renderEditor(focusKey) {
+      editor.replaceChildren();
+      const list = el("div", { class: "ogt-editor-list" });
+      for (const [index, entry] of draft.entries()) {
+        const labelInput = el("input", {
+          class: "ogt-editor-input",
+          type: "text",
+          value: entry.label,
+          "aria-label": "Link label",
+          "data-focus": `${entry.id}-label`
+        });
+        labelInput.addEventListener("input", () => {
+          entry.label = labelInput.value;
+        });
+        const urlInput = el("input", {
+          class: "ogt-editor-input",
+          type: "text",
+          value: entry.url,
+          "aria-label": "Link URL",
+          "data-focus": `${entry.id}-url`
+        });
+        urlInput.addEventListener("input", () => {
+          entry.url = urlInput.value;
+        });
+        const up = el("button", {
+          class: "ogt-mini-button",
+          type: "button",
+          text: "↑",
+          "aria-label": "Move up",
+          disabled: index === 0,
+          "data-focus": `${entry.id}-up`
+        });
+        up.addEventListener("click", () => {
+          draft = moveLink(draft, index, -1);
+          renderEditor(`${entry.id}-up`);
+        });
+        const down = el("button", {
+          class: "ogt-mini-button",
+          type: "button",
+          text: "↓",
+          "aria-label": "Move down",
+          disabled: index === draft.length - 1,
+          "data-focus": `${entry.id}-down`
+        });
+        down.addEventListener("click", () => {
+          draft = moveLink(draft, index, 1);
+          renderEditor(`${entry.id}-down`);
+        });
+        const remove = el("button", {
+          class: "ogt-mini-button",
+          type: "button",
+          text: "Delete",
+          "aria-label": "Delete link"
+        });
+        remove.addEventListener("click", () => {
+          draft = draft.filter((link) => link.id !== entry.id);
+          const nextEntry = draft[Math.min(index, draft.length - 1)];
+          renderEditor(nextEntry ? `${nextEntry.id}-label` : "add-link");
+        });
+        list.append(
+          el(
+            "div",
+            { class: "ogt-editor-row" },
+            el("label", { class: "ogt-editor-field" }, "Label", labelInput),
+            el("label", { class: "ogt-editor-field" }, "URL", urlInput),
+            el("div", { class: "ogt-editor-actions" }, up, down, remove)
+          )
+        );
+      }
+      const error = el("p", { class: "ogt-editor-error", role: "alert", hidden: true });
+      const add = el("button", {
+        class: "ogt-chip",
+        type: "button",
+        text: "Add link",
+        "data-focus": "add-link"
+      });
+      add.addEventListener("click", () => {
+        const entry = { id: nextDraftId++, label: "", url: "" };
+        draft.push(entry);
+        renderEditor(`${entry.id}-label`);
+      });
+      const save = el("button", { class: "ogt-chip", type: "button", text: "Save links" });
+      save.addEventListener("click", () => {
+        const errors = validateCustomLinks(draft);
+        if (errors.length) {
+          const first = errors[0];
+          error.textContent = first.message;
+          error.hidden = false;
+          const entry = draft[first.index];
+          editor.querySelector(`[data-focus="${entry.id}-${first.field}"]`)?.focus();
+          return;
+        }
+        setCustomLinks(draft.map(({ label, url }) => ({ label: label.trim(), url: url.trim() })));
+        renderLinks();
+        if (meta.kind === "show" && needsSelection()) {
+          if (seasons.length) renderControls();
+          else loadSeasons();
+        } else {
+          controlsRow.hidden = true;
+        }
+        closeTools();
+      });
+      const cancel = el("button", { class: "ogt-chip", type: "button", text: "Cancel" });
+      cancel.addEventListener("click", closeTools);
+      editor.append(
+        el("div", { class: "ogt-editor-list-wrap" }, list),
+        error,
+        el("div", { class: "ogt-row ogt-editor-footer" }, add, save, cancel)
+      );
+      if (focusKey) editor.querySelector(`[data-focus="${focusKey}"]`)?.focus();
+    }
+    function openEditor() {
+      currentView = "editor";
+      returnFocus = editButton;
+      draft = getCustomLinks().map((link) => ({ ...link, id: nextDraftId++ }));
+      tools.hidden = false;
+      editor.hidden = false;
+      presetChecklist.hidden = true;
+      renderEditor(draft.length ? `${draft[0].id}-label` : "add-link");
+    }
+    function renderPresetChecklist() {
+      const links = getCustomLinks();
+      const presets = filterPresetsByKind(PRESETS, meta.kind);
+      const list = el("div", { class: "ogt-preset-list" });
+      selectedPresets = /* @__PURE__ */ new Set();
+      for (const [index, preset] of presets.entries()) {
+        const added = presetAlreadyAdded(links, preset);
+        const checkbox = el("input", {
+          type: "checkbox",
+          value: preset.url,
+          disabled: added,
+          "aria-label": preset.label
+        });
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) selectedPresets.add(preset.url);
+          else selectedPresets.delete(preset.url);
+        });
+        const label = el(
+          "label",
+          { class: "ogt-preset-item", for: `ogt-preset-${index}` },
+          checkbox,
+          el("span", { text: preset.label }),
+          added ? el("span", { class: "ogt-preset-added", text: "added" }) : null
+        );
+        checkbox.id = `ogt-preset-${index}`;
+        list.append(label);
+      }
+      const error = el("p", { class: "ogt-hint", text: "Choose the services you want to add." });
+      const confirm = el("button", { class: "ogt-chip", type: "button", text: "Add selected" });
+      confirm.addEventListener("click", () => {
+        const selected = presets.filter((preset) => selectedPresets.has(preset.url));
+        if (selected.length) {
+          setCustomLinks(addPresets(getCustomLinks(), selected));
+          renderLinks();
+        }
+        closeTools();
+      });
+      const cancel = el("button", { class: "ogt-chip", type: "button", text: "Cancel" });
+      cancel.addEventListener("click", closeTools);
+      presetChecklist.replaceChildren(
+        el("div", { class: "ogt-preset-list-wrap" }, list),
+        error,
+        el("div", { class: "ogt-row ogt-editor-footer" }, confirm, cancel)
+      );
+    }
+    function openPresets() {
+      currentView = "presets";
+      returnFocus = presetsButton;
+      tools.hidden = false;
+      editor.hidden = true;
+      presetChecklist.hidden = false;
+      renderPresetChecklist();
+      const firstChoice = presetChecklist.querySelector('input[type="checkbox"]:not(:disabled)');
+      (firstChoice || presetChecklist.querySelector("button"))?.focus();
+    }
+    function onKeyDown(event) {
+      if (event.key === "Escape" && currentView) {
+        event.preventDefault();
+        closeTools();
+      }
+    }
+    presetsButton.addEventListener("click", openPresets);
+    editButton.addEventListener("click", openEditor);
+    node.addEventListener("keydown", onKeyDown);
     function needsSelection() {
       return getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
     }
@@ -1813,6 +2163,65 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       };
     }
   };
+
+  // src/actions.js
+  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id} {plural}";
+  function promptAddCustomLink() {
+    const answer = window.prompt(
+      `Add a custom link as "Label | URL".
+
+${PLACEHOLDER_HELP}`,
+      "My service | https://example.com/watch/{tmdb}?s={season}&e={episode}"
+    );
+    if (!answer) return null;
+    const separator = answer.indexOf("|");
+    if (separator < 0) {
+      toast('Use "Label | URL" — the | separator is missing.');
+      return null;
+    }
+    const label = answer.slice(0, separator).trim();
+    const url = answer.slice(separator + 1).trim();
+    if (!label || !url) {
+      toast("Both a label and a URL are required.");
+      return null;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      toast("The URL must start with http:// or https://.");
+      return null;
+    }
+    addCustomLink({ label, url });
+    toast(`Link "${label}" added.`);
+    document.dispatchEvent(new CustomEvent("ogt:refresh"));
+    return { label, url };
+  }
+  function promptRemoveCustomLink() {
+    const links = getCustomLinks();
+    if (!links.length) {
+      toast("No custom links to remove.");
+      return;
+    }
+    const answer = window.prompt(
+      `Type the label of the link to remove:
+
+${links.map((entry) => `• ${entry.label}`).join("\n")}`,
+      links[0].label
+    );
+    if (!answer) return;
+    const next = removeCustomLink(answer.trim());
+    if (next.length === links.length) toast(`No link labelled "${answer.trim()}".`);
+    else toast("Link removed.");
+    document.dispatchEvent(new CustomEvent("ogt:refresh"));
+  }
+  function promptClientId() {
+    const answer = window.prompt(
+      "Paste your Trakt API client ID.\n\nCreate a free app at https://app.trakt.tv/settings/apps — the redirect URI can be anything, since this script only calls public endpoints.\n\nCurrent: " + (getClientId() || "(none)"),
+      getClientId()
+    );
+    if (answer === null) return;
+    const clean = setClientId(answer);
+    toast(clean ? "Client ID saved." : "Client ID cleared.");
+    document.dispatchEvent(new CustomEvent("ogt:refresh"));
+  }
 
   // src/oauth-menu.js
   var CODE_TOAST_MS = 10 * 60 * 1e3;

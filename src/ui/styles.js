@@ -92,6 +92,11 @@ export const CSS = String.raw`
   transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
 }
 
+.ogt-panel button.ogt-chip {
+  cursor: pointer;
+  font-family: inherit;
+}
+
 .ogt-chip:hover,
 .ogt-chip:focus-visible {
   border-color: var(--ogt-accent);
@@ -136,6 +141,120 @@ export const CSS = String.raw`
   background-image: none;
 }
 
+.ogt-link-tools {
+  margin-block-start: 10px;
+  padding: 10px;
+  border: 1px solid var(--ogt-border);
+  border-radius: 5px;
+  background: var(--ogt-raised);
+}
+
+.ogt-editor-list-wrap,
+.ogt-preset-list-wrap {
+  max-block-size: 240px;
+  overflow: auto;
+}
+
+.ogt-editor-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ogt-editor-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.8fr) minmax(180px, 1.6fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.ogt-editor-field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--ogt-muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ogt-editor-input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 7px;
+  border: 1px solid var(--ogt-border);
+  border-radius: 4px;
+  background: var(--ogt-surface);
+  color: var(--ogt-fg);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.ogt-editor-input:focus-visible,
+.ogt-mini-button:focus-visible,
+.ogt-preset-item input:focus-visible {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 1px;
+}
+
+.ogt-editor-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.ogt-mini-button {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 3px 6px;
+  border: 1px solid var(--ogt-border);
+  border-radius: 4px;
+  background: var(--ogt-surface);
+  color: var(--ogt-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ogt-mini-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ogt-editor-footer {
+  margin-block-start: 10px;
+}
+
+.ogt-editor-error {
+  margin: 8px 0 0;
+  color: light-dark(#a00000, #ff8a8a);
+  font-size: 12px;
+}
+
+.ogt-preset-list {
+  display: grid;
+  gap: 4px;
+}
+
+.ogt-preset-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: var(--ogt-fg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ogt-preset-item input {
+  accent-color: var(--ogt-accent);
+}
+
+.ogt-preset-added {
+  color: var(--ogt-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
 .ogt-toast {
   position: fixed;
   inset-block-end: 24px;
@@ -170,6 +289,10 @@ export const CSS = String.raw`
   .ogt-panel {
     margin: 16px 0;
     padding: 14px;
+  }
+
+  .ogt-editor-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 `;

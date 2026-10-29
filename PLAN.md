@@ -13,9 +13,9 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 |---|---|---|---|
 | 0 | Foundation (shared CSS hook, exported `apiGet`) | — | done |
 | 1 | Season chart | client ID optional | done |
-| 2 | Playback progress manager | Phase A implemented; phase B pending | 1, 3, 4 |
+| 2 | Playback progress manager | OAuth (phase A done) | phase B next |
 | 3 | Metadata links | nothing (maybe client ID) | 1, 2, 4 |
-| 4 | Custom link presets | nothing | 1, 2, 3 |
+| 4 | Custom link presets | done | 1, 2, 3 |
 | 5 | Small extras (pronunciation, poster rating corners) | varies | after 1–4 |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
@@ -105,7 +105,7 @@ this: its Progress page only has Watching, Rewatching and Dropped tabs.
 
 ### Phase A: OAuth (blocks phase B)
 
-**Status:** implemented with mocked GM transport tests; real Trakt sign-in and Firefox/Chromium extension checks remain unverified. Phase B is not implemented.
+**Status:** done. Verified live against Trakt (sign-in, refresh, 401 retry, revoke) and in Violentmonkey; see NOTES.md. Phase B is not implemented.
 
 **Current API docs:** device flow no longer requires a client secret; OAuth uses `auth.trakt.tv`. PKCE is documented for the redirect-based authorization-code flow only. See NOTES.md for sources. The secret requirement below is superseded by these current docs.
 
@@ -157,6 +157,8 @@ already be links. Look at a live movie and a live show and list which fields are
 **Risk:** if og's search can't filter by a field, skip that field rather than inventing a URL.
 
 ## 4. Custom link presets
+
+**Status:** done
 
 **Goal:** the custom links panel is empty until the user types templates. Offer an optional preset pack of popular,
 legitimate services so it's useful straight away.
