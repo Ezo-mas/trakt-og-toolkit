@@ -53,6 +53,11 @@ Working notes and known issues. Newest first.
   remain unverified. A local headless Chromium check with mocked account data passed overview rendering, confirmed
   age-based deletion and list refresh; this does not establish live userscript-manager compatibility. No scrobble/pause
   requests or manual progress setting were implemented.
+- Later the same day: anchors checked against live og (`#overview .top` on movie and episode pages) and og's source
+  (`section.progress` in `ProgressList.svelte`; the progress page needs an og login). Real-account check in
+  Violentmonkey passed: a test entry made with `POST /scrobble/start` + `/scrobble/pause` (35%, no watch recorded)
+  showed as a badge and in the overview, and clearing it deleted it on Trakt. Without a syncing app, that
+  start+pause pair is the easiest way to create test playback.
 
 ### OAuth review fixes
 

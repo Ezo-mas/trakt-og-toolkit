@@ -121,10 +121,8 @@ this: its Progress page only has Watching, Rewatching and Dropped tabs.
 
 ### Phase B: the feature
 
-**Status:** implemented: movie/episode badges and an on-demand paused-playback section above og’s user progress
-list. Mapping, age filtering, private cache, confirmed deletes, four-worker bulk operations, partial failure and
-built-bundle interactions are tested. Real-account/browser extension validation and new live HTML captures are
-pending: og.trakt.tv requests were blocked by environment network policy; see NOTES.md for fixture provenance.
+**Status:** done: movie/episode badges and an on-demand paused-playback section above og’s user progress list.
+Verified 2026-10-29 on a real account in Violentmonkey (badge, overview load, delete); see NOTES.md.
 
 - Data: `GET /sync/playback/movies` and `/sync/playback/episodes` (progress %, `paused_at`, ids). Clear one with
   `DELETE /sync/playback/:id`.
