@@ -41,16 +41,30 @@ season cards, and the upcoming features need one. Any user can create one for fr
 | App name | `OG Toolkit` (or `Trakt OG Toolkit`) |
 | Description | `Userscript for og.trakt.tv: custom links and rating helpers. Public API endpoints only.` |
 | App type | **Development** — currently the only option |
-| Redirect URIs | `http://localhost:5173/callback` — the form wants one; this script never uses it |
+| Redirect URIs | `http://localhost:5173/callback` — must match the value entered at sign-in; used when refreshing tokens |
 | Allowed origins | leave empty (GM_xmlhttpRequest bypasses CORS); `http://localhost:5173` only if you use the fetch fallback |
 
-Then copy the **Client ID**. Never copy the Client Secret into the script — nothing here needs it.
+Then copy the **Client ID**. Never copy the Client Secret into the script — current Trakt device authentication does not need it.
 
 A Development app only lets you (and people you add) sign in with OAuth. That is fine for this script: it calls
 public endpoints with the client ID and does not sign anyone in yet. For a published script, leave
 `DEFAULT_CLIENT_ID` empty and let each user bring their own client ID, as the prompt already does.
 
 Set it from the userscript menu: **Trakt OG Toolkit: set API client ID**.
+
+## Optional Trakt sign-in
+
+The userscript menu now supports **sign in**, **cancel sign-in**, **sign out**, and **show signed-in user**.
+Set your own API client ID first. Sign-in asks for your app's registered redirect URI (needed for token refresh),
+pre-filled with `http://localhost:5173/callback`. A notice then shows a device code (already copied to your clipboard)
+and Trakt's verification URL: it opens in a new tab, so paste the code there. The notice stays up until sign-in finishes; use **cancel sign-in**
+to stop waiting.
+No client secret is needed with Trakt's current device API.
+
+Access and refresh tokens stay in the userscript manager's GM storage, separate from og's login. Tokens refresh
+on authenticated use before expiry, and sign-out attempts revocation and always clears local tokens. If revocation
+fails, remove the app connection in Trakt settings. This requires a userscript manager; OAuth never falls back to
+page localStorage. This phase supplies authentication only; playback UI will follow separately.
 
 ## Custom links
 

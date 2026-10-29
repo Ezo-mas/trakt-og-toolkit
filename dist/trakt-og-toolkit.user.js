@@ -15,7 +15,10 @@
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
+// @grant        GM_setClipboard
+// @grant        GM_openInTab
 // @connect      api.trakt.tv
+// @connect      auth.trakt.tv
 // @noframes
 // ==/UserScript==
 
@@ -180,6 +183,8 @@
   color: light-dark(#fff, #111);
   font: 500 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
   box-shadow: 0 6px 24px rgb(0 0 0 / 28%);
+  pointer-events: auto; /* the container ignores clicks; the text itself stays selectable */
+  user-select: text;
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 160ms ease, transform 160ms ease;
@@ -664,10 +669,22 @@
   }
   var STORAGE = {
     clientId: "trakt.clientId",
+    tokens: "trakt.oauth.tokens",
+    redirectUri: "trakt.oauth.redirectUri",
     customLinks: "watch.customLinks",
     debug: "debug",
     selection: (kind, id) => `selection.${kind}.${id}`
   };
+  function getPrivateValue(key) {
+    return backend ? backend.get(key, null) : null;
+  }
+  function setPrivateValue(key, value) {
+    if (!backend) throw new Error("OAuth requires userscript GM storage.");
+    backend.set(key, value);
+  }
+  function removePrivateValue(key) {
+    backend?.remove(key);
+  }
 
   // src/settings.js
   function getClientId() {
@@ -887,26 +904,37 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     if (next) next();
     else active -= 1;
   }
-  function rawRequest({ method = "GET", url, headers = {}, body = null, timeout = DEFAULT_TIMEOUT }) {
+  function rawRequest({ method = "GET", url, headers: headers2 = {}, body = null, timeout = DEFAULT_TIMEOUT, signal }) {
     const gmRequest = typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function" ? GM.xmlHttpRequest : null;
     if (!gmRequest) {
-      return fetch(url, { method, headers, body }).then(async (response) => ({
+      return fetch(url, { method, headers: headers2, body, signal }).then(async (response) => ({
         status: response.status,
         headers: response.headers,
         text: await response.text()
       }));
     }
     return new Promise((resolve, reject) => {
-      gmRequest({
+      if (signal?.aborted) return reject(new HttpError("Request cancelled", 0, null));
+      let handle;
+      const abort = () => {
+        handle?.abort();
+        reject(new HttpError("Request cancelled", 0, null));
+      };
+      const finish = (callback, value) => {
+        signal?.removeEventListener("abort", abort);
+        callback(value);
+      };
+      signal?.addEventListener("abort", abort, { once: true });
+      handle = gmRequest({
         method,
         url,
-        headers,
+        headers: headers2,
         data: body,
         timeout,
-        onload: (response) => resolve({ status: response.status, headers: response.responseHeaders, text: response.responseText }),
-        onerror: () => reject(new HttpError(`Network error for ${url}`, 0, null)),
-        ontimeout: () => reject(new HttpError(`Timed out for ${url}`, 0, null)),
-        onabort: () => reject(new HttpError(`Aborted ${url}`, 0, null))
+        onload: (response) => finish(resolve, { status: response.status, headers: response.responseHeaders, text: response.responseText }),
+        onerror: () => finish(reject, new HttpError(`Network error for ${url}`, 0, null)),
+        ontimeout: () => finish(reject, new HttpError(`Timed out for ${url}`, 0, null)),
+        onabort: () => finish(reject, new HttpError(`Aborted ${url}`, 0, null))
       });
     });
   }
@@ -918,7 +946,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       for (; ; ) {
         const response = await rawRequest(options);
         const retryable = response.status === 429 || response.status >= 500;
-        if (!retryable || attempt >= MAX_RETRIES) return response;
+        if (!retryable || attempt >= (options.retries ?? MAX_RETRIES)) return response;
         const retryAfter = Number(headerValue(response.headers, "retry-after"));
         const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1e3, 1e4) : 1e3 * (attempt + 1);
         attempt += 1;
@@ -928,18 +956,18 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       release();
     }
   }
-  function headerValue(headers, name) {
-    if (!headers) return null;
-    if (typeof headers.get === "function") return headers.get(name);
-    const line = String(headers).split(/\r?\n/).find((row) => row.toLowerCase().startsWith(`${name}:`));
+  function headerValue(headers2, name) {
+    if (!headers2) return null;
+    if (typeof headers2.get === "function") return headers2.get(name);
+    const line = String(headers2).split(/\r?\n/).find((row) => row.toLowerCase().startsWith(`${name}:`));
     return line ? line.slice(line.indexOf(":") + 1).trim() : null;
   }
   var cache = /* @__PURE__ */ new Map();
-  async function getJSON(url, { headers = {}, ttl = 0 } = {}) {
+  async function getJSON(url, { headers: headers2 = {}, ttl = 0 } = {}) {
     const now = Date.now();
     const hit = cache.get(url);
     if (hit && hit.expires > now) return hit.value;
-    const response = await request({ url, headers, method: "GET" });
+    const response = await request({ url, headers: headers2, method: "GET" });
     if (response.status < 200 || response.status >= 300) {
       throw new HttpError(`HTTP ${response.status} for ${url}`, response.status, response.text);
     }
@@ -961,6 +989,211 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
   }
   function cacheSize() {
     return cache.size;
+  }
+
+  // src/core/oauth.js
+  var AUTH = "https://auth.trakt.tv";
+  var generation = 0;
+  var refreshFlight = null;
+  var device = null;
+  var DEVICE_MESSAGES = {
+    400: "Waiting for Trakt authorization.",
+    404: "Invalid device code; start sign-in again.",
+    409: "Device code already used; start sign-in again.",
+    410: "Device code expired; start sign-in again.",
+    418: "Trakt authorization denied.",
+    429: "Polling slowed down; waiting before trying again."
+  };
+  function authError(message, status = 0) {
+    return new HttpError(message, status, null);
+  }
+  async function privateRequest(url, options = {}) {
+    try {
+      const r = await request({ ...options, url, retries: 0 });
+      return r;
+    } catch {
+      throw authError("Trakt request failed; check your connection.");
+    }
+  }
+  function headers() {
+    return { "Content-Type": "application/json" };
+  }
+  function post(path, body, signal) {
+    return privateRequest(`${AUTH}/oauth${path}`, { method: "POST", headers: headers(), body: JSON.stringify(body), signal });
+  }
+  function readTokens() {
+    const t = getPrivateValue(STORAGE.tokens);
+    return t?.client_id === getClientId() ? t : null;
+  }
+  function isSignedIn() {
+    const t = readTokens();
+    return Boolean(t?.access_token && t?.refresh_token);
+  }
+  function saveTokens(text2, clientId) {
+    let t;
+    try {
+      t = JSON.parse(text2);
+    } catch {
+    }
+    if (!t || typeof t.access_token !== "string" || !t.access_token || typeof t.refresh_token !== "string" || !t.refresh_token || !Number.isFinite(t.expires_in) || t.expires_in <= 0 || t.created_at != null && !Number.isFinite(t.created_at)) {
+      throw authError("Trakt returned invalid token data; sign in again.");
+    }
+    const tokens = {
+      access_token: t.access_token,
+      refresh_token: t.refresh_token,
+      client_id: clientId,
+      expires_at: (t.created_at == null ? Date.now() : t.created_at * 1e3) + t.expires_in * 1e3
+    };
+    setPrivateValue(STORAGE.tokens, tokens);
+    return tokens;
+  }
+  function clearTokens() {
+    generation += 1;
+    removePrivateValue(STORAGE.tokens);
+  }
+  function refreshTokens() {
+    if (refreshFlight) return refreshFlight;
+    const epoch = generation;
+    const t = readTokens();
+    if (!t) return Promise.reject(authError("Signed out; sign in to Trakt."));
+    refreshFlight = (async () => {
+      try {
+        const r = await post("/token", {
+          client_id: t.client_id,
+          refresh_token: t.refresh_token,
+          grant_type: "refresh_token",
+          redirect_uri: getPrivateValue(STORAGE.redirectUri)
+        });
+        if (epoch !== generation || getClientId() !== t.client_id) {
+          if (r.status === 200) {
+            try {
+              const rotated = JSON.parse(r.text);
+              const revoked = await post("/revoke", { token: rotated.access_token, client_id: t.client_id });
+              if (revoked.status !== 200 && revoked.status !== 204) throw authError("Revocation failed.");
+            } catch {
+              throw authError("Signed out locally; token revocation failed.", 502);
+            }
+          }
+          throw authError("Signed out; sign in to Trakt.");
+        }
+        if (r.status !== 200) throw authError("Trakt session expired; sign in again.", r.status);
+        return saveTokens(r.text, t.client_id);
+      } catch (error) {
+        if (epoch !== generation) {
+          if (error?.status === 502) throw authError("Signed out locally; token revocation failed.", 502);
+          throw authError("Trakt session expired; sign in again.");
+        }
+        if (error?.status === 400 || error?.status === 401) {
+          clearTokens();
+          throw authError("Trakt session expired; sign in again.", error.status);
+        }
+        throw authError("Could not refresh your Trakt session; try again.", error?.status || 0);
+      } finally {
+        refreshFlight = null;
+      }
+    })();
+    return refreshFlight;
+  }
+  function cancelSignIn() {
+    device?.abort();
+  }
+  function wait(ms, signal) {
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        signal.removeEventListener("abort", done);
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      signal.addEventListener("abort", done, { once: true });
+      if (signal.aborted) done();
+    });
+  }
+  async function signIn({ onCode = () => {
+  }, onMessage = () => {
+  } } = {}) {
+    let lastMessage;
+    const emit = (message) => {
+      if (message === lastMessage) return;
+      lastMessage = message;
+      onMessage(message);
+    };
+    cancelSignIn();
+    const controller = new AbortController();
+    device = controller;
+    const { signal } = controller;
+    const epoch = generation;
+    const clientId = getClientId();
+    const current = () => !signal.aborted && epoch === generation && clientId === getClientId();
+    try {
+      if (!clientId) throw authError("Set your Trakt client ID first.");
+      setPrivateValue(STORAGE.redirectUri, getPrivateValue(STORAGE.redirectUri));
+      const started = Date.now();
+      const r = await post("/device/code", { client_id: clientId }, signal);
+      if (!current()) return;
+      if (r.status !== 200) throw authError("Could not start Trakt sign-in.", r.status);
+      let code;
+      try {
+        code = JSON.parse(r.text);
+      } catch {
+      }
+      if (!code?.device_code || typeof code.user_code !== "string" || !/^https:\/\/(auth\.)?trakt\.tv\//.test(code.verification_url) || !Number.isFinite(code.interval) || code.interval <= 0 || !Number.isFinite(code.expires_in) || code.expires_in <= 0) throw authError("Invalid Trakt device response.");
+      const deadline = started + code.expires_in * 1e3;
+      let interval = code.interval * 1e3;
+      onCode({ user_code: code.user_code, verification_url: code.verification_url });
+      while (current()) {
+        await wait(Math.min(interval, Math.max(0, deadline - Date.now())), signal);
+        if (!current()) return;
+        if (Date.now() >= deadline) {
+          emit(DEVICE_MESSAGES[410]);
+          return;
+        }
+        const result = await post("/device/token", { code: code.device_code, client_id: clientId }, signal);
+        if (!current()) return;
+        if (Date.now() >= deadline) {
+          emit(DEVICE_MESSAGES[410]);
+          return;
+        }
+        if (result.status === 200) {
+          saveTokens(result.text, clientId);
+          emit("Signed in to Trakt.");
+          return;
+        }
+        emit(DEVICE_MESSAGES[result.status] || "Trakt sign-in failed; start again.");
+        if (result.status === 429) interval += 5e3;
+        else if (result.status !== 400) return;
+      }
+    } catch {
+      if (current()) emit("Trakt sign-in failed; check your client ID and connection.");
+    } finally {
+      if (signal.aborted) emit("Trakt sign-in cancelled.");
+      if (device === controller) device = null;
+    }
+  }
+  async function signOut() {
+    cancelSignIn();
+    const pending = refreshFlight;
+    const old = getPrivateValue(STORAGE.tokens);
+    clearTokens();
+    let refreshed;
+    let rotationRevokeFailed = false;
+    if (pending) {
+      try {
+        refreshed = await pending;
+      } catch (error) {
+        rotationRevokeFailed = error?.status === 502;
+      }
+    }
+    const token = refreshed || old;
+    try {
+      if (token) {
+        const r = await post("/revoke", { token: token.access_token, client_id: token.client_id });
+        if (r.status !== 200 && r.status !== 204) throw authError("Signed out locally; Trakt revocation failed.");
+      }
+      if (rotationRevokeFailed) throw authError("Signed out locally; Trakt revocation failed.");
+    } catch {
+      throw authError("Signed out locally; revoke this app in Trakt settings if needed.");
+    }
   }
 
   // src/core/trakt.js
@@ -994,6 +1227,44 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     const started = Date.now();
     await apiGet("/shows/breaking-bad", { ttl: 0 });
     return Date.now() - started;
+  }
+  async function apiAuth(method, path, body) {
+    if (!/^\/(?!\/)/.test(path) || /[?#]/.test(path) || path.includes("://")) {
+      throw authError("Authenticated API paths must be relative and contain no query.");
+    }
+    let tokens = readTokens();
+    if (!tokens) throw authError("Signed out; sign in to Trakt.");
+    if (tokens.expires_at <= Date.now() + 6e4) {
+      tokens = await refreshTokens();
+    }
+    const send = (t) => privateRequest(`${API.base}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "trakt-api-version": API.version,
+        "trakt-api-key": t.client_id,
+        Authorization: `Bearer ${t.access_token}`
+      },
+      body: body == null ? null : JSON.stringify(body)
+    });
+    let response = await send(tokens);
+    if (response.status === 401) {
+      const latest = readTokens();
+      if (!latest) throw authError("Signed out; sign in to Trakt.");
+      tokens = latest.access_token !== tokens.access_token ? latest : await refreshTokens();
+      response = await send(tokens);
+    }
+    if (response.status === 401) {
+      clearTokens();
+      throw authError("Trakt session expired; sign in again.", 401);
+    }
+    if (response.status < 200 || response.status >= 300) throw authError("Authenticated Trakt request failed.", response.status);
+    if (!response.text || response.status === 204) return null;
+    try {
+      return JSON.parse(response.text);
+    } catch {
+      throw authError("Invalid Trakt response.");
+    }
   }
 
   // src/features/custom-links/index.js
@@ -1543,6 +1814,91 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     }
   };
 
+  // src/oauth-menu.js
+  var CODE_TOAST_MS = 10 * 60 * 1e3;
+  var QUIET = /* @__PURE__ */ new Set([DEVICE_MESSAGES[400], DEVICE_MESSAGES[429]]);
+  function copyText(text2) {
+    if (typeof GM_setClipboard !== "function") return false;
+    try {
+      GM_setClipboard(text2, "text");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  function openTab(url) {
+    if (typeof GM_openInTab !== "function") return false;
+    try {
+      GM_openInTab(url, { active: true, insert: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  function registerAuthMenu() {
+    GM_registerMenuCommand("Trakt OG Toolkit: sign in", async () => {
+      if (!getClientId()) {
+        toast("Set your Trakt client ID first.");
+        return;
+      }
+      if (isSignedIn()) {
+        toast("Already signed in; sign out before changing accounts.");
+        return;
+      }
+      const uri = window.prompt(
+        "Enter the redirect URI registered for your Trakt app (used for token refresh).",
+        getPrivateValue(STORAGE.redirectUri) || "http://localhost:5173/callback"
+      );
+      if (uri === null) return;
+      if (!uri.trim()) {
+        toast("Enter the redirect URI registered for your Trakt app.");
+        return;
+      }
+      try {
+        setPrivateValue(STORAGE.redirectUri, uri.trim());
+        await signIn({
+          // A long toast instead of a native prompt, so the page keeps working while polling.
+          // The next sign-in message (signed in, cancelled, expired, …) replaces it.
+          onCode: ({ user_code, verification_url }) => {
+            const copied = copyText(user_code);
+            const opened = openTab(verification_url);
+            toast(
+              `${copied ? `Code ${user_code} copied; paste it` : `Enter ${user_code}`} at ${verification_url}${opened ? " (opened in a new tab)" : ""}, then come back. Use "cancel sign-in" in the menu to stop.`,
+              { duration: CODE_TOAST_MS }
+            );
+          },
+          // Pending and slow-down are expected while waiting; keep the code on screen.
+          onMessage: (message) => {
+            if (!QUIET.has(message)) toast(message);
+          }
+        });
+      } catch {
+        toast("Sign-in requires userscript GM storage.");
+      }
+    });
+    GM_registerMenuCommand("Trakt OG Toolkit: cancel sign-in", cancelSignIn);
+    GM_registerMenuCommand("Trakt OG Toolkit: sign out", async () => {
+      try {
+        await signOut();
+        toast("Signed out of Trakt.");
+      } catch {
+        toast("Signed out locally; revoke this app in Trakt settings if needed.");
+      }
+    });
+    GM_registerMenuCommand("Trakt OG Toolkit: show signed-in user", async () => {
+      if (!isSignedIn()) {
+        toast("Signed out of Trakt.");
+        return;
+      }
+      try {
+        const user = await apiAuth("GET", "/users/me");
+        toast(`Signed in to Trakt as ${user.username || "a Trakt user"}.`);
+      } catch {
+        toast(isSignedIn() ? "Could not load your Trakt profile." : "Trakt session expired; sign in again.");
+      }
+    });
+  }
+
   // src/menu.js
   var ATTRIBUTION = `${NAME} uses Trakt but is not endorsed or certified by Trakt.`;
   function registerMenu(getRouteKey = () => location.pathname) {
@@ -1570,6 +1926,7 @@ MIT licensed.`);
         console.warn("[OGT] Trakt API failed", error);
       }
     });
+    registerAuthMenu();
     GM_registerMenuCommand("Trakt OG Toolkit: add custom link", promptAddCustomLink);
     GM_registerMenuCommand("Trakt OG Toolkit: remove custom link", promptRemoveCustomLink);
     GM_registerMenuCommand("Trakt OG Toolkit: toggle debug logging", () => {

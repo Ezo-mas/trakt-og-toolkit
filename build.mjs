@@ -22,7 +22,10 @@ ${matches.map((match) => `// @match        ${match}`).join('\n')}
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
+// @grant        GM_setClipboard
+// @grant        GM_openInTab
 // @connect      api.trakt.tv
+// @connect      auth.trakt.tv
 // @noframes
 // ==/UserScript==
 `;

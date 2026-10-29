@@ -1,4 +1,5 @@
-/** Trakt API client. Public GETs only for now; auth arrives in a later step. */
+/** Trakt API client. Public cached GETs and uncached authenticated requests. */
+import { authError, readTokens, refreshTokens, privateRequest, clearTokens } from './oauth.js';
 import { API, CACHE_TTL } from '../config.js';
 import { getJSON } from './http.js';
 import { getClientId } from '../settings.js';
@@ -48,3 +49,39 @@ export async function ping() {
   await apiGet('/shows/breaking-bad', { ttl: 0 });
   return Date.now() - started;
 }
+
+
+/** Authenticated requests never enter the public response cache. */
+export async function apiAuth(method, path, body) {
+  if (!/^\/(?!\/)/.test(path) || /[?#]/.test(path) || path.includes('://')) {
+    throw authError('Authenticated API paths must be relative and contain no query.');
+  }
+  let tokens = readTokens();
+  if (!tokens) throw authError('Signed out; sign in to Trakt.');
+  if (tokens.expires_at <= Date.now() + 60000) {
+    tokens = await refreshTokens();
+  }
+  const send = (t) => privateRequest(`${API.base}${path}`, {
+    method, headers: {
+      'Content-Type': 'application/json', 'trakt-api-version': API.version,
+      'trakt-api-key': t.client_id, Authorization: `Bearer ${t.access_token}`,
+    }, body: body == null ? null : JSON.stringify(body),
+  });
+  let response = await send(tokens);
+  if (response.status === 401) {
+    // Another concurrent request may already have rotated the rejected token.
+    const latest = readTokens();
+    if (!latest) throw authError('Signed out; sign in to Trakt.');
+    tokens = latest.access_token !== tokens.access_token ? latest : await refreshTokens();
+    response = await send(tokens);
+  }
+  if (response.status === 401) {
+    clearTokens();
+    throw authError('Trakt session expired; sign in again.', 401);
+  }
+  if (response.status < 200 || response.status >= 300) throw authError('Authenticated Trakt request failed.', response.status);
+  if (!response.text || response.status === 204) return null;
+  try { return JSON.parse(response.text); } catch { throw authError('Invalid Trakt response.'); }
+}
+
+export { isSignedIn } from './oauth.js';

@@ -13,7 +13,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 |---|---|---|---|
 | 0 | Foundation (shared CSS hook, exported `apiGet`) | — | done |
 | 1 | Season chart | client ID optional | done |
-| 2 | Playback progress manager | OAuth | 1, 3, 4 |
+| 2 | Playback progress manager | Phase A implemented; phase B pending | 1, 3, 4 |
 | 3 | Metadata links | nothing (maybe client ID) | 1, 2, 4 |
 | 4 | Custom link presets | nothing | 1, 2, 3 |
 | 5 | Small extras (pronunciation, poster rating corners) | varies | after 1–4 |
@@ -104,6 +104,10 @@ this: its Progress page only has Watching, Rewatching and Dropped tabs.
 **This needs signing in to Trakt**, which the toolkit doesn't do yet, so it has two phases.
 
 ### Phase A: OAuth (blocks phase B)
+
+**Status:** implemented with mocked GM transport tests; real Trakt sign-in and Firefox/Chromium extension checks remain unverified. Phase B is not implemented.
+
+**Current API docs:** device flow no longer requires a client secret; OAuth uses `auth.trakt.tv`. PKCE is documented for the redirect-based authorization-code flow only. See NOTES.md for sources. The secret requirement below is superseded by these current docs.
 
 - Use the device code flow, which needs no redirect page: `POST /oauth/device/code` with the client ID, show the user
   the code and verification URL, poll `POST /oauth/device/token`, then store the access and refresh tokens in GM

@@ -2,6 +2,7 @@
 import { promptAddCustomLink, promptRemoveCustomLink, promptClientId } from './actions.js';
 import { applyDebugSetting, isDebug, setDebug, getClientId, getCustomLinks } from './settings.js';
 import { cacheSize, clearCache } from './core/http.js';
+import { registerAuthMenu } from './oauth-menu.js';
 import { ping } from './core/trakt.js';
 import { toast } from './ui/shell.js';
 import { NAME, VERSION } from './meta.js';
@@ -38,6 +39,7 @@ export function registerMenu(getRouteKey = () => location.pathname) {
       console.warn('[OGT] Trakt API failed', error);
     }
   });
+  registerAuthMenu();
   GM_registerMenuCommand('Trakt OG Toolkit: add custom link', promptAddCustomLink);
   GM_registerMenuCommand('Trakt OG Toolkit: remove custom link', promptRemoveCustomLink);
   GM_registerMenuCommand('Trakt OG Toolkit: toggle debug logging', () => {
