@@ -13,8 +13,6 @@ const ATTRIBUTION = `${NAME} uses Trakt but is not endorsed or certified by Trak
 export function registerMenu(getRouteKey = () => location.pathname) {
   if (typeof GM_registerMenuCommand !== 'function') return;
 
-  registerAuthMenu();
-
   GM_registerMenuCommand('Trakt OG Toolkit: about', () => {
     toast(`${NAME} v${VERSION}`, { duration: 5000 });
     console.info(`[OGT] ${NAME} v${VERSION}\n${ATTRIBUTION}\nMIT licensed.`);
@@ -41,6 +39,7 @@ export function registerMenu(getRouteKey = () => location.pathname) {
       console.warn('[OGT] Trakt API failed', error);
     }
   });
+  registerAuthMenu();
   GM_registerMenuCommand('Trakt OG Toolkit: add custom link', promptAddCustomLink);
   GM_registerMenuCommand('Trakt OG Toolkit: remove custom link', promptRemoveCustomLink);
   GM_registerMenuCommand('Trakt OG Toolkit: toggle debug logging', () => {

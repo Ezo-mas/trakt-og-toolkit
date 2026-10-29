@@ -1,9 +1,12 @@
 /** OAuth is menu-only; no playback UI or automatic sign-in. */
-import { signIn, cancelSignIn, signOut, isSignedIn } from './core/oauth.js';
+import { signIn, cancelSignIn, signOut, isSignedIn, DEVICE_MESSAGES } from './core/oauth.js';
 import { apiAuth } from './core/trakt.js';
 import { getClientId } from './settings.js';
 import { STORAGE, getPrivateValue, setPrivateValue } from './core/store.js';
 import { toast } from './ui/shell.js';
+
+const CODE_TOAST_MS = 10 * 60 * 1000; // Trakt device codes last 10 minutes
+const QUIET = new Set([DEVICE_MESSAGES[400], DEVICE_MESSAGES[429]]);
 
 export function registerAuthMenu() {
   GM_registerMenuCommand('Trakt OG Toolkit: sign in', async () => {
@@ -18,13 +21,13 @@ export function registerAuthMenu() {
     try {
       setPrivateValue(STORAGE.redirectUri, uri.trim());
       await signIn({
-        onCode: ({ user_code, verification_url }) => {
-          // A persistent native prompt keeps the code available without inserting
-          // DOM before hydration. Cancel here or use the cancel sign-in menu.
-          const answer = window.prompt(`Visit ${verification_url} in another tab and enter this code.\nCancel stops sign-in; OK continues waiting.`, user_code);
-          if (answer === null) cancelSignIn();
-        },
-        onMessage: (message) => toast(message),
+        // A long toast instead of a native prompt, so the page keeps working while polling.
+        // The next sign-in message (signed in, cancelled, expired, …) replaces it.
+        onCode: ({ user_code, verification_url }) => toast(
+          `Enter ${user_code} at ${verification_url}, then come back. Use "cancel sign-in" in the menu to stop.`,
+          { duration: CODE_TOAST_MS }),
+        // Pending and slow-down are expected while waiting; keep the code on screen.
+        onMessage: (message) => { if (!QUIET.has(message)) toast(message); },
       });
     } catch { toast('Sign-in requires userscript GM storage.'); }
   });

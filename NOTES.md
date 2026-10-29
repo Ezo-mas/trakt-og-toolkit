@@ -4,6 +4,15 @@ Working notes and known issues. Newest first.
 
 ## 2026-10-29
 
+### OAuth live check (2026-10-29, real account)
+
+- Passed against Trakt: device sign-in, `/users/me`, forced refresh (both tokens rotate, 7-day expiry), the old
+  refresh token is rejected with 400 after use, and a bad access token refreshes once and retries.
+- Revocation works but is not instant: after `POST /oauth/revoke` returns 200, the access token keeps working
+  for 30–60 s (cached on Trakt's side). Don't treat a still-working token right after sign-out as a failed revoke.
+- Cloudflare in front of Trakt returns 403 to Node's default user agent. Browsers are fine; scripts and tests
+  that hit the real API must send a `User-Agent`.
+
 ### OAuth review fixes
 
 - Sign-in accepts any non-empty registered redirect URI and defaults to the README's

@@ -56,8 +56,9 @@ Set it from the userscript menu: **Trakt OG Toolkit: set API client ID**.
 
 The userscript menu now supports **sign in**, **cancel sign-in**, **sign out**, and **show signed-in user**.
 Set your own API client ID first. Sign-in asks for your app's registered redirect URI (needed for token refresh),
-pre-filled with `http://localhost:5173/callback`, then displays a device code and Trakt verification URL. Open that URL in another tab and authorize the
-code; press OK to continue waiting, or Cancel to stop. You can also stop polling from the cancel sign-in menu.
+pre-filled with `http://localhost:5173/callback`. A notice then shows a device code and Trakt's verification URL:
+open the URL in another tab and enter the code. The notice stays up until sign-in finishes; use **cancel sign-in**
+to stop waiting.
 No client secret is needed with Trakt's current device API.
 
 Access and refresh tokens stay in the userscript manager's GM storage, separate from og's login. Tokens refresh

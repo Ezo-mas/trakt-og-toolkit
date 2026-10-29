@@ -1811,6 +1811,8 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
   };
 
   // src/oauth-menu.js
+  var CODE_TOAST_MS = 10 * 60 * 1e3;
+  var QUIET = /* @__PURE__ */ new Set([DEVICE_MESSAGES[400], DEVICE_MESSAGES[429]]);
   function registerAuthMenu() {
     GM_registerMenuCommand("Trakt OG Toolkit: sign in", async () => {
       if (!getClientId()) {
@@ -1833,12 +1835,16 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
       try {
         setPrivateValue(STORAGE.redirectUri, uri.trim());
         await signIn({
-          onCode: ({ user_code, verification_url }) => {
-            const answer = window.prompt(`Visit ${verification_url} in another tab and enter this code.
-Cancel stops sign-in; OK continues waiting.`, user_code);
-            if (answer === null) cancelSignIn();
-          },
-          onMessage: (message) => toast(message)
+          // A long toast instead of a native prompt, so the page keeps working while polling.
+          // The next sign-in message (signed in, cancelled, expired, …) replaces it.
+          onCode: ({ user_code, verification_url }) => toast(
+            `Enter ${user_code} at ${verification_url}, then come back. Use "cancel sign-in" in the menu to stop.`,
+            { duration: CODE_TOAST_MS }
+          ),
+          // Pending and slow-down are expected while waiting; keep the code on screen.
+          onMessage: (message) => {
+            if (!QUIET.has(message)) toast(message);
+          }
         });
       } catch {
         toast("Sign-in requires userscript GM storage.");
@@ -1871,7 +1877,6 @@ Cancel stops sign-in; OK continues waiting.`, user_code);
   var ATTRIBUTION = `${NAME} uses Trakt but is not endorsed or certified by Trakt.`;
   function registerMenu(getRouteKey = () => location.pathname) {
     if (typeof GM_registerMenuCommand !== "function") return;
-    registerAuthMenu();
     GM_registerMenuCommand("Trakt OG Toolkit: about", () => {
       toast(`${NAME} v${VERSION}`, { duration: 5e3 });
       console.info(`[OGT] ${NAME} v${VERSION}
@@ -1895,6 +1900,7 @@ MIT licensed.`);
         console.warn("[OGT] Trakt API failed", error);
       }
     });
+    registerAuthMenu();
     GM_registerMenuCommand("Trakt OG Toolkit: add custom link", promptAddCustomLink);
     GM_registerMenuCommand("Trakt OG Toolkit: remove custom link", promptRemoveCustomLink);
     GM_registerMenuCommand("Trakt OG Toolkit: toggle debug logging", () => {

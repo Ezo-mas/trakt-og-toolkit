@@ -77,3 +77,39 @@ test('sign-in accepts registered redirect values and pre-fills the README defaul
     });
   }
 });
+
+test('sign-in shows the device code in a toast and keeps it there while pending', async (t) => {
+  const window = new Window({ url: 'https://og.trakt.tv/' });
+  t.after(() => window.close());
+  const data = new Map([['trakt.clientId', 'client'], ['trakt.oauth.redirectUri', 'http://localhost:5173/callback']]);
+  const menus = new Map();
+  const shownWhilePending = [];
+  let polls = 0;
+  window.GM_getValue = (k, fallback) => data.get(k) ?? fallback;
+  window.GM_setValue = (k, v) => data.set(k, v);
+  window.GM_deleteValue = (k) => data.delete(k);
+  window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+  window.prompt = (message, initial) => {
+    assert.match(message, /redirect URI/, 'only the redirect URI may use a native prompt');
+    return initial;
+  };
+  window.GM_xmlhttpRequest = (r) => {
+    if (r.url.endsWith('/device/code')) {
+      r.onload({ status: 200, responseHeaders: '', responseText: JSON.stringify({
+        device_code: 'dev', user_code: 'ABCD1234', verification_url: 'https://auth.trakt.tv/activate', interval: 0.05, expires_in: 30 }) });
+      return;
+    }
+    polls += 1;
+    if (polls > 1) shownWhilePending.push(window.document.body.textContent);
+    r.onload(polls < 3
+      ? { status: 400, responseHeaders: '', responseText: '' }
+      : { status: 200, responseHeaders: '', responseText: JSON.stringify({ access_token: 'a', refresh_token: 'r', expires_in: 3600 }) });
+  };
+  window.document.write('<html><head></head><body></body></html>');
+  window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
+  window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
+  await menus.get('sign in')();
+  assert.equal(polls, 3);
+  for (const text of shownWhilePending) assert.match(text, /Enter ABCD1234 at https:\/\/auth\.trakt\.tv\/activate/);
+  assert.match(window.document.body.textContent, /Signed in to Trakt\./);
+});
