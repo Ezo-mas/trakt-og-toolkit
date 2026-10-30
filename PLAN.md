@@ -14,9 +14,9 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 0 | Foundation (shared CSS hook, exported `apiGet`) | — | done |
 | 1 | Season chart | client ID optional | done |
 | 2 | Playback progress manager | OAuth | done |
-| 3 | Metadata links | nothing (maybe client ID) | 1, 2, 4 |
+| 3 | Metadata links | — | dropped: og ships it |
 | 4 | Custom link presets | done | 1, 2, 3 |
-| 5 | Small extras (pronunciation, poster rating corners) | varies | after 1–4 |
+| 5 | Small extras | — | pronunciation done; poster corners dropped |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -139,25 +139,12 @@ Verified 2026-10-29 on a real account in Violentmonkey (badge, overview load, de
 **Agent split:** one agent does phase A alone, because it touches shared files (`trakt.js`, `settings.js`, `menu.js`,
 `store.js`). After it's merged, phase B can run alongside anything else.
 
-## 3. Metadata links
+## 3. Metadata links (dropped)
 
-**Goal:** make the facts on a title page clickable, as in classic Trakt VIP: genres, networks, studios, languages,
-country, certification and year each link to a filtered search.
-
-**Check first:** og's details list (`AdditionalStats` / `NameList` in trakt-og) supports links, and some fields may
-already be links. Look at a live movie and a live show and list which fields are plain text. Only add links to those.
-
-**Build:**
-
-- Find og's own search or discover URL format for each filter (`projects/client/src/routes/search/` and
-  `lib/components/filters/` in trakt-og). Link to og's pages, never to the classic site.
-- Wrap plain-text values in links; don't replace og's nodes. If og re-renders, the host remounts.
-- Optional: a country flag next to the country, if og doesn't already show one (og has a `CountryFlag` component; check
-  where it's used).
-- Optional: classic Trakt's "combined" search (click the label to search for all values at once), only if og's search
-  supports multiple values for that filter.
-
-**Risk:** if og's search can't filter by a field, skip that field rather than inventing a URL.
+og already does this. Its title pages link genres, network, studios, languages and country to filtered
+`/movies/popular?…` and `/shows/popular?…` pages. og had these links for VIPs only until trakt-og commit `6337c09`
+(2026-10-26) opened them to every member. Only the year and certification inside og's `<h1>` stay plain text, and
+editing inside og's own heading isn't worth the risk for two links.
 
 ## 4. Custom link presets
 
@@ -181,11 +168,12 @@ legitimate services so it's useful straight away.
 
 ## 5. Small extras (after 1–4)
 
-- **Name pronunciation:** a button on `/people/:id` that looks up the name on Forvo. Forvo's API needs a key; start
-  with a plain link to Forvo's search page instead. **Done.**
-- **Poster rating corners:** a corner badge with your own rating on posters in lists. Needs OAuth
-  (`/sync/ratings`) and a cached ratings map; check og doesn't already show ratings on posters (it has a `RatingLine`
-  component).
+- **Name pronunciation:** a button on `/people/:id` that fetches Forvo's public search page and plays the first
+  recording whose word matches the name, retrying with the next recording if audio fails and falling back to a Forvo
+  search link. Forvo's API needs a key, so the page's `Play(...)` handlers are parsed instead. **Done.**
+- **Poster rating corners (dropped):** og already does this. Its `CornerRating` component puts your own rating in the
+  corner of posters and fanart cards in lists, charts, search, progress, history, calendars and more, and has done
+  since og's first import (trakt-og `233a935`, 2026-09-30).
 - **All lists in one view:** probably unnecessary, since og has separate pages for personal, collaborations, liked and
   official lists. Revisit only if people ask.
 
