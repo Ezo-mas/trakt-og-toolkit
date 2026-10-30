@@ -26,6 +26,7 @@ ${matches.map((match) => `// @match        ${match}`).join('\n')}
 // @grant        GM_openInTab
 // @connect      api.trakt.tv
 // @connect      auth.trakt.tv
+// @connect      forvo.com
 // @noframes
 // ==/UserScript==
 `;

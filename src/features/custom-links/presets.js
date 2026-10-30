@@ -1,4 +1,4 @@
-/** Services og doesn't already link from a title page (it links Rotten Tomatoes, Wikipedia and Letterboxd). */
+/** Services og doesn't already link from a title page (it links Rotten Tomatoes, Wikipedia, Letterboxd and, on anime, MyAnimeList). */
 export const PRESETS = [
   {
     label: 'Metacritic',
@@ -18,11 +18,6 @@ export const PRESETS = [
   {
     label: 'AniList',
     url: 'https://anilist.co/search/anime?search={title}',
-    kinds: ['movie', 'show'],
-  },
-  {
-    label: 'MyAnimeList',
-    url: 'https://myanimelist.net/search/all?q={title}',
     kinds: ['movie', 'show'],
   },
 ];

@@ -2,6 +2,28 @@
 
 Working notes and known issues. Newest first.
 
+## v0.2.0 (2026-10-30)
+
+Release of everything since v0.1.4: season chart, OAuth device sign-in, paused-playback badges and manager, custom
+link presets and inline editor, and Forvo pronunciation on person pages. Metadata links and poster rating corners were
+dropped because og ships them. Tested in Chromium and Zen (Firefox); playback verified on a real account.
+
+## 2026-10-30
+
+### Pronunciation via Forvo (feature 5)
+
+- Forvo's search page embeds recording paths as base64 in `onclick="Play(id,'<mp3>','<ogg>',…)"`. Decoding yields
+  paths like `9574522/39/9574522_39_4307585.mp3`; the page's inline `_AUDIO_HTTP_HOST` (here `audio12.forvo.com`)
+  supplies the origin. Normal MP3/OGG files live under `/mp3/` and `/ogg/`. The high-quality paths
+  `/audios/mp3/` and `/audios/ogg/` are only used when the normal file is absent; that pattern is unverified.
+- The lookup runs on the first click, not on mount, and uses `GM_xmlhttpRequest` (`@connect forvo.com`). Parsed
+  results are cached in memory for 10 minutes, up to 20 names. Recordings are kept only when the `Play(...)` word
+  matches the person's name (case and whitespace are ignored), and the first match is played.
+- If a recording's audio fails, the next cached recording is tried before showing `Audio unavailable.`; later clicks
+  toggle pause. A Forvo search link is shown when lookup fails, nothing matches or every recording fails.
+- curl to Forvo's search returned Cloudflare 403 in this environment, while an audio HEAD returned 200. Parsing was
+  tested against a trimmed fixture; live in-browser playback in a userscript manager is still unverified.
+
 ## 2026-10-29
 
 ### Custom link preset URL checks (feature 4)
@@ -12,6 +34,8 @@ Working notes and known issues. Newest first.
   are offered for both page kinds because og does not reliably identify anime.
 - Dropped Letterboxd, Rotten Tomatoes and Wikipedia presets: og's title pages already link all three (checked on
   movies, shows and two anime titles). Metacritic stays: og shows its score but doesn't link to it.
+- Dropped the MyAnimeList preset on 2026-10-30: trakt-og `a297089` (2026-10-29) shows a MAL rating on anime that
+  links straight to the MAL entry, which beats a search link.
 - Stremio's official web source defines `/search` and reads the `search` query parameter. Plex's hash search route
   matches a Plex URL example, but curl only checks the hosted app shell for Stremio and Plex because it does not send
   URL fragments. Neither route had a browser click-through check in this environment.

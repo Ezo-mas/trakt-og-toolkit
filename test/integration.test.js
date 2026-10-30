@@ -6,12 +6,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
-import { SHOW_HTML, MOVIE_HTML, SEASON_HTML } from './fixtures.js';
+import { SHOW_HTML, MOVIE_HTML, SEASON_HTML, PERSON_HTML, FORVO_HTML, FORVO_EMPTY_HTML, FORVO_MULTI_HTML } from './fixtures.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function boot({ url, html, storage = {} }) {
+function boot({ url, html, storage = {}, gmRequest }) {
   const window = new Window({ url });
   const { document } = window;
   const store = new Map(Object.entries(storage));
@@ -26,6 +26,7 @@ function boot({ url, html, storage = {} }) {
     return style;
   };
   window.GM_registerMenuCommand = () => {};
+  if (gmRequest) window.GM_xmlhttpRequest = gmRequest;
 
   document.write(`<!doctype html><html><head><title>Test - Trakt OG Redux</title></head><body>${html}</body></html>`);
   window.eval(bundle);
@@ -307,4 +308,148 @@ test('show title pages do not mount the season chart', async (t) => {
   await wait(50);
 
   assert.equal(document.getElementById('ogt-season-chart'), null);
+});
+
+test('person pages fetch Forvo and play the recording in place', async (t) => {
+  const requested = [];
+  const played = [];
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/people/bryan-cranston',
+    html: PERSON_HTML,
+    gmRequest(options) {
+      requested.push(options.url);
+      setTimeout(() => options.onload({ status: 200, responseHeaders: '', responseText: FORVO_HTML }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  const heading = document.querySelector('.summary .summary-title h1');
+  const widget = heading.nextElementSibling;
+  assert.equal(widget?.className, 'ogt-pronounce__wrap');
+  const button = widget.querySelector('button.ogt-pronounce');
+  assert.equal(button?.textContent, 'Pronounce');
+
+  window.HTMLMediaElement.prototype.play = function play() {
+    played.push(this);
+    this.dispatchEvent(new window.Event('play'));
+    return Promise.resolve();
+  };
+  button.click();
+  await wait(30);
+
+  assert.deepEqual(requested, ['https://forvo.com/search/Bryan%20Cranston/']);
+  const audio = widget.querySelector('audio');
+  assert.ok(audio, 'audio element is created in place');
+  assert.deepEqual(
+    [...audio.querySelectorAll('source')].map((source) => source.getAttribute('src')),
+    [
+      'https://audio12.forvo.com/mp3/9574522/39/9574522_39_4307585.mp3',
+      'https://audio12.forvo.com/ogg/9574522/39/9574522_39_4307585.ogg',
+    ],
+  );
+  assert.equal(played.length, 1, 'the recording starts playing');
+
+  window.history.pushState({}, '', '/dashboard');
+  await wait(300);
+  assert.equal(document.querySelector('.ogt-pronounce__wrap'), null);
+});
+
+test('person pages try the next recording when playback fails', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/people/bryan-cranston',
+    html: PERSON_HTML,
+    gmRequest(options) {
+      setTimeout(() => options.onload({ status: 200, responseHeaders: '', responseText: FORVO_MULTI_HTML }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  const attempts = [];
+  window.HTMLMediaElement.prototype.play = function play() {
+    const src = this.querySelector('source')?.getAttribute('src');
+    attempts.push(src);
+    if (src?.includes('9574522')) {
+      for (const source of this.querySelectorAll('source')) source.dispatchEvent(new window.Event('error'));
+      return Promise.reject(new Error('unsupported'));
+    }
+    Object.defineProperty(this, 'paused', { configurable: true, get: () => false });
+    this.dispatchEvent(new window.Event('play'));
+    return Promise.resolve();
+  };
+
+  document.querySelector('.ogt-pronounce').click();
+  await wait(50);
+
+  assert.deepEqual(attempts, [
+    'https://audio12.forvo.com/mp3/9574522/39/9574522_39_4307585.mp3',
+    'https://audio12.forvo.com/mp3/2222222/22/2222222_22_2222222.mp3',
+  ]);
+  const audio = document.querySelector('.ogt-pronounce__audio');
+  assert.equal(
+    audio?.querySelector('source')?.getAttribute('src'),
+    'https://audio12.forvo.com/mp3/2222222/22/2222222_22_2222222.mp3',
+  );
+  assert.equal(document.querySelector('.ogt-pronounce').textContent, 'Pause');
+  assert.equal(document.querySelector('.ogt-pronounce__status').textContent, '');
+});
+
+test('person pages show the Forvo fallback when every recording fails', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/people/bryan-cranston',
+    html: PERSON_HTML,
+    gmRequest(options) {
+      setTimeout(() => options.onload({ status: 200, responseHeaders: '', responseText: FORVO_MULTI_HTML }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  const attempts = [];
+  window.HTMLMediaElement.prototype.play = function play() {
+    attempts.push(this.querySelector('source')?.getAttribute('src'));
+    this.dispatchEvent(new window.Event('error'));
+    return Promise.reject(new Error('unsupported'));
+  };
+
+  document.querySelector('.ogt-pronounce').click();
+  await wait(50);
+
+  assert.equal(attempts.length, 2, 'both cached recordings are tried');
+  assert.equal(document.querySelector('.ogt-pronounce__audio'), null);
+  assert.equal(document.querySelector('.ogt-pronounce').textContent, 'Pronounce');
+  const status = document.querySelector('.ogt-pronounce__status');
+  assert.match(status.textContent, /Audio unavailable/);
+  assert.equal(status.querySelector('a')?.getAttribute('href'), 'https://forvo.com/search/Bryan%20Cranston/');
+});
+
+test('person pages fall back to a Forvo search link when there is no recording', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/people/bryan-cranston',
+    html: PERSON_HTML,
+    gmRequest(options) {
+      setTimeout(() => options.onload({ status: 200, responseHeaders: '', responseText: FORVO_EMPTY_HTML }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  document.querySelector('.ogt-pronounce').click();
+  await wait(30);
+
+  const status = document.querySelector('.ogt-pronounce__status');
+  assert.match(status.textContent, /No pronunciation found/);
+  assert.equal(status.querySelector('a')?.getAttribute('href'), 'https://forvo.com/search/Bryan%20Cranston/');
+});
+
+test('show pages do not mount pronunciation controls', async (t) => {
+  const { window, document } = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
+  t.after(() => window.close());
+  await wait(50);
+  assert.equal(document.querySelector('.ogt-pronounce__wrap'), null);
 });

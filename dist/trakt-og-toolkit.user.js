@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Trakt OG Toolkit
 // @namespace    https://github.com/trakt-og-toolkit
-// @version      0.1.4
+// @version      0.2.0
 // @description  Brings back the useful classic-Trakt extras on og.trakt.tv.
 // @author       Ezo-mas
 // @license      MIT
@@ -19,13 +19,14 @@
 // @grant        GM_openInTab
 // @connect      api.trakt.tv
 // @connect      auth.trakt.tv
+// @connect      forvo.com
 // @noframes
 // ==/UserScript==
 
 (() => {
   // src/meta.js
   var NAME = "Trakt OG Toolkit";
-  var VERSION = "0.1.4";
+  var VERSION = "0.2.0";
 
   // src/ui/styles.js
   var CSS = String.raw`
@@ -415,6 +416,8 @@
     const path = pathname.replace(/\/+$/, "") || "/";
     const progress = path.match(/^\/users\/([^/]+)\/progress(?:\/.*)?$/);
     if (progress) return { name: "progress", kind: null, id: progress[1], path, key: path };
+    const person = path.match(/^\/people\/([^/]+)$/);
+    if (person) return { name: "person", kind: "person", id: person[1], path, key: path };
     const match = path.match(TITLE_PATH);
     if (!match) {
       return { name: "other", kind: null, id: null, path, key: path };
@@ -1001,11 +1004,6 @@
     {
       label: "AniList",
       url: "https://anilist.co/search/anime?search={title}",
-      kinds: ["movie", "show"]
-    },
-    {
-      label: "MyAnimeList",
-      url: "https://myanimelist.net/search/all?q={title}",
       kinds: ["movie", "show"]
     }
   ];
@@ -1897,13 +1895,13 @@
   // src/features/playback/api.js
   var TTL = 6e4;
   function createPlaybackApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
-    const cache2 = /* @__PURE__ */ new Map();
+    const cache3 = /* @__PURE__ */ new Map();
     const flights = /* @__PURE__ */ new Map();
     let revision = 0;
     let session = 0;
     function invalidate() {
       revision += 1;
-      cache2.clear();
+      cache3.clear();
       flights.clear();
     }
     function resetSession() {
@@ -1916,7 +1914,7 @@
         return [];
       }
       if (force) invalidate();
-      const hit = cache2.get(kind);
+      const hit = cache3.get(kind);
       if (hit && hit.until > now()) return hit.items;
       if (flights.has(kind)) return flights.get(kind);
       const rev = revision;
@@ -1926,7 +1924,7 @@
         if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
         if (!Array.isArray(rows)) throw new Error("Invalid playback response.");
         const items = mapPlayback(rows, kind);
-        if (rev === revision) cache2.set(kind, { items, until: now() + TTL });
+        if (rev === revision) cache3.set(kind, { items, until: now() + TTL });
         return items;
       })();
       flights.set(kind, flight);
@@ -2176,6 +2174,325 @@
     }
   };
 
+  // src/features/pronunciation/data.js
+  var DEFAULT_AUDIO_HOST = "audio12.forvo.com";
+  var AUDIO_HOST = /^(?:[a-z0-9-]+\.)+forvo\.com$/i;
+  var AUDIO_PATH = /^[A-Za-z0-9][A-Za-z0-9/_.-]*$/;
+  var PLAY_ARGUMENT = /'((?:[^'\\]|\\.)*)'/g;
+  var MAX_RECORDINGS = 12;
+  function readPersonName(doc) {
+    return text(doc.querySelector(".summary .summary-title h1")) || null;
+  }
+  function forvoUrl(name) {
+    return `https://forvo.com/search/${encodeURIComponent(name)}/`;
+  }
+  function forvoAudioHost(html) {
+    const match = String(html).match(/_AUDIO_HTTP_HOST\s*=\s*['"]([^'"]+)['"]/);
+    return match && AUDIO_HOST.test(match[1]) ? match[1] : DEFAULT_AUDIO_HOST;
+  }
+  function decodeForvoPath(encoded) {
+    if (!encoded) return null;
+    try {
+      const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+      const decoded = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
+      return AUDIO_PATH.test(decoded) ? decoded : null;
+    } catch {
+      return null;
+    }
+  }
+  function normalizeWord(value) {
+    return String(value || "").normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+  }
+  function unescapeString(value) {
+    return value.replace(/\\u([0-9a-f]{4})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16))).replace(/\\(['"\\/bfnrt])/g, (_, char) => {
+      const escapes = { b: "\b", f: "\f", n: "\n", r: "\r", t: "	" };
+      return escapes[char] ?? char;
+    });
+  }
+  function readPlay(node) {
+    const onclick = node.getAttribute("onclick") || "";
+    if (!/^\s*Play\s*\(/.test(onclick)) return null;
+    const args = [...onclick.matchAll(PLAY_ARGUMENT)].map((match) => unescapeString(match[1]));
+    return {
+      mp3: decodeForvoPath(args[0]),
+      ogg: decodeForvoPath(args[1]),
+      highMp3: decodeForvoPath(args[2]),
+      highOgg: decodeForvoPath(args[3]),
+      word: args[5]?.trim() || "",
+      language: args[6]?.trim() || ""
+    };
+  }
+  function readForvoRecordings(doc, host = DEFAULT_AUDIO_HOST, name = "") {
+    const recordings = [];
+    const seen = /* @__PURE__ */ new Set();
+    const wantedWord = normalizeWord(name);
+    for (const node of doc.querySelectorAll("[onclick]")) {
+      const play = readPlay(node);
+      if (!play) continue;
+      if (wantedWord && normalizeWord(play.word) !== wantedWord) continue;
+      const mp3Path = play.mp3 || play.highMp3;
+      const oggPath = play.ogg || play.highOgg;
+      if (!mp3Path && !oggPath) continue;
+      const mp3 = mp3Path ? `https://${host}/${play.mp3 ? "mp3" : "audios/mp3"}/${mp3Path}` : null;
+      const ogg = oggPath ? `https://${host}/${play.ogg ? "ogg" : "audios/ogg"}/${oggPath}` : null;
+      const key = mp3 || ogg;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      recordings.push({ mp3, ogg, word: play.word, language: play.language });
+      if (recordings.length === MAX_RECORDINGS) break;
+    }
+    return recordings;
+  }
+  function parseForvoPage(html, name = "") {
+    const source = String(html || "");
+    const doc = new DOMParser().parseFromString(source, "text/html");
+    return readForvoRecordings(doc, forvoAudioHost(source), name);
+  }
+
+  // src/features/pronunciation/api.js
+  var CACHE_TTL2 = 10 * 60 * 1e3;
+  var MAX_ENTRIES = 20;
+  var cache2 = /* @__PURE__ */ new Map();
+  function remember(url, recordings) {
+    cache2.delete(url);
+    cache2.set(url, { expires: Date.now() + CACHE_TTL2, recordings });
+    while (cache2.size > MAX_ENTRIES) cache2.delete(cache2.keys().next().value);
+  }
+  async function getForvoRecordings(name, { signal } = {}) {
+    const url = forvoUrl(name);
+    const hit = cache2.get(url);
+    if (hit && hit.expires > Date.now()) return hit.recordings;
+    const response = await request({
+      url,
+      method: "GET",
+      headers: { Accept: "text/html,application/xhtml+xml" },
+      timeout: 15e3,
+      signal
+    });
+    if (response.status < 200 || response.status >= 300) {
+      throw new HttpError(`HTTP ${response.status} for ${url}`, response.status, response.text);
+    }
+    const recordings = parseForvoPage(response.text, name);
+    remember(url, recordings);
+    return recordings;
+  }
+
+  // src/features/pronunciation/styles.js
+  var CSS3 = String.raw`
+.ogt-pronounce__wrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-inline-start: 8px;
+  vertical-align: middle;
+}
+
+.ogt-pronounce {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: light-dark(#767676, #a7a7a7);
+  font: inherit;
+  font-size: 0.875rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ogt-pronounce:hover {
+  text-decoration: underline;
+}
+
+.ogt-pronounce:focus-visible {
+  outline: 2px solid light-dark(#333, #fff);
+  outline-offset: 2px;
+}
+
+.ogt-pronounce[aria-busy="true"] {
+  cursor: progress;
+}
+
+.ogt-pronounce__status {
+  color: light-dark(#767676, #a7a7a7);
+  font-size: 0.75rem;
+}
+
+.ogt-pronounce__status a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.ogt-pronounce__status a:focus-visible {
+  outline: 2px solid light-dark(#333, #fff);
+  outline-offset: 2px;
+}
+`;
+
+  // src/features/pronunciation/index.js
+  function createWidget(name) {
+    let recordings = null;
+    let audio = null;
+    let controller = null;
+    let busy = false;
+    let destroyed = false;
+    const status = el("span", { class: "ogt-pronounce__status", role: "status", "aria-live": "polite" });
+    const button2 = el("button", {
+      class: "ogt-pronounce",
+      type: "button",
+      text: "Pronounce",
+      "aria-label": `Pronounce ${name}`
+    });
+    const node = el("span", { class: "ogt-pronounce__wrap" }, button2, status);
+    function setButton(label) {
+      button2.textContent = label;
+      button2.setAttribute("aria-label", label === "Pause" ? `Pause ${name} pronunciation` : `Pronounce ${name}`);
+    }
+    function setStatus(message, href = null) {
+      status.replaceChildren();
+      if (message) status.append(document.createTextNode(message));
+      if (href) {
+        if (message) status.append(" ");
+        status.append(el("a", { href, target: "_blank", rel: "noopener noreferrer", text: "Forvo" }));
+      }
+    }
+    function dropAudio() {
+      if (!audio) return;
+      const old = audio;
+      audio = null;
+      old.pause();
+      old.replaceChildren();
+      old.remove();
+    }
+    async function startRecording(index) {
+      dropAudio();
+      const recording = recordings?.[index];
+      if (!recording) {
+        setStatus("Audio unavailable.", forvoUrl(name));
+        return;
+      }
+      setStatus("");
+      const element = createAudio(recording, index);
+      audio = element;
+      node.append(element);
+      try {
+        await element.play();
+      } catch {
+        if (!destroyed && audio === element) setStatus("Tap Pronounce to play.");
+      }
+    }
+    function createAudio(recording, index) {
+      const element = el("audio", { class: "ogt-pronounce__audio", preload: "auto", hidden: true });
+      const sources = [];
+      let sourceErrors = 0;
+      let failed = false;
+      const fail = () => {
+        if (failed || destroyed || audio !== element) return;
+        failed = true;
+        if (index + 1 < recordings.length) {
+          void startRecording(index + 1);
+        } else {
+          dropAudio();
+          setStatus("Audio unavailable.", forvoUrl(name));
+        }
+      };
+      const addSource = (src, type) => {
+        const source = el("source", { src, type });
+        source.addEventListener("error", () => {
+          sourceErrors += 1;
+          if (sourceErrors === sources.length) fail();
+        });
+        sources.push(source);
+        element.append(source);
+      };
+      if (recording.mp3) addSource(recording.mp3, "audio/mpeg");
+      if (recording.ogg) addSource(recording.ogg, "audio/ogg; codecs=vorbis");
+      element.addEventListener("play", () => {
+        if (!destroyed) setButton("Pause");
+      });
+      element.addEventListener("pause", () => {
+        if (!destroyed) setButton("Pronounce");
+      });
+      element.addEventListener("ended", () => {
+        if (!destroyed) {
+          element.currentTime = 0;
+          setButton("Pronounce");
+        }
+      });
+      element.addEventListener("error", fail);
+      return element;
+    }
+    async function play() {
+      if (busy || destroyed) return;
+      if (audio) {
+        const element = audio;
+        if (!element.paused) {
+          element.pause();
+          return;
+        }
+        try {
+          element.currentTime = 0;
+          await element.play();
+        } catch {
+          if (!destroyed && audio === element) setStatus("Tap Pronounce to play.");
+        }
+        return;
+      }
+      busy = true;
+      button2.setAttribute("aria-busy", "true");
+      setButton("Loading…");
+      setStatus("");
+      const requestController = new AbortController();
+      controller = requestController;
+      try {
+        if (!recordings) recordings = await getForvoRecordings(name, { signal: requestController.signal });
+        if (destroyed) return;
+        if (!recordings.length) {
+          setStatus("No pronunciation found.", forvoUrl(name));
+          return;
+        }
+        await startRecording(0);
+      } catch (error) {
+        if (destroyed) return;
+        debugError("Forvo lookup failed", error);
+        setStatus("Forvo unavailable.", forvoUrl(name));
+      } finally {
+        busy = false;
+        if (!destroyed) {
+          button2.removeAttribute("aria-busy");
+          setButton(audio && !audio.paused ? "Pause" : "Pronounce");
+        }
+        if (controller === requestController) controller = null;
+      }
+    }
+    button2.addEventListener("click", play);
+    return {
+      node,
+      destroy() {
+        destroyed = true;
+        controller?.abort();
+        controller = null;
+        dropAudio();
+        node.remove();
+      }
+    };
+  }
+  var pronunciation = {
+    id: "pronunciation",
+    css: CSS3,
+    match(route) {
+      return route.name === "person";
+    },
+    mount() {
+      const name = readPersonName(document);
+      if (!name) return null;
+      const heading = document.querySelector(".summary .summary-title h1");
+      if (!heading) return null;
+      const widget = createWidget(name);
+      heading.after(widget.node);
+      return widget;
+    }
+  };
+
   // src/features/season-chart/data.js
   var CHART_WIDTH = 720;
   var CHART_HEIGHT = 180;
@@ -2278,7 +2595,7 @@
   }
 
   // src/features/season-chart/styles.js
-  var CSS3 = String.raw`
+  var CSS4 = String.raw`
 .ogt-season-chart__summary {
   margin: 0 0 8px;
   color: var(--ogt-fg);
@@ -2455,7 +2772,7 @@
   }
   var seasonChart = {
     id: "season-chart",
-    css: CSS3,
+    css: CSS4,
     match(route) {
       return route.kind === "show" && route.name === "season";
     },
@@ -2680,7 +2997,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, playback];
+  var FEATURES = [customLinks, seasonChart, playback, pronunciation];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))

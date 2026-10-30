@@ -3,8 +3,8 @@
 An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds the useful old-Trakt bits og doesn't have
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
-**Status:** v0.1.4: a custom links panel with season and episode pickers, a season ratings chart, and a hydration-safe
-mount. Development also includes OAuth and a paused-playback manager; see [PLAN.md](PLAN.md) for validation status.
+**Status:** v0.2.0: custom links with presets and an inline editor, a season ratings chart, optional Trakt sign-in
+with a paused-playback manager, and in-page name pronunciation on person pages. Tested in Chromium and Zen (Firefox).
 
 ## Install
 
@@ -21,7 +21,7 @@ It matches `https://og.trakt.tv/*` and `http://localhost:5173|5174/*` for develo
 A compact panel under the summary stats with user-configured links to your own services.
 
 - **Custom links** — manage your `Label | URL` templates in the inline editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{season}`, `{episode}`.
-- **Search presets** — optionally add Metacritic, Stremio, Plex, AniList and MyAnimeList links (og already links Rotten Tomatoes, Wikipedia and Letterboxd itself).
+- **Search presets** — optionally add Metacritic, Stremio, Plex and AniList links (og already links Rotten Tomatoes, Wikipedia, Letterboxd and, on anime, MyAnimeList itself).
 - **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}`. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
 - **Examples**: Plex, Jellyfin, Sonarr, Radarr, or any streaming/library service og doesn't link to.
 
@@ -30,6 +30,13 @@ A compact panel under the summary stats with user-configured links to your own s
 On a show's season page, an episode ratings chart shows the shape of the season. It uses the Trakt API when a client
 ID is set and og's displayed ratings otherwise; episodes with fewer than 10 votes appear as hollow points and do not
 affect the average.
+
+### Name pronunciation
+
+On person pages, **Pronounce** looks the name up on Forvo in the background and plays the first recording whose word
+matches the person’s name in place; the button becomes **Pause** while it plays. If a recording fails to load, the next
+one is tried before giving up. If Forvo has no matching recording or the lookup fails, a **Forvo** link opens the
+search page instead. Lookups are cached in memory for 10 minutes.
 
 ### Trakt client ID (optional for now)
 
@@ -166,8 +173,9 @@ src/
   read it and there is no generic API proxy. Everything here uses the public Trakt API with the user's own client ID.
 - **No `turbo:load`.** og is SvelteKit, so we patch `history.pushState`/`replaceState`, listen for `popstate`, and
   re-check after debounced mutations. Features re-mount if the app renders over them.
-- **No page scraping for data.** og is server-rendered, but the API is the stable surface. The only DOM reads are for
-  ids og already prints (TMDb/IMDb) and the season cards' episode counts.
+- **No Trakt page scraping for data.** og is server-rendered, but the API is the stable surface. The only DOM reads
+  from og are the person's name heading, ids og already prints (TMDb/IMDb) and the season cards' episode counts.
+  Pronunciation reads a Forvo search page fetched separately, never a Trakt page.
 - **Selectors.** Only semantic classes (`.summary-frame`, `#overview`, `.top`, `.subtitle`) — never `svelte-*` hashes.
 
 ## Known issues
@@ -178,11 +186,15 @@ src/
 
 ## Roadmap
 
-See [PLAN.md](PLAN.md) for completed work and upcoming metadata links, custom link presets, and smaller extras. og already ships the ratings distribution (on `/stats`) and trailers, so those are not planned.
+See [PLAN.md](PLAN.md). Everything planned is shipped or dropped because og now does it itself (ratings distribution,
+trailers, metadata links, poster rating corners). Next: a scheduled check against live og markup, then a fresh look
+at classic-Trakt features og still lacks.
 
 ## Trakt API compliance
 
-- Only documented, public Trakt endpoints — no HTML fetching, no internal og endpoints, no session reuse.
+- Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback` and `/users/me` through your
+  own optional OAuth sign-in. No Trakt HTML fetching, no internal og endpoints, no reuse of og's session.
+  Pronunciation fetches Forvo's public search page (with `@connect forvo.com`) to find recordings.
 - Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with `Retry-After` on 429.
 - Nothing is uploaded, resold or redistributed; the script has no backend.
 - Season data prefers the API when a client ID is present; rendered cards are the fallback.
