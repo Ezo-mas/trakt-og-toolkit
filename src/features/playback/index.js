@@ -155,9 +155,9 @@ export const playback = {
       anchor.parentElement.insertBefore(panel.node, anchor.nextSibling);
       return panel;
     }
-    // section.progress is full width with og's page column inside it; match that column so the panel lines up.
+    // Inside section.progress (so it shares og's background), in a column matching og's own Container.
     const column = el('div', { class: 'ogt-playback__column' }, panel.node);
-    anchor.parentElement.insertBefore(column, anchor);
+    anchor.prepend(column);
     return { node: column, destroy() { panel.destroy(); column.remove(); } };
   },
 };

@@ -60,7 +60,8 @@ test('overview is on demand and includes posters, titles, percentages and dates'
   assert.equal(b.calls.length, 0);
   const column = panel(b.document).parentElement;
   assert.equal(column.className, 'ogt-playback__column', 'the overview sits in a column matching og\'s container');
-  assert.equal(column.nextElementSibling.className, 'progress watched');
+  assert.equal(column.parentElement.className, 'progress watched', 'inside og\'s progress section');
+  assert.equal(column.parentElement.firstElementChild, column, 'before og\'s own content');
   click(b.document, 'load'); await wait();
   assert.equal(b.calls.length, 2);
   assert.ok(b.calls.every((r) => r.url.endsWith('?extended=images')));
