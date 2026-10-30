@@ -24,8 +24,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 10 | List preview posters link to titles | check og first | small |
 | 11 | All lists in one view | OAuth or public | lowest value |
 | 12 | Add to library button | OAuth | done |
-| 13 | Next-season button | — | dropped: og ships it |
-| 14 | One-click Add to watchlist | OAuth | small |
+| 13 | One-click Add to watchlist | OAuth | small |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -283,12 +282,7 @@ specials; the button hides when og shows its own library control.
 - Later: a whole-show add fetches every season one by one. `GET /shows/:id/seasons?extended=full,episodes` might
   return them in one call; check that it includes `first_aired` per episode before switching.
 
-## 13. Next-season button (dropped)
-
-og already has it: episode pages have an `a.item-nav.next` arrow that crosses seasons (Breaking Bad 1x07 links to
-`/seasons/2/episodes/1`, checked 2026-10-30), and season pages have a "Next: Season 2" arrow.
-
-## 14. One-click Add to watchlist
+## 13. One-click Add to watchlist
 
 **Goal:** og's "Listed on" button opens a list picker; adding to the watchlist takes several clicks. Add a separate
 button that only adds to the watchlist.
