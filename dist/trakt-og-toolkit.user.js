@@ -1980,7 +1980,7 @@
   var CSS2 = String.raw`
 .ogt-playback { color: var(--ogt-fg); }
 /* og's Container: full width with half gutters on phones, then fixed 740/960/1160px columns. */
-.ogt-playback__column { margin: 16px auto; padding-inline: calc(var(--gutter, 30px) / 2); box-sizing: border-box; }
+.ogt-playback__column { margin-inline: auto; padding-inline: calc(var(--gutter, 30px) / 2); box-sizing: border-box; }
 @media (min-width: 768px) { .ogt-playback__column { inline-size: var(--container-sm, 740px); } }
 @media (min-width: 992px) { .ogt-playback__column { inline-size: var(--container-md, 960px); } }
 @media (min-width: 1200px) { .ogt-playback__column { inline-size: var(--container-lg, 1160px); } }
@@ -2179,7 +2179,7 @@
         return panel;
       }
       const column = el("div", { class: "ogt-playback__column" }, panel.node);
-      anchor.parentElement.insertBefore(column, anchor);
+      anchor.prepend(column);
       return { node: column, destroy() {
         panel.destroy();
         column.remove();
