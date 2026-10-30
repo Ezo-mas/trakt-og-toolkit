@@ -17,6 +17,12 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 3 | Metadata links | — | dropped: og ships it |
 | 4 | Custom link presets | done | 1, 2, 3 |
 | 5 | Small extras | — | pronunciation done; poster corners dropped |
+| 6 | Last month in review card | OAuth | next |
+| 7 | Season chart: your ratings + watchers/comments | OAuth (ratings) | with 8 |
+| 8 | Your personal season and show averages | OAuth | with 7 |
+| 9 | Playback extras: set progress | OAuth | small |
+| 10 | List preview posters link to titles | check og first | small |
+| 11 | All lists in one view | OAuth or public | lowest value |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -91,10 +97,8 @@ for episodes under 10 votes, left out of the average; keyboard-focusable dots an
 
 **Later:**
 
-- A watchers or comments series from `GET /shows/:id/seasons/:season/episodes/:episode/stats` (one call per
-  episode, so only for the viewed season and only on demand).
+- Your ratings and watchers/comments series: now feature 7.
 - Vote counts next to og's episode percentages (og shows the % only).
-- Personal ratings on the chart once OAuth exists (feature 2): `GET /sync/ratings/episodes`.
 
 ## 2. Playback progress manager
 
@@ -174,8 +178,98 @@ legitimate services so it's useful straight away.
 - **Poster rating corners (dropped):** og already does this. Its `CornerRating` component puts your own rating in the
   corner of posters and fanart cards in lists, charts, search, progress, history, calendars and more, and has done
   since og's first import (trakt-og `233a935`, 2026-09-30).
-- **All lists in one view:** probably unnecessary, since og has separate pages for personal, collaborations, liked and
-  official lists. Revisit only if people ask.
+- **All lists in one view:** moved to feature 11.
+
+## 6. Last month in review card
+
+**Goal:** bring back classic Trakt's "your *March* in review" dashboard card: a summary of last month on the dashboard,
+without opening Month in Review on trakt.tv.
+
+**Already in og (checked 2026-10-30, trakt-og `27d7dbc`):** the dashboard's month strip (`RecapRibbon`, a
+`nav.ribbon` with plays per month) links each past month to Month in Review on v3. The Last 30 Days panel and the
+profile watch-time box also exist (both hide with no recent plays). None of them is a last-month card, so this is new.
+
+**Data (signed in, via `apiAuth`):**
+
+- Plays and hours: `GET /sync/history?start_at=<first of last month>&end_at=<first of this month>&extended=full`,
+  paginated (`page`, `limit=100`, read `X-Pagination-Page-Count`). Hours = sum of each item's `runtime`.
+  `apiAuth` only allows `extended=images` today: extend it with a validated option for these query keys rather than
+  free-form query strings.
+- First play of the month: the oldest history entry; its fanart (`extended=images`) is the card background.
+- Ratings given: `GET /sync/ratings` (all types), count those with `rated_at` inside the month.
+- Comments: `GET /users/me/comments` (paginated), count those with `created_at` inside the month.
+- Use the user's time zone for month boundaries (the browser's `Intl` zone), and cache the result for the month in GM
+  storage keyed by user and month, since last month's numbers don't change. Refetch at most daily in the first days of
+  a month, while late syncs can still land.
+
+**Build:**
+
+- Mount under og's month strip (`nav.ribbon`) on the dashboard (`/` when signed in to og, plus `/dashboard`). Add a
+  `dashboard` route name to `parseRoute` if needed.
+- The card: "your *<month>* in review" heading, plays, hours, ratings and comments tiles, the first play (title and
+  episode), the fanart background, and a link to the full Month in Review on trakt.tv (og's own `traktUrls.monthInReview`
+  format). A hide button that remembers the dismissed month.
+- Nothing when signed out of the toolkit or with zero plays last month; a one-line hint on API failure.
+- January shows December of the previous year.
+
+**Checks:** the og drift table (`scripts/og-drift-checks.mjs`) can't fetch the signed-in dashboard, so add
+`nav.ribbon` as "not checked (needs login)" like the progress page, and verify on a real account.
+
+## 7. Season chart: your ratings, watchers and comments
+
+**Goal:** what classic's seasons chart had and ours doesn't: your own ratings as a second line next to the community
+one, plus optional watchers and comments series. og shows your rating on each episode row (a corner badge), but never
+as a shape across the season.
+
+- **Your ratings:** `GET /sync/ratings/episodes` via `apiAuth` (one call, all your episode ratings; cache it in memory
+  for ~10 minutes and share it with feature 8). Filter to this show and season by the show's Trakt id (the season
+  page's API data from `getSeasonEpisodes` has it) and episode number. Draw a second line in a distinct colour with
+  its own dots; episodes you haven't rated are gaps, not zeros. A legend says which line is which. Signed out: chart
+  unchanged.
+- **Watchers and comments:** off by default, behind a "More" toggle in the chart panel. On demand, fetch
+  `GET /shows/:id/seasons/:season/episodes/:episode/stats` for each episode of the viewed season only, through the
+  existing request queue, and draw watchers and comments on a secondary right-hand axis (they're counts, not %).
+  Skip seasons with more than ~30 episodes, or ask first.
+- Keep the chart's fixed Y scale for ratings. Keyboard/accessible names for the new dots, as for the existing ones.
+
+## 8. Your personal averages
+
+**Goal:** classic's "Average Season And Episode Ratings": your own average, which og never shows.
+
+- Same ratings data as feature 7 (one fetch, shared cache). Also `GET /sync/ratings/seasons` if you rate seasons.
+- **Season page:** "Your average: 7.8 (6 of 7 episodes rated)" in the chart's summary line.
+- **Show page (season cards) and `/shows/:id/seasons`:** your average per season as a small badge next to og's
+  community %, and a show-wide "your average" (episodes only, plain mean, with the count).
+- Only show an average when at least 2 episodes are rated; label it clearly as yours so it isn't read as Trakt's.
+
+## 9. Playback extras: set progress
+
+**Goal:** classic's manager could also set progress. Add it as an opt-in action.
+
+- On a movie or episode page with no saved progress (and in the overview), a "Save progress…" action: enter a %,
+  confirm, then `POST /scrobble/start` + `POST /scrobble/pause` at that %, as the live test did. Warn in the confirm
+  that it may briefly show as "watching" on the profile. Never send `/scrobble/stop` (that can mark it watched).
+- **Renew:** classic offered it, but Trakt's current docs (trakt/api-help `28e57aa`) say nothing about paused
+  playback expiring. Don't build it unless entries are seen to disappear.
+
+## 10. List preview posters link to their titles
+
+**Goal:** on og, the poster stack of a list card (`ListRow`, the `a.fan` element) links to the list itself and is
+hidden from screen readers. Classic made each poster link to its own title and added your rating corners.
+
+- **Check first:** whether og's list card markup exposes which title each poster is (an id, slug or image path that
+  maps to one). If not, the list items would need an API call per card (`GET /users/:id/lists/:list/items`, limited),
+  which is probably not worth it. Report and stop if so.
+- Rating corners: og's `CornerRating` already exists on posters elsewhere; only add one here if the stack doesn't.
+
+## 11. All lists in one view (lowest value)
+
+**Goal:** classic's "All-In-One Lists View": personal, collaborations and liked lists on one page. og still splits
+them across `/users/:id/lists`, `/collaborations` and `/liked`.
+
+- A "Show all my lists" button on the personal lists page that appends the other two groups below, each under its own
+  heading, from `GET /users/:id/lists/collaborations` and `GET /users/:id/likes/lists` (check the current endpoints).
+- Only worth it for people with many lists; build last, or skip.
 
 ---
 
