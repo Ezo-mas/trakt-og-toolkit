@@ -151,7 +151,13 @@ export const playback = {
       document.querySelector('.summary-frame #overview .top');
     if (!anchor?.parentElement) return null;
     const panel = createPanel(route);
-    anchor.parentElement.insertBefore(panel.node, route.name === 'progress' ? anchor : anchor.nextSibling);
-    return panel;
+    if (route.name !== 'progress') {
+      anchor.parentElement.insertBefore(panel.node, anchor.nextSibling);
+      return panel;
+    }
+    // Inside section.progress (so it shares og's background), in a column matching og's own Container.
+    const column = el('div', { class: 'ogt-playback__column' }, panel.node);
+    anchor.prepend(column);
+    return { node: column, destroy() { panel.destroy(); column.remove(); } };
   },
 };

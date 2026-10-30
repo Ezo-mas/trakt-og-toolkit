@@ -7,7 +7,6 @@ export const CSS = String.raw`
 .ogt-season-chart__svg {
   display: block;
   inline-size: 100%;
-  max-inline-size: 720px;
   block-size: auto;
   overflow: visible;
 }

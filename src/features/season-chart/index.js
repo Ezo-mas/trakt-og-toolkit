@@ -7,6 +7,8 @@ import { CSS } from './styles.js';
 
 const PANEL_ID = 'ogt-season-chart';
 const SVG_NS = 'http://www.w3.org/2000/svg';
+const DEFAULT_WIDTH = 720;
+const MIN_WIDTH = 320;
 
 function svg(tag, attributes = {}, content = '') {
   const node = document.createElementNS(SVG_NS, tag);
@@ -36,8 +38,8 @@ function summary(episodes, average) {
   return `Season average: ${averageText} · Best: ${episodeName(best)} · Worst: ${episodeName(worst)}`;
 }
 
-function drawChart(chart, episodes, average) {
-  const geometry = chartGeometry(episodes, episodes, average);
+function drawChart(chart, episodes, average, targetWidth) {
+  const geometry = chartGeometry(episodes, episodes, average, targetWidth);
   const { width, height, plot, ticks, points, averageY } = geometry;
   chart.replaceChildren();
   chart.setAttribute('viewBox', `0 0 ${width} ${height}`);
@@ -101,12 +103,14 @@ function createPanel(episodes) {
     role: 'group',
     'aria-label': 'Episode ratings by episode number',
   });
+  // ResizeObserver reports an <svg>'s drawing bounds, not its box, so measure and observe this wrapper instead.
+  const plot = el('div', { class: 'ogt-season-chart__plot' }, chart);
   const node = el(
     'section',
     { class: 'ogt-panel ogt-season-chart', id: PANEL_ID, 'aria-labelledby': headingId },
     el('div', { class: 'ogt-head' }, el('h2', { class: 'ogt-title', id: headingId, text: 'Episode ratings' })),
     summaryLine,
-    chart,
+    plot,
   );
 
   function render(nextEpisodes) {
@@ -116,8 +120,22 @@ function createPanel(episodes) {
     const average = averageRating(currentEpisodes);
     node.hidden = rated.length < 2;
     summaryLine.textContent = summary(currentEpisodes, average);
-    drawChart(chart, currentEpisodes, average);
+    drawChart(chart, currentEpisodes, average, chartWidth());
   }
+
+  // Draw at the panel's real width so the chart fills it without scaling text and dots up.
+  let drawnWidth = 0;
+  function chartWidth() {
+    drawnWidth = Math.max(MIN_WIDTH, Math.round(plot.getBoundingClientRect().width) || DEFAULT_WIDTH);
+    return drawnWidth;
+  }
+  const resize = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(() => {
+      if (cancelled || node.hidden) return;
+      if (Math.abs(Math.round(plot.getBoundingClientRect().width) - drawnWidth) > 1) render(currentEpisodes);
+    })
+    : null;
+  resize?.observe(plot);
 
   render(currentEpisodes);
 
@@ -126,6 +144,7 @@ function createPanel(episodes) {
     render,
     destroy() {
       cancelled = true;
+      resize?.disconnect();
       node.remove();
     },
   };
