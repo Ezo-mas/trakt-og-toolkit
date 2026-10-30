@@ -5,8 +5,11 @@ import { SEASON_HTML } from './fixtures.js';
 import {
   averageRating,
   axisBottom,
+  barPath,
+  chartGeometry,
   mapApiEpisodes,
   ratedEpisodes,
+  ratingLevel,
   readSeasonEpisodes,
 } from '../src/features/season-chart/data.js';
 
@@ -77,4 +80,26 @@ test('axis bottom is 50% or the lowest rating rounded down to ten', () => {
   assert.equal(axisBottom([{ number: 1, rating: 83 }]), 50);
   assert.equal(axisBottom([{ number: 1, rating: 49 }]), 40);
   assert.equal(axisBottom([{ number: 1, rating: 8 }]), 0);
+});
+
+test('ratingLevel matches og\'s heart colours: truncated tens, clamped to 1-10', () => {
+  assert.equal(ratingLevel(83), 8);
+  assert.equal(ratingLevel(79.9), 7);
+  assert.equal(ratingLevel(100), 10);
+  assert.equal(ratingLevel(4), 1);
+});
+
+test('barPath is square at the baseline and rounded at the top', () => {
+  assert.equal(barPath(100, 20, 24, 150), 'M88,150V24Q88,20 92,20H108Q112,20 112,24V150Z');
+  // A bar shorter than the radius doesn't overshoot its baseline.
+  assert.match(barPath(100, 148, 24, 150), /^M88,150V150Q88,148 90,148H110Q112,148 112,150V150Z$/);
+});
+
+test('chartGeometry centres each episode in its own slot', () => {
+  const episodes = [1, 2, 3, 4].map((number) => ({ number, title: `E${number}`, rating: 80, votes: 100 }));
+  const { points, slot, plot, width, baseY } = chartGeometry(episodes, episodes, 80, 438);
+  assert.equal(slot, (438 - plot.left - plot.right) / 4);
+  assert.deepEqual(points.map((point) => point.x), [0.5, 1.5, 2.5, 3.5].map((n) => plot.left + n * slot));
+  assert.ok(points.at(-1).x < width - plot.right);
+  assert.ok(baseY > points[0].y, 'bars grow up from the baseline');
 });
