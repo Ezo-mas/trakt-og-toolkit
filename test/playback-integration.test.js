@@ -58,7 +58,9 @@ test('signed out: no badges, overview or authenticated requests', async (t) => {
 test('overview is on demand and includes posters, titles, percentages and dates', async (t) => {
   const b = boot(t); await wait();
   assert.equal(b.calls.length, 0);
-  assert.equal(panel(b.document).nextElementSibling.className, 'progress watched');
+  const column = panel(b.document).parentElement;
+  assert.equal(column.className, 'ogt-playback__column', 'the overview sits in a column matching og\'s container');
+  assert.equal(column.nextElementSibling.className, 'progress watched');
   click(b.document, 'load'); await wait();
   assert.equal(b.calls.length, 2);
   assert.ok(b.calls.every((r) => r.url.endsWith('?extended=images')));
@@ -112,6 +114,13 @@ test('sign-out removes private UI and discards the private cache', async (t) => 
   assert.ok(panel(b.document)); assert.equal(panel(b.document).querySelectorAll('li').length, 0);
   click(b.document, 'load'); await wait();
   assert.equal(b.calls.length, 4);
+});
+test('leaving the progress page removes the overview and its column', async (t) => {
+  const b = boot(t); await wait();
+  assert.ok(b.document.querySelector('.ogt-playback__column'));
+  b.window.history.pushState({}, '', '/'); await wait(250);
+  assert.equal(panel(b.document), null);
+  assert.equal(b.document.querySelector('.ogt-playback__column'), null);
 });
 test('navigation destroys the panel and late responses cannot mount it again', async (t) => {
   const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML, deferred: true }); await wait();

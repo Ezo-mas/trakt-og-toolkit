@@ -96,21 +96,21 @@ export function axisBottom(episodes) {
   return Math.min(50, Math.floor(lowest / 10) * 10);
 }
 
-/** SVG coordinates for a 720×180 chart. X positions follow episode numbers. */
-export function chartGeometry(episodes, allEpisodes = episodes, average = averageRating(episodes)) {
+/** SVG coordinates for a `width`×180 chart (720 by default). X positions follow episode numbers. */
+export function chartGeometry(episodes, allEpisodes = episodes, average = averageRating(episodes), width = CHART_WIDTH) {
   const rated = ratedEpisodes(episodes);
   const allNumbers = allEpisodes.map((episode) => episode.number).filter(Number.isFinite);
   const first = allNumbers.length ? Math.min(...allNumbers) : 1;
   const last = allNumbers.length ? Math.max(...allNumbers) : first;
   const bottom = axisBottom(rated);
-  const plotWidth = CHART_WIDTH - PLOT.left - PLOT.right;
+  const plotWidth = width - PLOT.left - PLOT.right;
   const plotHeight = CHART_HEIGHT - PLOT.top - PLOT.bottom;
   const x = (number) =>
     PLOT.left + (last === first ? plotWidth / 2 : ((number - first) / (last - first)) * plotWidth);
   const y = (rating) => PLOT.top + ((100 - rating) / (100 - bottom)) * plotHeight;
 
   return {
-    width: CHART_WIDTH,
+    width,
     height: CHART_HEIGHT,
     plot: PLOT,
     axisBottom: bottom,

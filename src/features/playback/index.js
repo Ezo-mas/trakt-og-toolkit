@@ -151,7 +151,13 @@ export const playback = {
       document.querySelector('.summary-frame #overview .top');
     if (!anchor?.parentElement) return null;
     const panel = createPanel(route);
-    anchor.parentElement.insertBefore(panel.node, route.name === 'progress' ? anchor : anchor.nextSibling);
-    return panel;
+    if (route.name !== 'progress') {
+      anchor.parentElement.insertBefore(panel.node, anchor.nextSibling);
+      return panel;
+    }
+    // section.progress is full width with og's page column inside it; match that column so the panel lines up.
+    const column = el('div', { class: 'ogt-playback__column' }, panel.node);
+    anchor.parentElement.insertBefore(column, anchor);
+    return { node: column, destroy() { panel.destroy(); column.remove(); } };
   },
 };

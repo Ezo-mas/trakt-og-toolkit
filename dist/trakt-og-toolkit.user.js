@@ -1979,6 +1979,11 @@
   // src/features/playback/styles.js
   var CSS2 = String.raw`
 .ogt-playback { color: var(--ogt-fg); }
+/* og's Container: full width with half gutters on phones, then fixed 740/960/1160px columns. */
+.ogt-playback__column { margin: 16px auto; padding-inline: calc(var(--gutter, 30px) / 2); box-sizing: border-box; }
+@media (min-width: 768px) { .ogt-playback__column { inline-size: var(--container-sm, 740px); } }
+@media (min-width: 992px) { .ogt-playback__column { inline-size: var(--container-md, 960px); } }
+@media (min-width: 1200px) { .ogt-playback__column { inline-size: var(--container-lg, 1160px); } }
 .ogt-playback__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 8px; }
 .ogt-playback__list { list-style: none; padding: 0; margin: 0; }
 .ogt-playback__item { display: flex; align-items: center; gap: 12px; padding-block: 8px; border-block-end: 1px solid light-dark(#ddd, #444); }
@@ -2169,8 +2174,16 @@
       const anchor = route.name === "progress" ? document.querySelector("section.progress") : document.querySelector(".summary-frame #overview .top");
       if (!anchor?.parentElement) return null;
       const panel = createPanel2(route);
-      anchor.parentElement.insertBefore(panel.node, route.name === "progress" ? anchor : anchor.nextSibling);
-      return panel;
+      if (route.name !== "progress") {
+        anchor.parentElement.insertBefore(panel.node, anchor.nextSibling);
+        return panel;
+      }
+      const column = el("div", { class: "ogt-playback__column" }, panel.node);
+      anchor.parentElement.insertBefore(column, anchor);
+      return { node: column, destroy() {
+        panel.destroy();
+        column.remove();
+      } };
     }
   };
 
@@ -2565,18 +2578,18 @@
     const lowest = Math.min(...rated.map((episode) => episode.rating));
     return Math.min(50, Math.floor(lowest / 10) * 10);
   }
-  function chartGeometry(episodes, allEpisodes = episodes, average = averageRating(episodes)) {
+  function chartGeometry(episodes, allEpisodes = episodes, average = averageRating(episodes), width = CHART_WIDTH) {
     const rated = ratedEpisodes(episodes);
     const allNumbers = allEpisodes.map((episode) => episode.number).filter(Number.isFinite);
     const first = allNumbers.length ? Math.min(...allNumbers) : 1;
     const last = allNumbers.length ? Math.max(...allNumbers) : first;
     const bottom = axisBottom(rated);
-    const plotWidth = CHART_WIDTH - PLOT.left - PLOT.right;
+    const plotWidth = width - PLOT.left - PLOT.right;
     const plotHeight = CHART_HEIGHT - PLOT.top - PLOT.bottom;
     const x = (number) => PLOT.left + (last === first ? plotWidth / 2 : (number - first) / (last - first) * plotWidth);
     const y = (rating) => PLOT.top + (100 - rating) / (100 - bottom) * plotHeight;
     return {
-      width: CHART_WIDTH,
+      width,
       height: CHART_HEIGHT,
       plot: PLOT,
       axisBottom: bottom,
@@ -2604,7 +2617,6 @@
 .ogt-season-chart__svg {
   display: block;
   inline-size: 100%;
-  max-inline-size: 720px;
   block-size: auto;
   overflow: visible;
 }
@@ -2661,6 +2673,8 @@
   // src/features/season-chart/index.js
   var PANEL_ID2 = "ogt-season-chart";
   var SVG_NS = "http://www.w3.org/2000/svg";
+  var DEFAULT_WIDTH = 720;
+  var MIN_WIDTH = 320;
   function svg(tag, attributes = {}, content = "") {
     const node = document.createElementNS(SVG_NS, tag);
     for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
@@ -2684,8 +2698,8 @@
     const averageText = average == null ? "—" : formatPercent(average);
     return `Season average: ${averageText} · Best: ${episodeName(best)} · Worst: ${episodeName(worst)}`;
   }
-  function drawChart(chart, episodes, average) {
-    const geometry = chartGeometry(episodes, episodes, average);
+  function drawChart(chart, episodes, average, targetWidth) {
+    const geometry = chartGeometry(episodes, episodes, average, targetWidth);
     const { width, height, plot, ticks, points, averageY } = geometry;
     chart.replaceChildren();
     chart.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -2744,12 +2758,13 @@
       role: "group",
       "aria-label": "Episode ratings by episode number"
     });
+    const plot = el("div", { class: "ogt-season-chart__plot" }, chart);
     const node = el(
       "section",
       { class: "ogt-panel ogt-season-chart", id: PANEL_ID2, "aria-labelledby": headingId },
       el("div", { class: "ogt-head" }, el("h2", { class: "ogt-title", id: headingId, text: "Episode ratings" })),
       summaryLine,
-      chart
+      plot
     );
     function render(nextEpisodes) {
       if (cancelled) return;
@@ -2758,14 +2773,25 @@
       const average = averageRating(currentEpisodes);
       node.hidden = rated.length < 2;
       summaryLine.textContent = summary(currentEpisodes, average);
-      drawChart(chart, currentEpisodes, average);
+      drawChart(chart, currentEpisodes, average, chartWidth());
     }
+    let drawnWidth = 0;
+    function chartWidth() {
+      drawnWidth = Math.max(MIN_WIDTH, Math.round(plot.getBoundingClientRect().width) || DEFAULT_WIDTH);
+      return drawnWidth;
+    }
+    const resize = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
+      if (cancelled || node.hidden) return;
+      if (Math.abs(Math.round(plot.getBoundingClientRect().width) - drawnWidth) > 1) render(currentEpisodes);
+    }) : null;
+    resize?.observe(plot);
     render(currentEpisodes);
     return {
       node,
       render,
       destroy() {
         cancelled = true;
+        resize?.disconnect();
         node.remove();
       }
     };
