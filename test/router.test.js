@@ -60,3 +60,15 @@ test('user progress routes include tab and sort variants', () => {
   }
   assert.equal(parseRoute('/users/tester/history').name, 'other');
 });
+
+test('person routes match only a person page', () => {
+  assert.deepEqual(parseRoute('/people/bryan-cranston'), {
+    name: 'person', kind: 'person', id: 'bryan-cranston', path: '/people/bryan-cranston', key: '/people/bryan-cranston',
+  });
+  assert.equal(parseRoute('/people/bryan-cranston/').name, 'person');
+  for (const path of ['/people', '/people/bryan-cranston/credits']) {
+    assert.equal(parseRoute(path).name, 'other');
+  }
+  assert.equal(parseRoute('/shows/breaking-bad').name, 'title');
+  assert.equal(parseRoute('/movies/13').name, 'title');
+});

@@ -31,6 +31,10 @@ On a show's season page, an episode ratings chart shows the shape of the season.
 ID is set and og's displayed ratings otherwise; episodes with fewer than 10 votes appear as hollow points and do not
 affect the average.
 
+### Name pronunciation
+
+On person pages, **Pronounce** opens a Forvo search for the person’s name in a new tab.
+
 ### Trakt client ID (optional for now)
 
 The panel works without one. With a client ID, the episode pickers get exact counts from the Trakt API instead of og's

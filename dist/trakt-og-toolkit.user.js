@@ -415,6 +415,8 @@
     const path = pathname.replace(/\/+$/, "") || "/";
     const progress = path.match(/^\/users\/([^/]+)\/progress(?:\/.*)?$/);
     if (progress) return { name: "progress", kind: null, id: progress[1], path, key: path };
+    const person = path.match(/^\/people\/([^/]+)$/);
+    if (person) return { name: "person", kind: "person", id: person[1], path, key: path };
     const match = path.match(TITLE_PATH);
     if (!match) {
       return { name: "other", kind: null, id: null, path, key: path };
@@ -2176,6 +2178,59 @@
     }
   };
 
+  // src/features/pronunciation/data.js
+  function readPersonName(doc) {
+    return text(doc.querySelector(".summary .summary-title h1")) || null;
+  }
+  function forvoUrl(name) {
+    return `https://forvo.com/search/${encodeURIComponent(name)}/`;
+  }
+
+  // src/features/pronunciation/styles.js
+  var CSS3 = String.raw`
+.ogt-pronounce {
+  display: inline-block;
+  margin-inline-start: 8px;
+  color: light-dark(#767676, #a7a7a7);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.ogt-pronounce:hover {
+  text-decoration: underline;
+}
+
+.ogt-pronounce:focus-visible {
+  outline: 2px solid light-dark(#333, #fff);
+  outline-offset: 2px;
+}
+`;
+
+  // src/features/pronunciation/index.js
+  var pronunciation = {
+    id: "pronunciation",
+    css: CSS3,
+    match(route) {
+      return route.name === "person";
+    },
+    mount() {
+      const name = readPersonName(document);
+      if (!name) return null;
+      const heading = document.querySelector(".summary .summary-title h1");
+      const node = el("a", {
+        class: "ogt-pronounce",
+        text: "Pronounce",
+        href: forvoUrl(name),
+        target: "_blank",
+        rel: "noopener noreferrer"
+      });
+      heading.after(node);
+      return { node, destroy() {
+        node.remove();
+      } };
+    }
+  };
+
   // src/features/season-chart/data.js
   var CHART_WIDTH = 720;
   var CHART_HEIGHT = 180;
@@ -2278,7 +2333,7 @@
   }
 
   // src/features/season-chart/styles.js
-  var CSS3 = String.raw`
+  var CSS4 = String.raw`
 .ogt-season-chart__summary {
   margin: 0 0 8px;
   color: var(--ogt-fg);
@@ -2455,7 +2510,7 @@
   }
   var seasonChart = {
     id: "season-chart",
-    css: CSS3,
+    css: CSS4,
     match(route) {
       return route.kind === "show" && route.name === "season";
     },
@@ -2680,7 +2735,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, playback];
+  var FEATURES = [customLinks, seasonChart, playback, pronunciation];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))

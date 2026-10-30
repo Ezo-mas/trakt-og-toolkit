@@ -118,3 +118,7 @@ export const PLAYBACK_PROGRESS_HTML = `
   <section class="phone-strip" aria-label="Progress totals"></section>
   <section class="progress watched" aria-label="Watching" aria-busy="false"><div class="empty">No shows.</div></section>
 </main>`;
+
+export const PERSON_HTML = `
+<h1>Watch Trakt on your phone</h1>
+<div class="summary"><div><div class="summary-title"><h1>Bryan Cranston <!----></h1></div></div></div>`;

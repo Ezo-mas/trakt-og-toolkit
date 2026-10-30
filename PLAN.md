@@ -182,7 +182,7 @@ legitimate services so it's useful straight away.
 ## 5. Small extras (after 1–4)
 
 - **Name pronunciation:** a button on `/people/:id` that looks up the name on Forvo. Forvo's API needs a key; start
-  with a plain link to Forvo's search page instead.
+  with a plain link to Forvo's search page instead. **Done.**
 - **Poster rating corners:** a corner badge with your own rating on posters in lists. Needs OAuth
   (`/sync/ratings`) and a cached ratings map; check og doesn't already show ratings on posters (it has a `RatingLine`
   component).

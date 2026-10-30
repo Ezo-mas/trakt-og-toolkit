@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
-import { SHOW_HTML, MOVIE_HTML, SEASON_HTML } from './fixtures.js';
+import { SHOW_HTML, MOVIE_HTML, SEASON_HTML, PERSON_HTML } from './fixtures.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -307,4 +307,27 @@ test('show title pages do not mount the season chart', async (t) => {
   await wait(50);
 
   assert.equal(document.getElementById('ogt-season-chart'), null);
+});
+
+test('person pages mount a pronunciation link and remove it on navigation', async (t) => {
+  const { window, document } = boot({ url: 'https://og.trakt.tv/people/bryan-cranston', html: PERSON_HTML });
+  t.after(() => window.close());
+  await wait(50);
+
+  const heading = document.querySelector('.summary .summary-title h1');
+  const link = heading.nextElementSibling;
+  assert.equal(link?.textContent, 'Pronounce');
+  assert.equal(link.getAttribute('href'), 'https://forvo.com/search/Bryan%20Cranston/');
+  assert.equal(link.getAttribute('target'), '_blank');
+  assert.equal(link.getAttribute('rel'), 'noopener noreferrer');
+  window.history.pushState({}, '', '/dashboard');
+  await wait(300);
+  assert.equal(document.querySelector('.ogt-pronounce'), null);
+});
+
+test('show pages do not mount a pronunciation link', async (t) => {
+  const { window, document } = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
+  t.after(() => window.close());
+  await wait(50);
+  assert.equal(document.querySelector('.ogt-pronounce'), null);
 });
