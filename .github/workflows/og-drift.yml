@@ -1,0 +1,37 @@
+name: og markup drift
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Check og markup
+        run: |
+          set +e
+          npm run drift -- --save og-pages
+          result=$?
+          if [ "$result" -eq 2 ]; then
+            echo '::error::og unreachable from the runner'
+          fi
+          exit "$result"
+      - name: Upload fetched pages
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: og-pages
+          path: og-pages/
+          if-no-files-found: ignore
