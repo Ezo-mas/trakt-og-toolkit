@@ -73,7 +73,7 @@ VIP features, scheduled e-mail exports, bug-fix patches for the classic site.
 
 ## 1. Season chart
 
-**Status:** done (DOM fallback verified in a browser; API path and Firefox not yet checked).
+**Status:** done (verified in Chromium and Zen/Firefox with og's ratings; the API path with a client ID is not yet checked).
 
 **Already in og (checked 2026-10-29 on Breaking Bad):** every season card shows its rating (e.g. 90%), the season
 page header shows the season rating, and every episode row shows its rating (e.g. 83%). Don't add badges for those.

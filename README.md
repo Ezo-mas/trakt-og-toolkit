@@ -3,8 +3,8 @@
 An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds the useful old-Trakt bits og doesn't have
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
-**Status:** v0.1.4: a custom links panel with season and episode pickers, a season ratings chart, and a hydration-safe
-mount. Development also includes OAuth and a paused-playback manager; see [PLAN.md](PLAN.md) for validation status.
+**Status:** v0.2.0: custom links with presets and an inline editor, a season ratings chart, optional Trakt sign-in
+with a paused-playback manager, and in-page name pronunciation on person pages. Tested in Chromium and Zen (Firefox).
 
 ## Install
 
@@ -186,11 +186,14 @@ src/
 
 ## Roadmap
 
-See [PLAN.md](PLAN.md) for completed work and upcoming metadata links, custom link presets, and smaller extras. og already ships the ratings distribution (on `/stats`) and trailers, so those are not planned.
+See [PLAN.md](PLAN.md). Everything planned is shipped or dropped because og now does it itself (ratings distribution,
+trailers, metadata links, poster rating corners). Next: a scheduled check against live og markup, then a fresh look
+at classic-Trakt features og still lacks.
 
 ## Trakt API compliance
 
-- Only documented, public Trakt endpoints — no Trakt HTML fetching, no internal og endpoints, no session reuse.
+- Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback` and `/users/me` through your
+  own optional OAuth sign-in. No Trakt HTML fetching, no internal og endpoints, no reuse of og's session.
   Pronunciation fetches Forvo's public search page (with `@connect forvo.com`) to find recordings.
 - Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with `Retry-After` on 429.
 - Nothing is uploaded, resold or redistributed; the script has no backend.
