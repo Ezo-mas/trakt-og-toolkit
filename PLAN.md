@@ -23,6 +23,9 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 9 | Playback extras: set progress | OAuth | small |
 | 10 | List preview posters link to titles | check og first | small |
 | 11 | All lists in one view | OAuth or public | lowest value |
+| 12 | Add to library button | OAuth | done |
+| 13 | Next-season button on a season's last episode | check og first | small |
+| 14 | One-click Add to watchlist | OAuth | small |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -270,6 +273,37 @@ them across `/users/:id/lists`, `/collaborations` and `/liked`.
 - A "Show all my lists" button on the personal lists page that appends the other two groups below, each under its own
   heading, from `GET /users/:id/lists/collaborations` and `GET /users/:id/likes/lists` (check the current endpoints).
 - Only worth it for people with many lists; build last, or skip.
+
+## 12. Add to library button
+
+**Status:** done. An **Add to library** action in the title, season and episode action stack, using the toolkit's own
+sign-in and `POST /sync/collection` with the current date. Whole shows confirm the aired-episode count and skip
+specials; the button hides when og shows its own library control.
+
+- Later: a whole-show add fetches every season one by one. `GET /shows/:id/seasons?extended=full,episodes` might
+  return them in one call; check that it includes `first_aired` per episode before switching.
+
+## 13. Next-season button on a season's last episode
+
+**Goal:** from the last episode of a season, one obvious click to the next season, instead of going back up to the
+show page.
+
+- **Check first:** og already renders an `a.item-nav.next` arrow on episode pages that crosses seasons (on Breaking
+  Bad 1x07 it links to `/seasons/2/episodes/1`, checked 2026-10-30), and the season page has a "Next: Season 2" arrow.
+  Confirm with the user what is missing: likely a visible, labelled button rather than the small arrow.
+- If built: on `episode` routes where og's next link points to a different season, add a labelled "Next season"
+  button near the episode's actions, linking to og's own href (no API call). Hide it on the series finale.
+
+## 14. One-click Add to watchlist
+
+**Goal:** og's "Listed on" button opens a list picker; adding to the watchlist takes several clicks. Add a separate
+button that only adds to the watchlist.
+
+- `POST /sync/watchlist` with the title's Trakt id, through the toolkit's sign-in, the same way feature 12 does
+  `/sync/collection`. Movies and shows (seasons and episodes are allowed by the API, but check what og shows).
+- Hide it when og already shows the title as on the watchlist; reuse feature 12's mount point, styling and
+  native-state observer.
+- **Check first:** whether og has added a direct watchlist action since 2026-10-30.
 
 ---
 

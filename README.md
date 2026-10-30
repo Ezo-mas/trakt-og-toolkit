@@ -4,7 +4,7 @@ An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds th
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
 **Status:** v0.2.0: custom links with presets and an inline editor, a season ratings chart, optional Trakt sign-in
-with a paused-playback manager, and in-page name pronunciation on person pages. Tested in Chromium and Zen (Firefox).
+with a paused-playback manager and manual library additions, and in-page name pronunciation on person pages.
 
 ## Install
 
@@ -30,6 +30,15 @@ A compact panel under the summary stats with user-configured links to your own s
 On a show's season page, an episode ratings chart shows the shape of the season. It uses the Trakt API when a client
 ID is set and og's displayed ratings otherwise; episodes with fewer than 10 votes appear as hollow points and do not
 affect the average.
+
+### Add to library
+
+Movie, show, season and episode pages have an **Add to library** button in the action stack. Sign in through the
+toolkit menu first: it uses that Trakt account, independently of OG’s login. Additions use the current date.
+Shows and seasons confirm the aired episode count before saving; whole shows exclude specials (add season 0
+separately). The add button disappears after saving, or whenever OG already shows a library control. Reload after
+adding to update OG’s own library status. Removing an item through OG restores the add action without a reload.
+The button uses OG’s design values for action styling and spacing, with separate toolkit classes.
 
 ### Name pronunciation
 
@@ -180,20 +189,23 @@ src/
 
 ## Known issues
 
-- og's native ratings strip (the row of IMDb, Rotten Tomatoes, TMDb, Trakt, popcorn and JustWatch scores) can disappear
-  on Gecko browsers. It reproduces with this toolkit disabled, so it is an og bug, not something the toolkit mounts or
-  removes. The custom links panel is unaffected.
+- uBlock’s cosmetic filter `trakt.tv##a[target="_blank"][style]:has(img[src])` can hide OG’s external ratings after
+  loading. Add `og.trakt.tv#@#a[target="_blank"][style]:has(img[src])` to uBlock’s My filters as a workaround.
 
 ## Roadmap
 
-See [PLAN.md](PLAN.md). Everything planned is shipped or dropped because og now does it itself (ratings distribution,
-trailers, metadata links, poster rating corners). Next: a scheduled check against live og markup, then a fresh look
-at classic-Trakt features og still lacks.
+See [PLAN.md](PLAN.md). Shipped or dropped because og now does it itself: ratings distribution, trailers, metadata
+links, poster rating corners. Backlog:
+
+- your ratings, watchers and comments on the season chart, and your personal season and show averages;
+- a last-month-in-review card;
+- a **Next season** button on the last episode of a season;
+- a one-click **Add to watchlist** button, without picking a list.
 
 ## Trakt API compliance
 
-- Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback` and `/users/me` through your
-  own optional OAuth sign-in. No Trakt HTML fetching, no internal og endpoints, no reuse of og's session.
+- Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection` and
+  `/users/me` through your own optional OAuth sign-in. No Trakt HTML fetching, no internal og endpoints, no reuse of og's session.
   Pronunciation fetches Forvo's public search page (with `@connect forvo.com`) to find recordings.
 - Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with `Retry-After` on 429.
 - Nothing is uploaded, resold or redistributed; the script has no backend.
