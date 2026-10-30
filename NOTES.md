@@ -12,6 +12,58 @@ dropped because og ships them. Tested in Chromium and Zen (Firefox); playback ve
 
 ## 2026-10-30
 
+### Check og before building anything (it ships daily)
+
+Several planned features turned out to be in og already, some added days before launch. Before planning or briefing a
+feature, check all three, not just one:
+
+1. **Live pages** (`curl` with a browser `User-Agent`): is the thing visible, is it a link, is it hidden when empty?
+2. **trakt-og source, full history**: `git clone https://github.com/trakt/trakt-og` (not `--depth 1`), then
+   `git log -S'<symbol>'` to see when and why something appeared. Features were often VIP-gated first
+   (`isVip ? … : undefined`) and opened later.
+3. **Signed-in-only UI**: profile boxes and dashboard panels pick or hide themselves based on your data, so "I can't see
+   it" may just mean no recent activity.
+
+Found this way (2026-10-30, trakt-og `27d7dbc`): metadata links (opened to everyone in `6337c09`, 2026-10-26), poster
+rating corners (`CornerRating`, since the first import), MyAnimeList ratings and links on anime (`a297089`), the
+dashboard Last 30 Days panel (`LastThirtyDaysPanel`, hidden with no plays in 30 days or when a grandfathered VIP hid
+stats), the profile watch-time box (one of ~11 boxes; og shows the best-scoring 4), and the dashboard month strip
+(`RecapRibbon`, `nav.ribbon`; past months link to Month in Review on trakt.tv).
+
+### Season chart: full width, then bars
+
+- The chart draws at the panel's real width (180px tall, text and marks unscaled) and redraws on resize.
+  **ResizeObserver on an `<svg>` reports its drawing's bounding box, not its layout box**, so it never fires when the
+  panel widens. Observe a wrapper `div` instead.
+- It is now a bar chart: one slot per episode, bars ≤ 24px with a 4px rounded top, square at the fixed 50% floor.
+  Colour is og's own `var(--rating-N)` with `N = clamp(trunc(percent / 10), 1, 10)`, the same rule as og's hearts
+  (`QuickIcons.svelte`). og's 7–9 reds are close (`#9e2424`, `#a81918`, `#b11010`), so most bars in a typical season
+  look alike; only big drops change colour. Labels only on best and worst, with a halo over the average line.
+
+### Playback overview placement
+
+og's progress page has a black page background; `section.progress` is full width (grey, from og's logged-in layout,
+not from the section's own CSS) with og's `Container` column inside. Mounting before the section left our panel on a
+black band. It now goes **inside** `section.progress` as its first child, in a column using og's global
+`--container-sm/md/lg` (740/960/1160px) and `--gutter` variables, so it shares og's background and lines up with
+og's list.
+
+### Testing without an og login
+
+- **Local preview of a real page:** save the page with `curl`, strip `<script>` and `modulepreload` links, add
+  `<base href="https://og.trakt.tv/">`, inline `dist/trakt-og-toolkit.user.js`, and serve it from `localhost`. The
+  hydration gate falls back to its settle timer. For a signed-in feature, define `GM_getValue` with a fake token and a
+  `GM_xmlhttpRequest` stub before the bundle.
+- **Playwright** can't reach og.trakt.tv, so pages come out unstyled: download og's `_app/immutable/assets/*.css`
+  next to the preview and rewrite `../../_app/` to `/_app/`. Element screenshots then match og.
+- **The Claude desktop browser pane** renders no frames while it's hidden, so ResizeObserver and
+  `requestAnimationFrame` never fire there until a screenshot is taken.
+- **Real-account playback without a syncing app:** sign in a throwaway Node session through the toolkit's own
+  `signIn` (the account owner approves the device code), then `POST /scrobble/start` + `POST /scrobble/pause` at a
+  progress like 35%. That creates a paused entry without marking anything watched; never call `/scrobble/stop`. Node
+  requests to Trakt need a `User-Agent`, or Cloudflare returns 403. Revoke the script's token afterwards.
+- `npm run drift` can't check signed-in pages (`/users/:id/progress`, the dashboard); verify those on a real account.
+
 ### Pronunciation via Forvo (feature 5)
 
 - Forvo's search page embeds recording paths as base64 in `onclick="Play(id,'<mp3>','<ogg>',…)"`. Decoding yields
@@ -138,6 +190,8 @@ Checked against the trakt-og source:
 - Trailers and videos: `/videos` subpages and og's own `VideoPopup`. The toolkit's trailer player is removed.
 - External links to IMDb, TMDb, JustWatch, Wikipedia and socials, and the external ratings strip.
 - Profile cover images, lists pages (personal, collaborations, liked, official), the header and search.
+- Added 2026-10-30: metadata links on title pages, your rating in poster corners, MyAnimeList ratings on anime, the
+  dashboard Last 30 Days panel and profile watch-time box. See "Check og before building anything" above.
 
 ### v0.1.4: cleanup
 
