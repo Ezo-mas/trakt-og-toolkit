@@ -48,6 +48,14 @@ black band. It now goes **inside** `section.progress` as its first child, in a c
 `--container-sm/md/lg` (740/960/1160px) and `--gutter` variables, so it shares og's background and lines up with
 og's list.
 
+### og hides its library button for titles not in your library
+
+Deliberate in og: trakt-og `1cd3142` (2026-10-26) with `LIBRARY_ADDING = false` in
+`components/collection/libraryAdding.ts`. og's library only shows what Plex and Jellyfin sync, so it offers no add
+control; the button appears only for items already in the library (to remove them or edit metadata), and never when
+signed out. The toolkit's **Add to library** fills that gap and hides itself whenever og shows its own control. If og
+flips the flag back, og's "Add to library" button appears and the toolkit's hides itself.
+
 ### Testing without an og login
 
 - **Local preview of a real page:** save the page with `curl`, strip `<script>` and `modulepreload` links, add

@@ -14,12 +14,13 @@ import { customLinks } from './features/custom-links/index.js';
 import { playback } from './features/playback/index.js';
 import { pronunciation } from './features/pronunciation/index.js';
 import { seasonChart } from './features/season-chart/index.js';
+import { library } from './features/library/index.js';
 import { registerMenu } from './menu.js';
 import { applyDebugSetting } from './settings.js';
 import { info, warn } from './core/log.js';
 import { cacheSize } from './core/http.js';
 
-const FEATURES = [customLinks, seasonChart, playback, pronunciation];
+const FEATURES = [customLinks, seasonChart, playback, pronunciation, library];
 
 function isSvelteKit() {
   return Boolean(
