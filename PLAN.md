@@ -24,7 +24,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 10 | List preview posters link to titles | check og first | small |
 | 11 | All lists in one view | OAuth or public | lowest value |
 | 12 | Add to library button | OAuth | done |
-| 13 | Next-season button on a season's last episode | check og first | small |
+| 13 | Next-season button | — | dropped: og ships it |
 | 14 | One-click Add to watchlist | OAuth | small |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
@@ -283,16 +283,10 @@ specials; the button hides when og shows its own library control.
 - Later: a whole-show add fetches every season one by one. `GET /shows/:id/seasons?extended=full,episodes` might
   return them in one call; check that it includes `first_aired` per episode before switching.
 
-## 13. Next-season button on a season's last episode
+## 13. Next-season button (dropped)
 
-**Goal:** from the last episode of a season, one obvious click to the next season, instead of going back up to the
-show page.
-
-- **Check first:** og already renders an `a.item-nav.next` arrow on episode pages that crosses seasons (on Breaking
-  Bad 1x07 it links to `/seasons/2/episodes/1`, checked 2026-10-30), and the season page has a "Next: Season 2" arrow.
-  Confirm with the user what is missing: likely a visible, labelled button rather than the small arrow.
-- If built: on `episode` routes where og's next link points to a different season, add a labelled "Next season"
-  button near the episode's actions, linking to og's own href (no API call). Hide it on the series finale.
+og already has it: episode pages have an `a.item-nav.next` arrow that crosses seasons (Breaking Bad 1x07 links to
+`/seasons/2/episodes/1`, checked 2026-10-30), and season pages have a "Next: Season 2" arrow.
 
 ## 14. One-click Add to watchlist
 

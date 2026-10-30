@@ -199,7 +199,6 @@ links, poster rating corners. Backlog:
 
 - your ratings, watchers and comments on the season chart, and your personal season and show averages;
 - a last-month-in-review card;
-- a **Next season** button on the last episode of a season;
 - a one-click **Add to watchlist** button, without picking a list.
 
 ## Trakt API compliance
