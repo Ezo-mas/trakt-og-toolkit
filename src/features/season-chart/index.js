@@ -1,7 +1,15 @@
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
 import { getClientId } from '../../settings.js';
-import { averageRating, chartGeometry, mapApiEpisodes, ratedEpisodes, readSeasonEpisodes } from './data.js';
+import {
+  averageRating,
+  barPath,
+  chartGeometry,
+  mapApiEpisodes,
+  ratedEpisodes,
+  ratingLevel,
+  readSeasonEpisodes,
+} from './data.js';
 import { getSeasonEpisodes } from './api.js';
 import { CSS } from './styles.js';
 
@@ -9,6 +17,7 @@ const PANEL_ID = 'ogt-season-chart';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const DEFAULT_WIDTH = 720;
 const MIN_WIDTH = 320;
+const MAX_BAR = 24;
 
 function svg(tag, attributes = {}, content = '') {
   const node = document.createElementNS(SVG_NS, tag);
@@ -58,6 +67,44 @@ function drawChart(chart, episodes, average, targetWidth) {
     );
   }
 
+  const barWidth = Math.min(MAX_BAR, geometry.slot * 0.6);
+  const rated = points.map(({ episode }) => episode.rating);
+  const best = Math.max(...rated);
+  const worst = Math.min(...rated);
+  let bestLabelled = false;
+  let worstLabelled = false;
+  const values = [];
+
+  for (const { episode, x, y } of points) {
+    const label = `${episodeName(episode)}, ${voteLabel(episode.votes)}`;
+    const lowVotes = episode.votes != null && episode.votes < 10;
+    const link = svg('a', { href: episode.href || '#', tabindex: '0', 'aria-label': label });
+    const bar = svg('path', {
+      class: `ogt-season-chart__bar${lowVotes ? ' ogt-season-chart__bar--low-votes' : ''}`,
+      d: barPath(x, y, barWidth, geometry.baseY),
+      style: `--ogt-bar: var(--rating-${ratingLevel(episode.rating)}, var(--brand-primary, #ed1c24))`,
+    });
+    // A transparent full-height target, so short bars are as easy to hover and click as tall ones.
+    const target = svg('rect', {
+      class: 'ogt-season-chart__target',
+      x: x - geometry.slot / 2,
+      y: plot.top,
+      width: geometry.slot,
+      height: geometry.baseY - plot.top,
+    });
+    link.append(svg('title', {}, label), target, bar);
+    chart.append(link, svg('text', { class: 'ogt-season-chart__episode-number', x, y: height - 7 }, String(episode.number)));
+
+    // Direct labels on the best and worst episode only; the rest are in the tooltips and the summary line.
+    const isBest = episode.rating === best && !bestLabelled && best !== worst;
+    const isWorst = episode.rating === worst && !worstLabelled && best !== worst;
+    if (isBest || isWorst) {
+      if (isBest) bestLabelled = true;
+      else worstLabelled = true;
+      values.push(svg('text', { class: 'ogt-season-chart__value', x, y: y - 6 }, formatPercent(episode.rating)));
+    }
+  }
+
   if (averageY != null) {
     chart.append(
       svg('line', {
@@ -69,28 +116,8 @@ function drawChart(chart, episodes, average, targetWidth) {
       }),
     );
   }
-
-  if (points.length > 1) {
-    chart.append(
-      svg('polyline', {
-        class: 'ogt-season-chart__line',
-        points: points.map(({ x, y }) => `${x},${y}`).join(' '),
-      }),
-    );
-  }
-
-  for (const { episode, x, y } of points) {
-    const label = `${episodeName(episode)}, ${voteLabel(episode.votes)}`;
-    const link = svg('a', { href: episode.href || '#', tabindex: '0', 'aria-label': label });
-    const dot = svg('circle', {
-      class: `ogt-season-chart__point${episode.votes != null && episode.votes < 10 ? ' ogt-season-chart__point--low-votes' : ''}`,
-      cx: x,
-      cy: y,
-      r: 5,
-    });
-    link.append(svg('title', {}, label), dot);
-    chart.append(link, svg('text', { class: 'ogt-season-chart__episode-number', x, y: height - 7 }, String(episode.number)));
-  }
+  // Labels last, so they sit above the average line.
+  chart.append(...values);
 }
 
 function createPanel(episodes) {

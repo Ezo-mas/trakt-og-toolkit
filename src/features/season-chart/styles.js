@@ -32,30 +32,41 @@ export const CSS = String.raw`
   stroke-width: 1.5;
 }
 
-.ogt-season-chart__line {
-  fill: none;
-  stroke: var(--brand-primary, #ed1c24);
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  stroke-width: 2.5;
+.ogt-season-chart__bar {
+  fill: var(--ogt-bar);
 }
 
-.ogt-season-chart__point {
-  fill: var(--brand-primary, #ed1c24);
-  stroke: var(--brand-primary, #ed1c24);
+.ogt-season-chart__bar--low-votes {
+  fill: var(--ogt-surface);
+  stroke: var(--ogt-bar);
   stroke-width: 2;
 }
 
-.ogt-season-chart__point--low-votes {
-  fill: var(--ogt-surface);
+.ogt-season-chart__target {
+  fill: transparent;
+}
+
+.ogt-season-chart a:hover .ogt-season-chart__bar {
+  filter: brightness(1.25);
+}
+
+.ogt-season-chart__value {
+  fill: var(--ogt-fg);
+  font: 600 11px system-ui, sans-serif;
+  text-anchor: middle;
+  /* A halo in the panel colour keeps the label readable over the average line. */
+  paint-order: stroke;
+  stroke: var(--ogt-surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
 }
 
 .ogt-season-chart a:focus-visible {
   outline: none;
 }
 
-.ogt-season-chart a:focus-visible .ogt-season-chart__point {
+.ogt-season-chart a:focus-visible .ogt-season-chart__bar {
   stroke: light-dark(#111111, #ffffff);
-  stroke-width: 4;
+  stroke-width: 2;
 }
 `;

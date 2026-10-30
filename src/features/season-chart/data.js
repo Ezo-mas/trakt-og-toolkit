@@ -105,8 +105,9 @@ export function chartGeometry(episodes, allEpisodes = episodes, average = averag
   const bottom = axisBottom(rated);
   const plotWidth = width - PLOT.left - PLOT.right;
   const plotHeight = CHART_HEIGHT - PLOT.top - PLOT.bottom;
-  const x = (number) =>
-    PLOT.left + (last === first ? plotWidth / 2 : ((number - first) / (last - first)) * plotWidth);
+  // One slot per episode number, bars centred in their slot.
+  const slot = plotWidth / (last - first + 1);
+  const x = (number) => PLOT.left + (number - first + 0.5) * slot;
   const y = (rating) => PLOT.top + ((100 - rating) / (100 - bottom)) * plotHeight;
 
   return {
@@ -114,8 +115,23 @@ export function chartGeometry(episodes, allEpisodes = episodes, average = averag
     height: CHART_HEIGHT,
     plot: PLOT,
     axisBottom: bottom,
+    slot,
+    baseY: y(bottom),
     ticks: Array.from({ length: (100 - bottom) / 10 + 1 }, (_, i) => bottom + i * 10),
     points: rated.map((episode) => ({ episode, x: x(episode.number), y: y(episode.rating) })),
     averageY: average == null ? null : y(average),
   };
+}
+
+/** og's rating colour step (`--rating-1`…`--rating-10`) for a percentage, like its hearts: truncated, 1–10. */
+export function ratingLevel(percent) {
+  return Math.min(Math.max(Math.trunc(percent / 10), 1), 10);
+}
+
+/** An SVG path for a bar: square at the baseline, 4px rounded corners at the top. */
+export function barPath(x, top, width, base, radius = 4) {
+  const r = Math.max(0, Math.min(radius, width / 2, base - top));
+  const left = x - width / 2;
+  const right = x + width / 2;
+  return `M${left},${base}V${top + r}Q${left},${top} ${left + r},${top}H${right - r}Q${right},${top} ${right},${top + r}V${base}Z`;
 }

@@ -2586,17 +2586,29 @@
     const bottom = axisBottom(rated);
     const plotWidth = width - PLOT.left - PLOT.right;
     const plotHeight = CHART_HEIGHT - PLOT.top - PLOT.bottom;
-    const x = (number) => PLOT.left + (last === first ? plotWidth / 2 : (number - first) / (last - first) * plotWidth);
+    const slot = plotWidth / (last - first + 1);
+    const x = (number) => PLOT.left + (number - first + 0.5) * slot;
     const y = (rating) => PLOT.top + (100 - rating) / (100 - bottom) * plotHeight;
     return {
       width,
       height: CHART_HEIGHT,
       plot: PLOT,
       axisBottom: bottom,
+      slot,
+      baseY: y(bottom),
       ticks: Array.from({ length: (100 - bottom) / 10 + 1 }, (_, i) => bottom + i * 10),
       points: rated.map((episode) => ({ episode, x: x(episode.number), y: y(episode.rating) })),
       averageY: average == null ? null : y(average)
     };
+  }
+  function ratingLevel(percent3) {
+    return Math.min(Math.max(Math.trunc(percent3 / 10), 1), 10);
+  }
+  function barPath(x, top, width, base, radius = 4) {
+    const r = Math.max(0, Math.min(radius, width / 2, base - top));
+    const left = x - width / 2;
+    const right = x + width / 2;
+    return `M${left},${base}V${top + r}Q${left},${top} ${left + r},${top}H${right - r}Q${right},${top} ${right},${top + r}V${base}Z`;
   }
 
   // src/features/season-chart/api.js
@@ -2642,31 +2654,42 @@
   stroke-width: 1.5;
 }
 
-.ogt-season-chart__line {
-  fill: none;
-  stroke: var(--brand-primary, #ed1c24);
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  stroke-width: 2.5;
+.ogt-season-chart__bar {
+  fill: var(--ogt-bar);
 }
 
-.ogt-season-chart__point {
-  fill: var(--brand-primary, #ed1c24);
-  stroke: var(--brand-primary, #ed1c24);
+.ogt-season-chart__bar--low-votes {
+  fill: var(--ogt-surface);
+  stroke: var(--ogt-bar);
   stroke-width: 2;
 }
 
-.ogt-season-chart__point--low-votes {
-  fill: var(--ogt-surface);
+.ogt-season-chart__target {
+  fill: transparent;
+}
+
+.ogt-season-chart a:hover .ogt-season-chart__bar {
+  filter: brightness(1.25);
+}
+
+.ogt-season-chart__value {
+  fill: var(--ogt-fg);
+  font: 600 11px system-ui, sans-serif;
+  text-anchor: middle;
+  /* A halo in the panel colour keeps the label readable over the average line. */
+  paint-order: stroke;
+  stroke: var(--ogt-surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
 }
 
 .ogt-season-chart a:focus-visible {
   outline: none;
 }
 
-.ogt-season-chart a:focus-visible .ogt-season-chart__point {
+.ogt-season-chart a:focus-visible .ogt-season-chart__bar {
   stroke: light-dark(#111111, #ffffff);
-  stroke-width: 4;
+  stroke-width: 2;
 }
 `;
 
@@ -2675,6 +2698,7 @@
   var SVG_NS = "http://www.w3.org/2000/svg";
   var DEFAULT_WIDTH = 720;
   var MIN_WIDTH = 320;
+  var MAX_BAR = 24;
   function svg(tag, attributes = {}, content = "") {
     const node = document.createElementNS(SVG_NS, tag);
     for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
@@ -2716,6 +2740,39 @@
         svg("text", { class: "ogt-season-chart__axis", x: plot.left - 7, y: y + 4, "text-anchor": "end" }, `${tick}%`)
       );
     }
+    const barWidth = Math.min(MAX_BAR, geometry.slot * 0.6);
+    const rated = points.map(({ episode }) => episode.rating);
+    const best = Math.max(...rated);
+    const worst = Math.min(...rated);
+    let bestLabelled = false;
+    let worstLabelled = false;
+    const values = [];
+    for (const { episode, x, y } of points) {
+      const label = `${episodeName(episode)}, ${voteLabel(episode.votes)}`;
+      const lowVotes = episode.votes != null && episode.votes < 10;
+      const link = svg("a", { href: episode.href || "#", tabindex: "0", "aria-label": label });
+      const bar = svg("path", {
+        class: `ogt-season-chart__bar${lowVotes ? " ogt-season-chart__bar--low-votes" : ""}`,
+        d: barPath(x, y, barWidth, geometry.baseY),
+        style: `--ogt-bar: var(--rating-${ratingLevel(episode.rating)}, var(--brand-primary, #ed1c24))`
+      });
+      const target = svg("rect", {
+        class: "ogt-season-chart__target",
+        x: x - geometry.slot / 2,
+        y: plot.top,
+        width: geometry.slot,
+        height: geometry.baseY - plot.top
+      });
+      link.append(svg("title", {}, label), target, bar);
+      chart.append(link, svg("text", { class: "ogt-season-chart__episode-number", x, y: height - 7 }, String(episode.number)));
+      const isBest = episode.rating === best && !bestLabelled && best !== worst;
+      const isWorst = episode.rating === worst && !worstLabelled && best !== worst;
+      if (isBest || isWorst) {
+        if (isBest) bestLabelled = true;
+        else worstLabelled = true;
+        values.push(svg("text", { class: "ogt-season-chart__value", x, y: y - 6 }, formatPercent(episode.rating)));
+      }
+    }
     if (averageY != null) {
       chart.append(
         svg("line", {
@@ -2727,26 +2784,7 @@
         })
       );
     }
-    if (points.length > 1) {
-      chart.append(
-        svg("polyline", {
-          class: "ogt-season-chart__line",
-          points: points.map(({ x, y }) => `${x},${y}`).join(" ")
-        })
-      );
-    }
-    for (const { episode, x, y } of points) {
-      const label = `${episodeName(episode)}, ${voteLabel(episode.votes)}`;
-      const link = svg("a", { href: episode.href || "#", tabindex: "0", "aria-label": label });
-      const dot = svg("circle", {
-        class: `ogt-season-chart__point${episode.votes != null && episode.votes < 10 ? " ogt-season-chart__point--low-votes" : ""}`,
-        cx: x,
-        cy: y,
-        r: 5
-      });
-      link.append(svg("title", {}, label), dot);
-      chart.append(link, svg("text", { class: "ogt-season-chart__episode-number", x, y: height - 7 }, String(episode.number)));
-    }
+    chart.append(...values);
   }
   function createPanel3(episodes) {
     let cancelled = false;
