@@ -21,7 +21,7 @@ It matches `https://og.trakt.tv/*` and `http://localhost:5173|5174/*` for develo
 A compact panel under the summary stats with user-configured links to your own services.
 
 - **Custom links** — manage your `Label | URL` templates in the inline editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{season}`, `{episode}`.
-- **Search presets** — optionally add Metacritic, Stremio, Plex, AniList and MyAnimeList links (og already links Rotten Tomatoes, Wikipedia and Letterboxd itself).
+- **Search presets** — optionally add Metacritic, Stremio, Plex and AniList links (og already links Rotten Tomatoes, Wikipedia, Letterboxd and, on anime, MyAnimeList itself).
 - **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}`. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
 - **Examples**: Plex, Jellyfin, Sonarr, Radarr, or any streaming/library service og doesn't link to.
 
@@ -33,7 +33,10 @@ affect the average.
 
 ### Name pronunciation
 
-On person pages, **Pronounce** opens a Forvo search for the person’s name in a new tab.
+On person pages, **Pronounce** looks the name up on Forvo in the background and plays the first recording whose word
+matches the person’s name in place; the button becomes **Pause** while it plays. If a recording fails to load, the next
+one is tried before giving up. If Forvo has no matching recording or the lookup fails, a **Forvo** link opens the
+search page instead. Lookups are cached in memory for 10 minutes.
 
 ### Trakt client ID (optional for now)
 
@@ -170,8 +173,9 @@ src/
   read it and there is no generic API proxy. Everything here uses the public Trakt API with the user's own client ID.
 - **No `turbo:load`.** og is SvelteKit, so we patch `history.pushState`/`replaceState`, listen for `popstate`, and
   re-check after debounced mutations. Features re-mount if the app renders over them.
-- **No page scraping for data.** og is server-rendered, but the API is the stable surface. The only DOM reads are for
-  ids og already prints (TMDb/IMDb) and the season cards' episode counts.
+- **No Trakt page scraping for data.** og is server-rendered, but the API is the stable surface. The only DOM reads
+  from og are the person's name heading, ids og already prints (TMDb/IMDb) and the season cards' episode counts.
+  Pronunciation reads a Forvo search page fetched separately, never a Trakt page.
 - **Selectors.** Only semantic classes (`.summary-frame`, `#overview`, `.top`, `.subtitle`) — never `svelte-*` hashes.
 
 ## Known issues
@@ -186,7 +190,8 @@ See [PLAN.md](PLAN.md) for completed work and upcoming metadata links, custom li
 
 ## Trakt API compliance
 
-- Only documented, public Trakt endpoints — no HTML fetching, no internal og endpoints, no session reuse.
+- Only documented, public Trakt endpoints — no Trakt HTML fetching, no internal og endpoints, no session reuse.
+  Pronunciation fetches Forvo's public search page (with `@connect forvo.com`) to find recordings.
 - Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with `Retry-After` on 429.
 - Nothing is uploaded, resold or redistributed; the script has no backend.
 - Season data prefers the API when a client ID is present; rendered cards are the fallback.

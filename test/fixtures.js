@@ -122,3 +122,25 @@ export const PLAYBACK_PROGRESS_HTML = `
 export const PERSON_HTML = `
 <h1>Watch Trakt on your phone</h1>
 <div class="summary"><div><div class="summary-title"><h1>Bryan Cranston <!----></h1></div></div></div>`;
+
+/** Trimmed Forvo search result with the current base64 Play(...) markup and audio host. */
+export const FORVO_HTML = `
+<div id="displayer"><div class="mainpage fullpage page_search">
+  <article class="search_words"><div class="results_match"><ul class="word-play-list-icon-size-l">
+    <li><div class="play" id="play_4991366" onclick="Play(4991366,'OTU3NDUyMi8zOS85NTc0NTIyXzM5XzQzMDc1ODUubXAz','OTU3NDUyMi8zOS85NTc0NTIyXzM5XzQzMDc1ODUub2dn',false,'','','l','Bryan Cranston','English');return false;"></div></li>
+  </ul></div></article>
+</div></div>
+<script>var _AUDIO_HTTP_HOST='audio12.forvo.com';</script>`;
+
+export const FORVO_EMPTY_HTML = `
+<div id="displayer"><div class="mainpage fullpage page_search"><p>No words found</p></div></div>
+<script>var _AUDIO_HTTP_HOST='audio12.forvo.com';</script>`;
+
+export const FORVO_MULTI_HTML = `
+<div id="displayer"><div class="mainpage fullpage page_search">
+  <article class="search_words"><div class="results_match"><ul class="word-play-list-icon-size-l">
+    <li><div class="play" id="play_4991366" onclick="Play(4991366,'OTU3NDUyMi8zOS85NTc0NTIyXzM5XzQzMDc1ODUubXAz','OTU3NDUyMi8zOS85NTc0NTIyXzM5XzQzMDc1ODUub2dn',false,'','','l','Bryan Cranston','English');return false;"></div></li>
+    <li><div class="play" id="play_4991367" onclick="Play(4991367,'MjIyMjIyMi8yMi8yMjIyMjIyXzIyXzIyMjIyMjIubXAz','MjIyMjIyMi8yMi8yMjIyMjIyXzIyXzIyMjIyMjIub2dn',false,'','','l','Bryan Cranston','English');return false;"></div></li>
+  </ul></div></article>
+</div></div>
+<script>var _AUDIO_HTTP_HOST='audio12.forvo.com';</script>`;
