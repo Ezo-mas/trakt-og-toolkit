@@ -19,13 +19,13 @@ test('movie addition resolves numeric IDs and uses authenticated collection endp
 });
 test('whole show adds only aired episodes, skips specials and confirms actual count', async () => {
   const reads = [], writes = [];
-  const api = createLibraryApi({ now, signedIn: () => true, get: async path => {
-    reads.push(path);
-    if (path.endsWith('/seasons')) return [{ number: 0 }, { number: 1 }];
-    return [episode(1, '2020-01-01'), episode(2, '2027-01-01'), episode(3, null), episode(1, '2020-01-01')];
+  const api = createLibraryApi({ now, signedIn: () => true, get: async (path, options) => {
+    reads.push([path, options]);
+    return [{ number: 0, episodes: [episode(9, '2020-01-01')] }, { number: 1,
+      episodes: [episode(1, '2020-01-01'), episode(2, '2027-01-01'), episode(3, null), episode(1, '2020-01-01')] }];
   }, auth: async (...args) => { writes.push(args); return { added: { episodes: 1 } }; } });
-  await api.add(parseRoute('/shows/test'), { confirm: text => { assert.match(text, /1 aired episodes/); return true; } });
-  assert.equal(reads.length, 2);
+  await api.add(parseRoute('/shows/test'), { confirm: text => { assert.match(text, /Add 1 aired episode to/); return true; } });
+  assert.deepEqual(reads, [['/shows/test/seasons?extended=full,episodes', { ttl: 0 }]]);
   assert.equal(writes[0][2].episodes.length, 1);
   assert.equal(writes[0][2].episodes[0].ids.trakt, 1);
 });

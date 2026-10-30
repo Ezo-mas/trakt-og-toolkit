@@ -279,8 +279,8 @@ them across `/users/:id/lists`, `/collaborations` and `/liked`.
 sign-in and `POST /sync/collection` with the current date. Whole shows confirm the aired-episode count and skip
 specials; the button hides when og shows its own library control.
 
-- Later: a whole-show add fetches every season one by one. `GET /shows/:id/seasons?extended=full,episodes` might
-  return them in one call; check that it includes `first_aired` per episode before switching.
+- A whole-show add uses one uncached `GET /shows/:id/seasons?extended=full,episodes`, which includes each
+  episode's `first_aired` (`extended=episodes` alone does not). The Simpsons, 39 seasons: about 1 MB in 1 s.
 
 ## 13. One-click Add to watchlist
 

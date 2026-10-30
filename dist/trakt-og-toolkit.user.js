@@ -2885,7 +2885,7 @@
           if (!validId(movie?.ids?.trakt)) throw new Error("Could not identify this movie.");
           body = { movies: [{ ids: { trakt: movie.ids.trakt }, collected_at }] };
         } else if (route.kind === "show" && ["title", "season", "episode"].includes(route.name)) {
-          const seasons = route.name === "title" ? await get(`/shows/${id}/seasons`) : [{ number: route.season }];
+          const seasons = route.name === "title" ? await get(`/shows/${id}/seasons?extended=full,episodes`, { ttl: 0 }) : [{ number: route.season }];
           if (!Array.isArray(seasons)) throw new Error("Could not load seasons.");
           const episodes = [];
           for (const season of seasons) {
@@ -2893,7 +2893,7 @@
             if (!Number.isSafeInteger(season.number) || season.number < 0) continue;
             if (route.name === "title" && season.number === 0) continue;
             const path = `/shows/${id}/seasons/${season.number}`;
-            const rows = route.name === "episode" ? [await get(`${path}/episodes/${route.episode}?extended=full`)] : await get(`${path}?extended=full`);
+            const rows = route.name === "title" ? season.episodes : route.name === "episode" ? [await get(`${path}/episodes/${route.episode}?extended=full`)] : await get(`${path}?extended=full`);
             if (!Array.isArray(rows)) throw new Error("Could not load episodes.");
             for (const episode of rows) {
               if (validId(episode?.ids?.trakt) && Number.isFinite(Date.parse(episode.first_aired)) && Date.parse(episode.first_aired) <= at) {
@@ -2904,7 +2904,7 @@
           body = { episodes: [...new Map(episodes.map((ep) => [ep.ids.trakt, ep])).values()] };
           if (!body.episodes.length) throw new Error("No aired episodes to add.");
           if (!active2() || !signedIn()) return { cancelled: true };
-          if (route.name !== "episode" && !confirm(`Add ${body.episodes.length} aired episodes to your toolkit Trakt account’s library?${route.name === "title" ? " Specials are excluded." : ""}`)) {
+          if (route.name !== "episode" && !confirm(`Add ${body.episodes.length} aired episode${body.episodes.length === 1 ? "" : "s"} to your toolkit Trakt account’s library?${route.name === "title" ? " Specials are excluded." : ""}`)) {
             return { cancelled: true };
           }
         } else throw new Error("Unsupported library page.");
