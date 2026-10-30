@@ -135,12 +135,12 @@ npm test          # unit + happy-dom integration tests
 `http://localhost:8787/trakt-og-toolkit.user.js` once in Violentmonkey, click **Track external edits**, and keep the
 installer tab open. Every rebuild is picked up automatically. See `NOTES.md` for details.
 
-`npm test` runs the built bundle against trimmed copies of og's markup. To check it against a real page:
+## Keeping up with og
 
-```bash
-curl -sSL https://og.trakt.tv/shows/breaking-bad -o /tmp/show.html
-node scripts/live-check.mjs /tmp/show.html https://og.trakt.tv/shows/breaking-bad
-```
+`npm run drift` fetches live og pages and checks the selectors and panel mounts the toolkit relies on. The daily
+GitHub Actions workflow runs the same check at 06:00 UTC and can also be started manually. Run
+`npm run drift -- --save <dir>` to save the fetched HTML for inspecting markup or refreshing fixtures. The check
+needs a built bundle (`npm run build`); `npm test` stays offline.
 
 ### Layout
 

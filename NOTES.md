@@ -4,6 +4,8 @@ Working notes and known issues. Newest first.
 
 ## v0.2.0 (2026-10-30)
 
+- Added a daily live markup and bundle-mount drift check; the signed-in playback overview cannot be checked.
+
 Release of everything since v0.1.4: season chart, OAuth device sign-in, paused-playback badges and manager, custom
 link presets and inline editor, and Forvo pronunciation on person pages. Metadata links and poster rating corners were
 dropped because og ships them. Tested in Chromium and Zen (Firefox); playback verified on a real account.
