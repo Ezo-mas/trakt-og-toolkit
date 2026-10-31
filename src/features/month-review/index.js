@@ -43,9 +43,11 @@ export const monthReview = {
       for (const key of ['plays', 'hours', 'ratings', 'comments']) grid.append(el('div', { class: 'ogt-review__tile' },
         tileIcon(key), el('div', { class: 'ogt-review__value' },
           el('strong', { text: data[key].toLocaleString() }), el('span', { text: key }))));
-      grid.append(el('div', { class: 'ogt-review__first' }, el('small', {}, 'First play', el('span', { text: `of ${span.label}` })),
-        el('div', {}, el('strong', { text: media?.title || 'Untitled' }),
-          first.episode ? el('span', { class: 'ogt-review__episode', text: `${first.episode.season}x${String(first.episode.number).padStart(2, '0')} “${first.episode.title || 'Untitled episode'}”` }) : null)));
+      grid.append(el('div', { class: 'ogt-review__first' }, el('small', {}, 'First play', el('span', {}, 'of ', el('b', { text: span.label }))),
+        el('div', {}, el('strong', { class: 'ogt-review__title', text: media?.title || 'Untitled' }),
+          first.episode ? el('span', { class: 'ogt-review__episode' },
+            el('b', { text: `${first.episode.season}x${String(first.episode.number).padStart(2, '0')}` }),
+            ` “${first.episode.title || 'Untitled episode'}”`) : null)));
       node.append(...(art ? [el('img', { class: 'ogt-review__art', src: art, alt: '', referrerpolicy: 'no-referrer' })] : []),
         el('button', { type: 'button', class: 'ogt-review__hide', text: '× Hide', on: { click: hide } }),
         el('div', { class: 'ogt-review__inner' }, el('h2', {}, 'your ', el('em', { text: span.label.toLocaleLowerCase() }), ' in review'), grid,
