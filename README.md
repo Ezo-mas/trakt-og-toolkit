@@ -209,7 +209,6 @@ src/
 See [PLAN.md](PLAN.md). Shipped or dropped because og now does it itself: ratings distribution, trailers, metadata
 links, poster rating corners. Backlog:
 
-- your ratings, watchers and comments on the season chart, and your personal season and show averages;
 - a last-month-in-review card;
 - a one-click **Add to watchlist** button, without picking a list;
 - **Add to library** on poster cards, not just title pages.
