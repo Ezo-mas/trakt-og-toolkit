@@ -16,8 +16,7 @@ export function summarize(history, ratings, comments, span) {
     const runtime = (row.episode || row.movie)?.runtime;
     return sum + (Number.isFinite(runtime) && runtime > 0 ? runtime : 0);
   }, 0);
-  return { episodePlays: plays.filter((row) => row.episode).length, moviePlays: plays.filter((row) => row.movie && !row.episode).length,
-    plays: plays.length, hours: Math.round(minutes / 60),
+  return { plays: plays.length, hours: Math.round(minutes / 60),
     ratings: ratings.filter((row) => inMonth(row.rated_at, span)).length,
     comments: comments.filter((row) => inMonth(row.comment?.created_at ?? row.created_at, span)).length, first };
 }

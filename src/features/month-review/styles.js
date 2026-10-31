@@ -23,9 +23,6 @@ export const CSS = `
 .ogt-review__first { grid-column:3; grid-row:1 / 3; display:flex; flex-direction:column; justify-content:space-between; gap:24px; padding:12px; }
 .ogt-review__title { font-family:var(--font-headings, inherit); font-size:30px; font-weight:700; letter-spacing:-.025em; line-height:1.1; display:block; }
 .ogt-review__first b { font-family:inherit; font-size:inherit; font-weight:700; }
-.ogt-review__breakdown { display:flex; flex-wrap:wrap; gap:10px 24px; margin-top:14px; font-size:14px; color:#eee; }
-.ogt-review__breakdown > span { display:inline-flex; align-items:center; gap:8px; }
-.ogt-review__breakdown .ogt-review__icon { width:20px; height:20px; color:var(--brand-primary,#ed1c24); }
 .ogt-review__link { font-size:15px; display:inline-block; margin-top:26px; padding:10px 14px; background:var(--brand-primary,#ed1c24); text-decoration:none; color:white!important; border-radius:4px; font-weight:bold; }
 .ogt-review__link:hover { background:var(--brand-primary-darken,#c61017); }
 .ogt-review__link:focus-visible,.ogt-review__hide:focus-visible { outline:2px solid white; outline-offset:3px; }

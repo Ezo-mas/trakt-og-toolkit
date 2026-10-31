@@ -41,7 +41,6 @@ test('built bundle renders under ribbon, links review, remembers hide and signs 
   const node = b.doc.querySelector('#ogt-month-review');
   assert.equal(node.previousElementSibling.tagName, 'NAV'); assert.equal(node.hidden, false);
   assert.equal(node.querySelectorAll('.ogt-review__tile').length, 4);
-  assert.match(node.querySelector('.ogt-review__breakdown').textContent, /0 episode plays1 movie play/);
   assert.match(node.textContent, /First movie/); assert.match(node.querySelector('a').href, /users\/tester\/mir\/\d{4}\/\d+/);
   assert.equal(node.querySelector('img').src, 'https://media.trakt.tv/fanart.jpg');
   node.querySelector('button').click(); assert.equal(node.hidden, true);

@@ -3182,8 +3182,6 @@
       return sum + (Number.isFinite(runtime) && runtime > 0 ? runtime : 0);
     }, 0);
     return {
-      episodePlays: plays.filter((row) => row.episode).length,
-      moviePlays: plays.filter((row) => row.movie && !row.episode).length,
       plays: plays.length,
       hours: Math.round(minutes / 60),
       ratings: ratings.filter((row) => inMonth(row.rated_at, span)).length,
@@ -3237,10 +3235,10 @@
       if (getPrivateValue(STORAGE.dismissedReview(user)) === span.key) return null;
       const key = STORAGE.monthReview(user, span.key);
       const cached = getPrivateValue(key);
-      if (freshCache(cached, now) && Number.isSafeInteger(cached.summary?.episodePlays) && Number.isSafeInteger(cached.summary?.moviePlays)) return { ...cached.summary, user, span };
+      if (freshCache(cached, now)) return { ...cached.summary, user, span };
       const history2 = await paginate(apiAuthPage, "/sync/history", { start_at: span.start, end_at: span.end, extended: "full,images" });
       alive();
-      let summary2 = { plays: 0, episodePlays: 0, moviePlays: 0 };
+      let summary2 = { plays: 0 };
       if (history2.some((row) => Date.parse(row.watched_at) >= Date.parse(span.start) && Date.parse(row.watched_at) < Date.parse(span.end))) {
         const [ratings, comments] = await Promise.all([
           paginate(apiAuthPage, "/sync/ratings"),
@@ -3286,9 +3284,6 @@
 .ogt-review__first { grid-column:3; grid-row:1 / 3; display:flex; flex-direction:column; justify-content:space-between; gap:24px; padding:12px; }
 .ogt-review__title { font-family:var(--font-headings, inherit); font-size:30px; font-weight:700; letter-spacing:-.025em; line-height:1.1; display:block; }
 .ogt-review__first b { font-family:inherit; font-size:inherit; font-weight:700; }
-.ogt-review__breakdown { display:flex; flex-wrap:wrap; gap:10px 24px; margin-top:14px; font-size:14px; color:#eee; }
-.ogt-review__breakdown > span { display:inline-flex; align-items:center; gap:8px; }
-.ogt-review__breakdown .ogt-review__icon { width:20px; height:20px; color:var(--brand-primary,#ed1c24); }
 .ogt-review__link { font-size:15px; display:inline-block; margin-top:26px; padding:10px 14px; background:var(--brand-primary,#ed1c24); text-decoration:none; color:white!important; border-radius:4px; font-weight:bold; }
 .ogt-review__link:hover { background:var(--brand-primary-darken,#c61017); }
 .ogt-review__link:focus-visible,.ogt-review__hide:focus-visible { outline:2px solid white; outline-offset:3px; }
@@ -3300,8 +3295,6 @@
   // src/features/month-review/index.js
   function tileIcon(kind) {
     const paths = {
-      episodes: ["M5 8h14a2 2 0 0 1 2 2v10H3V10a2 2 0 0 1 2-2Z", "M8 2l4 5 4-5M8 23h8"],
-      movies: ["M3 3h18v18H3Z", "M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4"],
       plays: ["M7 3 22 12 7 21Z"],
       hours: ["M10 2h4M12 5v2M19 6l2-2", "M12 8v5l3 2", "M21 14a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"],
       ratings: ["M8 10 12 3c1-2 3-1 3 1v5h5c2 0 2 2 2 3l-2 7c0 1-1 2-3 2H8Z", "M3 10h5v11H3Z"],
@@ -3375,10 +3368,6 @@
             ) : null
           )
         ));
-        const breakdown = el("div", { class: "ogt-review__breakdown", "aria-label": "Plays by type" });
-        for (const [kind, count, label] of [["episodes", data.episodePlays, "episode"], ["movies", data.moviePlays, "movie"]]) {
-          breakdown.append(el("span", {}, tileIcon(kind), `${count.toLocaleString()} ${label} ${count === 1 ? "play" : "plays"}`));
-        }
         node.append(
           ...art ? [el("img", { class: "ogt-review__art", src: art, alt: "", referrerpolicy: "no-referrer" })] : [],
           el("button", { type: "button", class: "ogt-review__hide", text: "× Hide", on: { click: hide } }),
@@ -3387,7 +3376,6 @@
             { class: "ogt-review__inner" },
             el("h2", {}, "your ", el("em", { text: span.label.toLocaleLowerCase() }), " in review"),
             grid,
-            breakdown,
             el("a", { class: "ogt-review__link", text: "Month in Review →", href: `https://app.trakt.tv/users/${encodeURIComponent(data.user)}/mir/${span.year}/${span.month}`, target: "_blank", rel: "noopener noreferrer" })
           )
         );
