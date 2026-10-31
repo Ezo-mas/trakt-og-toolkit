@@ -311,9 +311,8 @@ show it for items already in the library (trakt-og `1cd3142`, `LIBRARY_ADDING = 
   shows and seasons, specials excluded for whole shows), then reuses feature 12's `libraryApi`.
 - The card's own link gives the title (`a.poster` href → movie, show, season or episode route); no page-level route.
 - Hide it on cards where og already shows its library control, and after a successful add.
-- **Space:** og's strip is a fixed-height flex row with `overflow: hidden`, and a text badge after the heart rating
-  was visibly clipped (feature 8). Check one extra icon fits on the narrowest cards (`.small`, `.compact`) before
-  building; if it doesn't, put the action in the card's own menu or skip compact cards.
+- **Space:** fits. og showed its own library icon in this slot on every card until `1cd3142` hid it (the removed
+  `LibrarySyncLink` card variant used the same size), so it takes back an existing gap rather than adding one.
 - **Check first:** whether og has turned `LIBRARY_ADDING` back on.
 
 ---
