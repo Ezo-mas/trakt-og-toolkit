@@ -34,14 +34,14 @@ affect the average.
 ### Your ratings and averages
 
 Sign in through the toolkit menu to overlay your episode ratings as a blue line on the season chart. Unrated
-episodes leave gaps. The summary shows **Your average** with the rated episode count once you have rated at least
-two episodes. Show pages and their Seasons page also show your per-season and show-wide episode averages.
-These are plain means from the toolkit account, which may differ from your OG account. Ratings stay in memory for
+episodes leave gaps, and the summary adds **Your average** with the rated episode count once you have rated at least
+two episodes. Season cards on show pages and the Seasons page get a small blue heart with your average after the episode
+count; hover it for the number of rated episodes. Averages are plain means of episode ratings from the toolkit's account,
+which may differ from your og account. og already shows a season rating you set directly. Ratings stay in memory for
 ten minutes and are cleared when the account changes; nothing private enters the public API cache.
 
 **More** on a season chart loads watchers and comments, off by default, on a separate right-hand count axis.
 This needs a client ID and uses the shared request queue. Seasons with more than 30 episodes skip these requests.
-OG already shows your directly assigned season rating; averages here use episode ratings only.
 
 ### Add to library
 

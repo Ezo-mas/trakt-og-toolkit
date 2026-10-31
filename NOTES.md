@@ -2,34 +2,22 @@
 
 Working notes and known issues. Newest first.
 
-## 2026-10-31: personal ratings (features 7 and 8)
+## 2026-11-01: personal ratings (features 7 and 8)
 
-- Later verification: Playwright browser access became available. The built bundle passed a real Chromium DOM
-  smoke check on locally served OG fixtures with mocked GM/API responses: three personal dots, 6.0 average,
-  four on-demand episode-stat requests, Less hiding counts, sign-out removing personal points, and the show-wide
-  average plus season badge. npm test and npm run build passed again. Live og.trakt.tv still returned
-  Cloudflare HTTP 403, so real-account and userscript-manager verification remain pending.
-
-
-- Checked live signed-out Breaking Bad show, seasons overview and season-1 HTML (saved with curl), plus trakt-og
-  `4bdefaf4e` under `projects/client/src`: `SeasonPage.svelte`, `ShowPage.svelte`, `ShowSeasonsPage.svelte`,
-  `SeasonsGrid.svelte`, and the show/season routes. Neither personal episode-rating lines nor episode-derived
-  personal season/show averages are rendered there. `git log -S'Your average'` across the client and
-  `git log -S'average'` / `-S'chart'` in the show components found no implementation.
-- OG's direct season-rating corner (`userRating={state.rating}`) dates to import `233a9354e`;
-  it is a season rating, not an average of episode ratings. We leave it to OG and do not fetch season ratings.
-- `/sync/ratings/episodes` is shared by both features, deduplicated in flight and cached in memory for ten minutes.
-  Auth events invalidate it and reject old in-flight results. Slugs resolve to the response's numeric show ID;
-  episode identity includes show, season and number. The season episode endpoint itself does not return a parent
-  show ID, despite the original plan's assumption.
-- Community chart bars stay in place. Personal ratings use a blue line with gaps and accessible episode links;
-  the ratings scale extends below 50% when needed. Count series use a separate right axis and fetch only on More,
-  through apiGet's shared queue, skipping seasons over 30 episodes. Averages require two ratings and show counts.
-- Fresh live captures were trimmed into `LIVE_RATINGS_SEASON_HTML` and `LIVE_RATINGS_SHOW_HTML` in fixtures.js.
-  Built-bundle tests cover both, navigation/cache sharing, private late results after sign-out, and the More limit.
-- Browser inventory returned “browser access host is unavailable”. Live signed-in behavior, real authenticated
-  ratings responses, and Firefox/Chromium userscript-manager rendering could not be verified in this session.
-  Happy-dom bundle checks are not claimed as live browser verification.
+- og check (trakt-og `4bdefaf4e`, `SeasonPage`, `ShowPage`, `ShowSeasonsPage`, `SeasonsGrid`; `git log -S`): og shows
+  neither a personal episode-rating line nor episode-derived personal averages. Its season-rating corner
+  (`userRating={state.rating}`, since `233a9354e`) is a rating you set on the season itself, not an average.
+- `/sync/ratings/episodes` is shared by both features, deduplicated in flight and cached in memory for ten minutes;
+  auth changes clear it and drop late results. The season episodes endpoint has no parent show id, so slugs resolve
+  through the ratings response's show ids.
+- Season cards (show page and `/seasons`) have og's quick-icons strip, a fixed-height flex row with `overflow:
+  hidden` (`QuickIcons.svelte`). A badge after og's heart percentage was clipped by about 75% of its last digit, so
+  the personal average joins the card subtitle instead ("13 episodes · ♥ 7.5" in blue, full text on hover). A show-wide
+  average line above the seasons looked out of place without a chart, so it was cut.
+- `/shows/:id/seasons/all` is og's "All Episodes" list, not a seasons grid; the router names it `all-episodes` and no
+  feature mounts there.
+- Verified live 2026-11-01 in Zen + Violentmonkey with test ratings on Breaking Bad 1x01–1x05 and 2x01–2x02 (added and
+  then removed through the API): chart line with gaps, season summaries, card badges.
 
 ## v0.2.0 (2026-10-30)
 

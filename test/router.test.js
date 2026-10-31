@@ -29,6 +29,13 @@ test('season and episode pages', () => {
   assert.equal(episode.episode, 14);
 });
 
+test('seasons overview and the all-episodes list are separate routes', () => {
+  assert.equal(parseRoute('/shows/breaking-bad/seasons').name, 'seasons');
+  const all = parseRoute('/shows/breaking-bad/seasons/all');
+  assert.equal(all.name, 'all-episodes');
+  assert.equal(all.season, null);
+});
+
 test('sub-pages keep the title id', () => {
   const stats = parseRoute('/shows/breaking-bad/stats');
   assert.equal(stats.name, 'stats');

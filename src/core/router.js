@@ -5,6 +5,7 @@
  *   /shows/:id                     -> title
  *   /shows/:id/stats               -> stats
  *   /shows/:id/seasons              -> seasons
+ *   /shows/:id/seasons/all          -> all-episodes
  *   /shows/:id/seasons/:season      -> season
  *   /shows/:id/seasons/:s/episodes/:e -> episode
  *   /movies/:id[/...]              -> same names where they exist
@@ -66,7 +67,8 @@ export function parseRoute(pathname = location.pathname) {
         name = 'episode';
       }
     } else {
-      name = 'seasons';
+      // og's "All Episodes" list; no feature targets it.
+      name = second === 'all' ? 'all-episodes' : 'seasons';
     }
   }
 

@@ -47,11 +47,14 @@ test('bundle: personal chart gaps, average, on-demand counts, shared navigation 
   assert.equal(chart(b).querySelector('.ogt-season-chart__watchers'), null);
   b.window.history.pushState({}, '', '/shows/breaking-bad');
   b.document.body.innerHTML = SHOW_HTML; await wait(600);
-  assert.match(b.document.getElementById('ogt-your-ratings').textContent, /Your average: 6.0/);
-  assert.equal(b.document.querySelectorAll('article.poster-card .ogt-your-average').length, 1);
+  assert.equal(b.document.getElementById('ogt-your-ratings').textContent, '', 'no show-wide average line');
+  const badges = b.document.querySelectorAll('article.poster-card .ogt-your-average');
+  assert.equal(badges.length, 1);
+  assert.equal(badges[0].textContent, '6.0');
+  assert.match(badges[0].getAttribute('title'), /Your average: 6.0 \(3 episodes rated\)/);
   assert.equal(b.calls.filter((r) => r.url.endsWith('/sync/ratings/episodes')).length, 1);
   b.window.history.pushState({}, '', '/shows/breaking-bad/seasons'); await wait(600);
-  assert.match(b.document.getElementById('ogt-your-ratings').textContent, /3 episodes rated/);
+  assert.match(b.document.querySelector('article.poster-card .ogt-your-average').getAttribute('title'), /3 episodes rated/);
   b.store.delete('trakt.oauth.tokens'); b.document.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
   assert.equal(b.document.querySelector('.ogt-your-average'), null);
 });
@@ -78,6 +81,7 @@ test('bundle mounts on fresh live OG season and show markup', async (t) => {
   assert.ok(chart(b).querySelector('.ogt-season-chart__personal-dot'));
   b.window.history.pushState({}, '', '/shows/breaking-bad');
   b.document.body.innerHTML = LIVE_RATINGS_SHOW_HTML; await wait(600);
-  assert.match(b.document.getElementById('ogt-your-ratings').textContent, /Your average/);
-  assert.ok(b.document.querySelector('article.poster-card .ogt-your-average'));
+  const badge = b.document.querySelector('article.poster-card .ogt-your-average');
+  assert.ok(badge);
+  assert.ok(badge.parentElement.classList.contains('subtitle'), 'badge joins the card subtitle, outside og\'s clipped quick icons');
 });

@@ -199,7 +199,7 @@ function createPanel(episodes, route) {
     node.hidden = rated.length < 2 && personal.length < 2;
     const visiblePersonal = personal.filter((p) => currentEpisodes.some((e) => e.number === p.number));
     summaryLine.textContent = [summary(currentEpisodes, average), averageLabel(visiblePersonal, currentEpisodes.length)].filter(Boolean).join(' · ');
-    legend.replaceChildren(el('span', { text: 'Trakt community (bars)' }));
+    legend.replaceChildren(el('span', { class: 'ogt-season-chart__legend-community', text: 'Trakt community (bars)' }));
     if (visiblePersonal.length) legend.append(el('span', { class: 'ogt-season-chart__legend-personal', text: 'Your ratings (blue line)' }));
     if (moreOpen && stats) legend.append(el('span', { text: 'Watchers (green) · Comments (purple dashed) · Counts: right axis' }));
     legend.hidden = !visiblePersonal.length && !(moreOpen && stats);

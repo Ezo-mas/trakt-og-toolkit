@@ -441,7 +441,7 @@
           name = "episode";
         }
       } else {
-        name = "seasons";
+        name = second === "all" ? "all-episodes" : "seasons";
       }
     }
     return { name, kind, id, rest, season, episode, path, key: path };
@@ -2583,7 +2583,12 @@
 
   // src/features/your-ratings/styles.js
   var CSS4 = String.raw`
-.ogt-your-average { display: block; margin: 6px 0; color: light-dark(#075c86, #83d5ff); font-size: 0.85rem; }
+/* Follows a season card's "13 episodes" subtitle: " · ♥ 7.5". */
+.ogt-your-average { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap;
+  color: light-dark(#075c86, #83d5ff); font-weight: 600; }
+.ogt-your-average::before { content: "·"; margin-inline: 5px 2px; color: light-dark(#767676, #a7a7a7); font-weight: 400; }
+.ogt-your-average svg { inline-size: 0.95em; block-size: 0.95em; fill: currentColor; }
+.ogt-season-chart__legend-community { color: light-dark(#c4161c, #ff6b6b); }
 .ogt-season-chart__personal { stroke: light-dark(#075c86, #83d5ff); fill: none; stroke-width: 2; }
 .ogt-season-chart__personal-dot { fill: light-dark(#075c86, #83d5ff); stroke: var(--ogt-surface); stroke-width: 1; }
 .ogt-season-chart__counts { fill: none; stroke-width: 1.5; }
@@ -2595,6 +2600,16 @@
 `;
 
   // src/features/your-ratings/index.js
+  var HEART = "M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 5.3 3 1.7-1.9 3.2-3 5.3-3 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z";
+  function heart() {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg3.setAttribute("viewBox", "0 0 24 24");
+    svg3.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", HEART);
+    svg3.append(path);
+    return svg3;
+  }
   var yourRatings = {
     id: "your-ratings",
     css: CSS4,
@@ -2602,26 +2617,29 @@
     mount(route) {
       const section = document.querySelector("section.seasons");
       if (!section || document.getElementById("ogt-your-ratings")) return null;
-      const node = el("p", { id: "ogt-your-ratings", class: "ogt-your-average", hidden: true });
+      const node = el("span", { id: "ogt-your-ratings", hidden: true });
       section.prepend(node);
       let cancelled = false;
       let items = [];
       const badges = /* @__PURE__ */ new Set();
       function render() {
         if (cancelled) return;
-        const label = averageLabel(items);
-        if (node.textContent !== label) node.textContent = label;
-        if (node.hidden !== !label) node.hidden = !label;
         for (const card of section.querySelectorAll("article.poster-card")) {
           if (card.querySelector(".ogt-your-average")) continue;
           const href = card.querySelector('a[href*="/seasons/"]')?.getAttribute("href");
           const match = href?.match(/\/seasons\/(\d+)\/?$/);
           if (!match) continue;
           const rows = items.filter((item) => item.season === Number(match[1]));
-          const text2 = averageLabel(rows);
-          if (!text2) continue;
-          const badge = el("span", { class: "ogt-your-average", text: text2 });
-          (card.querySelector(".quick-icons") || card).append(badge);
+          const average = personalAverage(rows);
+          if (average == null) continue;
+          const label = averageLabel(rows);
+          const badge = el(
+            "span",
+            { class: "ogt-your-average", title: label, "aria-label": label },
+            heart(),
+            el("span", { text: average.toFixed(1) })
+          );
+          (card.querySelector(".titles-link .subtitle") || card).append(badge);
           badges.add(badge);
         }
       }
@@ -3055,7 +3073,7 @@
       node.hidden = rated.length < 2 && personal.length < 2;
       const visiblePersonal = personal.filter((p) => currentEpisodes.some((e) => e.number === p.number));
       summaryLine.textContent = [summary(currentEpisodes, average), averageLabel(visiblePersonal, currentEpisodes.length)].filter(Boolean).join(" · ");
-      legend.replaceChildren(el("span", { text: "Trakt community (bars)" }));
+      legend.replaceChildren(el("span", { class: "ogt-season-chart__legend-community", text: "Trakt community (bars)" }));
       if (visiblePersonal.length) legend.append(el("span", { class: "ogt-season-chart__legend-personal", text: "Your ratings (blue line)" }));
       if (moreOpen && stats) legend.append(el("span", { text: "Watchers (green) · Comments (purple dashed) · Counts: right axis" }));
       legend.hidden = !visiblePersonal.length && !(moreOpen && stats);
