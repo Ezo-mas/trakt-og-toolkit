@@ -24,6 +24,7 @@ test('counts plays including rewatches, runtimes, nested comments, and exclusive
     [{ comment: { created_at: span.start } }, { created_at: 'bad' }], span);
   assert.deepEqual([summary.plays, summary.hours, summary.ratings, summary.comments], [2, 3, 1, 1]);
   assert.equal(summary.first, rows[0]);
+  assert.equal(summary.episodePlays, 1); assert.equal(summary.moviePlays, 1);
 });
 test('pagination respects page count and falls back to short pages without headers', async () => {
   const calls = [];

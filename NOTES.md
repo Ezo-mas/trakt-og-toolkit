@@ -2,6 +2,9 @@
 
 ## 2026-11-01: last month in review (feature 6)
 
+- Added a compact TV/film icon row with episode/movie play counts from the same history response,
+  plus a larger first-play title. Old summaries without those fields refresh once to populate them.
+
 - Visual follow-up: native `--brand-primary` red for the month/button, red translucent tiles, decorative
   inline SVG icons, native Figtree body/heading variables and 700-weight compact typography. Rechecked
   desktop/mobile screenshots and Hide in Playwright Chromium/Firefox with og’s actual Figtree font.

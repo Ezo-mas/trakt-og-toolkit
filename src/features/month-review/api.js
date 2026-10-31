@@ -28,10 +28,10 @@ export function loadReview(now = new Date()) {
     if (getPrivateValue(STORAGE.dismissedReview(user)) === span.key) return null;
     const key = STORAGE.monthReview(user, span.key);
     const cached = getPrivateValue(key);
-    if (freshCache(cached, now)) return { ...cached.summary, user, span };
+    if (freshCache(cached, now) && Number.isSafeInteger(cached.summary?.episodePlays) && Number.isSafeInteger(cached.summary?.moviePlays)) return { ...cached.summary, user, span };
     const history = await paginate(apiAuthPage, '/sync/history', { start_at: span.start, end_at: span.end, extended: 'full,images' });
     alive();
-    let summary = { plays: 0 };
+    let summary = { plays: 0, episodePlays: 0, moviePlays: 0 };
     if (history.some((row) => Date.parse(row.watched_at) >= Date.parse(span.start) && Date.parse(row.watched_at) < Date.parse(span.end))) {
       const [ratings, comments] = await Promise.all([
         paginate(apiAuthPage, '/sync/ratings'), paginate(apiAuthPage, '/users/me/comments'),
