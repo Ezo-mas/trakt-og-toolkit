@@ -4,15 +4,15 @@ export const CSS = `
 .ogt-review__art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:-2; }
 .ogt-review::before { content:''; position:absolute; inset:0; background:linear-gradient(90deg,rgba(10,8,10,.92),rgba(10,8,10,.45)); z-index:-1; }
 .ogt-review__inner { max-width:1160px; margin:auto; padding:32px 24px; }
-.ogt-review h2 { font-size:clamp(28px,4vw,44px); font-family:var(--font-headings, inherit); font-weight:700; letter-spacing:-.025em; line-height:1.1; margin:0 0 28px; color:white; }
+.ogt-review h2 { font-size:clamp(32px,4vw,48px); font-family:var(--font-headings, inherit); font-weight:700; letter-spacing:-.025em; line-height:1.1; margin:0 0 28px; color:white; }
 .ogt-review em { color:var(--brand-primary,#ed1c24); font-style:normal; }
 .ogt-review__grid { display:grid; grid-template-columns:144px 144px minmax(180px,360px); gap:10px; }
 .ogt-review__tile,.ogt-review__first { background:rgba(120,24,30,.38); border-radius:6px; padding:10px 12px; }
 .ogt-review__tile { display:grid; grid-template-columns:32px minmax(0,1fr); align-items:center; column-gap:10px; min-width:0; min-height:64px; box-sizing:border-box; }
 .ogt-review__icon { width:32px; height:32px; display:block; align-self:center; }
 .ogt-review__value { min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
-.ogt-review__tile strong { font-family:var(--font-headings, inherit); font-weight:700; font-size:32px; line-height:1; letter-spacing:-.025em; display:block; }
-.ogt-review__tile span { display:block; text-transform:uppercase; font-size:12px; line-height:1; color:#ddd; }
+.ogt-review__tile strong { font-family:var(--font-headings, inherit); font-weight:700; font-size:28px; line-height:1; letter-spacing:-.025em; display:block; }
+.ogt-review__tile span { display:block; text-transform:uppercase; font-size:11px; line-height:1; color:#ddd; }
 .ogt-review__first small { display:block; text-transform:uppercase; font-size:14px; font-weight:400; line-height:1.15; color:#ddd; }
 .ogt-review__first small span { display:block; color:white; font-weight:400; }
 .ogt-review__episode { display:block; margin-top:4px; font-size:16px; font-weight:400; line-height:1.25; }
