@@ -2,6 +2,28 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-10-31: personal ratings (features 7 and 8)
+
+- Checked live signed-out Breaking Bad show, seasons overview and season-1 HTML (saved with curl), plus trakt-og
+  `4bdefaf4e` under `projects/client/src`: `SeasonPage.svelte`, `ShowPage.svelte`, `ShowSeasonsPage.svelte`,
+  `SeasonsGrid.svelte`, and the show/season routes. Neither personal episode-rating lines nor episode-derived
+  personal season/show averages are rendered there. `git log -S'Your average'` across the client and
+  `git log -S'average'` / `-S'chart'` in the show components found no implementation.
+- OG's direct season-rating corner (`userRating={state.rating}`) dates to import `233a9354e`;
+  it is a season rating, not an average of episode ratings. We leave it to OG and do not fetch season ratings.
+- `/sync/ratings/episodes` is shared by both features, deduplicated in flight and cached in memory for ten minutes.
+  Auth events invalidate it and reject old in-flight results. Slugs resolve to the response's numeric show ID;
+  episode identity includes show, season and number. The season episode endpoint itself does not return a parent
+  show ID, despite the original plan's assumption.
+- Community chart bars stay in place. Personal ratings use a blue line with gaps and accessible episode links;
+  the ratings scale extends below 50% when needed. Count series use a separate right axis and fetch only on More,
+  through apiGet's shared queue, skipping seasons over 30 episodes. Averages require two ratings and show counts.
+- Fresh live captures were trimmed into `LIVE_RATINGS_SEASON_HTML` and `LIVE_RATINGS_SHOW_HTML` in fixtures.js.
+  Built-bundle tests cover both, navigation/cache sharing, private late results after sign-out, and the More limit.
+- Browser inventory returned “browser access host is unavailable”. Live signed-in behavior, real authenticated
+  ratings responses, and Firefox/Chromium userscript-manager rendering could not be verified in this session.
+  Happy-dom bundle checks are not claimed as live browser verification.
+
 ## v0.2.0 (2026-10-30)
 
 - Added a daily live markup and bundle-mount drift check; the signed-in playback overview cannot be checked.

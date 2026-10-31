@@ -7,3 +7,8 @@ export async function getSeasonEpisodes(id, season) {
   );
   return Array.isArray(episodes) ? episodes : [];
 }
+
+/** Public requests use the shared four-request queue. */
+export async function getEpisodeStats(id, season, number) {
+  return apiGet(`/shows/${encodeURIComponent(id)}/seasons/${season}/episodes/${number}/stats`);
+}

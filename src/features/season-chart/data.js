@@ -97,13 +97,13 @@ export function axisBottom(episodes) {
 }
 
 /** SVG coordinates for a `width`×180 chart (720 by default). X positions follow episode numbers. */
-export function chartGeometry(episodes, allEpisodes = episodes, average = averageRating(episodes), width = CHART_WIDTH) {
+export function chartGeometry(episodes, allEpisodes = episodes, average = averageRating(episodes), width = CHART_WIDTH, scaleEpisodes = episodes, right = PLOT.right) {
   const rated = ratedEpisodes(episodes);
   const allNumbers = allEpisodes.map((episode) => episode.number).filter(Number.isFinite);
   const first = allNumbers.length ? Math.min(...allNumbers) : 1;
   const last = allNumbers.length ? Math.max(...allNumbers) : first;
-  const bottom = axisBottom(rated);
-  const plotWidth = width - PLOT.left - PLOT.right;
+  const bottom = axisBottom(scaleEpisodes);
+  const plotWidth = width - PLOT.left - right;
   const plotHeight = CHART_HEIGHT - PLOT.top - PLOT.bottom;
   // One slot per episode number, bars centred in their slot.
   const slot = plotWidth / (last - first + 1);
@@ -113,7 +113,7 @@ export function chartGeometry(episodes, allEpisodes = episodes, average = averag
   return {
     width,
     height: CHART_HEIGHT,
-    plot: PLOT,
+    plot: { ...PLOT, right },
     axisBottom: bottom,
     slot,
     baseY: y(bottom),

@@ -31,6 +31,18 @@ On a show's season page, an episode ratings chart shows the shape of the season.
 ID is set and og's displayed ratings otherwise; episodes with fewer than 10 votes appear as hollow points and do not
 affect the average.
 
+### Your ratings and averages
+
+Sign in through the toolkit menu to overlay your episode ratings as a blue line on the season chart. Unrated
+episodes leave gaps. The summary shows **Your average** with the rated episode count once you have rated at least
+two episodes. Show pages and their Seasons page also show your per-season and show-wide episode averages.
+These are plain means from the toolkit account, which may differ from your OG account. Ratings stay in memory for
+ten minutes and are cleared when the account changes; nothing private enters the public API cache.
+
+**More** on a season chart loads watchers and comments, off by default, on a separate right-hand count axis.
+This needs a client ID and uses the shared request queue. Seasons with more than 30 episodes skip these requests.
+OG already shows your directly assigned season rating; averages here use episode ratings only.
+
 ### Add to library
 
 Movie, show, season and episode pages have an **Add to library** button in the action stack. Sign in through the

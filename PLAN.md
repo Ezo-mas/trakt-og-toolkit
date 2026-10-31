@@ -18,8 +18,8 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 4 | Custom link presets | done | 1, 2, 3 |
 | 5 | Small extras | — | pronunciation done; poster corners dropped |
 | 6 | Last month in review card | OAuth | next |
-| 7 | Season chart: your ratings + watchers/comments | OAuth (ratings) | with 8 |
-| 8 | Your personal season and show averages | OAuth | with 7 |
+| 7 | Season chart: your ratings + watchers/comments | OAuth (ratings) | implemented; browser verification pending |
+| 8 | Your personal season and show averages | OAuth | implemented; browser verification pending |
 | 9 | Playback extras: set progress | OAuth | small |
 | 10 | List preview posters link to titles | check og first | small |
 | 11 | All lists in one view | OAuth or public | lowest value |
@@ -219,6 +219,8 @@ profile watch-time box also exist (both hide with no recent plays). None of them
 
 ## 7. Season chart: your ratings, watchers and comments
 
+**Status:** implemented with feature 8; unit and built-bundle checks included. Live signed-in browser verification pending.
+
 **Goal:** what classic's seasons chart had and ours doesn't: your own ratings as a second line next to the community
 one, plus optional watchers and comments series. og shows your rating on each episode row (a corner badge), but never
 as a shape across the season.
@@ -235,6 +237,8 @@ as a shape across the season.
 - Keep the chart's fixed Y scale for ratings. Keyboard/accessible names for the new dots, as for the existing ones.
 
 ## 8. Your personal averages
+
+**Status:** implemented with feature 7, sharing one ten-minute episode-ratings cache. Direct season ratings remain OG’s own badges; no extra season-ratings fetch is needed. Live signed-in browser verification pending.
 
 **Goal:** classic's "Average Season And Episode Ratings": your own average, which og never shows.
 
