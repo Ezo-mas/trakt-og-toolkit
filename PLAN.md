@@ -25,6 +25,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 11 | All lists in one view | OAuth or public | lowest value |
 | 12 | Add to library button | OAuth | done |
 | 13 | One-click Add to watchlist | OAuth | small |
+| 14 | Add to library on poster cards | OAuth | small; after 12 |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -298,6 +299,22 @@ button that only adds to the watchlist.
 - Hide it when og already shows the title as on the watchlist; reuse feature 12's mount point, styling and
   native-state observer.
 - **Check first:** whether og has added a direct watchlist action since 2026-10-30.
+
+## 14. Add to library on poster cards
+
+**Goal:** feature 12 added **Add to library** to title, season and episode pages, but poster cards (show page season
+cards, lists, search, dashboards) still can't add. og hides the card's library control too: its quick icons only
+show it for items already in the library (trakt-og `1cd3142`, `LIBRARY_ADDING = false`; see NOTES.md).
+
+- An icon-only action in the card's `.quick-icons .actions`, the same size as og's own (`--action-width`, 28px on
+  `.small` cards), with og's collection glyph and a tooltip. Click confirms like feature 12 (aired-episode count for
+  shows and seasons, specials excluded for whole shows), then reuses feature 12's `libraryApi`.
+- The card's own link gives the title (`a.poster` href → movie, show, season or episode route); no page-level route.
+- Hide it on cards where og already shows its library control, and after a successful add.
+- **Space:** og's strip is a fixed-height flex row with `overflow: hidden`, and a text badge after the heart rating
+  was visibly clipped (feature 8). Check one extra icon fits on the narrowest cards (`.small`, `.compact`) before
+  building; if it doesn't, put the action in the card's own menu or skip compact cards.
+- **Check first:** whether og has turned `LIBRARY_ADDING` back on.
 
 ---
 
