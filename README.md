@@ -234,3 +234,11 @@ Written from scratch. Ideas and UX inspiration came from
 No GPL code was copied, so this project can stay MIT.
 
 Trakt OG Toolkit is not affiliated with Trakt.
+
+### Last month in review
+
+Sign in through the toolkit to see last month’s plays, hours, ratings and comments under the dashboard’s month
+strip. The fanart card highlights your first play and links to the full Month in Review. Hide dismisses that month
+for your toolkit account. Nothing appears for months with no plays. Month boundaries use your browser’s time zone;
+results are stored in userscript storage per account and month, refreshing at most daily during the first seven days.
+Hours use the API’s reported runtimes, rounded to whole hours; missing runtimes contribute no time.

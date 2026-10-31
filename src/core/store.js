@@ -62,6 +62,8 @@ export function removeValue(key) {
 }
 
 export const STORAGE = {
+  monthReview: (user, month) => `review.${encodeURIComponent(user)}.${month}`,
+  dismissedReview: (user) => `review.dismissed.${encodeURIComponent(user)}`,
   clientId: 'trakt.clientId',
   tokens: 'trakt.oauth.tokens',
   redirectUri: 'trakt.oauth.redirectUri',

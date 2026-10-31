@@ -89,7 +89,7 @@ export async function request(options) {
   }
 }
 
-function headerValue(headers, name) {
+export function headerValue(headers, name) {
   if (!headers) return null;
   if (typeof headers.get === 'function') return headers.get(name);
   const line = String(headers)

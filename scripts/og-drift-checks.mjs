@@ -38,3 +38,5 @@ export function unreachableReason({ status, url, html }) {
   if (/\b(?:cf-challenge|cf_chl_|just a moment\.\.\.)/i.test(html)) return 'Cloudflare challenge';
   return null;
 }
+
+export const LOGIN_CHECKS = [{ feature: 'month review', selector: 'nav.ribbon', status: 'not checked (needs login)' }];

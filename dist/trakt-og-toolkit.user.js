@@ -414,6 +414,7 @@
   var TITLE_PATH = /^\/(shows|movies)\/([^/]+)(?:\/(.*))?$/;
   function parseRoute(pathname = location.pathname) {
     const path = pathname.replace(/\/+$/, "") || "/";
+    if (path === "/" || path === "/dashboard") return { name: "dashboard", kind: null, id: null, path, key: path };
     const progress = path.match(/^\/users\/([^/]+)\/progress(?:\/.*)?$/);
     if (progress) return { name: "progress", kind: null, id: progress[1], path, key: path };
     const person = path.match(/^\/people\/([^/]+)$/);
@@ -796,6 +797,8 @@
     }
   }
   var STORAGE = {
+    monthReview: (user, month) => `review.${encodeURIComponent(user)}.${month}`,
+    dismissedReview: (user) => `review.dismissed.${encodeURIComponent(user)}`,
     clientId: "trakt.clientId",
     tokens: "trakt.oauth.tokens",
     redirectUri: "trakt.oauth.redirectUri",
@@ -1360,14 +1363,23 @@
     await apiGet("/shows/breaking-bad", { ttl: 0 });
     return Date.now() - started;
   }
-  async function apiAuth(method, path, body, { extended } = {}) {
+  function apiAuth(method, path, body, options = {}) {
+    return authenticated(method, path, body, options, false);
+  }
+  function apiAuthPage(path, options = {}) {
+    return authenticated("GET", path, void 0, options, true);
+  }
+  async function authenticated(method, path, body, options, metadata) {
     if (!/^\/(?!\/)/.test(path) || /[?#]/.test(path) || path.includes("://")) {
       throw authError("Authenticated API paths must be relative and contain no query.");
     }
-    if (extended !== void 0 && (method !== "GET" || extended !== "images")) {
-      throw authError("Unsupported authenticated query option.");
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(options)) {
+      const valid = method === "GET" && (["page", "limit"].includes(key) && Number.isSafeInteger(value) && value >= 1 && (key !== "limit" || value <= 1e3) || ["start_at", "end_at"].includes(key) && typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value)) || key === "extended" && ["images", "full", "full,images"].includes(value));
+      if (!valid) throw authError("Unsupported authenticated query option.");
+      query.set(key, String(value));
     }
-    const requestPath = extended === "images" ? `${path}?extended=images` : path;
+    const requestPath = query.size ? `${path}?${query}` : path;
     let tokens = readTokens();
     if (!tokens) throw authError("Signed out; sign in to Trakt.");
     if (tokens.expires_at <= Date.now() + 6e4) {
@@ -1397,7 +1409,12 @@
     if (response.status < 200 || response.status >= 300) throw authError("Authenticated Trakt request failed.", response.status);
     if (!response.text || response.status === 204) return null;
     try {
-      return JSON.parse(response.text);
+      const data = JSON.parse(response.text);
+      if (!metadata) return data;
+      const raw = headerValue(response.headers, "x-pagination-page-count");
+      const pages = raw == null ? null : Number(raw);
+      if (pages !== null && (!Number.isSafeInteger(pages) || pages < 0)) throw new Error();
+      return { data, pages };
     } catch {
       throw authError("Invalid Trakt response.");
     }
@@ -1919,7 +1936,7 @@
       if (flights.has(kind)) return flights.get(kind);
       const rev = revision;
       const epoch = session;
-      const flight = (async () => {
+      const flight2 = (async () => {
         const rows = await auth("GET", `/sync/playback/${kind === "movie" ? "movies" : "episodes"}`, void 0, { extended: "images" });
         if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
         if (!Array.isArray(rows)) throw new Error("Invalid playback response.");
@@ -1927,11 +1944,11 @@
         if (rev === revision) cache3.set(kind, { items, until: now() + TTL });
         return items;
       })();
-      flights.set(kind, flight);
+      flights.set(kind, flight2);
       try {
-        return await flight;
+        return await flight2;
       } finally {
-        if (flights.get(kind) === flight) flights.delete(kind);
+        if (flights.get(kind) === flight2) flights.delete(kind);
       }
     }
     async function loadAll({ force = false } = {}) {
@@ -2546,12 +2563,12 @@
   // src/features/your-ratings/api.js
   function createRatingsApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
     let cache3 = null;
-    let flight = null;
-    let generation2 = 0;
+    let flight2 = null;
+    let generation3 = 0;
     function resetSession() {
-      generation2++;
+      generation3++;
       cache3 = null;
-      flight = null;
+      flight2 = null;
     }
     async function load() {
       if (!signedIn()) {
@@ -2559,21 +2576,21 @@
         return [];
       }
       if (cache3 && cache3.until > now()) return cache3.items;
-      if (flight) return flight;
-      const epoch = generation2;
+      if (flight2) return flight2;
+      const epoch = generation3;
       const pending = (async () => {
         const rows = await auth("GET", "/sync/ratings/episodes");
-        if (epoch !== generation2 || !signedIn()) throw new Error("Ratings session changed.");
+        if (epoch !== generation3 || !signedIn()) throw new Error("Ratings session changed.");
         if (!Array.isArray(rows)) throw new Error("Invalid ratings response.");
         const items = mapRatings(rows);
         cache3 = { items, until: now() + 10 * 6e4 };
         return items;
       })();
-      flight = pending;
+      flight2 = pending;
       try {
         return await pending;
       } finally {
-        if (flight === pending) flight = null;
+        if (flight2 === pending) flight2 = null;
       }
     }
     return { load, resetSession };
@@ -3140,6 +3157,195 @@
     }
   };
 
+  // src/features/month-review/data.js
+  function lastMonth(now = /* @__PURE__ */ new Date()) {
+    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+    const start2 = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return {
+      start: start2.toISOString(),
+      end: end.toISOString(),
+      year: start2.getFullYear(),
+      month: start2.getMonth() + 1,
+      key: `${start2.getFullYear()}-${String(start2.getMonth() + 1).padStart(2, "0")}`,
+      label: start2.toLocaleString(void 0, { month: "long" })
+    };
+  }
+  function inMonth(value, span) {
+    const time = Date.parse(value);
+    return time >= Date.parse(span.start) && time < Date.parse(span.end);
+  }
+  function summarize(history2, ratings, comments, span) {
+    const plays = history2.filter((row) => inMonth(row.watched_at, span));
+    const first = plays.reduce((a, b) => !a || Date.parse(b.watched_at) < Date.parse(a.watched_at) ? b : a, null);
+    const minutes = plays.reduce((sum, row) => {
+      const runtime = (row.episode || row.movie)?.runtime;
+      return sum + (Number.isFinite(runtime) && runtime > 0 ? runtime : 0);
+    }, 0);
+    return {
+      plays: plays.length,
+      hours: Math.round(minutes / 60),
+      ratings: ratings.filter((row) => inMonth(row.rated_at, span)).length,
+      comments: comments.filter((row) => inMonth(row.comment?.created_at ?? row.created_at, span)).length,
+      first
+    };
+  }
+  function fanart(first) {
+    const raw = (first?.show || first?.movie)?.images?.fanart?.[0];
+    if (typeof raw !== "string") return null;
+    try {
+      const url = new URL(raw.startsWith("https://") ? raw : `https://${raw}`);
+      return url.protocol === "https:" && url.hostname === "media.trakt.tv" ? url.href : null;
+    } catch {
+      return null;
+    }
+  }
+  function freshCache(entry, now) {
+    return entry && (now.getDate() > 7 || now.getTime() - entry.savedAt < 864e5);
+  }
+
+  // src/features/month-review/api.js
+  async function paginate(pageRequest, path, options = {}) {
+    const rows = [];
+    for (let page = 1; ; page++) {
+      const result = await pageRequest(path, { ...options, page, limit: 100 });
+      if (!Array.isArray(result.data)) throw new Error("Invalid review response.");
+      rows.push(...result.data);
+      if (result.pages !== null ? page >= result.pages : result.data.length < 100) return rows;
+      if (page >= 1e4) throw new Error("Review pagination limit reached.");
+    }
+  }
+  var generation2 = 0;
+  var flight;
+  if (typeof document !== "undefined") document.addEventListener("ogt:authchange", () => {
+    generation2++;
+    flight = null;
+  });
+  function loadReview(now = /* @__PURE__ */ new Date()) {
+    if (flight) return flight;
+    const epoch = generation2;
+    const alive = () => {
+      if (generation2 !== epoch || !isSignedIn()) throw new Error("Review session changed.");
+    };
+    const task = (async () => {
+      const profile = await apiAuth("GET", "/users/me");
+      alive();
+      const user = profile?.ids?.slug || profile?.username;
+      if (!user) throw new Error("Missing review user.");
+      const span = lastMonth(now);
+      if (getPrivateValue(STORAGE.dismissedReview(user)) === span.key) return null;
+      const key = STORAGE.monthReview(user, span.key);
+      const cached = getPrivateValue(key);
+      if (freshCache(cached, now)) return { ...cached.summary, user, span };
+      const history2 = await paginate(apiAuthPage, "/sync/history", { start_at: span.start, end_at: span.end, extended: "full,images" });
+      alive();
+      let summary2 = { plays: 0 };
+      if (history2.some((row) => Date.parse(row.watched_at) >= Date.parse(span.start) && Date.parse(row.watched_at) < Date.parse(span.end))) {
+        const [ratings, comments] = await Promise.all([
+          paginate(apiAuthPage, "/sync/ratings"),
+          paginate(apiAuthPage, "/users/me/comments")
+        ]);
+        alive();
+        summary2 = summarize(history2, ratings, comments, span);
+      }
+      setPrivateValue(key, { savedAt: now.getTime(), summary: summary2 });
+      return { ...summary2, user, span };
+    })();
+    flight = task;
+    task.finally(() => {
+      if (flight === task) flight = null;
+    }).catch(() => {
+    });
+    return task;
+  }
+
+  // src/features/month-review/styles.js
+  var CSS6 = `
+.ogt-review { position:relative; isolation:isolate; color:white; background:#17121f; overflow:hidden; }
+.ogt-review[hidden] { display:none; }
+.ogt-review__art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:-2; }
+.ogt-review::before { content:''; position:absolute; inset:0; background:linear-gradient(90deg,rgba(8,8,18,.92),rgba(8,8,18,.45)); z-index:-1; }
+.ogt-review__inner { max-width:1160px; margin:auto; padding:32px 24px; }
+.ogt-review h2 { font-size:clamp(26px,4vw,42px); font-weight:800; margin:0 0 28px; color:white; }
+.ogt-review em { color:#b965d4; font-style:normal; }
+.ogt-review__grid { display:grid; grid-template-columns:120px 120px minmax(180px,330px); gap:10px; }
+.ogt-review__tile,.ogt-review__first { background:rgba(104,49,133,.35); border-radius:6px; padding:14px; }
+.ogt-review__tile strong { font-size:28px; line-height:1; display:block; }
+.ogt-review__tile span,.ogt-review__first small { text-transform:uppercase; font-size:12px; color:#ddd; }
+.ogt-review__first { grid-column:3; grid-row:1 / 3; display:flex; flex-direction:column; justify-content:space-between; gap:24px; }
+.ogt-review__first strong { font-size:24px; display:block; }
+.ogt-review__link { display:inline-block; margin-top:26px; padding:10px 14px; background:#9747b5; color:white!important; border-radius:4px; font-weight:bold; }
+.ogt-review__hide { position:absolute; right:12px; top:8px; border:0; background:transparent; color:white; cursor:pointer; }
+.ogt-review-hint { padding:12px 24px; color:light-dark(#555,#bbb); }
+@media(max-width:600px) { .ogt-review__grid { grid-template-columns:1fr 1fr; } .ogt-review__first { grid-column:1 / 3; grid-row:3; } }
+`;
+
+  // src/features/month-review/index.js
+  var monthReview = {
+    id: "month-review",
+    css: CSS6,
+    match: (route) => route.name === "dashboard" && isSignedIn(),
+    mount() {
+      const anchor = document.querySelector("nav.ribbon");
+      if (!anchor) return null;
+      let destroyed = false;
+      const node = el("section", { class: "ogt-review", id: "ogt-month-review", hidden: true, "aria-label": "Last month in review" });
+      anchor.after(node);
+      const hide = () => {
+        if (review) setPrivateValue(STORAGE.dismissedReview(review.user), review.span.key);
+        node.hidden = true;
+      };
+      let review;
+      loadReview().then((data) => {
+        if (destroyed || !isSignedIn() || !data?.plays) return;
+        review = data;
+        const { span, first } = data;
+        const media = first.show || first.movie;
+        const art = fanart(first);
+        const grid = el("div", { class: "ogt-review__grid" });
+        for (const key of ["plays", "hours", "ratings", "comments"]) grid.append(el(
+          "div",
+          { class: "ogt-review__tile" },
+          el("strong", { text: data[key].toLocaleString() }),
+          el("span", { text: key })
+        ));
+        grid.append(el(
+          "div",
+          { class: "ogt-review__first" },
+          el("small", { text: `First play of ${span.label}` }),
+          el(
+            "div",
+            {},
+            el("strong", { text: media?.title || "Untitled" }),
+            first.episode ? `${first.episode.season}×${String(first.episode.number).padStart(2, "0")} “${first.episode.title || "Untitled episode"}”` : ""
+          )
+        ));
+        node.append(
+          ...art ? [el("img", { class: "ogt-review__art", src: art, alt: "", referrerpolicy: "no-referrer" })] : [],
+          el("button", { type: "button", class: "ogt-review__hide", text: "× Hide", on: { click: hide } }),
+          el(
+            "div",
+            { class: "ogt-review__inner" },
+            el("h2", {}, "your ", el("em", { text: span.label.toLocaleLowerCase() }), " in review"),
+            grid,
+            el("a", { class: "ogt-review__link", text: "Month in Review →", href: `https://app.trakt.tv/users/${encodeURIComponent(data.user)}/mir/${span.year}/${span.month}`, target: "_blank", rel: "noopener noreferrer" })
+          )
+        );
+        node.hidden = false;
+      }).catch((error) => {
+        if (destroyed || !isSignedIn()) return;
+        debugError("month review failed", error);
+        node.className = "ogt-review-hint";
+        node.textContent = "Could not load last month’s review; try again later.";
+        node.hidden = false;
+      });
+      return { node, destroy() {
+        destroyed = true;
+        node.querySelector("button")?.removeEventListener("click", hide);
+        node.remove();
+      } };
+    }
+  };
+
   // src/features/library/api.js
   var validId = (id) => Number.isSafeInteger(id) && id > 0;
   function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
@@ -3501,7 +3707,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library];
+  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, monthReview];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))

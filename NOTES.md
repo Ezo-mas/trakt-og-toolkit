@@ -1,5 +1,24 @@
 # Notes
 
+## 2026-11-01: last month in review (feature 6)
+
+- Checked latest trakt-og `4bdefaf4e` after fetching origin: `DashboardPage.svelte`, `RecapRibbon`,
+  `LastThirtyDaysPanel`, `traktUrls.monthInReview`, and `git log -S monthInReview`. Og has a month strip
+  and rolling thirty-day stats, but no last-calendar-month card. The review URL is
+  `https://app.trakt.tv/users/:slug/mir/:year/:month`.
+- Saved live `/` and `/dashboard` to `/tmp/og-home.html` and `/tmp/og-dashboard.html`; signed-out responses
+  do not expose the session-only ribbon. The integration fixture is transcribed from RecapRibbon source,
+  not claimed to be a captured signed-in dashboard.
+- Auth query options are allowlisted; `apiAuthPage` exposes validated pagination metadata without changing
+  existing `apiAuth` return values. History, ratings and comments are paginated; timestamps are filtered
+  against a half-open local calendar month so boundary plays are not counted twice.
+- Cache and dismissal are private GM storage, keyed by the toolkit account slug and month. The first seven
+  days allow daily successful refreshes for late syncs; later reads retain the stored result. Authentication
+  changes invalidate in-flight results. Runtime totals include rewatches and omit missing runtime values.
+- Unit and built-bundle checks cover date rollover, pagination, counts, empty/error/signed-out states and
+  dismissal. Real signed-in Firefox/Chromium, actual API payloads and fanart remain to be checked. Browser
+  automation was unavailable in this session (browser access host unavailable).
+
 Working notes and known issues. Newest first.
 
 ## 2026-11-01: personal ratings (features 7 and 8)

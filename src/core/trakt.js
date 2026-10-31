@@ -1,7 +1,7 @@
 /** Trakt API client. Public cached GETs and uncached authenticated requests. */
 import { authError, readTokens, refreshTokens, privateRequest, clearTokens } from './oauth.js';
 import { API, CACHE_TTL } from '../config.js';
-import { getJSON } from './http.js';
+import { getJSON, headerValue } from './http.js';
 import { getClientId } from '../settings.js';
 
 export class MissingClientIdError extends Error {
@@ -52,14 +52,26 @@ export async function ping() {
 
 
 /** Authenticated requests never enter the public response cache. */
-export async function apiAuth(method, path, body, { extended } = {}) {
+export function apiAuth(method, path, body, options = {}) {
+  return authenticated(method, path, body, options, false);
+}
+export function apiAuthPage(path, options = {}) {
+  return authenticated('GET', path, undefined, options, true);
+}
+async function authenticated(method, path, body, options, metadata) {
   if (!/^\/(?!\/)/.test(path) || /[?#]/.test(path) || path.includes('://')) {
     throw authError('Authenticated API paths must be relative and contain no query.');
   }
-  if (extended !== undefined && (method !== 'GET' || extended !== 'images')) {
-    throw authError('Unsupported authenticated query option.');
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    const valid = method === 'GET' && (
+      (['page', 'limit'].includes(key) && Number.isSafeInteger(value) && value >= 1 && (key !== 'limit' || value <= 1000)) ||
+      (['start_at', 'end_at'].includes(key) && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value))) ||
+      (key === 'extended' && ['images', 'full', 'full,images'].includes(value)));
+    if (!valid) throw authError('Unsupported authenticated query option.');
+    query.set(key, String(value));
   }
-  const requestPath = extended === 'images' ? `${path}?extended=images` : path;
+  const requestPath = query.size ? `${path}?${query}` : path;
   let tokens = readTokens();
   if (!tokens) throw authError('Signed out; sign in to Trakt.');
   if (tokens.expires_at <= Date.now() + 60000) {
@@ -85,7 +97,14 @@ export async function apiAuth(method, path, body, { extended } = {}) {
   }
   if (response.status < 200 || response.status >= 300) throw authError('Authenticated Trakt request failed.', response.status);
   if (!response.text || response.status === 204) return null;
-  try { return JSON.parse(response.text); } catch { throw authError('Invalid Trakt response.'); }
+  try {
+    const data = JSON.parse(response.text);
+    if (!metadata) return data;
+    const raw = headerValue(response.headers, 'x-pagination-page-count');
+    const pages = raw == null ? null : Number(raw);
+    if (pages !== null && (!Number.isSafeInteger(pages) || pages < 0)) throw new Error();
+    return { data, pages };
+  } catch { throw authError('Invalid Trakt response.'); }
 }
 
 export { isSignedIn } from './oauth.js';

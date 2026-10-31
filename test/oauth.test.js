@@ -200,6 +200,17 @@ test('authenticated requests, refresh, sign-out and sanitized failures', async (
     await assert.rejects(apiAuth('GET', '/sync/playback/movies', undefined, { extended: 'private-access' }), /Unsupported/);
     assert.equal(calls.length, 1);
   });
+  await t.test('review query options are encoded and strictly validated', async () => {
+    reset(); stored(); mock(() => ({ status: 200, body: [] }));
+    const options = { start_at: '2026-10-01T00:00:00.000Z', end_at: '2026-11-01T00:00:00.000Z', page: 2, limit: 100, extended: 'full,images' };
+    await apiAuth('GET', '/sync/history', undefined, options);
+    const url = new URL(calls[0].url);
+    for (const [key, value] of Object.entries(options)) assert.equal(url.searchParams.get(key), String(value));
+    for (const bad of [{ page: 0 }, { page: 1.5 }, { limit: 1001 }, { start_at: 'yesterday' }, { token: 'secret' }, { extended: 'full&token=secret' }]) {
+      await assert.rejects(apiAuth('GET', '/sync/history', undefined, bad), /Unsupported/);
+    }
+    assert.equal(calls.length, 1);
+  });
   await t.test('tokens are bound to client ID', async () => {
     reset(); stored(); setClientId('different'); assert.equal(oauth.isSignedIn(), false);
     await assert.rejects(apiAuth('GET', '/users/me'), /Signed out/);
