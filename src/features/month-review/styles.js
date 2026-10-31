@@ -3,7 +3,11 @@ export const CSS = `
 .ogt-review[hidden] { display:none; }
 .ogt-review__art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:-2; }
 .ogt-review::before { content:''; position:absolute; inset:0; background:linear-gradient(90deg,rgba(10,8,10,.92),rgba(10,8,10,.45)); z-index:-1; }
-.ogt-review__inner { max-width:1160px; margin:auto; padding:32px 24px; }
+/* Match og's Container so review content lines up with the month ribbon and Up Next. */
+.ogt-review__inner { margin-inline:auto; padding-block:32px; padding-inline:calc(var(--gutter,20px) / 2); box-sizing:border-box; }
+@media(min-width:768px) { .ogt-review__inner { inline-size:var(--container-sm,740px); } }
+@media(min-width:992px) { .ogt-review__inner { inline-size:var(--container-md,960px); } }
+@media(min-width:1200px) { .ogt-review__inner { inline-size:var(--container-lg,1160px); } }
 .ogt-review h2 { font-size:clamp(32px,4vw,48px); font-family:var(--font-headings, inherit); font-weight:700; letter-spacing:-.025em; line-height:1.1; margin:0 0 28px; color:white; }
 .ogt-review em { color:var(--brand-primary,#ed1c24); font-style:normal; }
 .ogt-review__grid { display:grid; grid-template-columns:144px 144px minmax(180px,360px); gap:10px; }
