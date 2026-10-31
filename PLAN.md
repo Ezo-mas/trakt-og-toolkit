@@ -18,13 +18,14 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 4 | Custom link presets | done | 1, 2, 3 |
 | 5 | Small extras | — | pronunciation done; poster corners dropped |
 | 6 | Last month in review card | OAuth | next |
-| 7 | Season chart: your ratings + watchers/comments | OAuth (ratings) | with 8 |
-| 8 | Your personal season and show averages | OAuth | with 7 |
+| 7 | Season chart: your ratings + watchers/comments | OAuth (ratings) | done |
+| 8 | Your personal season and show averages | OAuth | done |
 | 9 | Playback extras: set progress | OAuth | small |
 | 10 | List preview posters link to titles | check og first | small |
 | 11 | All lists in one view | OAuth or public | lowest value |
 | 12 | Add to library button | OAuth | done |
 | 13 | One-click Add to watchlist | OAuth | small |
+| 14 | Add to library on poster cards | OAuth | small; after 12 |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -219,6 +220,8 @@ profile watch-time box also exist (both hide with no recent plays). None of them
 
 ## 7. Season chart: your ratings, watchers and comments
 
+**Status:** done with feature 8; verified 2026-11-01 in Zen + Violentmonkey with test ratings on a real account.
+
 **Goal:** what classic's seasons chart had and ours doesn't: your own ratings as a second line next to the community
 one, plus optional watchers and comments series. og shows your rating on each episode row (a corner badge), but never
 as a shape across the season.
@@ -235,6 +238,10 @@ as a shape across the season.
 - Keep the chart's fixed Y scale for ratings. Keyboard/accessible names for the new dots, as for the existing ones.
 
 ## 8. Your personal averages
+
+**Status:** done with feature 7, sharing one ten-minute episode-ratings cache. Season cards show your average after
+the episode count; the show-wide line was cut after a live look. og keeps its own badge for a season rating you set
+directly, so there is no season-ratings fetch.
 
 **Goal:** classic's "Average Season And Episode Ratings": your own average, which og never shows.
 
@@ -292,6 +299,21 @@ button that only adds to the watchlist.
 - Hide it when og already shows the title as on the watchlist; reuse feature 12's mount point, styling and
   native-state observer.
 - **Check first:** whether og has added a direct watchlist action since 2026-10-30.
+
+## 14. Add to library on poster cards
+
+**Goal:** feature 12 added **Add to library** to title, season and episode pages, but poster cards (show page season
+cards, lists, search, dashboards) still can't add. og hides the card's library control too: its quick icons only
+show it for items already in the library (trakt-og `1cd3142`, `LIBRARY_ADDING = false`; see NOTES.md).
+
+- An icon-only action in the card's `.quick-icons .actions`, the same size as og's own (`--action-width`, 28px on
+  `.small` cards), with og's collection glyph and a tooltip. Click confirms like feature 12 (aired-episode count for
+  shows and seasons, specials excluded for whole shows), then reuses feature 12's `libraryApi`.
+- The card's own link gives the title (`a.poster` href → movie, show, season or episode route); no page-level route.
+- Hide it on cards where og already shows its library control, and after a successful add.
+- **Space:** fits. og showed its own library icon in this slot on every card until `1cd3142` hid it (the removed
+  `LibrarySyncLink` card variant used the same size), so it takes back an existing gap rather than adding one.
+- **Check first:** whether og has turned `LIBRARY_ADDING` back on.
 
 ---
 

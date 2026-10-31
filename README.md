@@ -31,6 +31,18 @@ On a show's season page, an episode ratings chart shows the shape of the season.
 ID is set and og's displayed ratings otherwise; episodes with fewer than 10 votes appear as hollow points and do not
 affect the average.
 
+### Your ratings and averages
+
+Sign in through the toolkit menu to overlay your episode ratings as a blue line on the season chart. Unrated
+episodes leave gaps, and the summary adds **Your average** with the rated episode count once you have rated at least
+two episodes. Season cards on show pages and the Seasons page get a small blue heart with your average after the episode
+count; hover it for the number of rated episodes. Averages are plain means of episode ratings from the toolkit's account,
+which may differ from your og account. og already shows a season rating you set directly. Ratings stay in memory for
+ten minutes and are cleared when the account changes; nothing private enters the public API cache.
+
+**More** on a season chart loads watchers and comments, off by default, on a separate right-hand count axis.
+This needs a client ID and uses the shared request queue. Seasons with more than 30 episodes skip these requests.
+
 ### Add to library
 
 Movie, show, season and episode pages have an **Add to library** button in the action stack. Sign in through the
@@ -197,9 +209,9 @@ src/
 See [PLAN.md](PLAN.md). Shipped or dropped because og now does it itself: ratings distribution, trailers, metadata
 links, poster rating corners. Backlog:
 
-- your ratings, watchers and comments on the season chart, and your personal season and show averages;
 - a last-month-in-review card;
-- a one-click **Add to watchlist** button, without picking a list.
+- a one-click **Add to watchlist** button, without picking a list;
+- **Add to library** on poster cards, not just title pages.
 
 ## Trakt API compliance
 

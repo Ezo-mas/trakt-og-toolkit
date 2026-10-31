@@ -441,7 +441,7 @@
           name = "episode";
         }
       } else {
-        name = "seasons";
+        name = second === "all" ? "all-episodes" : "seasons";
       }
     }
     return { name, kind, id, rest, season, episode, path, key: path };
@@ -2506,6 +2506,163 @@
     }
   };
 
+  // src/features/your-ratings/data.js
+  function mapRatings(rows) {
+    const items = /* @__PURE__ */ new Map();
+    for (const row of rows) {
+      const show = row.show?.ids?.trakt;
+      const { season, number } = row.episode || {};
+      if (!Number.isSafeInteger(show) || show <= 0 || !Number.isInteger(season) || season < 0 || !Number.isInteger(number) || number < 1 || !Number.isInteger(row.rating) || row.rating < 1 || row.rating > 10) continue;
+      items.set(`${show}:${season}:${number}`, { show, slug: row.show.ids.slug, season, number, rating: row.rating });
+    }
+    return [...items.values()];
+  }
+  function forShow(items, id) {
+    const show = /^\d+$/.test(String(id)) ? Number(id) : items.find((item) => item.slug === id)?.show;
+    return items.filter((item) => item.show === show);
+  }
+  function personalAverage(items) {
+    return items.length < 2 ? null : items.reduce((sum, item) => sum + item.rating, 0) / items.length;
+  }
+  function averageLabel(items, total) {
+    const average = personalAverage(items);
+    return average == null ? "" : `Your average: ${average.toFixed(1)} (${items.length}${total == null ? "" : ` of ${total}`} episodes rated)`;
+  }
+  function linePath(points) {
+    let previous = null;
+    return points.map(({ number, x, y }) => {
+      const command = previous === number - 1 ? "L" : "M";
+      previous = number;
+      return `${command}${x},${y}`;
+    }).join("");
+  }
+  function mapStats(value) {
+    if (!value || !["watchers", "comments"].every((key) => Number.isSafeInteger(value[key]) && value[key] >= 0)) {
+      throw new Error("Invalid episode statistics.");
+    }
+    return { watchers: value.watchers, comments: value.comments };
+  }
+
+  // src/features/your-ratings/api.js
+  function createRatingsApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
+    let cache3 = null;
+    let flight = null;
+    let generation2 = 0;
+    function resetSession() {
+      generation2++;
+      cache3 = null;
+      flight = null;
+    }
+    async function load() {
+      if (!signedIn()) {
+        resetSession();
+        return [];
+      }
+      if (cache3 && cache3.until > now()) return cache3.items;
+      if (flight) return flight;
+      const epoch = generation2;
+      const pending = (async () => {
+        const rows = await auth("GET", "/sync/ratings/episodes");
+        if (epoch !== generation2 || !signedIn()) throw new Error("Ratings session changed.");
+        if (!Array.isArray(rows)) throw new Error("Invalid ratings response.");
+        const items = mapRatings(rows);
+        cache3 = { items, until: now() + 10 * 6e4 };
+        return items;
+      })();
+      flight = pending;
+      try {
+        return await pending;
+      } finally {
+        if (flight === pending) flight = null;
+      }
+    }
+    return { load, resetSession };
+  }
+  var ratingsApi = createRatingsApi();
+  if (typeof document !== "undefined") document.addEventListener("ogt:authchange", ratingsApi.resetSession);
+
+  // src/features/your-ratings/styles.js
+  var CSS4 = String.raw`
+/* Follows a season card's "13 episodes" subtitle: " · ♥ 7.5". */
+.ogt-your-average { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap;
+  color: light-dark(#075c86, #83d5ff); font-weight: 600; }
+.ogt-your-average::before { content: "·"; margin-inline: 5px 2px; color: light-dark(#767676, #a7a7a7); font-weight: 400; }
+.ogt-your-average svg { inline-size: 0.95em; block-size: 0.95em; fill: currentColor; }
+.ogt-season-chart__legend-community { color: light-dark(#c4161c, #ff6b6b); }
+.ogt-season-chart__personal { stroke: light-dark(#075c86, #83d5ff); fill: none; stroke-width: 2; }
+.ogt-season-chart__personal-dot { fill: light-dark(#075c86, #83d5ff); stroke: var(--ogt-surface); stroke-width: 1; }
+.ogt-season-chart__counts { fill: none; stroke-width: 1.5; }
+.ogt-season-chart__watchers { stroke: light-dark(#397a27, #a3d78e); }
+.ogt-season-chart__comments { stroke: light-dark(#8250a0, #d7a8f0); stroke-dasharray: 4 3; }
+.ogt-season-chart__legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 6px 0; font-size: .85rem; }
+.ogt-season-chart__legend-personal { color: light-dark(#075c86, #83d5ff); }
+.ogt-season-chart a:focus-visible circle { stroke: light-dark(#111, #fff); stroke-width: 3; }
+`;
+
+  // src/features/your-ratings/index.js
+  var HEART = "M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 5.3 3 1.7-1.9 3.2-3 5.3-3 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z";
+  function heart() {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg3.setAttribute("viewBox", "0 0 24 24");
+    svg3.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", HEART);
+    svg3.append(path);
+    return svg3;
+  }
+  var yourRatings = {
+    id: "your-ratings",
+    css: CSS4,
+    match: (route) => route.kind === "show" && ["title", "seasons"].includes(route.name) && isSignedIn(),
+    mount(route) {
+      const section = document.querySelector("section.seasons");
+      if (!section || document.getElementById("ogt-your-ratings")) return null;
+      const node = el("span", { id: "ogt-your-ratings", hidden: true });
+      section.prepend(node);
+      let cancelled = false;
+      let items = [];
+      const badges = /* @__PURE__ */ new Set();
+      function render() {
+        if (cancelled) return;
+        for (const card of section.querySelectorAll("article.poster-card")) {
+          if (card.querySelector(".ogt-your-average")) continue;
+          const href = card.querySelector('a[href*="/seasons/"]')?.getAttribute("href");
+          const match = href?.match(/\/seasons\/(\d+)\/?$/);
+          if (!match) continue;
+          const rows = items.filter((item) => item.season === Number(match[1]));
+          const average = personalAverage(rows);
+          if (average == null) continue;
+          const label = averageLabel(rows);
+          const badge = el(
+            "span",
+            { class: "ogt-your-average", title: label, "aria-label": label },
+            heart(),
+            el("span", { text: average.toFixed(1) })
+          );
+          (card.querySelector(".titles-link .subtitle") || card).append(badge);
+          badges.add(badge);
+        }
+      }
+      const observer = new MutationObserver(render);
+      observer.observe(section, { childList: true, subtree: true });
+      ratingsApi.load().then((rows) => {
+        items = forShow(rows, route.id);
+        render();
+      }).catch((error) => debugError("personal ratings lookup failed", error));
+      function onAuth() {
+        cancelled = true;
+        observer.disconnect();
+        node.remove();
+        for (const badge of badges) badge.remove();
+      }
+      document.addEventListener("ogt:authchange", onAuth);
+      return { node, destroy() {
+        onAuth();
+        document.removeEventListener("ogt:authchange", onAuth);
+      } };
+    }
+  };
+
   // src/features/season-chart/data.js
   var CHART_WIDTH = 720;
   var CHART_HEIGHT = 180;
@@ -2578,13 +2735,13 @@
     const lowest = Math.min(...rated.map((episode) => episode.rating));
     return Math.min(50, Math.floor(lowest / 10) * 10);
   }
-  function chartGeometry(episodes, allEpisodes = episodes, average = averageRating(episodes), width = CHART_WIDTH) {
+  function chartGeometry(episodes, allEpisodes = episodes, average = averageRating(episodes), width = CHART_WIDTH, scaleEpisodes = episodes, right = PLOT.right) {
     const rated = ratedEpisodes(episodes);
     const allNumbers = allEpisodes.map((episode) => episode.number).filter(Number.isFinite);
     const first = allNumbers.length ? Math.min(...allNumbers) : 1;
     const last = allNumbers.length ? Math.max(...allNumbers) : first;
-    const bottom = axisBottom(rated);
-    const plotWidth = width - PLOT.left - PLOT.right;
+    const bottom = axisBottom(scaleEpisodes);
+    const plotWidth = width - PLOT.left - right;
     const plotHeight = CHART_HEIGHT - PLOT.top - PLOT.bottom;
     const slot = plotWidth / (last - first + 1);
     const x = (number) => PLOT.left + (number - first + 0.5) * slot;
@@ -2592,7 +2749,7 @@
     return {
       width,
       height: CHART_HEIGHT,
-      plot: PLOT,
+      plot: { ...PLOT, right },
       axisBottom: bottom,
       slot,
       baseY: y(bottom),
@@ -2611,6 +2768,45 @@
     return `M${left},${base}V${top + r}Q${left},${top} ${left + r},${top}H${right - r}Q${right},${top} ${right},${top + r}V${base}Z`;
   }
 
+  // src/features/season-chart/extra.js
+  var NS2 = "http://www.w3.org/2000/svg";
+  function svg(tag, attrs, text2) {
+    const node = document.createElementNS(NS2, tag);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+    if (text2) node.textContent = text2;
+    return node;
+  }
+  function drawExtras(chart, episodes, geometry, personal, stats) {
+    const { plot, width, height, slot, axisBottom: axisBottom2 } = geometry;
+    const first = Math.min(...episodes.map((e) => e.number));
+    const x = (number) => plot.left + (number - first + 0.5) * slot;
+    const y = (rating) => plot.top + (100 - rating) / (100 - axisBottom2) * (height - plot.top - plot.bottom);
+    const points = episodes.filter((e) => personal.some((p) => p.number === e.number)).map((e) => ({ ...e, x: x(e.number), y: y(personal.find((p) => p.number === e.number).rating * 10) }));
+    chart.append(svg("path", { class: "ogt-season-chart__personal", d: linePath(points) }));
+    for (const point of points) {
+      const label = `Your rating, Episode ${point.number}: ${personal.find((p) => p.number === point.number).rating} of 10`;
+      const link = svg("a", { href: point.href, tabindex: "0", "aria-label": label });
+      link.append(svg("title", {}, label), svg("circle", { class: "ogt-season-chart__personal-dot", cx: point.x, cy: point.y, r: 4 }));
+      chart.append(link);
+    }
+    if (!stats) return;
+    const max = Math.max(1, ...stats.flatMap((s) => [s.watchers, s.comments]));
+    const countY = (count) => plot.top + (1 - count / max) * (height - plot.top - plot.bottom);
+    for (const count of [0, Math.round(max / 2), max]) {
+      chart.append(svg("text", { class: "ogt-season-chart__axis", x: width - plot.right + 5, y: countY(count) + 4 }, String(count)));
+    }
+    for (const key of ["watchers", "comments"]) {
+      const series = stats.map((s) => ({ number: s.number, x: x(s.number), y: countY(s[key]) }));
+      chart.append(svg("path", { class: `ogt-season-chart__counts ogt-season-chart__${key}`, d: linePath(series) }));
+      for (const point of series) {
+        const label = `Episode ${point.number}: ${stats.find((s) => s.number === point.number)[key]} ${key}`;
+        const dot = svg("circle", { class: `ogt-season-chart__counts ogt-season-chart__${key}`, cx: point.x, cy: point.y, r: 3, tabindex: "0", role: "img", "aria-label": label });
+        dot.append(svg("title", {}, label));
+        chart.append(dot);
+      }
+    }
+  }
+
   // src/features/season-chart/api.js
   async function getSeasonEpisodes(id, season) {
     const episodes = await apiGet(
@@ -2618,9 +2814,12 @@
     );
     return Array.isArray(episodes) ? episodes : [];
   }
+  async function getEpisodeStats(id, season, number) {
+    return apiGet(`/shows/${encodeURIComponent(id)}/seasons/${season}/episodes/${number}/stats`);
+  }
 
   // src/features/season-chart/styles.js
-  var CSS4 = String.raw`
+  var CSS5 = String.raw`
 .ogt-season-chart__summary {
   margin: 0 0 8px;
   color: var(--ogt-fg);
@@ -2699,7 +2898,7 @@
   var DEFAULT_WIDTH = 720;
   var MIN_WIDTH = 320;
   var MAX_BAR = 24;
-  function svg(tag, attributes = {}, content = "") {
+  function svg2(tag, attributes = {}, content = "") {
     const node = document.createElementNS(SVG_NS, tag);
     for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
     if (content) node.textContent = content;
@@ -2722,22 +2921,23 @@
     const averageText = average == null ? "—" : formatPercent(average);
     return `Season average: ${averageText} · Best: ${episodeName(best)} · Worst: ${episodeName(worst)}`;
   }
-  function drawChart(chart, episodes, average, targetWidth) {
-    const geometry = chartGeometry(episodes, episodes, average, targetWidth);
+  function drawChart(chart, episodes, average, targetWidth, personal = [], stats = null) {
+    const scale = [...episodes, ...personal.map((p) => ({ ...p, rating: p.rating * 10 }))];
+    const geometry = chartGeometry(episodes, episodes, average, targetWidth, scale, stats ? 64 : 12);
     const { width, height, plot, ticks, points, averageY } = geometry;
     chart.replaceChildren();
     chart.setAttribute("viewBox", `0 0 ${width} ${height}`);
     for (const tick of ticks) {
       const y = plot.top + (100 - tick) / (100 - geometry.axisBottom) * (height - plot.top - plot.bottom);
       chart.append(
-        svg("line", {
+        svg2("line", {
           class: "ogt-season-chart__gridline",
           x1: plot.left,
           x2: width - plot.right,
           y1: y,
           y2: y
         }),
-        svg("text", { class: "ogt-season-chart__axis", x: plot.left - 7, y: y + 4, "text-anchor": "end" }, `${tick}%`)
+        svg2("text", { class: "ogt-season-chart__axis", x: plot.left - 7, y: y + 4, "text-anchor": "end" }, `${tick}%`)
       );
     }
     const barWidth = Math.min(MAX_BAR, geometry.slot * 0.6);
@@ -2750,32 +2950,32 @@
     for (const { episode, x, y } of points) {
       const label = `${episodeName(episode)}, ${voteLabel(episode.votes)}`;
       const lowVotes = episode.votes != null && episode.votes < 10;
-      const link = svg("a", { href: episode.href || "#", tabindex: "0", "aria-label": label });
-      const bar = svg("path", {
+      const link = svg2("a", { href: episode.href || "#", tabindex: "0", "aria-label": label });
+      const bar = svg2("path", {
         class: `ogt-season-chart__bar${lowVotes ? " ogt-season-chart__bar--low-votes" : ""}`,
         d: barPath(x, y, barWidth, geometry.baseY),
         style: `--ogt-bar: var(--rating-${ratingLevel(episode.rating)}, var(--brand-primary, #ed1c24))`
       });
-      const target = svg("rect", {
+      const target = svg2("rect", {
         class: "ogt-season-chart__target",
         x: x - geometry.slot / 2,
         y: plot.top,
         width: geometry.slot,
         height: geometry.baseY - plot.top
       });
-      link.append(svg("title", {}, label), target, bar);
-      chart.append(link, svg("text", { class: "ogt-season-chart__episode-number", x, y: height - 7 }, String(episode.number)));
+      link.append(svg2("title", {}, label), target, bar);
+      chart.append(link, svg2("text", { class: "ogt-season-chart__episode-number", x, y: height - 7 }, String(episode.number)));
       const isBest = episode.rating === best && !bestLabelled && best !== worst;
       const isWorst = episode.rating === worst && !worstLabelled && best !== worst;
       if (isBest || isWorst) {
         if (isBest) bestLabelled = true;
         else worstLabelled = true;
-        values.push(svg("text", { class: "ogt-season-chart__value", x, y: y - 6 }, formatPercent(episode.rating)));
+        values.push(svg2("text", { class: "ogt-season-chart__value", x, y: y - 6 }, formatPercent(episode.rating)));
       }
     }
     if (averageY != null) {
       chart.append(
-        svg("line", {
+        svg2("line", {
           class: "ogt-season-chart__average",
           x1: plot.left,
           x2: width - plot.right,
@@ -2785,13 +2985,19 @@
       );
     }
     chart.append(...values);
+    drawExtras(chart, episodes, geometry, personal, stats);
   }
-  function createPanel3(episodes) {
+  function createPanel3(episodes, route) {
+    let personal = [];
+    let stats = null;
+    let moreOpen = false;
+    let statsFlight = false;
+    let authRevision = 0;
     let cancelled = false;
     let currentEpisodes = episodes;
     const headingId = `${PANEL_ID2}-title`;
     const summaryLine = el("p", { class: "ogt-season-chart__summary" });
-    const chart = svg("svg", {
+    const chart = svg2("svg", {
       class: "ogt-season-chart__svg",
       role: "group",
       "aria-label": "Episode ratings by episode number"
@@ -2804,14 +3010,74 @@
       summaryLine,
       plot
     );
+    const legend = el("div", { class: "ogt-season-chart__legend", hidden: true });
+    const more = el("button", { class: "ogt-chip", type: "button", text: "More", "aria-expanded": "false" });
+    const hint = el("span", { class: "ogt-hint", role: "status" });
+    node.append(legend, el("div", { class: "ogt-row" }, more, hint));
+    async function toggleMore() {
+      moreOpen = !moreOpen;
+      more.setAttribute("aria-expanded", String(moreOpen));
+      more.textContent = moreOpen ? "Less" : "More";
+      hint.hidden = !moreOpen;
+      render(currentEpisodes);
+      if (!moreOpen || stats || statsFlight) return;
+      if (currentEpisodes.length > 30) {
+        hint.textContent = "Episode statistics skipped for seasons over 30 episodes.";
+        return;
+      }
+      if (!getClientId()) {
+        hint.textContent = "Set a Trakt client ID to load episode statistics.";
+        return;
+      }
+      statsFlight = true;
+      hint.textContent = "Loading episode statistics…";
+      try {
+        const result = await Promise.all(currentEpisodes.map(async (episode) => ({
+          number: episode.number,
+          ...mapStats(await getEpisodeStats(route.id, route.season, episode.number))
+        })));
+        if (cancelled) return;
+        stats = result;
+        hint.textContent = "";
+        render(currentEpisodes);
+      } catch (error) {
+        if (!cancelled) {
+          hint.textContent = "Episode statistics unavailable.";
+          debugError("episode statistics failed", error);
+        }
+      } finally {
+        statsFlight = false;
+      }
+    }
+    more.addEventListener("click", toggleMore);
+    async function loadPersonal() {
+      const revision = ++authRevision;
+      personal = [];
+      render(currentEpisodes);
+      if (!isSignedIn()) return;
+      try {
+        const rows = await ratingsApi.load();
+        if (cancelled || revision !== authRevision) return;
+        personal = forShow(rows, route.id).filter((item) => item.season === route.season);
+        render(currentEpisodes);
+      } catch (error) {
+        if (!cancelled) debugError("personal season ratings failed", error);
+      }
+    }
+    document.addEventListener("ogt:authchange", loadPersonal);
     function render(nextEpisodes) {
       if (cancelled) return;
       currentEpisodes = nextEpisodes;
       const rated = ratedEpisodes(currentEpisodes);
       const average = averageRating(currentEpisodes);
-      node.hidden = rated.length < 2;
-      summaryLine.textContent = summary(currentEpisodes, average);
-      drawChart(chart, currentEpisodes, average, chartWidth());
+      node.hidden = rated.length < 2 && personal.length < 2;
+      const visiblePersonal = personal.filter((p) => currentEpisodes.some((e) => e.number === p.number));
+      summaryLine.textContent = [summary(currentEpisodes, average), averageLabel(visiblePersonal, currentEpisodes.length)].filter(Boolean).join(" · ");
+      legend.replaceChildren(el("span", { class: "ogt-season-chart__legend-community", text: "Trakt community (bars)" }));
+      if (visiblePersonal.length) legend.append(el("span", { class: "ogt-season-chart__legend-personal", text: "Your ratings (blue line)" }));
+      if (moreOpen && stats) legend.append(el("span", { text: "Watchers (green) · Comments (purple dashed) · Counts: right axis" }));
+      legend.hidden = !visiblePersonal.length && !(moreOpen && stats);
+      drawChart(chart, currentEpisodes, average, chartWidth(), visiblePersonal, moreOpen ? stats : null);
     }
     let drawnWidth = 0;
     function chartWidth() {
@@ -2824,19 +3090,23 @@
     }) : null;
     resize?.observe(plot);
     render(currentEpisodes);
+    loadPersonal();
     return {
       node,
       render,
       destroy() {
         cancelled = true;
         resize?.disconnect();
+        authRevision++;
+        document.removeEventListener("ogt:authchange", loadPersonal);
+        more.removeEventListener("click", toggleMore);
         node.remove();
       }
     };
   }
   var seasonChart = {
     id: "season-chart",
-    css: CSS4,
+    css: CSS5,
     match(route) {
       return route.kind === "show" && route.name === "season";
     },
@@ -2845,7 +3115,7 @@
       const episodesSection = document.querySelector("section.episodes");
       if (!episodesSection) return null;
       const fallback = readSeasonEpisodes(document);
-      const panel = createPanel3(fallback);
+      const panel = createPanel3(fallback, route);
       episodesSection.parentElement.insertBefore(panel.node, episodesSection);
       if (getClientId()) {
         getSeasonEpisodes(route.id, route.season).then((episodes) => {
@@ -2959,12 +3229,12 @@
       let wasCollected = false;
       const label = el("span", { class: "ogt-library__title", text: "Add to library" });
       const glyph = el("span", { class: "ogt-library__glyph", "aria-hidden": "true" });
-      const svg2 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      for (const [name, value] of Object.entries({ viewBox: "0 0 24 28", fill: "none", stroke: "currentColor", "stroke-width": "1" })) svg2.setAttribute(name, value);
+      const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      for (const [name, value] of Object.entries({ viewBox: "0 0 24 28", fill: "none", stroke: "currentColor", "stroke-width": "1" })) svg3.setAttribute(name, value);
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", "M5 2h17v24H3V4a2 2 0 0 1 2-2Z M3 5H1V2a2 2 0 0 1 2-2h17v2 M14 2v8l3-2 3 2V2");
-      svg2.append(path);
-      glyph.append(svg2);
+      svg3.append(path);
+      glyph.append(svg3);
       const button2 = el("button", {
         type: "button",
         class: "ogt-library__button",
@@ -3231,7 +3501,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, playback, pronunciation, library];
+  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))
