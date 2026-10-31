@@ -3269,8 +3269,8 @@
 .ogt-review em { color:var(--brand-primary,#ed1c24); font-style:normal; }
 .ogt-review__grid { display:grid; grid-template-columns:144px 144px minmax(180px,360px); gap:10px; }
 .ogt-review__tile,.ogt-review__first { background:rgba(120,24,30,.38); border-radius:6px; padding:10px 12px; }
-.ogt-review__tile { display:grid; grid-template-columns:32px minmax(0,1fr); align-items:center; column-gap:10px; min-width:0; min-height:64px; box-sizing:border-box; }
-.ogt-review__icon { width:32px; height:32px; display:block; align-self:center; }
+.ogt-review__tile { display:grid; grid-template-columns:36px minmax(0,1fr); align-items:center; column-gap:10px; min-width:0; min-height:64px; box-sizing:border-box; }
+.ogt-review__icon { width:36px; height:36px; display:block; align-self:center; }
 .ogt-review__value { min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
 .ogt-review__tile strong { font-family:var(--font-headings, inherit); font-weight:700; font-size:28px; line-height:1; letter-spacing:-.025em; display:block; }
 .ogt-review__tile span { display:block; text-transform:uppercase; font-size:11px; line-height:1; color:#ddd; }
