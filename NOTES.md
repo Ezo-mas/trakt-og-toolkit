@@ -16,8 +16,10 @@
   days allow daily successful refreshes for late syncs; later reads retain the stored result. Authentication
   changes invalidate in-flight results. Runtime totals include rewatches and omit missing runtime values.
 - Unit and built-bundle checks cover date rollover, pagination, counts, empty/error/signed-out states and
-  dismissal. Real signed-in Firefox/Chromium, actual API payloads and fanart remain to be checked. Browser
-  automation was unavailable in this session (browser access host unavailable).
+  dismissal. Cached Playwright Chromium and Firefox passed mocked dashboard rendering at 1320px and
+  390px, no horizontal overflow, and Hide; desktop/mobile screenshots were visually inspected. The browser
+  connector was unavailable, but cached Playwright worked outside the filesystem sandbox. Real signed-in
+  userscript-manager mounting, actual API payloads and fanart remain to be checked.
 
 Working notes and known issues. Newest first.
 
