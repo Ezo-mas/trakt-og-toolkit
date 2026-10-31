@@ -2,6 +2,10 @@
 
 ## 2026-11-01: last month in review (feature 6)
 
+- Visual follow-up: native `--brand-primary` red for the month/button, red translucent tiles, decorative
+  inline SVG icons, native Figtree body/heading variables and 700-weight compact typography. Rechecked
+  desktop/mobile screenshots and Hide in Playwright Chromium/Firefox with og’s actual Figtree font.
+
 - Checked latest trakt-og `4bdefaf4e` after fetching origin: `DashboardPage.svelte`, `RecapRibbon`,
   `LastThirtyDaysPanel`, `traktUrls.monthInReview`, and `git log -S monthInReview`. Og has a month strip
   and rolling thirty-day stats, but no last-calendar-month card. The review URL is

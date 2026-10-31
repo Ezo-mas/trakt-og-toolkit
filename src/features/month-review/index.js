@@ -5,6 +5,23 @@ import { STORAGE, setPrivateValue } from '../../core/store.js';
 import { loadReview } from './api.js';
 import { fanart } from './data.js';
 import { CSS } from './styles.js';
+// Decorative SVGs keep the tiles crisp without depending on og's icon font.
+function tileIcon(kind) {
+  const paths = {
+    plays: ['M7 3 22 12 7 21Z'],
+    hours: ['M10 2h4M12 5v2M19 6l2-2', 'M12 8v5l3 2', 'M21 14a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'],
+    ratings: ['M8 10 12 3c1-2 3-1 3 1v5h5c2 0 2 2 2 3l-2 7c0 1-1 2-3 2H8Z', 'M3 10h5v11H3Z'],
+    comments: ['M22 11c0 5-4 8-10 8H8l-6 4 2-7a8 8 0 0 1-2-5c0-5 4-9 10-9s10 4 10 9Z'],
+  };
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  for (const [key, value] of Object.entries({ viewBox: '0 0 24 24', class: 'ogt-review__icon', 'aria-hidden': 'true', focusable: 'false',
+    fill: ['ratings', 'comments'].includes(kind) ? 'currentColor' : 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linejoin': 'round', 'stroke-linecap': 'round' })) svg.setAttribute(key, value);
+  for (const d of paths[kind]) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d); svg.append(path);
+  }
+  return svg;
+}
 export const monthReview = {
   id: 'month-review', css: CSS,
   match: (route) => route.name === 'dashboard' && isSignedIn(),
@@ -24,7 +41,8 @@ export const monthReview = {
       const art = fanart(first);
       const grid = el('div', { class: 'ogt-review__grid' });
       for (const key of ['plays', 'hours', 'ratings', 'comments']) grid.append(el('div', { class: 'ogt-review__tile' },
-        el('strong', { text: data[key].toLocaleString() }), el('span', { text: key })));
+        tileIcon(key), el('div', { class: 'ogt-review__value' },
+          el('strong', { text: data[key].toLocaleString() }), el('span', { text: key }))));
       grid.append(el('div', { class: 'ogt-review__first' }, el('small', { text: `First play of ${span.label}` }),
         el('div', {}, el('strong', { text: media?.title || 'Untitled' }),
           first.episode ? `${first.episode.season}×${String(first.episode.number).padStart(2, '0')} “${first.episode.title || 'Untitled episode'}”` : '')));

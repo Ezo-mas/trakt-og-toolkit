@@ -3260,26 +3260,57 @@
 
   // src/features/month-review/styles.js
   var CSS6 = `
-.ogt-review { position:relative; isolation:isolate; color:white; background:#17121f; overflow:hidden; }
+.ogt-review { position:relative; isolation:isolate; color:white; background:#181012; font-family:var(--font-body, "Helvetica Neue", Helvetica, Arial, sans-serif); overflow:hidden; }
 .ogt-review[hidden] { display:none; }
 .ogt-review__art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:-2; }
-.ogt-review::before { content:''; position:absolute; inset:0; background:linear-gradient(90deg,rgba(8,8,18,.92),rgba(8,8,18,.45)); z-index:-1; }
+.ogt-review::before { content:''; position:absolute; inset:0; background:linear-gradient(90deg,rgba(10,8,10,.92),rgba(10,8,10,.45)); z-index:-1; }
 .ogt-review__inner { max-width:1160px; margin:auto; padding:32px 24px; }
-.ogt-review h2 { font-size:clamp(26px,4vw,42px); font-weight:800; margin:0 0 28px; color:white; }
-.ogt-review em { color:#b965d4; font-style:normal; }
+.ogt-review h2 { font-size:clamp(26px,4vw,42px); font-family:var(--font-headings, inherit); font-weight:700; letter-spacing:-.025em; line-height:1.1; margin:0 0 28px; color:white; }
+.ogt-review em { color:var(--brand-primary,#ed1c24); font-style:normal; }
 .ogt-review__grid { display:grid; grid-template-columns:120px 120px minmax(180px,330px); gap:10px; }
-.ogt-review__tile,.ogt-review__first { background:rgba(104,49,133,.35); border-radius:6px; padding:14px; }
-.ogt-review__tile strong { font-size:28px; line-height:1; display:block; }
-.ogt-review__tile span,.ogt-review__first small { text-transform:uppercase; font-size:12px; color:#ddd; }
-.ogt-review__first { grid-column:3; grid-row:1 / 3; display:flex; flex-direction:column; justify-content:space-between; gap:24px; }
-.ogt-review__first strong { font-size:24px; display:block; }
-.ogt-review__link { display:inline-block; margin-top:26px; padding:10px 14px; background:#9747b5; color:white!important; border-radius:4px; font-weight:bold; }
+.ogt-review__tile,.ogt-review__first { background:rgba(120,24,30,.38); border-radius:6px; padding:10px 12px; }
+.ogt-review__tile { display:flex; align-items:center; gap:10px; min-width:0; }
+.ogt-review__icon { width:30px; height:30px; flex:none; }
+.ogt-review__value { min-width:0; }
+.ogt-review__tile strong { font-family:var(--font-headings, inherit); font-weight:700; font-size:28px; line-height:1; letter-spacing:-.025em; display:block; }
+.ogt-review__tile span,.ogt-review__first small { text-transform:uppercase; font-size:10px; line-height:1.15; color:#ddd; }
+.ogt-review__first { grid-column:3; grid-row:1 / 3; display:flex; flex-direction:column; justify-content:space-between; gap:24px; padding:12px; }
+.ogt-review__first strong { font-family:var(--font-headings, inherit); font-size:24px; font-weight:700; letter-spacing:-.025em; line-height:1.1; display:block; }
+.ogt-review__link { display:inline-block; margin-top:26px; padding:10px 14px; background:var(--brand-primary,#ed1c24); text-decoration:none; color:white!important; border-radius:4px; font-weight:bold; }
+.ogt-review__link:hover { background:var(--brand-primary-darken,#c61017); }
+.ogt-review__link:focus-visible,.ogt-review__hide:focus-visible { outline:2px solid white; outline-offset:3px; }
 .ogt-review__hide { position:absolute; right:12px; top:8px; border:0; background:transparent; color:white; cursor:pointer; }
 .ogt-review-hint { padding:12px 24px; color:light-dark(#555,#bbb); }
 @media(max-width:600px) { .ogt-review__grid { grid-template-columns:1fr 1fr; } .ogt-review__first { grid-column:1 / 3; grid-row:3; } }
 `;
 
   // src/features/month-review/index.js
+  function tileIcon(kind) {
+    const paths = {
+      plays: ["M7 3 22 12 7 21Z"],
+      hours: ["M10 2h4M12 5v2M19 6l2-2", "M12 8v5l3 2", "M21 14a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"],
+      ratings: ["M8 10 12 3c1-2 3-1 3 1v5h5c2 0 2 2 2 3l-2 7c0 1-1 2-3 2H8Z", "M3 10h5v11H3Z"],
+      comments: ["M22 11c0 5-4 8-10 8H8l-6 4 2-7a8 8 0 0 1-2-5c0-5 4-9 10-9s10 4 10 9Z"]
+    };
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    for (const [key, value] of Object.entries({
+      viewBox: "0 0 24 24",
+      class: "ogt-review__icon",
+      "aria-hidden": "true",
+      focusable: "false",
+      fill: ["ratings", "comments"].includes(kind) ? "currentColor" : "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+      "stroke-linejoin": "round",
+      "stroke-linecap": "round"
+    })) svg3.setAttribute(key, value);
+    for (const d of paths[kind]) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d);
+      svg3.append(path);
+    }
+    return svg3;
+  }
   var monthReview = {
     id: "month-review",
     css: CSS6,
@@ -3305,8 +3336,13 @@
         for (const key of ["plays", "hours", "ratings", "comments"]) grid.append(el(
           "div",
           { class: "ogt-review__tile" },
-          el("strong", { text: data[key].toLocaleString() }),
-          el("span", { text: key })
+          tileIcon(key),
+          el(
+            "div",
+            { class: "ogt-review__value" },
+            el("strong", { text: data[key].toLocaleString() }),
+            el("span", { text: key })
+          )
         ));
         grid.append(el(
           "div",
