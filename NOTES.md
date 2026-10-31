@@ -4,6 +4,13 @@ Working notes and known issues. Newest first.
 
 ## 2026-10-31: personal ratings (features 7 and 8)
 
+- Later verification: Playwright browser access became available. The built bundle passed a real Chromium DOM
+  smoke check on locally served OG fixtures with mocked GM/API responses: three personal dots, 6.0 average,
+  four on-demand episode-stat requests, Less hiding counts, sign-out removing personal points, and the show-wide
+  average plus season badge. npm test and npm run build passed again. Live og.trakt.tv still returned
+  Cloudflare HTTP 403, so real-account and userscript-manager verification remain pending.
+
+
 - Checked live signed-out Breaking Bad show, seasons overview and season-1 HTML (saved with curl), plus trakt-og
   `4bdefaf4e` under `projects/client/src`: `SeasonPage.svelte`, `ShowPage.svelte`, `ShowSeasonsPage.svelte`,
   `SeasonsGrid.svelte`, and the show/season routes. Neither personal episode-rating lines nor episode-derived
