@@ -34,7 +34,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 20 | Turn features on and off from the menu | — | small |
 | 21 | Month review: browse earlier months | OAuth | small |
 
-**Next release:** bump to 0.3.0 once the bug items (15–17) are done; until then main stays 0.2.0 and userscript
+**Next release:** bump to 0.3.0 once most bugs are ironed out (15, 16 and any new ones); until then main stays 0.2.0 and userscript
 managers won't offer an update.
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
