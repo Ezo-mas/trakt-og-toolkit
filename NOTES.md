@@ -1,31 +1,26 @@
 # Notes
 
+Working notes and known issues. Newest first.
+
 ## 2026-11-01: last month in review (feature 6)
 
-- Visual follow-up: native `--brand-primary` red for the month/button, red translucent tiles, decorative
-  inline SVG icons, native Figtree body/heading variables and 700-weight compact typography. Rechecked
-  desktop/mobile screenshots and Hide in Playwright Chromium/Firefox with og’s actual Figtree font.
-
-- Checked latest trakt-og `4bdefaf4e` after fetching origin: `DashboardPage.svelte`, `RecapRibbon`,
-  `LastThirtyDaysPanel`, `traktUrls.monthInReview`, and `git log -S monthInReview`. Og has a month strip
-  and rolling thirty-day stats, but no last-calendar-month card. The review URL is
-  `https://app.trakt.tv/users/:slug/mir/:year/:month`.
-- Saved live `/` and `/dashboard` to `/tmp/og-home.html` and `/tmp/og-dashboard.html`; signed-out responses
-  do not expose the session-only ribbon. The integration fixture is transcribed from RecapRibbon source,
-  not claimed to be a captured signed-in dashboard.
-- Auth query options are allowlisted; `apiAuthPage` exposes validated pagination metadata without changing
-  existing `apiAuth` return values. History, ratings and comments are paginated; timestamps are filtered
-  against a half-open local calendar month so boundary plays are not counted twice.
-- Cache and dismissal are private GM storage, keyed by the toolkit account slug and month. The first seven
-  days allow daily successful refreshes for late syncs; later reads retain the stored result. Authentication
-  changes invalidate in-flight results. Runtime totals include rewatches and omit missing runtime values.
-- Unit and built-bundle checks cover date rollover, pagination, counts, empty/error/signed-out states and
-  dismissal. Cached Playwright Chromium and Firefox passed mocked dashboard rendering at 1320px and
-  390px, no horizontal overflow, and Hide; desktop/mobile screenshots were visually inspected. The browser
-  connector was unavailable, but cached Playwright worked outside the filesystem sandbox. Real signed-in
-  userscript-manager mounting, actual API payloads and fanart remain to be checked.
-
-Working notes and known issues. Newest first.
+- og check (trakt-og `4bdefaf4e`: `DashboardPage.svelte`, `RecapRibbon`, `LastThirtyDaysPanel`,
+  `traktUrls.monthInReview`; `git log -S monthInReview`): og has the month strip and rolling thirty-day stats, but no
+  last-calendar-month card. Its review URL is `https://app.trakt.tv/users/:slug/mir/:year/:month`.
+- The dashboard is session-only, so signed-out captures of `/` and `/dashboard` have no `nav.ribbon`; the integration
+  fixture is transcribed from `RecapRibbon`. The drift check lists it as "not checked (needs login)".
+- `apiAuth` takes an allowlist of query options (`page`, `limit`, `start_at`, `end_at`, `extended`); `apiAuthPage`
+  also returns `X-Pagination-Page-Count`. History and comments are paginated. `/sync/ratings` has no date filter, so
+  it is fetched once unpaginated (Trakt returns everything without `page`) and filtered locally.
+- Counts use a half-open local calendar month, so boundary plays are not counted twice. Hours include rewatches and
+  skip missing runtimes. The month name is always English, like og.
+- Cache and dismissal are private GM storage keyed by account slug and month; the first seven days refresh at most
+  daily for late syncs.
+- History's `extended=images` fanart is the 1280px `medium` size; the card swaps in `full` (1920px). A fanart that
+  fails to load is removed, leaving the plain background.
+- Styling matches og: `--brand-primary` red, Figtree via og's font variables, og container widths so the card lines
+  up with the ribbon and Up Next. Verified live 2026-11-01 on a real account (first play a movie); an episode first
+  play was checked with a mocked mockup at desktop and phone widths.
 
 ## 2026-11-01: personal ratings (features 7 and 8)
 

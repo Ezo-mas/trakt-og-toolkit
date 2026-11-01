@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { lastMonth, summarize, freshCache } from '../src/features/month-review/data.js';
+import { lastMonth, summarize, freshCache, fanart } from '../src/features/month-review/data.js';
 import { paginate } from '../src/features/month-review/api.js';
 
 test('local calendar boundaries cross January and daylight saving correctly', () => {
@@ -39,4 +39,11 @@ test('early-month cache refresh is daily; settled months remain cached', () => {
   assert.ok(freshCache({ savedAt: +now - 1000 }, now));
   assert.equal(freshCache({ savedAt: +now - 86400000 }, now), false);
   assert.ok(freshCache({ savedAt: 0 }, new Date(2026, 10, 8)));
+});
+
+test('month label is English and fanart uses the full size', () => {
+  assert.equal(lastMonth(new Date(2026, 10, 1)).label, 'October');
+  assert.equal(fanart({ show: { images: { fanart: ['media.trakt.tv/images/shows/000/004/170/fanarts/medium/a.jpg.webp'] } } }),
+    'https://media.trakt.tv/images/shows/000/004/170/fanarts/full/a.jpg.webp');
+  assert.equal(fanart({ movie: { images: { fanart: ['https://evil.example/fanarts/medium/a.jpg'] } } }), null);
 });

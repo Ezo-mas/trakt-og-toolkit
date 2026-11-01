@@ -33,9 +33,11 @@ export function loadReview(now = new Date()) {
     alive();
     let summary = { plays: 0 };
     if (history.some((row) => Date.parse(row.watched_at) >= Date.parse(span.start) && Date.parse(row.watched_at) < Date.parse(span.end))) {
+      // Ratings have no date filter; unpaginated, Trakt returns them all in one response instead of 100 per page.
       const [ratings, comments] = await Promise.all([
-        paginate(apiAuthPage, '/sync/ratings'), paginate(apiAuthPage, '/users/me/comments'),
+        apiAuth('GET', '/sync/ratings'), paginate(apiAuthPage, '/users/me/comments'),
       ]);
+      if (!Array.isArray(ratings)) throw new Error('Invalid review response.');
       alive();
       summary = summarize(history, ratings, comments, span);
     }

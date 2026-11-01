@@ -3,7 +3,8 @@ export function lastMonth(now = new Date()) {
   const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   return { start: start.toISOString(), end: end.toISOString(), year: start.getFullYear(),
     month: start.getMonth() + 1, key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`,
-    label: start.toLocaleString(undefined, { month: 'long' }) };
+    // og is English-only; match it whatever the browser language.
+    label: start.toLocaleString('en-US', { month: 'long' }) };
 }
 export function inMonth(value, span) {
   const time = Date.parse(value);
@@ -25,7 +26,10 @@ export function fanart(first) {
   if (typeof raw !== 'string') return null;
   try {
     const url = new URL(raw.startsWith('https://') ? raw : `https://${raw}`);
-    return url.protocol === 'https:' && url.hostname === 'media.trakt.tv' ? url.href : null;
+    if (url.protocol !== 'https:' || url.hostname !== 'media.trakt.tv') return null;
+    // The API hands out the 1280px "medium" size; the card spans the page, so use the 1920px "full" one.
+    url.pathname = url.pathname.replace('/fanarts/medium/', '/fanarts/full/');
+    return url.href;
   } catch { return null; }
 }
 export function freshCache(entry, now) {

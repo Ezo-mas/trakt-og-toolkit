@@ -17,7 +17,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 3 | Metadata links | — | dropped: og ships it |
 | 4 | Custom link presets | done | 1, 2, 3 |
 | 5 | Small extras | — | pronunciation done; poster corners dropped |
-| 6 | Last month in review card | OAuth | done; signed-in browser check pending |
+| 6 | Last month in review card | OAuth | done |
 | 7 | Season chart: your ratings + watchers/comments | OAuth (ratings) | done |
 | 8 | Your personal season and show averages | OAuth | done |
 | 9 | Playback extras: set progress | OAuth | small |
@@ -185,7 +185,7 @@ legitimate services so it's useful straight away.
 
 ## 6. Last month in review card
 
-**Status:** implemented with unit and built-bundle tests; real signed-in Firefox/Chromium check pending.
+**Status:** done; verified 2026-11-01 on a real account in Zen + Violentmonkey.
 
 **Goal:** bring back classic Trakt's "your *March* in review" dashboard card: a summary of last month on the dashboard,
 without opening Month in Review on trakt.tv.

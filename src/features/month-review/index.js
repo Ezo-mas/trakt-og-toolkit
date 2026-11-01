@@ -48,7 +48,10 @@ export const monthReview = {
           first.episode ? el('span', { class: 'ogt-review__episode' },
             el('b', { text: `${first.episode.season}x${String(first.episode.number).padStart(2, '0')}` }),
             ` “${first.episode.title || 'Untitled episode'}”`) : null)));
-      node.append(...(art ? [el('img', { class: 'ogt-review__art', src: art, alt: '', referrerpolicy: 'no-referrer' })] : []),
+      // A fanart that fails to load leaves the plain background instead of a broken-image box.
+      const image = art ? el('img', { class: 'ogt-review__art', src: art, alt: '', referrerpolicy: 'no-referrer' }) : null;
+      image?.addEventListener('error', () => image.remove(), { once: true });
+      node.append(...(image ? [image] : []),
         el('button', { type: 'button', class: 'ogt-review__hide', text: '× Hide', on: { click: hide } }),
         el('div', { class: 'ogt-review__inner' }, el('h2', {}, 'your ', el('em', { text: span.label.toLocaleLowerCase() }), ' in review'), grid,
           el('a', { class: 'ogt-review__link', text: 'Month in Review →', href: `https://app.trakt.tv/users/${encodeURIComponent(data.user)}/mir/${span.year}/${span.month}`, target: '_blank', rel: 'noopener noreferrer' })));

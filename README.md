@@ -43,6 +43,14 @@ ten minutes and are cleared when the account changes; nothing private enters the
 **More** on a season chart loads watchers and comments, off by default, on a separate right-hand count axis.
 This needs a client ID and uses the shared request queue. Seasons with more than 30 episodes skip these requests.
 
+### Last month in review
+
+Sign in through the toolkit to see last month’s plays, hours, ratings and comments under the dashboard’s month
+strip. The fanart card highlights your first play and links to the full Month in Review. Hide dismisses that month
+for your toolkit account. Nothing appears for months with no plays. Month boundaries use your browser’s time zone;
+results are stored in userscript storage per account and month, refreshing at most daily during the first seven days.
+Hours use the API’s reported runtimes, rounded to whole hours; missing runtimes contribute no time.
+
 ### Add to library
 
 Movie, show, season and episode pages have an **Add to library** button in the action stack. Sign in through the
@@ -215,8 +223,9 @@ links, poster rating corners. Backlog:
 
 ## Trakt API compliance
 
-- Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection` and
-  `/users/me` through your own optional OAuth sign-in. No Trakt HTML fetching, no internal og endpoints, no reuse of og's session.
+- Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection`,
+  `/sync/history`, `/sync/ratings`, `/users/me` and `/users/me/comments` through your own optional OAuth sign-in.
+  No Trakt HTML fetching, no internal og endpoints, no reuse of og's session.
   Pronunciation fetches Forvo's public search page (with `@connect forvo.com`) to find recordings.
 - Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with `Retry-After` on 429.
 - Nothing is uploaded, resold or redistributed; the script has no backend.
@@ -234,11 +243,3 @@ Written from scratch. Ideas and UX inspiration came from
 No GPL code was copied, so this project can stay MIT.
 
 Trakt OG Toolkit is not affiliated with Trakt.
-
-### Last month in review
-
-Sign in through the toolkit to see last month’s plays, hours, ratings and comments under the dashboard’s month
-strip. The fanart card highlights your first play and links to the full Month in Review. Hide dismisses that month
-for your toolkit account. Nothing appears for months with no plays. Month boundaries use your browser’s time zone;
-results are stored in userscript storage per account and month, refreshing at most daily during the first seven days.
-Hours use the API’s reported runtimes, rounded to whole hours; missing runtimes contribute no time.

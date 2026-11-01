@@ -43,6 +43,10 @@ test('built bundle renders under ribbon, links review, remembers hide and signs 
   assert.equal(node.querySelectorAll('.ogt-review__tile').length, 4);
   assert.match(node.textContent, /First movie/); assert.match(node.querySelector('a').href, /users\/tester\/mir\/\d{4}\/\d+/);
   assert.equal(node.querySelector('img').src, 'https://media.trakt.tv/fanart.jpg');
+  const ratings = b.calls.filter((r) => new URL(r.url).pathname === '/sync/ratings');
+  assert.equal(ratings.length, 1); assert.equal(new URL(ratings[0].url).search, '', 'ratings load in one unpaginated request');
+  node.querySelector('img').dispatchEvent(new b.window.Event('error'));
+  assert.equal(node.querySelector('img'), null, 'a failed fanart leaves no broken image');
   node.querySelector('button').click(); assert.equal(node.hidden, true);
   assert.equal(b.store.get('review.dismissed.tester'), lastMonth().key);
   b.store.delete('trakt.oauth.tokens'); b.doc.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
