@@ -4091,7 +4091,9 @@
         if (!states.has(key)) states.set(key, { busy: false, added: false, wasWatchlisted: false });
         return states.get(key);
       }
+      const resizeObserver = new ResizeObserver(schedule);
       function remove(entry) {
+        resizeObserver.unobserve(entry.bar);
         entry.button.removeEventListener("click", entry.click);
         entry.button.remove();
         entries.delete(entry.control);
@@ -4143,11 +4145,12 @@
             "aria-label": "Add to watchlist",
             title: "Add to watchlist using the toolkit’s Trakt account"
           }, watchlistIcon());
-          const entry = { control, card, route, key: route.key, button: button2 };
+          const entry = { control, card, route, key: route.key, button: button2, bar: control.closest(".quick-icons") };
           entry.click = (event) => add(entry, event);
           button2.addEventListener("click", entry.click);
           control.after(button2);
           entries.set(control, entry);
+          resizeObserver.observe(entry.bar);
         }
         const native = /* @__PURE__ */ new Map();
         for (const entry of entries.values()) {
@@ -4162,6 +4165,10 @@
           const state = stateFor(entry.key);
           const hidden = state.added || state.wasWatchlisted;
           if (entry.button.hidden !== hidden) entry.button.hidden = hidden;
+          if (!hidden && entry.card.matches(".poster-card")) {
+            const rating = entry.bar.querySelector(".percentage");
+            if (entry.bar.scrollWidth > entry.bar.clientWidth + 1 || rating && rating.scrollWidth > rating.clientWidth + 1) entry.button.hidden = true;
+          }
           if (entry.button.disabled !== state.busy) entry.button.disabled = state.busy;
           const busy = String(state.busy);
           if (entry.button.getAttribute("aria-busy") !== busy) entry.button.setAttribute("aria-busy", busy);
@@ -4189,12 +4196,17 @@
         attributes: true,
         attributeFilter: ["href", "aria-describedby"]
       });
+      window.addEventListener("resize", schedule);
+      document.fonts?.addEventListener("loadingdone", schedule);
       document.addEventListener("ogt:authchange", authChanged);
       scan();
       return { node, destroy() {
         destroyed = true;
         nativeRefresh.destroy();
         observer.disconnect();
+        resizeObserver.disconnect();
+        window.removeEventListener("resize", schedule);
+        document.fonts?.removeEventListener("loadingdone", schedule);
         document.removeEventListener("ogt:authchange", authChanged);
         for (const entry of entries.values()) remove(entry);
         states.clear();

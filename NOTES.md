@@ -4,6 +4,14 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-01: one-click watchlist (feature 13)
 
+- Poster-card shortcuts now hide when their action bar/rating would overflow, measured with the shortcut
+  present. A ResizeObserver, window resize and font-load updates restore the shortcut when space returns.
+  This follows actual card space at any zoom rather than guessing zoom from display pixel density; fanart
+  cards retain their existing layout. Cleanup disconnects observers and removes listeners.
+  Full tests/build pass. Captured OG markup/CSS in Chromium and Firefox verified wide → narrow → wide
+  transitions: shortcut visible → hidden → visible, no action-bar overflow, and a successful mocked save.
+  Actual browser zoom on the signed-in history page remains a live check.
+
 - Restricted card shortcuts to movies and whole shows at the user’s request. Up Next episode cards and season
   cards have no bookmark action, even when their subtitles link to the parent show. Recycled cards lose the
   shortcut when their canonical link becomes an episode/season. Title-page actions remain unchanged.

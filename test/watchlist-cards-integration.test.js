@@ -94,6 +94,22 @@ test('Up Next episode and season cards have no shortcut, including recycled card
   assert.equal(b.calls.length, 0);
 });
 
+test('narrow poster cards hide the shortcut and restore it when space returns', async t => {
+  const b = boot(t, { html: watchlistCardHtml({ small: true }) + watchlistCardHtml({ id: 'wide' }) });
+  await wait();
+  const bar = b.document.querySelector('.poster-card .quick-icons');
+  let available = 140;
+  Object.defineProperty(bar, 'clientWidth', { get: () => available });
+  Object.defineProperty(bar, 'scrollWidth', { get: () => bar.querySelector('.ogt-watchlist-card').hidden ? 130 : 165 });
+  b.window.dispatchEvent(new b.window.Event('resize')); await wait();
+  assert.equal(b.buttons()[0].hidden, true);
+  assert.equal(b.buttons()[1].hidden, false, 'fanart cards are unaffected');
+  available = 200;
+  b.window.dispatchEvent(new b.window.Event('resize')); await wait();
+  assert.equal(b.buttons()[0].hidden, false);
+  assert.equal(b.calls.length, 0);
+});
+
 test('card membership tracks native Watchlist additions/removals while custom lists keep the shortcut', async t => {
   const b = boot(t); await wait();
   nativeState(b, 'card-movie', true); await wait(); assert.equal(b.buttons()[0].hidden, true);

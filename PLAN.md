@@ -295,6 +295,7 @@ specials; the button hides when og shows its own library control.
 
 **Status:** implemented on movie, show, season and episode pages, plus movie/whole-show poster and fanart cards
 beside the lists button. Season and episode cards, including Up Next, have no shortcut.
+On narrow poster cards the shortcut hides to preserve the full rating, returning when space allows.
 The user verified title-page adding with their toolkit account. Unit tests and built-bundle integration tests
 pass. Movie/show saves now request OG's native picker membership refresh without opening it; seasons/episodes
 retain the reload fallback. Saved-page browser checks and remaining live checks are recorded in NOTES.md.

@@ -74,7 +74,10 @@ picker to remove items.
 
 Movie and whole-show poster and fanart cards also have a bookmark shortcut beside the blue lists button,
 including cards loaded as you browse. Season and episode cards (including Up Next) have no shortcut. It uses
-the card’s own title and the same toolkit account. The shortcut hides when that card’s native list tooltip includes Watchlist, or after a successful add; custom lists alone keep it available.
+the card’s own title and the same toolkit account. The shortcut hides when that card’s native list tooltip
+includes Watchlist, or after a successful add; custom lists alone keep it available.
+On narrow poster cards, the shortcut hides when it would crowd the rating and returns when there is room,
+including after zooming or resizing.
 
 Success shows **You added Spider-Man: Brand New Day to your watchlist.** (using the added title) in OG’s native
 notifier when available. Otherwise, a matching notification appears below the header on the right, with a green
