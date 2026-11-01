@@ -29,6 +29,13 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 15 | Season chart: remove the More button | — | small |
 | 16 | Custom links on season and episode pages | client ID optional | small; decide fix or hide first |
 | 17 | Watchlist buttons on a person's credits | OAuth | medium; reuses feature 13 |
+| 18 | `npm run drift`: cover features 12–13 and og's native modules | — | small |
+| 19 | Undo on success notices | OAuth | small |
+| 20 | Turn features on and off from the menu | — | small |
+| 21 | Month review: browse earlier months | OAuth | small |
+
+**Next release:** bump to 0.3.0 once the bug items (15–17) are done; until then main stays 0.2.0 and userscript
+managers won't offer an update.
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -381,6 +388,43 @@ Feature 13's card shortcut doesn't reach these rows: they aren't `.poster-card`/
 - **Check first:** the credits row markup at the current og commit, whether og added its own quick watchlist since,
   and how the page loads more credits (lazy rows must get shortcuts too). IDs: prefer the row's link slug; resolve
   Trakt IDs the same way feature 13 does.
+
+## 18. `npm run drift`: cover features 12–13 and og's native modules
+
+**Goal:** the daily drift check (`scripts/og-drift-checks.mjs`) only covers markup for custom links, the season chart,
+playback and pronunciation. Features 12 and 13 depend on more, and when it changes they fall back quietly (toolkit
+notice instead of og's, reload instead of refresh), so nobody notices.
+
+- Markup: the title action stack (`findActionStack`), the summary list control and its `aria-keyshortcuts` picker
+  trigger, and card `.quick-icons` list controls on a listing page such as `/movies/trending`.
+- Native modules, statically: fetch the root layout (`/_app/immutable/nodes/0.*.js`), then run `nativeToastImports`
+  + `isNativeToastStore` and `nativeLibraryImports` + `isNativeLibraryStore` on it and its imports. Report "not found"
+  as drift. No page-realm code, no sign-in.
+
+## 19. Undo on success notices
+
+**Goal:** card and credits shortcuts are one click, so misclicks happen. Add **Undo** to the toolkit's watchlist and
+library success notices (the fallback toast; og's native notifier can't take a button).
+
+- Undo sends `POST /sync/watchlist/remove` or `POST /sync/collection/remove` with the same body as the add, then
+  restores the button and requests the same native refresh.
+- Only for the toolkit's own fallback notice, or show a small Undo in the button's place when og's notice was used.
+- Don't remove items that were already on the list before the click (`existing` in the add response).
+
+## 20. Turn features on and off from the menu
+
+**Goal:** about ten features now; let people hide the ones they don't want without editing the script.
+
+- One toggle per feature in the toolkit menu, stored with `GM_setValue`; the host skips disabled features and
+  removes their nodes when toggled off.
+- Everything on by default.
+
+## 21. Month review: browse earlier months
+
+**Goal:** the dashboard card only shows last month. Add previous/next arrows to step through earlier months.
+
+- Same requests as now with a different date range; cache each month.
+- Stop at the account's first history entry; no next arrow past last month.
 
 ---
 
