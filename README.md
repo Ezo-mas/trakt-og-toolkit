@@ -252,7 +252,8 @@ links, poster rating corners. Backlog:
 
 - set playback progress by hand;
 - list preview posters that link to their titles;
-- all your lists in one view.
+- all your lists in one view;
+- remove the season chart's **More** button (its watchers and comments lines are too flat to read).
 
 ## Trakt API compliance
 

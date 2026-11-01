@@ -26,6 +26,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 12 | Add to library button | OAuth | done; user verified in Zen and Brave with real API |
 | 13 | One-click Add to watchlist | OAuth | done; user verified in Zen and Brave with real API |
 | 14 | Add to library on poster cards | OAuth | dropped: cards too tight; watchlist fits cards better |
+| 15 | Season chart: remove the More button | — | small |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -334,6 +335,18 @@ show it for items already in the library (trakt-og `1cd3142`, `LIBRARY_ADDING = 
 - **Space:** fits. og showed its own library icon in this slot on every card until `1cd3142` hid it (the removed
   `LibrarySyncLink` card variant used the same size), so it takes back an existing gap rather than adding one.
 - **Check first:** whether og has turned `LIBRARY_ADDING` back on.
+
+## 15. Season chart: remove the More button
+
+**Goal:** feature 7's **More** button adds watchers (green) and comments (purple dashed) lines to the season chart.
+On a real season (2026-11-01, 22 episodes) both say almost nothing: watchers barely move (about 41.4k down to 40k)
+on an axis from 0, so the line sits flat on the 100% gridline and looks like a rating; comments are a few dozen
+against that scale, so their line is pinned at 0. It also costs one stats request per episode.
+
+- Remove the More/Less button, the right count axis, both lines, their legend entry and the stats requests
+  (`getEpisodeStats`, `mapStats`, the 30-episode limit and its hints).
+- Keep the your-ratings line and its legend.
+- Update README, NOTES.md and tests.
 
 ---
 
