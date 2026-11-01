@@ -23,8 +23,8 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 9 | Playback extras: set progress | OAuth | small |
 | 10 | List preview posters link to titles | check og first | small |
 | 11 | All lists in one view | OAuth or public | lowest value |
-| 12 | Add to library button | OAuth | done |
-| 13 | One-click Add to watchlist | OAuth | done; card shortcut added, live card check pending |
+| 12 | Add to library button | OAuth | done; user verified in Zen and Brave with real API |
+| 13 | One-click Add to watchlist | OAuth | done; user verified in Zen and Brave with real API |
 | 14 | Add to library on poster cards | OAuth | deferred; card layout undecided |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
@@ -284,7 +284,8 @@ them across `/users/:id/lists`, `/collaborations` and `/liked`.
 
 ## 12. Add to library button
 
-**Status:** done. An **Add to library** action in the title, season and episode action stack, using the toolkit's own
+**Status:** done; user confirmed on a real account with the real Trakt API in Zen and Brave on 2026-11-01.
+An **Add to library** action in the title, season and episode action stack, using the toolkit's own
 sign-in and `POST /sync/collection` with the current date. Whole shows confirm the aired-episode count and skip
 specials; the button hides when og shows its own library control. Success uses the shared native-first
 notification with the title. Movie/show additions request OG’s own read-only collection refresh; unavailable
@@ -300,9 +301,9 @@ a disabled updating row fills the native-refresh handoff. No toolkit library act
 beside the lists button. Season and episode cards, including Up Next, have no shortcut.
 Poster shortcuts hide only in the 1.5–<1.8dppx resolution band (150–170% zoom on a 1x desktop display),
 returning at 180%. No fixed card-width cutoff; display-scaling limitations are documented in README.md.
-The user verified title-page adding with their toolkit account. Unit tests and built-bundle integration tests
-pass. Movie/show saves now request OG's native picker membership refresh without opening it; seasons/episodes
-retain the reload fallback. Saved-page browser checks and remaining live checks are recorded in NOTES.md.
+The user confirmed the feature on a real account with the real Trakt API in Zen and Brave on 2026-11-01.
+Unit tests and built-bundle integration tests pass. Movie/show saves now request OG's native picker membership refresh without opening it; seasons/episodes
+retain the reload fallback. Saved-page browser checks and the user’s live confirmation are recorded in NOTES.md.
 Success notifications try OG's native notifier, with a matching top-right fallback when unavailable.
 
 **Goal:** og's "Listed on" button opens a list picker; adding to the watchlist takes several clicks. Add a separate
