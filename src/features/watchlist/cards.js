@@ -21,6 +21,12 @@ export const watchlistCards = {
       padding: 0; border: 0; border-radius: 0; background: none;
       color: var(--brand-fifth, #2b678f); cursor: pointer; }
     .ogt-watchlist-card[hidden] { display: none !important; }
+    .poster-card .quick-icons:has(.ogt-watchlist-card) {
+      container-type: inline-size; container-name: ogt-watchlist-actions;
+    }
+    @container ogt-watchlist-actions (max-width: 180px) {
+      .ogt-watchlist-card { display: none !important; }
+    }
     .ogt-watchlist-card svg { width: 20px; height: 24px; stroke-linejoin: round; }
     .quick-icons.small .ogt-watchlist-card { block-size: calc(var(--bar, 35px) - 1px); }
     .quick-icons.small .ogt-watchlist-card svg { width: 16px; height: 20px; }
@@ -114,8 +120,18 @@ export const watchlistCards = {
         // Zoom changes the available CSS width; it cannot be reliably inferred from devicePixelRatio.
         if (!hidden && entry.card.matches('.poster-card')) {
           const rating = entry.bar.querySelector('.percentage');
-          if (entry.bar.scrollWidth > entry.bar.clientWidth + 1 ||
-              (rating && rating.scrollWidth > rating.clientWidth + 1)) entry.button.hidden = true;
+          const actions = entry.bar.querySelector('.actions');
+          // The native rating button can clip its child while the bar itself reports no overflow.
+          // Range bounds include the rendered digits even when an ancestor clips them.
+          const range = document.createRange();
+          if (rating) range.selectNodeContents(rating);
+          const content = rating && range.getBoundingClientRect?.();
+          const ratingStyle = rating && getComputedStyle(rating);
+          const ratingWidth = rating ? Math.max(rating.scrollWidth, (content?.width ?? 0) +
+            (parseFloat(ratingStyle.paddingLeft) || 0) + (parseFloat(ratingStyle.paddingRight) || 0)) : 0;
+          const requiredWidth = (actions?.scrollWidth ?? 0) + ratingWidth;
+          if (entry.bar.scrollWidth > entry.bar.clientWidth || requiredWidth > entry.bar.clientWidth ||
+              (rating && rating.scrollWidth > rating.clientWidth)) entry.button.hidden = true;
         }
         if (entry.button.disabled !== state.busy) entry.button.disabled = state.busy;
         const busy = String(state.busy);

@@ -110,6 +110,30 @@ test('narrow poster cards hide the shortcut and restore it when space returns', 
   assert.equal(b.calls.length, 0);
 });
 
+test('poster rating clipped inside its control hides the shortcut even without bar overflow', async t => {
+  const b = boot(t, { html: watchlistCardHtml({ small: true }) }); await wait();
+  const bar = b.document.querySelector('.quick-icons');
+  const actions = bar.querySelector('.actions');
+  const rating = bar.querySelector('.percentage');
+  let available = 145;
+  Object.defineProperty(bar, 'clientWidth', { get: () => available });
+  Object.defineProperty(bar, 'scrollWidth', { get: () => available });
+  Object.defineProperty(actions, 'scrollWidth', { get: () => b.buttons()[0].hidden ? 84 : 112 });
+  Object.defineProperty(rating, 'clientWidth', { get: () => 33 });
+  Object.defineProperty(rating, 'scrollWidth', { get: () => 33 });
+  const createRange = b.document.createRange.bind(b.document);
+  b.document.createRange = () => {
+    const range = createRange();
+    range.getBoundingClientRect = () => ({ width: 51 });
+    return range;
+  };
+  b.window.dispatchEvent(new b.window.Event('resize')); await wait();
+  assert.equal(b.buttons()[0].hidden, true);
+  available = 180;
+  b.window.dispatchEvent(new b.window.Event('resize')); await wait();
+  assert.equal(b.buttons()[0].hidden, false);
+});
+
 test('card membership tracks native Watchlist additions/removals while custom lists keep the shortcut', async t => {
   const b = boot(t); await wait();
   nativeState(b, 'card-movie', true); await wait(); assert.equal(b.buttons()[0].hidden, true);

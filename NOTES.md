@@ -4,6 +4,18 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-01: one-click watchlist (feature 13)
 
+- User reported the first space-based fix still clips Social Feed ratings at 150% in Zen. The earlier browser
+  check converted a fanart card and tested only two widths; it did not validate the actual signed-in Social
+  Feed at 150%. A saved real poster with a modeled native rating button did not reproduce that exact failure.
+  Added an independent CSS container-query fallback: poster action bars at 180 CSS px or narrower hide the
+  toolkit icon regardless of JS overflow measurements. This preserves native card sizes and does not depend
+  on devicePixelRatio or hide wide cards on high-DPI displays. Also measure the actions plus full rating text
+  (Range bounds/padding) so a clipping rating wrapper cannot disguise the needed width. Built-bundle tests
+  cover a clipped rating whose outer bar reports no overflow. Full tests/build pass. Chromium and Firefox
+  verified the CSS fallback on captured real poster markup across 150/180/182/183/200px outer widths,
+  deliberately overriding JS dimensions to report spare room; CSS hid/restored correctly, with a mocked
+  save at the wider width. Actual Zen signed-in zoom remains unverified.
+
 - Poster-card shortcuts now hide when their action bar/rating would overflow, measured with the shortcut
   present. A ResizeObserver, window resize and font-load updates restore the shortcut when space returns.
   This follows actual card space at any zoom rather than guessing zoom from display pixel density; fanart
