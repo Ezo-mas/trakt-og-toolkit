@@ -2,6 +2,26 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-01: last month in review (feature 6)
+
+- og check (trakt-og `4bdefaf4e`: `DashboardPage.svelte`, `RecapRibbon`, `LastThirtyDaysPanel`,
+  `traktUrls.monthInReview`; `git log -S monthInReview`): og has the month strip and rolling thirty-day stats, but no
+  last-calendar-month card. Its review URL is `https://app.trakt.tv/users/:slug/mir/:year/:month`.
+- The dashboard is session-only, so signed-out captures of `/` and `/dashboard` have no `nav.ribbon`; the integration
+  fixture is transcribed from `RecapRibbon`. The drift check lists it as "not checked (needs login)".
+- `apiAuth` takes an allowlist of query options (`page`, `limit`, `start_at`, `end_at`, `extended`); `apiAuthPage`
+  also returns `X-Pagination-Page-Count`. History and comments are paginated. `/sync/ratings` has no date filter, so
+  it is fetched once unpaginated (Trakt returns everything without `page`) and filtered locally.
+- Counts use a half-open local calendar month, so boundary plays are not counted twice. Hours include rewatches and
+  skip missing runtimes. The month name is always English, like og.
+- Cache and dismissal are private GM storage keyed by account slug and month; the first seven days refresh at most
+  daily for late syncs.
+- History's `extended=images` fanart is the 1280px `medium` size; the card swaps in `full` (1920px). A fanart that
+  fails to load is removed, leaving the plain background.
+- Styling matches og: `--brand-primary` red, Figtree via og's font variables, og container widths so the card lines
+  up with the ribbon and Up Next. Verified live 2026-11-01 on a real account (first play a movie); an episode first
+  play was checked with a mocked mockup at desktop and phone widths.
+
 ## 2026-11-01: personal ratings (features 7 and 8)
 
 - og check (trakt-og `4bdefaf4e`, `SeasonPage`, `ShowPage`, `ShowSeasonsPage`, `SeasonsGrid`; `git log -S`): og shows

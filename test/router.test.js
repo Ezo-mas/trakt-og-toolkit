@@ -52,7 +52,7 @@ test('chart pages are not titles', () => {
 });
 
 test('non-title routes', () => {
-  for (const path of ['/', '/dashboard', '/users/me', '/search']) {
+  for (const path of ['/users/me', '/search']) {
     assert.equal(parseRoute(path).name, 'other', path);
   }
 });
@@ -79,3 +79,5 @@ test('person routes match only a person page', () => {
   assert.equal(parseRoute('/shows/breaking-bad').name, 'title');
   assert.equal(parseRoute('/movies/13').name, 'title');
 });
+
+test('dashboard routes', () => { for (const path of ['/', '/dashboard', '/dashboard/']) assert.equal(parseRoute(path).name, 'dashboard'); });

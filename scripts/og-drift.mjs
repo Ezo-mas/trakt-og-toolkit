@@ -1,3 +1,4 @@
+import { LOGIN_CHECKS } from './og-drift-checks.mjs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { get } from 'node:https';
 import { Window } from 'happy-dom';
@@ -94,3 +95,5 @@ for (const result of results) {
 console.log('playback overview: not checked (needs login)');
 if (results.some((result) => result.status === 'drift')) process.exitCode = 1;
 else if (results.some((result) => result.status === 'unreachable')) process.exitCode = 2;
+
+for (const check of LOGIN_CHECKS) console.log(`${check.feature} ${check.selector}: ${check.status}`);
