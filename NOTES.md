@@ -4,6 +4,27 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-01: one-click watchlist (feature 13)
 
+- Follow-up: the user confirmed title-page adding works with the toolkit on their own account (browser/media
+  types unspecified). Added a bookmark shortcut immediately after the blue lists control on poster/fanart cards,
+  including cards inserted or recycled during browsing. This extends feature 13; feature 14's library-on-cards
+  work remains separate.
+- Card check: saved live `/movies/trending` and checked `QuickIcons`, `PosterCard`, `FanartCard`, `MediaList`,
+  `Tooltip` and `ListedTip` at the upstream commit below. Cards still use the picker. The canonical image link
+  identifies each card's own movie/show/season/episode, rather than the page route or a subtitle's parent show.
+  Native `aria-describedby` points to an always-rendered tooltip; only its `.listed-tip` link to
+  `/users/:slug/watchlist` proves Watchlist membership. A custom list named Watchlist uses `/lists/:id` and
+  does not hide the shortcut. No per-card requests occur until clicking, and no og session/internal API is read.
+- Card buttons share the existing API and bookmark glyph. Within a mounted page, duplicate card URLs share busy
+  and successful-add state. Native removal restores the shortcut, sign-in changes clear local state, and pending
+  lookups cancel on navigation, card removal or recycling. A hydration-gated observer handles lazy/replaced
+  controls; teardown removes the observer, marker and all per-card listeners/buttons. Small cards use og's 28px
+  action width and 34px button height; full cards use og's action width and 40px bar height.
+- Card validation: new data-reader tests and built-bundle integration coverage for all four media types, lazy and
+  recycled cards, duplicate saves, native custom/mixed-list membership, failure/retry, account changes and
+  navigation. Local saved-page Chromium 156/Firefox 157 checks passed with mocked GM/API responses and og's CSS:
+  fanart controls match 35×40px native buttons; poster controls match 28×34px; keyboard focus, exact-item POST,
+  success hiding and no page errors. Live signed-in card clicking and native tooltip/overlay updates in the
+  userscript manager still need a user check.
 - Started from main `1746380`. Checked live signed-out HTML for `/movies/fight-club-1999`,
   `/shows/breaking-bad`, `/shows/breaking-bad/seasons/1` and `/shows/breaking-bad/seasons/1/episodes/1`.
   All have `.summary-frame #overview .top .actions .action-buttons` and **Add to list**, not a direct watchlist
@@ -38,9 +59,9 @@ Working notes and known issues. Newest first.
   Passed in Chromium 156 and Firefox 157 at 1280px and 800px: 60px action height, keyboard focus, exact POST,
   success hiding, native mixed-list removal restoring the action, sign-out guidance, navigation cleanup and no
   page errors. At 390px og's own `MobileSplash` clips the app and prevents interaction; no phone pass is claimed.
-  Real signed-in checks still needed in Chromium and Firefox with Violentmonkey: actual watchlist POSTs
-  (including season/episode support), OG's live overlay updating/removing Watchlist alongside other lists,
-  and behavior when OG and toolkit use different accounts.
+  The user subsequently confirmed actual title-page adding (see above). Remaining specific checks in Chromium
+  and Firefox with Violentmonkey: card writes, season/episode support if not covered by that confirmation,
+  OG's live overlay updating/removing Watchlist alongside other lists, and differing OG/toolkit accounts.
 
 ## 2026-11-01: last month in review (feature 6)
 

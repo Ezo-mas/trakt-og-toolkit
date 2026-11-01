@@ -18,12 +18,13 @@ import { seasonChart } from './features/season-chart/index.js';
 import { monthReview } from './features/month-review/index.js';
 import { library } from './features/library/index.js';
 import { watchlist } from './features/watchlist/index.js';
+import { watchlistCards } from './features/watchlist/cards.js';
 import { registerMenu } from './menu.js';
 import { applyDebugSetting } from './settings.js';
 import { info, warn } from './core/log.js';
 import { cacheSize } from './core/http.js';
 
-const FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, monthReview];
+const FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, monthReview];
 
 function isSvelteKit() {
   return Boolean(

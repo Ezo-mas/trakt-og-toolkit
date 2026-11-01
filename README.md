@@ -69,6 +69,10 @@ The action hides after success or when OG’s **Listed On** detail includes **Wa
 leave it available. Reload to update OG’s status after adding; removing the item through OG restores the action
 once OG shows the change. This action only adds; use OG’s list picker to remove items.
 
+Poster and fanart cards also have a bookmark shortcut beside the blue lists button, including cards loaded as
+you browse. It uses the card’s own title and the same toolkit account. The shortcut hides when that card’s native
+list tooltip includes Watchlist, or after a successful add; custom lists alone keep it available.
+
 ### Name pronunciation
 
 On person pages, **Pronounce** looks the name up on Forvo in the background and plays the first recording whose word

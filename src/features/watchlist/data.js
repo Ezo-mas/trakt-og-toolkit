@@ -1,4 +1,6 @@
 /** Public lookup needed to identify exactly the item on this page. */
+import { parseRoute } from '../../core/router.js';
+
 export function watchlistLookup(route) {
   if (!route?.id) return null;
   const id = encodeURIComponent(route.id);
@@ -27,4 +29,29 @@ export function readWatchlisted(anchor) {
   return [...anchor.querySelectorAll('.summary-action')].some(action =>
     /^listed on$/i.test(action.querySelector('.title')?.textContent.trim() ?? '') &&
     /^watchlist(?:\s*\+|$)/i.test(action.querySelector('.detail')?.textContent.trim() ?? ''));
+}
+
+/** Image links identify the card itself; subtitle links can point to a parent show/season. */
+export function readCardRoute(card) {
+  const link = card.querySelector('a.poster[href], a.image-link[href]');
+  if (!link) return null;
+  try {
+    const url = new URL(link.getAttribute('href'), card.ownerDocument.location.href);
+    if (url.origin !== card.ownerDocument.location.origin) return null;
+    const route = parseRoute(url.pathname);
+    return watchlistLookup(route) ? route : null;
+  } catch { return null; }
+}
+
+/** The rich tooltip is rendered even while closed. A custom list called Watchlist has a /lists/:id URL. */
+export function readCardWatchlisted(control) {
+  const trigger = control.matches('button') ? control : control.querySelector('button.trigger');
+  const ids = trigger?.getAttribute('aria-describedby')?.split(/\s+/) ?? [];
+  return ids.some(id => [...(control.ownerDocument.getElementById(id)?.querySelectorAll('.listed-tip a[href]') ?? [])]
+    .some(link => {
+      try {
+        const url = new URL(link.getAttribute('href'), control.ownerDocument.location.href);
+        return url.origin === control.ownerDocument.location.origin && /^\/users\/[^/]+\/watchlist\/?$/.test(url.pathname);
+      } catch { return false; }
+    }));
 }

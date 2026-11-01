@@ -6,6 +6,7 @@ import { css } from './styles.js';
 import { debugError } from '../../core/log.js';
 import { toast } from '../../ui/shell.js';
 import { findActionStack } from '../../ui/action-button.js';
+import { watchlistIcon } from './icon.js';
 
 const ID = 'ogt-watchlist';
 export const watchlist = {
@@ -22,12 +23,7 @@ export const watchlist = {
     let wasWatchlisted = false;
     const label = el('span', { class: 'ogt-watchlist__title', text: 'Add to watchlist' });
     const glyph = el('span', { class: 'ogt-watchlist__glyph', 'aria-hidden': 'true' });
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    for (const [name, value] of Object.entries({ viewBox: '0 0 24 28', fill: 'none', stroke: 'currentColor', 'stroke-width': '1' })) svg.setAttribute(name, value);
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', 'M5 2h14v24l-7-5-7 5Z');
-    svg.append(path);
-    glyph.append(svg);
+    glyph.append(watchlistIcon());
     const button = el('button', { type: 'button', class: 'ogt-watchlist__button',
       title: 'Add using the toolkit’s Trakt account' });
     button.append(glyph, el('span', { class: 'ogt-watchlist__text' }, label));

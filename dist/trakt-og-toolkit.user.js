@@ -3602,6 +3602,30 @@
   function readWatchlisted(anchor) {
     return [...anchor.querySelectorAll(".summary-action")].some((action) => /^listed on$/i.test(action.querySelector(".title")?.textContent.trim() ?? "") && /^watchlist(?:\s*\+|$)/i.test(action.querySelector(".detail")?.textContent.trim() ?? ""));
   }
+  function readCardRoute(card) {
+    const link = card.querySelector("a.poster[href], a.image-link[href]");
+    if (!link) return null;
+    try {
+      const url = new URL(link.getAttribute("href"), card.ownerDocument.location.href);
+      if (url.origin !== card.ownerDocument.location.origin) return null;
+      const route = parseRoute(url.pathname);
+      return watchlistLookup(route) ? route : null;
+    } catch {
+      return null;
+    }
+  }
+  function readCardWatchlisted(control) {
+    const trigger = control.matches("button") ? control : control.querySelector("button.trigger");
+    const ids = trigger?.getAttribute("aria-describedby")?.split(/\s+/) ?? [];
+    return ids.some((id) => [...control.ownerDocument.getElementById(id)?.querySelectorAll(".listed-tip a[href]") ?? []].some((link) => {
+      try {
+        const url = new URL(link.getAttribute("href"), control.ownerDocument.location.href);
+        return url.origin === control.ownerDocument.location.origin && /^\/users\/[^/]+\/watchlist\/?$/.test(url.pathname);
+      } catch {
+        return false;
+      }
+    }));
+  }
 
   // src/features/watchlist/api.js
   function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn } = {}) {
@@ -3630,6 +3654,18 @@
   // src/features/watchlist/styles.js
   var css = actionButtonCss("ogt-watchlist", "var(--brand-secondary, light-dark(#2474ae, #59a9e2))");
 
+  // src/features/watchlist/icon.js
+  function watchlistIcon() {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    for (const [name, value] of Object.entries({ viewBox: "0 0 24 28", fill: "none", stroke: "currentColor", "stroke-width": "1", "aria-hidden": "true" })) {
+      svg3.setAttribute(name, value);
+    }
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M5 2h14v24l-7-5-7 5Z");
+    svg3.append(path);
+    return svg3;
+  }
+
   // src/features/watchlist/index.js
   var ID3 = "ogt-watchlist";
   var watchlist = {
@@ -3646,12 +3682,7 @@
       let wasWatchlisted = false;
       const label = el("span", { class: "ogt-watchlist__title", text: "Add to watchlist" });
       const glyph = el("span", { class: "ogt-watchlist__glyph", "aria-hidden": "true" });
-      const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      for (const [name, value] of Object.entries({ viewBox: "0 0 24 28", fill: "none", stroke: "currentColor", "stroke-width": "1" })) svg3.setAttribute(name, value);
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      path.setAttribute("d", "M5 2h14v24l-7-5-7 5Z");
-      svg3.append(path);
-      glyph.append(svg3);
+      glyph.append(watchlistIcon());
       const button2 = el("button", {
         type: "button",
         class: "ogt-watchlist__button",
@@ -3721,6 +3752,146 @@
         observer.disconnect();
         button2.removeEventListener("click", add);
         document.removeEventListener("ogt:authchange", authChanged);
+        node.remove();
+      } };
+    }
+  };
+
+  // src/features/watchlist/cards.js
+  var ID4 = "ogt-watchlist-cards";
+  var CARD = ".poster-card, .fanart-card";
+  var CONTROL = ".quick-icons .list-control.card, .quick-icons button.action.list";
+  var watchlistCards = {
+    id: "watchlist-cards",
+    match: () => true,
+    css: `
+    .ogt-watchlist-card { display: grid; place-items: center; flex: 0 0 auto;
+      inline-size: var(--action-width, 32px); block-size: var(--bar, 40px); min-block-size: 0;
+      padding: 0; border: 0; border-radius: 0; background: none;
+      color: var(--brand-secondary, light-dark(#2474ae, #59a9e2)); cursor: pointer; }
+    .ogt-watchlist-card[hidden] { display: none !important; }
+    .ogt-watchlist-card svg { width: 20px; height: 24px; }
+    .quick-icons.small .ogt-watchlist-card { block-size: calc(var(--bar, 35px) - 1px); }
+    .quick-icons.small .ogt-watchlist-card svg { width: 16px; height: 20px; }
+    .ogt-watchlist-card:is(:hover, :focus-visible):not(:disabled) {
+      background: var(--brand-secondary, #2474ae); color: var(--color-card-text, white); }
+    .ogt-watchlist-card:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+    .ogt-watchlist-card:disabled { opacity: .6; cursor: default; }
+  `,
+    mount() {
+      if (!document.body || document.getElementById(ID4)) return null;
+      const node = el("span", { id: ID4, hidden: true });
+      document.body.append(node);
+      const entries = /* @__PURE__ */ new Map();
+      const states = /* @__PURE__ */ new Map();
+      let destroyed = false, session = 0, scheduled = false;
+      function stateFor(key) {
+        if (!states.has(key)) states.set(key, { busy: false, added: false, wasWatchlisted: false });
+        return states.get(key);
+      }
+      function remove(entry) {
+        entry.button.removeEventListener("click", entry.click);
+        entry.button.remove();
+        entries.delete(entry.control);
+      }
+      async function add(entry, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const state = stateFor(entry.key);
+        if (state.busy || entry.button.hidden) return;
+        if (!isSignedIn()) {
+          toast("Sign in to Trakt through the toolkit menu first.");
+          return;
+        }
+        const epoch = session;
+        const pagePath = location.pathname;
+        const active2 = () => !destroyed && session === epoch && location.pathname === pagePath && [...entries.values()].some((e) => e.key === entry.key && e.control.isConnected && readCardRoute(e.card)?.key === entry.key);
+        state.busy = true;
+        scan();
+        try {
+          const result = await watchlistApi.add(entry.route, { active: active2 });
+          if (!active2() || result.cancelled) return;
+          state.added = true;
+          toast("Added to your toolkit Trakt account’s watchlist. Reload to update OG’s status.");
+        } catch (error) {
+          debugError("card watchlist addition failed", error);
+          if (active2()) toast(error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not add to watchlist. Check your toolkit sign-in and try again." : error.message);
+        } finally {
+          if (!destroyed && epoch === session) {
+            state.busy = false;
+            scan();
+          }
+        }
+      }
+      function scan() {
+        if (destroyed) return;
+        for (const entry of entries.values()) {
+          if (!entry.control.isConnected || !entry.button.isConnected || readCardRoute(entry.card)?.key !== entry.key) remove(entry);
+        }
+        for (const control of document.querySelectorAll(CONTROL)) {
+          if (entries.has(control)) continue;
+          const card = control.closest(CARD);
+          const route = card && readCardRoute(card);
+          if (!route) continue;
+          const button2 = el("button", {
+            type: "button",
+            class: "ogt-watchlist-card",
+            "aria-label": "Add to watchlist",
+            title: "Add to watchlist using the toolkit’s Trakt account"
+          }, watchlistIcon());
+          const entry = { control, card, route, key: route.key, button: button2 };
+          entry.click = (event) => add(entry, event);
+          button2.addEventListener("click", entry.click);
+          control.after(button2);
+          entries.set(control, entry);
+        }
+        const native = /* @__PURE__ */ new Map();
+        for (const entry of entries.values()) {
+          native.set(entry.key, Boolean(native.get(entry.key) || readCardWatchlisted(entry.control)));
+        }
+        for (const [key, watchlisted] of native) {
+          const state = stateFor(key);
+          if (state.wasWatchlisted && !watchlisted) state.added = false;
+          state.wasWatchlisted = watchlisted;
+        }
+        for (const entry of entries.values()) {
+          const state = stateFor(entry.key);
+          const hidden = state.added || state.wasWatchlisted;
+          if (entry.button.hidden !== hidden) entry.button.hidden = hidden;
+          if (entry.button.disabled !== state.busy) entry.button.disabled = state.busy;
+          const busy = String(state.busy);
+          if (entry.button.getAttribute("aria-busy") !== busy) entry.button.setAttribute("aria-busy", busy);
+        }
+      }
+      function schedule() {
+        if (scheduled || destroyed) return;
+        scheduled = true;
+        queueMicrotask(() => {
+          scheduled = false;
+          scan();
+        });
+      }
+      function authChanged() {
+        session++;
+        states.clear();
+        scan();
+      }
+      const observer = new MutationObserver(schedule);
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["href", "aria-describedby"]
+      });
+      document.addEventListener("ogt:authchange", authChanged);
+      scan();
+      return { node, destroy() {
+        destroyed = true;
+        observer.disconnect();
+        document.removeEventListener("ogt:authchange", authChanged);
+        for (const entry of entries.values()) remove(entry);
+        states.clear();
         node.remove();
       } };
     }
@@ -3917,7 +4088,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, monthReview];
+  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, monthReview];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))

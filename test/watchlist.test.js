@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { parseRoute } from '../src/core/router.js';
-import { watchlistLookup, watchlistBody, readWatchlisted } from '../src/features/watchlist/data.js';
+import { watchlistLookup, watchlistBody, readWatchlisted, readCardRoute, readCardWatchlisted } from '../src/features/watchlist/data.js';
 import { createWatchlistApi } from '../src/features/watchlist/api.js';
-import { WATCHLIST_HTML } from './fixtures.js';
+import { WATCHLIST_HTML, watchlistCardHtml } from './fixtures.js';
 
 const cases = [
   ['/movies/fight-club-1999', 'movies', '/movies/fight-club-1999', { ids: { trakt: 1 } }],
@@ -79,4 +79,32 @@ test('native watchlist reader distinguishes Watchlist from custom-list membershi
   }
   anchor.querySelector('.picker').innerHTML = '<button aria-pressed="true"><span class="name">Watchlist</span></button>';
   assert.equal(readWatchlisted(anchor), false);
+});
+
+test('card route reader uses the image link for each media type and rejects external/unsupported links', t => {
+  const window = new Window({ url: 'https://og.trakt.tv/movies/trending' }); t.after(() => window.close());
+  for (const [href, expected] of [
+    ['/movies/fight-club-1999', 'title'], ['/shows/breaking-bad', 'title'],
+    ['/shows/breaking-bad/seasons/0', 'season'], ['/shows/breaking-bad/seasons/1/episodes/2', 'episode'],
+    ['https://example.com/movies/test', undefined], ['/people/test', undefined], ['/movies/trending', undefined],
+  ]) {
+    window.document.body.innerHTML = watchlistCardHtml({ href });
+    // Subtitles can point to something else, so they cannot identify a card.
+    window.document.querySelector('.titles-link').href = '/shows/wrong-show';
+    assert.equal(readCardRoute(window.document.querySelector('article'))?.name, expected, href);
+  }
+});
+
+test('card membership reader follows only its native list tooltip and canonical watchlist link', t => {
+  const window = new Window({ url: 'https://og.trakt.tv/movies/trending' }); t.after(() => window.close());
+  window.document.body.innerHTML = watchlistCardHtml();
+  const control = window.document.querySelector('.list-control');
+  const tip = window.document.querySelector('.tooltip');
+  for (const [href, expected] of [['/lists/123', false], ['/users/test/watchlist', true],
+    ['https://example.com/users/test/watchlist', false], ['/users/test/watchlist/other', false]]) {
+    tip.innerHTML = `<span class="listed-tip"><a href="${href}">Watchlist</a><a href="/lists/456">Another list</a></span>`;
+    assert.equal(readCardWatchlisted(control), expected, href);
+  }
+  control.querySelector('button').removeAttribute('aria-describedby');
+  assert.equal(readCardWatchlisted(control), false);
 });
