@@ -23,9 +23,9 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 9 | Playback extras: set progress | OAuth | small |
 | 10 | List preview posters link to titles | check og first | small |
 | 11 | All lists in one view | OAuth or public | lowest value |
-| 12 | Add to library button | OAuth | done |
+| 12 | Add to library button | OAuth | done; user verified in Zen and Brave with real API |
 | 13 | One-click Add to watchlist | OAuth | done; user verified in Zen and Brave with real API |
-| 14 | Add to library on poster cards | OAuth | small; after 12 |
+| 14 | Add to library on poster cards | OAuth | dropped: cards too tight; watchlist fits cards better |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -284,9 +284,13 @@ them across `/users/:id/lists`, `/collaborations` and `/liked`.
 
 ## 12. Add to library button
 
-**Status:** done. An **Add to library** action in the title, season and episode action stack, using the toolkit's own
+**Status:** done; user confirmed on a real account with the real Trakt API in Zen and Brave on 2026-11-01.
+An **Add to library** action in the title, season and episode action stack, using the toolkit's own
 sign-in and `POST /sync/collection` with the current date. Whole shows confirm the aired-episode count and skip
-specials; the button hides when og shows its own library control.
+specials; the button hides when og shows its own library control. Success uses the shared native-first
+notification with the title. Movie/show additions request OG’s own read-only collection refresh; unavailable
+native integration and season/episode pages retain the reload fallback. Module discovery overlaps the save;
+a disabled updating row fills the native-refresh handoff. No toolkit library action on cards.
 
 - A whole-show add uses one uncached `GET /shows/:id/seasons?extended=full,episodes`, which includes each
   episode's `first_aired` (`extended=episodes` alone does not). The Simpsons, 39 seasons: about 1 MB in 1 s.
@@ -312,6 +316,11 @@ button that only adds to the watchlist.
 - **Check first:** whether og has added a direct watchlist action since 2026-10-30.
 
 ## 14. Add to library on poster cards
+
+**Status:** dropped (2026-11-01). og's cards are tighter than classic Trakt's, and browser zoom makes the fit
+harder still (feature 13 already has to hide its poster shortcut at 150–170%). One-click add to watchlist is the
+action that makes sense on a card; adding to the library stays on title, season and episode pages (feature 12).
+The notes below are kept for reference.
 
 **Goal:** feature 12 added **Add to library** to title, season and episode pages, but poster cards (show page season
 cards, lists, search, dashboards) still can't add. og hides the card's library control too: its quick icons only

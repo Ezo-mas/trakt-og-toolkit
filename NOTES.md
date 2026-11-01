@@ -2,6 +2,56 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-01: library feedback and native refresh (feature 12)
+
+- Live confirmation: the user tested and confirmed both PRs on a real account in Zen and Brave, using the
+  real Trakt API. This includes their confirmation after the latest library handoff change and supersedes
+  the general pending-live-verification notes. Individual failure/CSP/account-switch cases were not enumerated.
+
+- The user's recording confirms native library controls refresh, with a short gap after success. OG's native
+  removal updates its local overlay optimistically, while toolkit additions wait for OG's authoritative reads.
+  There is no artificial delay to remove. Start public overlay-module discovery alongside the toolkit lookup/
+  save instead of after it; native account reads still begin only on successful POST. While refreshing, retain
+  a disabled **Updating library…** row until OG renders its own control (or refresh ends). This prevents the
+  empty-slot/layout jump without faking membership or a clickable remove action. Full network latency cannot
+  be eliminated by this change. Auth changes/failures reset the pending row as before.
+  Full tests/build pass; the built-bundle test proves discovery happens during a held lookup and the row
+  remains disabled through a held native refresh. Actual OG/Svelte Chromium and Firefox checks with delayed
+  native responses pass: the pending row and native control occupy the same vertical slot, with one toolkit
+  POST and no page errors. The user’s recording confirms the prior signed-in movie add/native-remove flow;
+  the user subsequently confirmed the updated feature live in Zen and Brave (see above).
+
+- Branch `fix/library-button` starts at `e739dce` on `feature/watchlist-button`, retaining its watchlist work.
+  No toolkit library shortcut is added to cards, and no version is bumped.
+- Library success now says **You added TITLE to your library.** through the same native notifier and styled
+  fallback used by watchlist. The title is read from OG’s SummaryTitle text nodes, excluding the separate year
+  and certification. No extra API request is needed; the collection payload, aired-episode confirmation and
+  specials handling are unchanged. All existing library title/season/episode actions share this notification.
+- Verified upstream main is still `4bdefaf4e` on this check. MediaCollection’s `open` does not reload collection
+  state and may have no rendered control when uncollected. The list-picker refresh cannot update collection.
+  `startOverlay` uses `overlay.recheck()` on visibility (throttled to once/minute); its `refresh()` bypasses
+  that throttle, reads last activities, and reloads stale collection slices through OG’s own viewer fetch.
+- A temporary page-realm module bridge discovers the already-loaded overlay import from the root layout’s
+  start/stop/recheck usage, validates the collectionCounts/state/refresh/recheck/patch shape and calls only
+  `refresh()`. It never calls start/stop/reset/patch, reads tokens, fakes a native write or copies toolkit
+  collection results into OG. Thus different OG/toolkit accounts remain separate. Positive signed-in header
+  markup is required; movies and whole shows only. Season/episode pages retain the reload fallback.
+- Module discovery is shared with native toast discovery under `src/ui/`, reading cached same-origin public
+  JavaScript without credentials and without fixed hashes/export aliases. The success UI and its CSS are now
+  shared too; old watchlist exports/classes stay compatible. Library refresh cleanup covers errors, timeout,
+  account changes and navigation. Library lookups/results now also check the current path and connected node.
+- Unit/built-bundle tests cover title extraction, loaded-module discovery, movie/show refresh, separate
+  accounts, signed-out OG, blocked modules, native read failures, failed writes, navigation/auth races and
+  native removal restoring the toolkit action. `npm test` passes (25 test files) and `npm run build` succeeds.
+- Browser validation uses the actual captured OG Svelte app, real overlay `start`/`refresh`, collection controls
+  and Toaster, with an isolated mock overlay user/header and all API responses mocked. Chromium and Firefox
+  each passed movie/show × native/fallback notification cases: one toolkit POST, a second native activity
+  check, collected state and native controls updated, no popup, no remaining bridge scripts or page errors.
+  Chromium with a real CSP blocking inline scripts kept the addition, showed one fallback, left native state
+  unchanged and cleaned up the blocked bridge. Watchlist’s native/fallback title notifications, matching
+  dimensions (subpixel tolerance), stacking and Close behavior also passed in both browsers after sharing UI.
+  The user subsequently confirmed both features on a real account in Zen and Brave (see above).
+
 ## 2026-11-01: one-click watchlist (feature 13)
 
 - Live confirmation: the user tested and confirmed both features in PR #10 (watchlist) and PR #11 (library)
@@ -102,8 +152,8 @@ Working notes and known issues. Newest first.
   refresh path.
 - Follow-up: the user confirmed title-page adding works with the toolkit on their own account (browser/media
   types unspecified). Added a bookmark shortcut immediately after the blue lists control on poster/fanart cards,
-  including cards inserted or recycled during browsing. This extends feature 13; feature 14's library-on-cards
-  work remains separate.
+  including cards inserted or recycled during browsing. This extends feature 13; feature 14 (library on cards)
+  was later dropped: cards are too tight, and the watchlist is the card action that makes sense.
 - Card check: saved live `/movies/trending` and checked `QuickIcons`, `PosterCard`, `FanartCard`, `MediaList`,
   `Tooltip` and `ListedTip` at the upstream commit below. Cards still use the picker. The canonical image link
   identifies each card's own movie/show/season/episode, rather than the page route or a subtitle's parent show.

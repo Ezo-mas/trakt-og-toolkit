@@ -57,8 +57,15 @@ Hours use the API’s reported runtimes, rounded to whole hours; missing runtime
 Movie, show, season and episode pages have an **Add to library** button in the action stack. Sign in through the
 toolkit menu first: it uses that Trakt account, independently of OG’s login. Additions use the current date.
 Shows and seasons confirm the aired episode count before saving; whole shows exclude specials (add season 0
-separately). The add button disappears after saving, or whenever OG already shows a library control. Reload after
-adding to update OG’s own library status. Removing an item through OG restores the add action without a reload.
+separately). The add button disappears after saving, or whenever OG already shows a library control.
+Success shows **You added Fight Club to your library.** (using the title) using the same native-first notification and matching
+fallback as watchlist additions. Movie/show saves ask OG to refresh its own collection state without a page
+reload or opening a popup. Module discovery runs during the save; a disabled **Updating library…** row keeps
+the stack steady until OG’s native control appears or the refresh finishes. Native reads still take network time.
+This reads OG’s signed-in account; different toolkit/OG accounts remain separate.
+If OG is signed out, the native module is unavailable or the browser blocks it, reload remains the fallback.
+Season/episode pages retain the reload fallback. Removing an item through OG restores the add action once OG
+shows the change. No toolkit library button is added to cards.
 The button uses OG’s design values for action styling and spacing, with separate toolkit classes.
 
 ### Add to watchlist
@@ -228,7 +235,8 @@ src/
 - **No `turbo:load`.** og is SvelteKit, so we patch `history.pushState`/`replaceState`, listen for `popstate`, and
   re-check after debounced mutations. Features re-mount if the app renders over them.
 - **No Trakt page scraping for data.** og is server-rendered, but the API is the stable surface. The only DOM reads
-  from og are the person's name heading, ids og already prints (TMDb/IMDb) and the season cards' episode counts.
+  from og include name/title headings, native action status, ids og already prints (TMDb/IMDb) and the season
+  cards' episode counts.
   Pronunciation reads a Forvo search page fetched separately, never a Trakt page.
 - **Selectors.** Only semantic classes (`.summary-frame`, `#overview`, `.top`, `.subtitle`) — never `svelte-*` hashes.
 
@@ -242,17 +250,20 @@ src/
 See [PLAN.md](PLAN.md). Shipped or dropped because og now does it itself: ratings distribution, trailers, metadata
 links, poster rating corners. Backlog:
 
-- a last-month-in-review card;
-- a one-click **Add to watchlist** button, without picking a list;
-- **Add to library** on poster cards, not just title pages.
+- set playback progress by hand;
+- list preview posters that link to their titles;
+- all your lists in one view.
 
 ## Trakt API compliance
 
 - Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection`, `/sync/watchlist`,
   `/sync/history`, `/sync/ratings`, `/users/me` and `/users/me/comments` through your own optional OAuth sign-in.
-  No Trakt HTML fetching, no internal og endpoints, no reuse of og's session.
-  Native notification discovery reads only already-loaded public JavaScript assets, without credentials;
-  it does not make authenticated API requests.
+  No Trakt HTML fetching or toolkit calls to internal og endpoints. Toolkit API writes use only its own OAuth
+  connection.
+  Native notification/collection-refresh discovery reads only already-loaded public JavaScript assets,
+  without credentials. Page-realm bridges call OG’s native notifier or its read-only collection refresh;
+  OG performs its own signed-in reads. The toolkit does not read OG tokens, copy its session, patch its
+  collection data or perform a second collection write.
   Pronunciation fetches Forvo's public search page (with `@connect forvo.com`) to find recordings.
 - Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with `Retry-After` on 429.
 - Nothing is uploaded, resold or redistributed; the script has no backend.

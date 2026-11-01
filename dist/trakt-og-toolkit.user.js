@@ -397,6 +397,38 @@
     }, duration);
   }
 
+  // src/ui/success-notification-styles.js
+  var successNotificationCss = `
+  .ogt-watchlist-toasts {
+    inset-block-start: calc(var(--header-height, 70px) + var(--toast-offset, 12px) + var(--ogt-native-toast-height, 0px));
+    inset-block-end: auto; inset-inline-start: auto; inset-inline-end: var(--toast-offset, 12px);
+    z-index: var(--z-toast, 30); inline-size: min(var(--toast-width, 360px), calc(100vw - 2 * var(--toast-offset, 12px)));
+    display: flex; flex-direction: column; justify-content: normal; gap: var(--toast-gap, 8px);
+  }
+  .ogt-watchlist-toast {
+    position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
+    gap: var(--toast-icon-gap, 10px); padding: var(--toast-padding, 11px 8px 11px 14px); overflow: hidden;
+    border: 1px solid var(--color-toast-border, #ffffff20); border-radius: var(--radius-toast, 12px);
+    background: var(--color-toast-bg, #171717ed); color: var(--color-toast-text, white);
+    box-shadow: var(--shadow-toast, 0 12px 32px #0007); backdrop-filter: var(--blur-toast, blur(16px));
+    font: var(--font-size-toast, 14px)/1.4 var(--font-body, system-ui); pointer-events: auto;
+  }
+  .ogt-watchlist-toast__icon { display: flex; color: var(--color-toast-success, #6cc96c); }
+  .ogt-watchlist-toast__icon svg { inline-size: var(--font-size-toast-icon, 18px); block-size: var(--font-size-toast-icon, 18px); }
+  .ogt-watchlist-toast__message { margin: 0; overflow-wrap: anywhere; }
+  .ogt-watchlist-toast__close {
+    display: grid; place-items: center; min-block-size: 0; padding: 0; border: 0;
+    inline-size: var(--toast-close-size, 28px); block-size: var(--toast-close-size, 28px);
+    border-radius: var(--radius-toast-close, 4px); background: none; color: var(--color-toast-close, #bbb); cursor: pointer;
+  }
+  .ogt-watchlist-toast__close svg { inline-size: var(--font-size-toast-close, 14px); block-size: var(--font-size-toast-close, 14px); }
+  .ogt-watchlist-toast__close:is(:hover, :focus-visible) { background: var(--color-toast-close-hover, #ffffff15); color: var(--color-toast-text, white); }
+  .ogt-watchlist-toast__close:focus-visible { outline: 2px solid currentColor; }
+  .ogt-watchlist-toast__timer { position: absolute; inset: auto 0 0; block-size: var(--toast-timer-height, 2px);
+    background: var(--color-toast-success, #6cc96c); transform-origin: left; }
+  @media (prefers-reduced-motion: reduce) { .ogt-watchlist-toast__timer { display: none; } }
+`;
+
   // src/core/router.js
   var CHART_NAMES = /* @__PURE__ */ new Set([
     "trending",
@@ -3452,6 +3484,292 @@
   }
   var libraryApi = createLibraryApi();
 
+  // src/ui/native-modules.js
+  var earlyResources = [];
+  function rememberNativeResources(names) {
+    earlyResources = [...names];
+  }
+  var chunkUrl = (value, base) => {
+    try {
+      const url = new URL(value, base);
+      return url.origin === new URL(base).origin && /^\/_app\/immutable\/chunks\/[\w.-]+\.js$/.test(url.pathname) && !url.search && !url.hash ? url.href : null;
+    } catch {
+      return null;
+    }
+  };
+  function nativeRootImports(source, layoutUrl, loaded, uses) {
+    const result = [];
+    for (const match of source.matchAll(/\bimport\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/g)) {
+      const url = chunkUrl(match[2], layoutUrl);
+      if (!url || !loaded.includes(url)) continue;
+      for (const spec of match[1].split(",")) {
+        const alias = spec.trim().split(/\s+as\s+/).at(-1);
+        if (/^[\w$]+$/.test(alias) && uses(alias)) result.push(url);
+      }
+    }
+    return [...new Set(result)];
+  }
+  async function discoverNativeModule(imports, validate) {
+    const names = [.../* @__PURE__ */ new Set([...earlyResources, ...(performance.getEntriesByType?.("resource") ?? []).map((entry) => entry.name)])];
+    const layout = names.find((name) => {
+      try {
+        const url = new URL(name);
+        return url.origin === location.origin && /^\/_app\/immutable\/nodes\/0\.[\w-]+\.js$/.test(url.pathname);
+      } catch {
+        return false;
+      }
+    });
+    if (!layout) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2e3);
+    const read = async (url) => {
+      const response = await fetch(url, { cache: "force-cache", credentials: "omit", signal: controller.signal });
+      if (!response.ok) throw new Error("Native module unavailable.");
+      return response.text();
+    };
+    try {
+      const source = await read(layout);
+      for (const url of imports(source, layout, names)) if (validate(await read(url))) return url;
+    } catch (error) {
+      debugError("native module discovery failed", error);
+    } finally {
+      clearTimeout(timer);
+    }
+    return null;
+  }
+
+  // src/ui/native-toast.js
+  var discovery;
+  function nativeToastImports(source, layoutUrl, loaded) {
+    return nativeRootImports(source, layoutUrl, loaded, (alias) => source.includes(`${alias}.dismiss(`) && source.includes(`${alias}.list`));
+  }
+  function isNativeToastStore(source) {
+    return source.length < 16e3 && /\bget\s+list\s*\(/.test(source) && /\bsuccess\s*:/.test(source) && /\berror\s*:/.test(source) && /\bdismiss\s*:/.test(source);
+  }
+  async function discover() {
+    return document.querySelector(".toaster") ? discoverNativeModule(nativeToastImports, isNativeToastStore) : null;
+  }
+  async function tryNativeToast(message, active2 = () => true) {
+    if (!active2()) return false;
+    const url = await (discovery ??= discover());
+    if (!url || !active2() || !document.querySelector(".toaster")) return false;
+    return new Promise((resolve) => {
+      const eventName = `ogt:watchlist-toast:${crypto.randomUUID()}`;
+      const script = document.createElement("script");
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        document.removeEventListener(eventName, answered);
+        script.remove();
+        resolve(ok);
+      };
+      const answered = (event) => finish(event.detail === "shown");
+      const timer = setTimeout(() => finish(false), 1e3);
+      document.addEventListener(eventName, answered);
+      script.type = "module";
+      script.onerror = () => finish(false);
+      script.textContent = `(async () => {
+      let result = 'unavailable';
+      try {
+        const module = await import(${JSON.stringify(url)});
+        const store = Object.values(module).find(value => value && typeof value.success === 'function' &&
+          typeof value.dismiss === 'function' && Array.isArray(value.list));
+        if (store && document.querySelector('.toaster')) { store.success(${JSON.stringify(message).replace(/</g, "\\u003c")}); result = 'shown'; }
+      } catch {}
+      document.dispatchEvent(new CustomEvent(${JSON.stringify(eventName)}, { detail: result }));
+    })();`;
+      document.head.append(script);
+    });
+  }
+
+  // src/ui/success-notification.js
+  var root;
+  var observed;
+  var resize;
+  var notices = [];
+  function icon(path, circle = false) {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg3.setAttribute("viewBox", "0 0 24 24");
+    svg3.setAttribute("aria-hidden", "true");
+    if (circle) {
+      const node2 = document.createElementNS(svg3.namespaceURI, "circle");
+      node2.setAttribute("cx", "12");
+      node2.setAttribute("cy", "12");
+      node2.setAttribute("r", "11");
+      node2.setAttribute("fill", "currentColor");
+      svg3.append(node2);
+    }
+    const node = document.createElementNS(svg3.namespaceURI, "path");
+    for (const [key, value] of Object.entries({ d: path, fill: "none", stroke: circle ? "#163516" : "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" })) node.setAttribute(key, value);
+    svg3.append(node);
+    return svg3;
+  }
+  function showSuccessToast(message = "You added this title to your watchlist.") {
+    if (!root?.isConnected) {
+      resize?.disconnect();
+      root = el("div", { class: "ogt-toast ogt-watchlist-toasts" });
+      document.body.append(root);
+    }
+    const native = document.querySelector(".toaster");
+    const position = () => root?.style.setProperty("--ogt-native-toast-height", `${native?.isConnected && native.children.length ? native.getBoundingClientRect().height + 8 : 0}px`);
+    if (native !== observed) {
+      resize?.disconnect();
+      observed = native;
+      if (native && typeof ResizeObserver === "function") {
+        resize = new ResizeObserver(position);
+        resize.observe(native);
+      }
+    }
+    position();
+    const close = el("button", { type: "button", class: "ogt-watchlist-toast__close", "aria-label": "Close" }, icon("M6 6l12 12M18 6 6 18"));
+    const line = el("span", { class: "ogt-watchlist-toast__timer", "aria-hidden": "true" });
+    const node = el(
+      "div",
+      { class: "ogt-watchlist-toast", role: "status", "aria-atomic": "true" },
+      el("span", { class: "ogt-watchlist-toast__icon" }, icon("m7 12 3 3 7-7", true)),
+      el("p", { class: "ogt-watchlist-toast__message", text: message }),
+      close,
+      line
+    );
+    root.prepend(node);
+    let timer, animation, fraction = 1, started, duration, removed = false;
+    const holds = /* @__PURE__ */ new Set();
+    const remove = () => {
+      if (removed) return;
+      removed = true;
+      clearTimeout(timer);
+      animation?.cancel();
+      node.remove();
+      const index = notices.indexOf(remove);
+      if (index >= 0) notices.splice(index, 1);
+      if (!notices.length) {
+        resize?.disconnect();
+        observed = null;
+        root?.remove();
+        root = null;
+      }
+    };
+    const start2 = (ms) => {
+      duration = ms;
+      started = Date.now();
+      animation?.cancel();
+      animation = line.animate?.([{ transform: `scaleX(${fraction})` }, { transform: "scaleX(0)" }], { duration: ms, fill: "forwards" });
+      animation?.finished?.catch(() => {
+      });
+      timer = setTimeout(remove, ms);
+    };
+    const hold = (kind) => {
+      if (holds.has(kind)) return;
+      if (!holds.size) {
+        fraction *= Math.max(0, 1 - (Date.now() - started) / duration);
+        clearTimeout(timer);
+        animation?.pause();
+      }
+      holds.add(kind);
+    };
+    const release2 = (kind) => {
+      if (holds.delete(kind) && !holds.size) start2(1e3);
+    };
+    close.addEventListener("click", remove);
+    node.addEventListener("pointerenter", () => hold("pointer"));
+    node.addEventListener("pointerleave", () => release2("pointer"));
+    node.addEventListener("focusin", () => hold("focus"));
+    node.addEventListener("focusout", (event) => {
+      if (!(event.relatedTarget instanceof Node) || !node.contains(event.relatedTarget)) release2("focus");
+    });
+    notices.unshift(remove);
+    while (notices.length > 3) notices.at(-1)();
+    start2(5e3);
+    return { node, destroy: remove };
+  }
+  async function notifySuccess(message, active2 = () => true) {
+    try {
+      if (await tryNativeToast(message, active2)) return;
+    } catch (error) {
+      debugError("native success toast unavailable", error);
+    }
+    if (active2()) showSuccessToast(message);
+  }
+
+  // src/features/library/native-refresh.js
+  var discovery2;
+  function nativeLibraryImports(source, layoutUrl, loaded) {
+    return nativeRootImports(source, layoutUrl, loaded, (alias) => ["start", "stop", "recheck"].every((method) => source.includes(`${alias}.${method}(`)));
+  }
+  function isNativeLibraryStore(source) {
+    return source.length < 5e4 && ["state", "collectionCounts", "refresh", "recheck", "patch"].every((name) => new RegExp(`\\b${name}\\s*:`).test(source));
+  }
+  function createNativeLibraryRefresh() {
+    const pending = /* @__PURE__ */ new Set();
+    const prepare = async (route, { active: active2 = () => true } = {}) => {
+      if (route.name !== "title" || !["movie", "show"].includes(route.kind) || !active2() || !document.querySelector("header.top-nav .profile")) return null;
+      const url = await (discovery2 ??= discoverNativeModule(nativeLibraryImports, isNativeLibraryStore));
+      return active2() && document.querySelector("header.top-nav .profile") ? url : null;
+    };
+    return {
+      // Resolve cached public modules during the save; native account reads still start only after success.
+      prepare,
+      async refresh(route, { active: active2 = () => true } = {}) {
+        const url = await prepare(route, { active: active2 });
+        if (!url) return false;
+        return new Promise((resolve) => {
+          const id = `ogt:library-refresh:${crypto.randomUUID()}`;
+          const script = document.createElement("script");
+          const pagePath = location.pathname;
+          script.id = id;
+          let settled = false;
+          const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            document.removeEventListener(id, answered);
+            document.removeEventListener("ogt:authchange", cancel);
+            window.removeEventListener("popstate", cancel);
+            script.remove();
+            pending.delete(cancel);
+            resolve(result && active2());
+          };
+          const cancel = () => finish(false);
+          const answered = (event) => finish(event.detail === "refreshed");
+          const timer = setTimeout(cancel, 1e4);
+          pending.add(cancel);
+          document.addEventListener(id, answered);
+          document.addEventListener("ogt:authchange", cancel);
+          window.addEventListener("popstate", cancel);
+          script.type = "module";
+          script.onerror = cancel;
+          script.textContent = `(async () => {
+          let result = 'unavailable';
+          try {
+            const module = await import(${JSON.stringify(url)});
+            const store = Object.values(module).find(value => value &&
+              ['state', 'collectionCounts', 'refresh', 'recheck', 'patch'].every(key => typeof value[key] === 'function'));
+            if (store && document.getElementById(${JSON.stringify(id)}) &&
+                location.pathname === ${JSON.stringify(pagePath).replace(/</g, "\\u003c")} &&
+                document.querySelector('header.top-nav .profile')) {
+              await store.refresh();
+              result = 'refreshed';
+            }
+          } catch {}
+          document.dispatchEvent(new CustomEvent(${JSON.stringify(id)}, { detail: result }));
+        })();`;
+          document.head.append(script);
+        });
+      },
+      destroy() {
+        for (const cancel of [...pending]) cancel();
+      }
+    };
+  }
+
+  // src/features/library/data.js
+  function readLibraryTitle(doc) {
+    const heading = doc.querySelector(".fanart-header .summary-title h1");
+    return [...heading?.childNodes ?? []].filter((node) => node.nodeType === 3).map((node) => node.textContent).join("").trim() || "this title";
+  }
+
   // src/ui/action-button.js
   function findActionStack(doc = document) {
     return doc.querySelector(".summary-frame #overview .top .actions .action-buttons") || doc.querySelector(".summary-frame #overview .top .actions");
@@ -3495,7 +3813,11 @@
       let busy = false;
       let session = 0;
       let added = false;
+      let refreshing = false;
       let wasCollected = false;
+      const nativeRefresh = createNativeLibraryRefresh();
+      const doc = anchor.ownerDocument;
+      const pagePath = doc.location.pathname;
       const label = el("span", { class: "ogt-library__title", text: "Add to library" });
       const glyph = el("span", { class: "ogt-library__glyph", "aria-hidden": "true" });
       const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -3518,7 +3840,7 @@
         if (wasCollected && !collected) added = false;
         wasCollected = collected;
         const nativeLibrary = collected || titles.some((title) => /\badd to library\b/i.test(title.textContent));
-        node.hidden = added || nativeLibrary;
+        node.hidden = nativeLibrary || added && !refreshing;
       }
       async function add() {
         if (busy || node.hidden) return;
@@ -3531,14 +3853,23 @@
         button2.disabled = true;
         label.textContent = "Adding to library…";
         status.textContent = "";
-        const active2 = () => !destroyed && epoch === session;
+        const active2 = () => !destroyed && epoch === session && node.isConnected && doc.location.pathname === pagePath;
+        const title = readLibraryTitle(doc);
+        void nativeRefresh.prepare(route, { active: active2 }).catch((error) => debugError("native library preparation unavailable", error));
         try {
           const result = await libraryApi.add(route, { confirm: (message) => window.confirm(message), active: active2 });
           if (!active2()) return;
           if (!result.cancelled) {
             added = true;
+            refreshing = route.name === "title";
+            label.textContent = "Updating library…";
             syncVisibility();
-            toast("Added to your toolkit Trakt account’s library. Reload to update OG’s status.");
+            void notifySuccess(`You added ${title} to your library.`, active2);
+            try {
+              await nativeRefresh.refresh(route, { active: active2 });
+            } catch (error) {
+              debugError("native library refresh unavailable", error);
+            }
             return;
           }
         } catch (error) {
@@ -3546,6 +3877,8 @@
         } finally {
           if (active2()) {
             busy = false;
+            refreshing = false;
+            syncVisibility();
             button2.disabled = false;
             label.textContent = "Add to library";
           }
@@ -3553,7 +3886,9 @@
       }
       function authChanged() {
         session++;
+        nativeRefresh.destroy();
         busy = false;
+        refreshing = false;
         button2.disabled = false;
         added = false;
         wasCollected = false;
@@ -3571,6 +3906,7 @@
       syncVisibility();
       return { node, destroy() {
         destroyed = true;
+        nativeRefresh.destroy();
         observer.disconnect();
         button2.removeEventListener("click", add);
         document.removeEventListener("ogt:authchange", authChanged);
@@ -3655,36 +3991,7 @@
   var watchlistApi = createWatchlistApi();
 
   // src/features/watchlist/styles.js
-  var css = actionButtonCss("ogt-watchlist", "var(--brand-secondary, light-dark(#2474ae, #59a9e2))") + `
-  .ogt-watchlist-toasts {
-    inset-block-start: calc(var(--header-height, 70px) + var(--toast-offset, 12px) + var(--ogt-native-toast-height, 0px));
-    inset-block-end: auto; inset-inline-start: auto; inset-inline-end: var(--toast-offset, 12px);
-    z-index: var(--z-toast, 30); inline-size: min(var(--toast-width, 360px), calc(100vw - 2 * var(--toast-offset, 12px)));
-    display: flex; flex-direction: column; justify-content: normal; gap: var(--toast-gap, 8px);
-  }
-  .ogt-watchlist-toast {
-    position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
-    gap: var(--toast-icon-gap, 10px); padding: var(--toast-padding, 11px 8px 11px 14px); overflow: hidden;
-    border: 1px solid var(--color-toast-border, #ffffff20); border-radius: var(--radius-toast, 12px);
-    background: var(--color-toast-bg, #171717ed); color: var(--color-toast-text, white);
-    box-shadow: var(--shadow-toast, 0 12px 32px #0007); backdrop-filter: var(--blur-toast, blur(16px));
-    font: var(--font-size-toast, 14px)/1.4 var(--font-body, system-ui); pointer-events: auto;
-  }
-  .ogt-watchlist-toast__icon { display: flex; color: var(--color-toast-success, #6cc96c); }
-  .ogt-watchlist-toast__icon svg { inline-size: var(--font-size-toast-icon, 18px); block-size: var(--font-size-toast-icon, 18px); }
-  .ogt-watchlist-toast__message { margin: 0; overflow-wrap: anywhere; }
-  .ogt-watchlist-toast__close {
-    display: grid; place-items: center; min-block-size: 0; padding: 0; border: 0;
-    inline-size: var(--toast-close-size, 28px); block-size: var(--toast-close-size, 28px);
-    border-radius: var(--radius-toast-close, 4px); background: none; color: var(--color-toast-close, #bbb); cursor: pointer;
-  }
-  .ogt-watchlist-toast__close svg { inline-size: var(--font-size-toast-close, 14px); block-size: var(--font-size-toast-close, 14px); }
-  .ogt-watchlist-toast__close:is(:hover, :focus-visible) { background: var(--color-toast-close-hover, #ffffff15); color: var(--color-toast-text, white); }
-  .ogt-watchlist-toast__close:focus-visible { outline: 2px solid currentColor; }
-  .ogt-watchlist-toast__timer { position: absolute; inset: auto 0 0; block-size: var(--toast-timer-height, 2px);
-    background: var(--color-toast-success, #6cc96c); transform-origin: left; }
-  @media (prefers-reduced-motion: reduce) { .ogt-watchlist-toast__timer { display: none; } }
-`;
+  var css = actionButtonCss("ogt-watchlist", "var(--brand-secondary, light-dark(#2474ae, #59a9e2))");
 
   // src/features/watchlist/icon.js
   function watchlistIcon() {
@@ -3758,210 +4065,9 @@
     };
   }
 
-  // src/features/watchlist/native-toast.js
-  var earlyResources = [];
-  var discovery;
-  function rememberToastResources(names) {
-    earlyResources = [...names];
-  }
-  var chunkUrl = (value, base) => {
-    try {
-      const url = new URL(value, base);
-      return url.origin === new URL(base).origin && /^\/_app\/immutable\/chunks\/[\w.-]+\.js$/.test(url.pathname) && !url.search && !url.hash ? url.href : null;
-    } catch {
-      return null;
-    }
-  };
-  function nativeToastImports(source, layoutUrl, loaded) {
-    const result = [];
-    for (const match of source.matchAll(/\bimport\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/g)) {
-      const url = chunkUrl(match[2], layoutUrl);
-      if (!url || !loaded.includes(url)) continue;
-      for (const spec of match[1].split(",")) {
-        const alias = spec.trim().split(/\s+as\s+/).at(-1);
-        if (!/^[\w$]+$/.test(alias)) continue;
-        if (source.includes(`${alias}.dismiss(`) && source.includes(`${alias}.list`)) result.push(url);
-      }
-    }
-    return [...new Set(result)];
-  }
-  function isNativeToastStore(source) {
-    return source.length < 16e3 && /\bget\s+list\s*\(/.test(source) && /\bsuccess\s*:/.test(source) && /\berror\s*:/.test(source) && /\bdismiss\s*:/.test(source);
-  }
-  async function discover() {
-    if (!document.querySelector(".toaster")) return null;
-    const names = [.../* @__PURE__ */ new Set([...earlyResources, ...(performance.getEntriesByType?.("resource") ?? []).map((entry) => entry.name)])];
-    const layout = names.find((name) => {
-      try {
-        const url = new URL(name);
-        return url.origin === location.origin && /^\/_app\/immutable\/nodes\/0\.[\w-]+\.js$/.test(url.pathname);
-      } catch {
-        return false;
-      }
-    });
-    if (!layout) return null;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2e3);
-    const read = async (url) => {
-      const response = await fetch(url, { cache: "force-cache", credentials: "omit", signal: controller.signal });
-      if (!response.ok) throw new Error("Native toast module unavailable.");
-      return response.text();
-    };
-    try {
-      const source = await read(layout);
-      for (const url of nativeToastImports(source, layout, names)) {
-        if (isNativeToastStore(await read(url))) return url;
-      }
-    } catch (error) {
-      debugError("native toast discovery failed", error);
-    } finally {
-      clearTimeout(timer);
-    }
-    return null;
-  }
-  async function tryNativeWatchlistToast(message, active2 = () => true) {
-    if (!active2()) return false;
-    const url = await (discovery ??= discover());
-    if (!url || !active2() || !document.querySelector(".toaster")) return false;
-    return new Promise((resolve) => {
-      const eventName = `ogt:watchlist-toast:${crypto.randomUUID()}`;
-      const script = document.createElement("script");
-      let settled = false;
-      const finish = (ok) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        document.removeEventListener(eventName, answered);
-        script.remove();
-        resolve(ok);
-      };
-      const answered = (event) => finish(event.detail === "shown");
-      const timer = setTimeout(() => finish(false), 1e3);
-      document.addEventListener(eventName, answered);
-      script.type = "module";
-      script.onerror = () => finish(false);
-      script.textContent = `(async () => {
-      let result = 'unavailable';
-      try {
-        const module = await import(${JSON.stringify(url)});
-        const store = Object.values(module).find(value => value && typeof value.success === 'function' &&
-          typeof value.dismiss === 'function' && Array.isArray(value.list));
-        if (store && document.querySelector('.toaster')) { store.success(${JSON.stringify(message).replace(/</g, "\\u003c")}); result = 'shown'; }
-      } catch {}
-      document.dispatchEvent(new CustomEvent(${JSON.stringify(eventName)}, { detail: result }));
-    })();`;
-      document.head.append(script);
-    });
-  }
-
   // src/features/watchlist/notification.js
-  var root;
-  var observed;
-  var resize;
-  var notices = [];
-  function icon(path, circle = false) {
-    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg3.setAttribute("viewBox", "0 0 24 24");
-    svg3.setAttribute("aria-hidden", "true");
-    if (circle) {
-      const node2 = document.createElementNS(svg3.namespaceURI, "circle");
-      node2.setAttribute("cx", "12");
-      node2.setAttribute("cy", "12");
-      node2.setAttribute("r", "11");
-      node2.setAttribute("fill", "currentColor");
-      svg3.append(node2);
-    }
-    const node = document.createElementNS(svg3.namespaceURI, "path");
-    for (const [key, value] of Object.entries({ d: path, fill: "none", stroke: circle ? "#163516" : "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" })) node.setAttribute(key, value);
-    svg3.append(node);
-    return svg3;
-  }
-  function showWatchlistToast(message = "You added this title to your watchlist.") {
-    if (!root?.isConnected) {
-      resize?.disconnect();
-      root = el("div", { class: "ogt-toast ogt-watchlist-toasts" });
-      document.body.append(root);
-    }
-    const native = document.querySelector(".toaster");
-    const position = () => root?.style.setProperty("--ogt-native-toast-height", `${native?.isConnected && native.children.length ? native.getBoundingClientRect().height + 8 : 0}px`);
-    if (native !== observed) {
-      resize?.disconnect();
-      observed = native;
-      if (native && typeof ResizeObserver === "function") {
-        resize = new ResizeObserver(position);
-        resize.observe(native);
-      }
-    }
-    position();
-    const close = el("button", { type: "button", class: "ogt-watchlist-toast__close", "aria-label": "Close" }, icon("M6 6l12 12M18 6 6 18"));
-    const line = el("span", { class: "ogt-watchlist-toast__timer", "aria-hidden": "true" });
-    const node = el(
-      "div",
-      { class: "ogt-watchlist-toast", role: "status", "aria-atomic": "true" },
-      el("span", { class: "ogt-watchlist-toast__icon" }, icon("m7 12 3 3 7-7", true)),
-      el("p", { class: "ogt-watchlist-toast__message", text: message }),
-      close,
-      line
-    );
-    root.prepend(node);
-    let timer, animation, fraction = 1, started, duration, removed = false;
-    const holds = /* @__PURE__ */ new Set();
-    const remove = () => {
-      if (removed) return;
-      removed = true;
-      clearTimeout(timer);
-      animation?.cancel();
-      node.remove();
-      const index = notices.indexOf(remove);
-      if (index >= 0) notices.splice(index, 1);
-      if (!notices.length) {
-        resize?.disconnect();
-        observed = null;
-        root?.remove();
-        root = null;
-      }
-    };
-    const start2 = (ms) => {
-      duration = ms;
-      started = Date.now();
-      animation?.cancel();
-      animation = line.animate?.([{ transform: `scaleX(${fraction})` }, { transform: "scaleX(0)" }], { duration: ms, fill: "forwards" });
-      animation?.finished?.catch(() => {
-      });
-      timer = setTimeout(remove, ms);
-    };
-    const hold = (kind) => {
-      if (holds.has(kind)) return;
-      if (!holds.size) {
-        fraction *= Math.max(0, 1 - (Date.now() - started) / duration);
-        clearTimeout(timer);
-        animation?.pause();
-      }
-      holds.add(kind);
-    };
-    const release2 = (kind) => {
-      if (holds.delete(kind) && !holds.size) start2(1e3);
-    };
-    close.addEventListener("click", remove);
-    node.addEventListener("pointerenter", () => hold("pointer"));
-    node.addEventListener("pointerleave", () => release2("pointer"));
-    node.addEventListener("focusin", () => hold("focus"));
-    node.addEventListener("focusout", (event) => {
-      if (!(event.relatedTarget instanceof Node) || !node.contains(event.relatedTarget)) release2("focus");
-    });
-    notices.unshift(remove);
-    while (notices.length > 3) notices.at(-1)();
-    start2(5e3);
-    return { node, destroy: remove };
-  }
-  async function notifyWatchlistAdded({ title = "this title", active: active2 = () => true } = {}) {
-    const message = `You added ${title} to your watchlist.`;
-    try {
-      if (await tryNativeWatchlistToast(message, active2)) return;
-    } catch (error) {
-      debugError("native watchlist toast unavailable", error);
-    }
-    if (active2()) showWatchlistToast(message);
+  function notifyWatchlistAdded({ title = "this title", active: active2 = () => true } = {}) {
+    return notifySuccess(`You added ${title} to your watchlist.`, active2);
   }
 
   // src/features/watchlist/index.js
@@ -4420,9 +4526,9 @@ MIT licensed.`);
     const openGate = () => {
       if (canMount) return;
       canMount = true;
-      rememberToastResources(moduleWatch.entries.keys());
+      rememberNativeResources(moduleWatch.entries.keys());
       moduleWatch.stop();
-      injectStyles(FEATURES.map((feature) => feature.css).filter(Boolean));
+      injectStyles([successNotificationCss, ...FEATURES.map((feature) => feature.css).filter(Boolean)]);
       host = createFeatureHost(FEATURES);
       createRouter({
         onRoute(next) {

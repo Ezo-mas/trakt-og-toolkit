@@ -92,7 +92,7 @@ test('built script mounts button, guides sign-in, saves once, and removes it aft
   assert.equal(writes.length, 1);
   assert.equal(writes[0].url, 'https://api.trakt.tv/sync/collection');
   assert.equal(window.document.getElementById('ogt-library').hidden, true);
-  assert.match(window.document.querySelector('.ogt-toast').textContent, /Added to your toolkit/);
+  assert.equal(window.document.querySelector('.ogt-watchlist-toast__message').textContent, 'You added The Dark to your library.');
   // OG eventually learns about the addition, then the user removes it natively.
   const nativeCollection = window.document.createElement('div');
   nativeCollection.className = 'summary-action selected';
