@@ -3702,7 +3702,7 @@
   function createNativeWatchlistRefresh() {
     const pending = /* @__PURE__ */ new Set();
     return {
-      refresh(control, route, { active: active2 = () => true } = {}) {
+      refresh(control, route, { active: active2 = () => true, timeout = 1e4 } = {}) {
         if (route.name !== "title" || !["movie", "show"].includes(route.kind) || !control?.isConnected || !active2()) {
           return Promise.resolve(false);
         }
@@ -3719,6 +3719,7 @@
           const finish = (result) => {
             if (settled) return;
             settled = true;
+            clearTimeout(timer);
             observer.disconnect();
             picker.removeEventListener("beforetoggle", beforeToggle);
             doc.removeEventListener("ogt:authchange", cancel);
@@ -3727,6 +3728,7 @@
             resolve(result && active2() && control.isConnected);
           };
           const cancel = () => finish(false);
+          const timer = setTimeout(cancel, timeout);
           const beforeToggle = (event) => {
             if (event.newState !== "open") return;
             event.preventDefault();

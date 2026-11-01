@@ -66,6 +66,12 @@ test('failed native loading and destroyed refreshes settle without changing save
   assert.equal(b.open().defaultPrevented, false, 'teardown restores native behavior');
 });
 
+test('native refresh gives up when OG ignores the keypress', async t => {
+  const b = setup(t);
+  assert.equal(await b.refresh.refresh(b.control, b.route, { timeout: 20 }), false);
+  assert.equal(b.open().defaultPrevented, false, 'the abandoned refresh no longer blocks the picker');
+});
+
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = () => new Promise(resolve => setTimeout(resolve, 100));
 // Source-derived MediaList model: ArrowDown -> open(true) -> loadPickerLists -> syncPickerOverlay -> togglePopover.
