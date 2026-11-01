@@ -2,6 +2,163 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-01: one-click watchlist (feature 13)
+
+- Live confirmation: the user tested and confirmed both features in PR #10 (watchlist) and PR #11 (library)
+  on a real account, in Zen and Brave, using the real Trakt API. This supersedes the general pending-live-check
+  notes below. Earlier local browser checks remain identified as mocked; the user did not enumerate every
+  media type or failure scenario individually.
+
+- User clarified their Firefox failure is specifically 150–170% zoom; 180% grows the cards again. Removed
+  the fixed-width container query and all geometry/ResizeObserver hiding. Poster-only CSS now hides at
+  1.5 <= resolution < 1.8dppx and restores at 1.8dppx. Narrow cards alone no longer hide the shortcut.
+  This maps to that zoom band on a 1x/100%-scaled desktop; CSS resolution includes display scaling, so
+  this is an explicitly documented approximation, not a universal exact-zoom detector. Native membership
+  hiding, movie/show scope and fanart layout stay unchanged. Earlier overflow approaches below are superseded.
+  Full tests/build pass. Captured-page Chromium/Firefox checks emulate 1.0/1.3/1.5/1.7/1.8/2.0dppx at
+  150px and 240px card widths, verifying the media rule rather than actual browser toolbar zoom. The
+  user subsequently confirmed both features live in Zen and Brave; see the confirmation above.
+
+- User reported the first space-based fix still clips Social Feed ratings at 150% in Zen. The earlier browser
+  check converted a fanart card and tested only two widths; it did not validate the actual signed-in Social
+  Feed at 150%. A saved real poster with a modeled native rating button did not reproduce that exact failure.
+  Added an independent CSS container-query fallback: poster action bars at 180 CSS px or narrower hide the
+  toolkit icon regardless of JS overflow measurements. This preserves native card sizes and does not depend
+  on devicePixelRatio or hide wide cards on high-DPI displays. Also measure the actions plus full rating text
+  (Range bounds/padding) so a clipping rating wrapper cannot disguise the needed width. Built-bundle tests
+  cover a clipped rating whose outer bar reports no overflow. Full tests/build pass. Chromium and Firefox
+  verified the CSS fallback on captured real poster markup across 150/180/182/183/200px outer widths,
+  deliberately overriding JS dimensions to report spare room; CSS hid/restored correctly, with a mocked
+  save at the wider width. Actual Zen signed-in zoom remains unverified.
+
+- Poster-card shortcuts now hide when their action bar/rating would overflow, measured with the shortcut
+  present. A ResizeObserver, window resize and font-load updates restore the shortcut when space returns.
+  This follows actual card space at any zoom rather than guessing zoom from display pixel density; fanart
+  cards retain their existing layout. Cleanup disconnects observers and removes listeners.
+  Full tests/build pass. Captured OG markup/CSS in Chromium and Firefox verified wide → narrow → wide
+  transitions: shortcut visible → hidden → visible, no action-bar overflow, and a successful mocked save.
+  Actual browser zoom on the signed-in history page remains a live check.
+
+- Restricted card shortcuts to movies and whole shows at the user’s request. Up Next episode cards and season
+  cards have no bookmark action, even when their subtitles link to the parent show. Recycled cards lose the
+  shortcut when their canonical link becomes an episode/season. Title-page actions remain unchanged.
+  Unit and built-bundle integration tests cover excluded cards and show-to-episode recycling.
+
+- Softened the card bookmark to OG's muted list-action blue (`--brand-fifth`) instead of bright cyan, with rounded
+  stroke joins. Hover uses the same muted blue; title-page action styling is unchanged.
+- Success notifications now match OG's wording: **You added <title> to your watchlist.**, including when native
+  refresh is unavailable. The title comes from the existing public API lookup, with no extra request; both
+  the native bridge and fallback render it as text, including punctuation/markup-looking titles.
+  Verified the exact Spider-Man example in native/fallback paths in Chromium and Firefox. A Chromium native
+  test also rendered a title containing quotes, `</script>` and an HTML-looking image as literal text without
+  creating HTML or running its handler; unit/built-bundle tests cover API title propagation on pages and cards.
+  The account distinction stays in button tooltips/README, rather than the success message. Native refresh
+  failure no longer repeats the success toast with a reload hint; the addition is already saved.
+  Checked `components/toast/toast.svelte.ts` and `Toaster.svelte`: OG's notifications are a private reactive Svelte
+  store, with no public window API or custom-event listener for external callers.
+- At the user's request, tested importing that store in the page realm: it does drive OG's real notifier.
+  The toolkit now discovers the root layout's toast import using its `list`/`dismiss` references, validates
+  the loaded module's `list`/`success`/`error`/`dismiss` shape, and invokes `success` through a temporary module
+  script in the page realm. Importing from a userscript sandbox alone would create a separate Svelte singleton.
+  No build hash/export alias is fixed in the source. Only already-loaded, same-origin immutable public assets
+  are eligible, fetched with `credentials: omit`/`force-cache`; discovery is cached for the page and bounded.
+  The bridge removes its script/listener and times out to the fallback if CSP or module changes block it.
+- The fallback is independent toolkit markup using OG's toast design tokens: top right below the header, dark
+  glass, green check/timer, Close button, five-second dismissal, pause on hover/focus and one second after leaving.
+  It stacks below existing native notices rather than overlapping or modifying them, and respects reduced motion.
+  Other toolkit notifications keep their existing appearance. No additional API writes or userscript grants.
+- Notification validation: `npm test` and build pass; pure discovery/validation tests plus fallback dismissal and
+  stacking tests. Chromium 156 and Firefox 157 booted the actual captured signed-out OG page and its real public
+  Svelte modules (not a modeled Toaster), then the built bundle saved through mocked GM requests. Both rendered
+  the actual native success toast with one POST and no fallback/remaining bridge script. Deliberately changed
+  the discovery response to test fallback: both matched native width (360px), font (14px), background and height
+  (52px), sat 8px below an existing native toast, and dismissed via Close. Also injected a real browser CSP
+  blocking inline module scripts: both browsers recorded the blocked bridge, removed it, and showed exactly
+  the matching fallback with one mocked POST and no page errors. Chromium also verified pause past five seconds
+  on hover, continued pause with keyboard focus, then dismissal one second after leaving. The saved page's UTC
+  zone must match the test browser, or OG's date-zone invalidation loops when its data requests are blocked.
+  Live Violentmonkey/Tampermonkey sandbox and CSP behavior still need the user's check; discovery/bridge failures
+  use the matching fallback rather than losing the success notification.
+
+- Native-refresh follow-up: movie/show saves now ask OG's existing `MediaList` control to reread membership.
+  Its `ArrowDown` handler calls `open(true)` (always the picker read, even if QUICK_ADD is later enabled), then
+  `loadPickerLists` → `syncPickerOverlay` patches the same shared state used by OG's title buttons, card tooltips
+  and picker rows. Cancel the picker's opening `beforetoggle` event after reconciliation so no popup appears.
+  No native button click, second write, Svelte module import, cookie/token read or toolkit call to an og endpoint.
+  The native app performs its own reads using its own account, so different accounts are not falsely reconciled.
+- Only attempt this with positive signed-in header markup (`header.top-nav .profile`), an idle closed picker,
+  and its advertised ArrowDown shortcut/controlled popover. Missing/signed-out/busy controls and native load
+  failures preserve the successful toolkit add; reloading remains the fallback for native state. Auth changes and teardown remove
+  refresh listeners/observers. The guard remains until the native load completes, including slow requests.
+  Source detail: `loadPickerLists` explicitly omits fresh season/episode Watchlist membership, so those saves
+  retain the reload fallback rather than claiming the picker can refresh them.
+- Refresh validation: unit tests cover the forced read-only event, popup suppression, signed-out/busy/open
+  controls, season/episode skips, native load failures and cleanup. Built-bundle tests model MediaList's event
+  contract to check one toolkit POST, no native click/write, updated title/card/picker membership, preservation
+  of custom lists, different accounts, a preserved successful add on native failure, and no refresh after a
+  rejected POST. Saved-page Chromium 156 and Firefox 157 checks passed for title and card actions using the
+  real Popover API with a modeled native loader: one POST, one native read, checked Watchlist row, canceled
+  popup opening and no page errors. This still needs a real signed-in userscript-manager check of the native
+  refresh path.
+- Follow-up: the user confirmed title-page adding works with the toolkit on their own account (browser/media
+  types unspecified). Added a bookmark shortcut immediately after the blue lists control on poster/fanart cards,
+  including cards inserted or recycled during browsing. This extends feature 13; feature 14's library-on-cards
+  work remains separate.
+- Card check: saved live `/movies/trending` and checked `QuickIcons`, `PosterCard`, `FanartCard`, `MediaList`,
+  `Tooltip` and `ListedTip` at the upstream commit below. Cards still use the picker. The canonical image link
+  identifies each card's own movie/show/season/episode, rather than the page route or a subtitle's parent show.
+  Native `aria-describedby` points to an always-rendered tooltip; only its `.listed-tip` link to
+  `/users/:slug/watchlist` proves Watchlist membership. A custom list named Watchlist uses `/lists/:id` and
+  does not hide the shortcut. No per-card requests occur until clicking, and no og session/internal API is read.
+- Card buttons share the existing API and bookmark glyph. Within a mounted page, duplicate card URLs share busy
+  and successful-add state. Native removal restores the shortcut, sign-in changes clear local state, and pending
+  lookups cancel on navigation, card removal or recycling. A hydration-gated observer handles lazy/replaced
+  controls; teardown removes the observer, marker and all per-card listeners/buttons. Small cards use og's 28px
+  action width and 34px button height; full cards use og's action width and 40px bar height.
+- Card validation: new data-reader tests and built-bundle integration coverage for all four media types, lazy and
+  recycled cards, duplicate saves, native custom/mixed-list membership, failure/retry, account changes and
+  navigation. Local saved-page Chromium 156/Firefox 157 checks passed with mocked GM/API responses and og's CSS:
+  fanart controls match 35×40px native buttons; poster controls match 28×34px; keyboard focus, exact-item POST,
+  success hiding and no page errors. Live signed-in card clicking and native tooltip/overlay updates in the
+  userscript manager still need a user check.
+- Started from main `1746380`. Checked live signed-out HTML for `/movies/fight-club-1999`,
+  `/shows/breaking-bad`, `/shows/breaking-bad/seasons/1` and `/shows/breaking-bad/seasons/1/episodes/1`.
+  All have `.summary-frame #overview .top .actions .action-buttons` and **Add to list**, not a direct watchlist
+  action. `WATCHLIST_HTML` is a hand-trimmed fixture of that shared structure.
+- Checked full trakt-og history at `4bdefaf4e`: `ActionButtons.svelte` delegates to `MediaList.svelte`.
+  `git log -S 'quickAdd'` and `git log -S 'QUICK_ADD'` trace `QUICK_ADD = false` to `858973bfb`
+  (2026-10-28): always open prompts because users cannot change the old quick-add account settings in og.
+  `ff795e338` also labels the signed-out button **Add to list**. `git log -S 'watchlist'` on `ActionButtons`
+  shows no subsequent standalone title-page action. A separate direct `WatchlistButton.svelte` exists, but its
+  current callers are dashboard `RecommendationSpotlight` and onboarding `PickPoster`, not title pages
+  (checked callers and `git log -S 'WatchlistButton'`). All four title routes exist in the source.
+- `SeasonPage` and `EpisodePage` also pass their exact `listTarget` to `ActionButtons` and get the same picker.
+  The toolkit therefore offers one-click adds on those pages too. Movies/shows resolve through their public
+  detail endpoint; seasons resolve through `/shows/:id/seasons` by season number (including season 0);
+  episodes use their exact detail endpoint. No collection expansion, aired-date filtering or confirmation is
+  needed: each POST to `/sync/watchlist` contains one numeric Trakt ID under its own media type.
+- Native `.selected` alone means membership in any list, not necessarily Watchlist. Read **Listed On** plus
+  `.detail` equal to **Watchlist** or beginning **Watchlist +**; **3 lists** keeps the action visible.
+  The source-derived signed-in variants are tested separately from the live signed-out fixture.
+  As with library, a mutation observer follows native changes, success hides locally, and a native
+  watchlisted → not-watchlisted transition restores the action. Toolkit and OG accounts can differ.
+- Shared `src/ui/action-button.js` extracts only feature 12's CSS and action-stack lookup; its generated CSS,
+  collection requests, observer and sign-in behavior are unchanged. Watchlist accepts a positive matching
+  `added` or `existing` count; empty responses and any non-empty/malformed `not_found` entries fail visibly.
+  Auth changes/navigation cancel pending lookups and ignore late write results. No authenticated watchlist
+  prefetch or private response cache was added.
+- Validation: `npm run build` and `npm test` pass, including library tests and watchlist unit/built-bundle
+  tests for all four media types, sign-in guidance, duplicate clicks, native changes, rejected additions,
+  account changes and navigation. Playwright's live og navigation returned Cloudflare 403, while browser-UA
+  curl captures succeeded. Local Chromium/Firefox checks use that captured movie HTML and og's downloaded CSS,
+  the built bundle at document-start, and mocked GM/API responses; they do not run Svelte or a userscript manager.
+  Passed in Chromium 156 and Firefox 157 at 1280px and 800px: 60px action height, keyboard focus, exact POST,
+  success hiding, native mixed-list removal restoring the action, sign-out guidance, navigation cleanup and no
+  page errors. At 390px og's own `MobileSplash` clips the app and prevents interaction; no phone pass is claimed.
+  The user subsequently confirmed actual title-page adding (see above). Remaining specific checks in Chromium
+  and Firefox with Violentmonkey: card writes, season/episode support if not covered by that confirmation,
+  OG's live overlay updating/removing Watchlist alongside other lists, and differing OG/toolkit accounts.
+
 ## 2026-11-01: last month in review (feature 6)
 
 - og check (trakt-og `4bdefaf4e`: `DashboardPage.svelte`, `RecapRibbon`, `LastThirtyDaysPanel`,

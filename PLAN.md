@@ -24,7 +24,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 10 | List preview posters link to titles | check og first | small |
 | 11 | All lists in one view | OAuth or public | lowest value |
 | 12 | Add to library button | OAuth | done |
-| 13 | One-click Add to watchlist | OAuth | small |
+| 13 | One-click Add to watchlist | OAuth | done; user verified in Zen and Brave with real API |
 | 14 | Add to library on poster cards | OAuth | small; after 12 |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
@@ -292,6 +292,15 @@ specials; the button hides when og shows its own library control.
   episode's `first_aired` (`extended=episodes` alone does not). The Simpsons, 39 seasons: about 1 MB in 1 s.
 
 ## 13. One-click Add to watchlist
+
+**Status:** implemented on movie, show, season and episode pages, plus movie/whole-show poster and fanart cards
+beside the lists button. Season and episode cards, including Up Next, have no shortcut.
+Poster shortcuts hide only in the 1.5–<1.8dppx resolution band (150–170% zoom on a 1x desktop display),
+returning at 180%. No fixed card-width cutoff; display-scaling limitations are documented in README.md.
+The user confirmed the feature on a real account with the real Trakt API in Zen and Brave on 2026-11-01.
+Unit tests and built-bundle integration tests pass. Movie/show saves now request OG's native picker membership refresh without opening it; seasons/episodes
+retain the reload fallback. Saved-page browser checks and the user’s live confirmation are recorded in NOTES.md.
+Success notifications try OG's native notifier, with a matching top-right fallback when unavailable.
 
 **Goal:** og's "Listed on" button opens a list picker; adding to the watchlist takes several clicks. Add a separate
 button that only adds to the watchlist.

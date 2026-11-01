@@ -2,37 +2,15 @@ import { el } from '../../core/dom.js';
 import { isSignedIn } from '../../core/trakt.js';
 import { libraryApi } from './api.js';
 import { toast } from '../../ui/shell.js';
+import { actionButtonCss, findActionStack } from '../../ui/action-button.js';
 
 const ID = 'ogt-library';
 export const library = {
   id: 'library',
-  css: `
-    .ogt-library { --action-color: var(--brand-quaternary, #129982); margin: 0; }
-    .ogt-library[hidden] { display: none !important; }
-    /* Use OG's design values without inheriting its component state selectors. */
-    .ogt-library__button { display: flex; align-items: center; width: 100%;
-      height: var(--summary-action-height, 60px); padding: 0; border: 0;
-      border-radius: var(--radius-summary-action, 6px);
-      background: color-mix(in srgb, var(--action-color) var(--summary-action-tint, 3%), var(--color-action-bg, #202020));
-      box-shadow: inset 0 0 0 var(--summary-action-outline, 1px) color-mix(in srgb, var(--action-color) var(--summary-action-outline-mix, 65%), transparent);
-      color: var(--action-color); font: inherit; text-align: start; cursor: pointer;
-      transition: background-color var(--transition-summary-action, 150ms), color var(--transition-summary-action, 150ms); }
-    .ogt-library__button:is(:hover, :focus-visible):not(:disabled) { background: var(--action-color); color: var(--color-text-inverse, white); box-shadow: none; }
-    .ogt-library__glyph { display: grid; place-items: center; flex-shrink: 0; align-self: stretch; width: var(--action-icon-width, 48px); }
-    .ogt-library__glyph svg { width: 24px; height: 28px; }
-    .ogt-library__text { flex: 1; min-width: 0; font-family: var(--font-headings, inherit); }
-    .ogt-library__title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      font-size: var(--font-size-action, 13px); font-weight: var(--font-weight-headings-heavy, 700);
-      letter-spacing: var(--summary-action-tracking, .04em); line-height: var(--summary-action-title-line, 1.3); text-transform: uppercase; }
-    .ogt-library__button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
-    .ogt-library__button:disabled { opacity: .6; cursor: default; }
-    .ogt-library__status { font: 12px/1.4 system-ui; margin: 6px 0 0; }
-    .ogt-library__status:empty { display: none; }
-  `,
+  css: actionButtonCss('ogt-library', 'var(--brand-quaternary, #129982)'),
   match: route => route.kind === 'movie' && route.name === 'title' || route.kind === 'show' && ['title', 'season', 'episode'].includes(route.name),
   mount(route) {
-    const anchor = document.querySelector('.summary-frame #overview .top .actions .action-buttons') ||
-      document.querySelector('.summary-frame #overview .top .actions');
+    const anchor = findActionStack();
     if (!anchor || document.getElementById(ID)) return null;
     let destroyed = false;
     let busy = false;

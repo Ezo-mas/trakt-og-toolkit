@@ -1,5 +1,51 @@
 /** Trimmed, hand-written mirrors of the real og markup these selectors rely on. */
 
+/** Action-stack structure trimmed by hand from live signed-out captures on 2026-11-01:
+ * /movies/fight-club-1999, /shows/breaking-bad, and its /seasons/1 and /seasons/1/episodes/1.
+ * All four use this stack/list control. Icons, unrelated actions and Svelte hashes omitted.
+ * Signed-in Listed On/detail variants in tests are source-derived from MediaList at 4bdefaf4e. */
+export const WATCHLIST_HTML = `
+<main id="content">
+  <section class="summary-frame"><div class="container"><div class="columns">
+    <div class="info" id="overview"><div class="top"><div class="details"></div>
+      <div class="actions"><div class="action-buttons">
+        <div class="stacked"><div class="watch-control summary"><div class="summary-action">
+          <button type="button" class="main" aria-label="Add to history" aria-haspopup="dialog">
+            <span class="text"><span class="title">Add to history</span></span>
+          </button>
+        </div></div></div>
+        <div class="stacked"></div>
+        <div class="list-control summary"><div class="summary-action">
+          <button type="button" class="main" aria-haspopup="dialog" aria-expanded="false" aria-controls="native-list-picker" aria-keyshortcuts="ArrowDown">
+            <span class="text"><span class="title">Add to list</span></span>
+          </button>
+          <div class="tiles"><button type="button" class="tile" aria-label="Pick a list" aria-haspopup="dialog"></button></div>
+        </div></div>
+        <div id="native-list-picker" class="picker summary" popover="auto" role="dialog" aria-label="Lists"></div>
+      </div></div>
+    </div></div>
+  </div></div></section>
+</main>`;
+
+/** Hand-trimmed fanart-card from live /movies/trending (2026-11-01). Poster variant uses the
+ * same controls (also checked on the saved show page). Signed-in rich tooltip comes from ListedTip. */
+export function watchlistCardHtml({ id = 'card-movie', href = '/movies/verity-2026', small = false } = {}) {
+  return `<article id="${id}" class="${small ? 'poster-card' : 'fanart-card'} with-icons">
+    <a class="${small ? 'poster' : 'image-link'}" href="${href}" tabindex="-1" aria-hidden="true"></a>
+    <div class="titles"><h3><a class="titles-link" href="${href}">Card title</a></h3></div>
+    <div class="quick-icons${small ? ' small' : ''}"><div class="actions"><div class="tools">
+      <div class="watch-control card"><button class="watch-trigger" aria-label="Add to watched history"></button></div>
+      <div class="list-control card${small ? ' small' : ''}">
+        <button type="button" class="trigger" aria-label="Add to list" aria-describedby="${id}-tip" aria-haspopup="dialog" aria-controls="${id}-picker" aria-keyshortcuts="ArrowDown"></button>
+        <span id="${id}-tip" class="tooltip" role="tooltip" popover="hint">Add to list</span>
+      </div>
+      <div id="${id}-picker" class="picker card" popover="auto" role="dialog"></div>
+      <button type="button" class="action favorite" aria-label="Add to favorites"></button>
+      <button type="button" class="action watch-now" aria-label="Watch now"></button>
+    </div></div><span class="percentage">77%</span></div>
+  </article>`;
+}
+
 export const SHOW_HTML = `
 <main id="content">
   <section class="fanart-header with-stats">

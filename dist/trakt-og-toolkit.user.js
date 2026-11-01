@@ -367,15 +367,15 @@
   var STYLE_ID = "ogt-styles";
   function injectStyles(extra = []) {
     if (document.getElementById(STYLE_ID)) return;
-    const css = [CSS, ...extra].join("\n");
+    const css2 = [CSS, ...extra].join("\n");
     if (typeof GM_addStyle === "function") {
       try {
-        GM_addStyle(css);
+        GM_addStyle(css2);
         return;
       } catch {
       }
     }
-    const style = el("style", { id: STYLE_ID, text: css });
+    const style = el("style", { id: STYLE_ID, text: css2 });
     (document.head || document.documentElement).append(style);
   }
   var toastTimer = null;
@@ -1879,7 +1879,7 @@
       if (kind === "episode" && (!Number.isInteger(episode?.season) || episode.season < 0 || !Number.isInteger(episode?.number) || episode.number < 1)) continue;
       const slug = media.ids.slug || media.ids.trakt;
       if (!slug) continue;
-      const root = `/${kind === "movie" ? "movies" : "shows"}/${encodeURIComponent(slug)}`;
+      const root2 = `/${kind === "movie" ? "movies" : "shows"}/${encodeURIComponent(slug)}`;
       mapped.push({
         id: row.id,
         kind,
@@ -1887,7 +1887,7 @@
         season: kind === "episode" ? episode.season : null,
         episode: kind === "episode" ? episode.number : null,
         title: kind === "movie" ? media.title || "Untitled movie" : `${media.title || "Untitled show"} · ${episode.season}×${String(episode.number).padStart(2, "0")} · ${episode.title || "Untitled episode"}`,
-        href: kind === "movie" ? root : `${root}/seasons/${episode.season}/episodes/${episode.number}`,
+        href: kind === "movie" ? root2 : `${root2}/seasons/${episode.season}/episodes/${episode.number}`,
         poster: posterUrl(media.images?.poster?.[0]),
         progress: row.progress,
         pausedAt: row.paused_at,
@@ -3101,11 +3101,11 @@
       drawnWidth = Math.max(MIN_WIDTH, Math.round(plot.getBoundingClientRect().width) || DEFAULT_WIDTH);
       return drawnWidth;
     }
-    const resize = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
+    const resize2 = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
       if (cancelled || node.hidden) return;
       if (Math.abs(Math.round(plot.getBoundingClientRect().width) - drawnWidth) > 1) render(currentEpisodes);
     }) : null;
-    resize?.observe(plot);
+    resize2?.observe(plot);
     render(currentEpisodes);
     loadPersonal();
     return {
@@ -3113,7 +3113,7 @@
       render,
       destroy() {
         cancelled = true;
-        resize?.disconnect();
+        resize2?.disconnect();
         authRevision++;
         document.removeEventListener("ogt:authchange", loadPersonal);
         more.removeEventListener("click", toggleMore);
@@ -3452,36 +3452,44 @@
   }
   var libraryApi = createLibraryApi();
 
-  // src/features/library/index.js
-  var ID2 = "ogt-library";
-  var library = {
-    id: "library",
-    css: `
-    .ogt-library { --action-color: var(--brand-quaternary, #129982); margin: 0; }
-    .ogt-library[hidden] { display: none !important; }
+  // src/ui/action-button.js
+  function findActionStack(doc = document) {
+    return doc.querySelector(".summary-frame #overview .top .actions .action-buttons") || doc.querySelector(".summary-frame #overview .top .actions");
+  }
+  function actionButtonCss(prefix, color) {
+    return `
+    .${prefix} { --action-color: ${color}; margin: 0; }
+    .${prefix}[hidden] { display: none !important; }
     /* Use OG's design values without inheriting its component state selectors. */
-    .ogt-library__button { display: flex; align-items: center; width: 100%;
+    .${prefix}__button { display: flex; align-items: center; width: 100%;
       height: var(--summary-action-height, 60px); padding: 0; border: 0;
       border-radius: var(--radius-summary-action, 6px);
       background: color-mix(in srgb, var(--action-color) var(--summary-action-tint, 3%), var(--color-action-bg, #202020));
       box-shadow: inset 0 0 0 var(--summary-action-outline, 1px) color-mix(in srgb, var(--action-color) var(--summary-action-outline-mix, 65%), transparent);
       color: var(--action-color); font: inherit; text-align: start; cursor: pointer;
       transition: background-color var(--transition-summary-action, 150ms), color var(--transition-summary-action, 150ms); }
-    .ogt-library__button:is(:hover, :focus-visible):not(:disabled) { background: var(--action-color); color: var(--color-text-inverse, white); box-shadow: none; }
-    .ogt-library__glyph { display: grid; place-items: center; flex-shrink: 0; align-self: stretch; width: var(--action-icon-width, 48px); }
-    .ogt-library__glyph svg { width: 24px; height: 28px; }
-    .ogt-library__text { flex: 1; min-width: 0; font-family: var(--font-headings, inherit); }
-    .ogt-library__title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    .${prefix}__button:is(:hover, :focus-visible):not(:disabled) { background: var(--action-color); color: var(--color-text-inverse, white); box-shadow: none; }
+    .${prefix}__glyph { display: grid; place-items: center; flex-shrink: 0; align-self: stretch; width: var(--action-icon-width, 48px); }
+    .${prefix}__glyph svg { width: 24px; height: 28px; }
+    .${prefix}__text { flex: 1; min-width: 0; font-family: var(--font-headings, inherit); }
+    .${prefix}__title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       font-size: var(--font-size-action, 13px); font-weight: var(--font-weight-headings-heavy, 700);
       letter-spacing: var(--summary-action-tracking, .04em); line-height: var(--summary-action-title-line, 1.3); text-transform: uppercase; }
-    .ogt-library__button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
-    .ogt-library__button:disabled { opacity: .6; cursor: default; }
-    .ogt-library__status { font: 12px/1.4 system-ui; margin: 6px 0 0; }
-    .ogt-library__status:empty { display: none; }
-  `,
+    .${prefix}__button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+    .${prefix}__button:disabled { opacity: .6; cursor: default; }
+    .${prefix}__status { font: 12px/1.4 system-ui; margin: 6px 0 0; }
+    .${prefix}__status:empty { display: none; }
+  `;
+  }
+
+  // src/features/library/index.js
+  var ID2 = "ogt-library";
+  var library = {
+    id: "library",
+    css: actionButtonCss("ogt-library", "var(--brand-quaternary, #129982)"),
     match: (route) => route.kind === "movie" && route.name === "title" || route.kind === "show" && ["title", "season", "episode"].includes(route.name),
     mount(route) {
-      const anchor = document.querySelector(".summary-frame #overview .top .actions .action-buttons") || document.querySelector(".summary-frame #overview .top .actions");
+      const anchor = findActionStack();
       if (!anchor || document.getElementById(ID2)) return null;
       let destroyed = false;
       let busy = false;
@@ -3566,6 +3574,637 @@
         observer.disconnect();
         button2.removeEventListener("click", add);
         document.removeEventListener("ogt:authchange", authChanged);
+        node.remove();
+      } };
+    }
+  };
+
+  // src/features/watchlist/data.js
+  function watchlistLookup(route) {
+    if (!route?.id) return null;
+    const id = encodeURIComponent(route.id);
+    if (route.kind === "movie" && route.name === "title") return { type: "movies", path: `/movies/${id}` };
+    if (route.kind !== "show") return null;
+    if (route.name === "title") return { type: "shows", path: `/shows/${id}` };
+    if (!Number.isSafeInteger(route.season) || route.season < 0) return null;
+    if (route.name === "season") return { type: "seasons", path: `/shows/${id}/seasons`, season: route.season };
+    if (route.name === "episode" && Number.isSafeInteger(route.episode) && route.episode > 0) {
+      return { type: "episodes", path: `/shows/${id}/seasons/${route.season}/episodes/${route.episode}` };
+    }
+    return null;
+  }
+  function watchlistBody(lookup, data) {
+    const item = lookup?.type === "seasons" ? Array.isArray(data) ? data.find((season) => season?.number === lookup.season) : null : data;
+    const id = item?.ids?.trakt;
+    if (!lookup || !Number.isSafeInteger(id) || id <= 0) throw new Error("Could not identify this title.");
+    return { [lookup.type]: [{ ids: { trakt: id } }] };
+  }
+  function readWatchlisted(anchor) {
+    return [...anchor.querySelectorAll(".summary-action")].some((action) => /^listed on$/i.test(action.querySelector(".title")?.textContent.trim() ?? "") && /^watchlist(?:\s*\+|$)/i.test(action.querySelector(".detail")?.textContent.trim() ?? ""));
+  }
+  function readCardRoute(card) {
+    const link = card.querySelector("a.poster[href], a.image-link[href]");
+    if (!link) return null;
+    try {
+      const url = new URL(link.getAttribute("href"), card.ownerDocument.location.href);
+      if (url.origin !== card.ownerDocument.location.origin) return null;
+      const route = parseRoute(url.pathname);
+      return route.name === "title" && watchlistLookup(route) ? route : null;
+    } catch {
+      return null;
+    }
+  }
+  function readCardWatchlisted(control) {
+    const trigger = control.matches("button") ? control : control.querySelector("button.trigger");
+    const ids = trigger?.getAttribute("aria-describedby")?.split(/\s+/) ?? [];
+    return ids.some((id) => [...control.ownerDocument.getElementById(id)?.querySelectorAll(".listed-tip a[href]") ?? []].some((link) => {
+      try {
+        const url = new URL(link.getAttribute("href"), control.ownerDocument.location.href);
+        return url.origin === control.ownerDocument.location.origin && /^\/users\/[^/]+\/watchlist\/?$/.test(url.pathname);
+      } catch {
+        return false;
+      }
+    }));
+  }
+
+  // src/features/watchlist/api.js
+  function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn } = {}) {
+    return {
+      async add(route, { active: active2 = () => true } = {}) {
+        if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
+        const lookup = watchlistLookup(route);
+        if (!lookup) throw new Error("Unsupported watchlist page.");
+        if (!active2()) return { cancelled: true };
+        const data = await get(lookup.path);
+        const body = watchlistBody(lookup, data);
+        const item = lookup.type === "seasons" ? data.find((season) => season?.number === lookup.season) : data;
+        const title = typeof item?.title === "string" && item.title.trim() ? item.title.trim() : lookup.type === "seasons" ? `Season ${lookup.season}` : "this title";
+        if (!active2() || !signedIn()) return { cancelled: true };
+        const result = await auth("POST", "/sync/watchlist", body);
+        if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
+          throw new Error("Trakt could not find this title.");
+        }
+        const counts = [result?.added?.[lookup.type], result?.existing?.[lookup.type]];
+        if (!counts.some((count) => Number.isSafeInteger(count) && count > 0)) {
+          throw new Error("Trakt did not confirm a watchlist addition.");
+        }
+        return { cancelled: false, title };
+      }
+    };
+  }
+  var watchlistApi = createWatchlistApi();
+
+  // src/features/watchlist/styles.js
+  var css = actionButtonCss("ogt-watchlist", "var(--brand-secondary, light-dark(#2474ae, #59a9e2))") + `
+  .ogt-watchlist-toasts {
+    inset-block-start: calc(var(--header-height, 70px) + var(--toast-offset, 12px) + var(--ogt-native-toast-height, 0px));
+    inset-block-end: auto; inset-inline-start: auto; inset-inline-end: var(--toast-offset, 12px);
+    z-index: var(--z-toast, 30); inline-size: min(var(--toast-width, 360px), calc(100vw - 2 * var(--toast-offset, 12px)));
+    display: flex; flex-direction: column; justify-content: normal; gap: var(--toast-gap, 8px);
+  }
+  .ogt-watchlist-toast {
+    position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center;
+    gap: var(--toast-icon-gap, 10px); padding: var(--toast-padding, 11px 8px 11px 14px); overflow: hidden;
+    border: 1px solid var(--color-toast-border, #ffffff20); border-radius: var(--radius-toast, 12px);
+    background: var(--color-toast-bg, #171717ed); color: var(--color-toast-text, white);
+    box-shadow: var(--shadow-toast, 0 12px 32px #0007); backdrop-filter: var(--blur-toast, blur(16px));
+    font: var(--font-size-toast, 14px)/1.4 var(--font-body, system-ui); pointer-events: auto;
+  }
+  .ogt-watchlist-toast__icon { display: flex; color: var(--color-toast-success, #6cc96c); }
+  .ogt-watchlist-toast__icon svg { inline-size: var(--font-size-toast-icon, 18px); block-size: var(--font-size-toast-icon, 18px); }
+  .ogt-watchlist-toast__message { margin: 0; overflow-wrap: anywhere; }
+  .ogt-watchlist-toast__close {
+    display: grid; place-items: center; min-block-size: 0; padding: 0; border: 0;
+    inline-size: var(--toast-close-size, 28px); block-size: var(--toast-close-size, 28px);
+    border-radius: var(--radius-toast-close, 4px); background: none; color: var(--color-toast-close, #bbb); cursor: pointer;
+  }
+  .ogt-watchlist-toast__close svg { inline-size: var(--font-size-toast-close, 14px); block-size: var(--font-size-toast-close, 14px); }
+  .ogt-watchlist-toast__close:is(:hover, :focus-visible) { background: var(--color-toast-close-hover, #ffffff15); color: var(--color-toast-text, white); }
+  .ogt-watchlist-toast__close:focus-visible { outline: 2px solid currentColor; }
+  .ogt-watchlist-toast__timer { position: absolute; inset: auto 0 0; block-size: var(--toast-timer-height, 2px);
+    background: var(--color-toast-success, #6cc96c); transform-origin: left; }
+  @media (prefers-reduced-motion: reduce) { .ogt-watchlist-toast__timer { display: none; } }
+`;
+
+  // src/features/watchlist/icon.js
+  function watchlistIcon() {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    for (const [name, value] of Object.entries({ viewBox: "0 0 24 28", fill: "none", stroke: "currentColor", "stroke-width": "1", "aria-hidden": "true" })) {
+      svg3.setAttribute(name, value);
+    }
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M5 2h14v24l-7-5-7 5Z");
+    svg3.append(path);
+    return svg3;
+  }
+
+  // src/features/watchlist/native-refresh.js
+  function createNativeWatchlistRefresh() {
+    const pending = /* @__PURE__ */ new Set();
+    return {
+      refresh(control, route, { active: active2 = () => true, timeout = 1e4 } = {}) {
+        if (route.name !== "title" || !["movie", "show"].includes(route.kind) || !control?.isConnected || !active2()) {
+          return Promise.resolve(false);
+        }
+        const doc = control.ownerDocument;
+        if (!doc.querySelector("header.top-nav .profile")) return Promise.resolve(false);
+        const trigger = control.querySelector('button[aria-controls][aria-keyshortcuts~="ArrowDown"]');
+        const picker = doc.getElementById(trigger?.getAttribute("aria-controls"));
+        if (!trigger || trigger.disabled || trigger.getAttribute("aria-busy") === "true" || trigger.getAttribute("aria-expanded") === "true" || !picker?.matches(".picker[popover]")) {
+          return Promise.resolve(false);
+        }
+        const view = doc.defaultView;
+        return new Promise((resolve) => {
+          let settled = false, began = false;
+          const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            observer.disconnect();
+            picker.removeEventListener("beforetoggle", beforeToggle);
+            doc.removeEventListener("ogt:authchange", cancel);
+            view.removeEventListener("popstate", cancel);
+            pending.delete(cancel);
+            resolve(result && active2() && control.isConnected);
+          };
+          const cancel = () => finish(false);
+          const timer = setTimeout(cancel, timeout);
+          const beforeToggle = (event) => {
+            if (event.newState !== "open") return;
+            event.preventDefault();
+            finish(event.defaultPrevented);
+          };
+          const observer = new view.MutationObserver((records) => {
+            if (!active2() || !control.isConnected) {
+              finish(false);
+              return;
+            }
+            const busy = trigger.disabled || trigger.getAttribute("aria-busy") === "true";
+            const wasBusy = records.some((record) => record.target === trigger && (record.attributeName === "disabled" && record.oldValue !== null || record.attributeName === "aria-busy" && record.oldValue === "true"));
+            if (busy) began = true;
+            else if (began || wasBusy) finish(false);
+          });
+          pending.add(cancel);
+          picker.addEventListener("beforetoggle", beforeToggle);
+          doc.addEventListener("ogt:authchange", cancel);
+          view.addEventListener("popstate", cancel);
+          observer.observe(control, { attributes: true, subtree: true, attributeOldValue: true, attributeFilter: ["disabled", "aria-busy"] });
+          trigger.dispatchEvent(new view.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+        });
+      },
+      destroy() {
+        for (const cancel of [...pending]) cancel();
+      }
+    };
+  }
+
+  // src/features/watchlist/native-toast.js
+  var earlyResources = [];
+  var discovery;
+  function rememberToastResources(names) {
+    earlyResources = [...names];
+  }
+  var chunkUrl = (value, base) => {
+    try {
+      const url = new URL(value, base);
+      return url.origin === new URL(base).origin && /^\/_app\/immutable\/chunks\/[\w.-]+\.js$/.test(url.pathname) && !url.search && !url.hash ? url.href : null;
+    } catch {
+      return null;
+    }
+  };
+  function nativeToastImports(source, layoutUrl, loaded) {
+    const result = [];
+    for (const match of source.matchAll(/\bimport\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/g)) {
+      const url = chunkUrl(match[2], layoutUrl);
+      if (!url || !loaded.includes(url)) continue;
+      for (const spec of match[1].split(",")) {
+        const alias = spec.trim().split(/\s+as\s+/).at(-1);
+        if (!/^[\w$]+$/.test(alias)) continue;
+        if (source.includes(`${alias}.dismiss(`) && source.includes(`${alias}.list`)) result.push(url);
+      }
+    }
+    return [...new Set(result)];
+  }
+  function isNativeToastStore(source) {
+    return source.length < 16e3 && /\bget\s+list\s*\(/.test(source) && /\bsuccess\s*:/.test(source) && /\berror\s*:/.test(source) && /\bdismiss\s*:/.test(source);
+  }
+  async function discover() {
+    if (!document.querySelector(".toaster")) return null;
+    const names = [.../* @__PURE__ */ new Set([...earlyResources, ...(performance.getEntriesByType?.("resource") ?? []).map((entry) => entry.name)])];
+    const layout = names.find((name) => {
+      try {
+        const url = new URL(name);
+        return url.origin === location.origin && /^\/_app\/immutable\/nodes\/0\.[\w-]+\.js$/.test(url.pathname);
+      } catch {
+        return false;
+      }
+    });
+    if (!layout) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2e3);
+    const read = async (url) => {
+      const response = await fetch(url, { cache: "force-cache", credentials: "omit", signal: controller.signal });
+      if (!response.ok) throw new Error("Native toast module unavailable.");
+      return response.text();
+    };
+    try {
+      const source = await read(layout);
+      for (const url of nativeToastImports(source, layout, names)) {
+        if (isNativeToastStore(await read(url))) return url;
+      }
+    } catch (error) {
+      debugError("native toast discovery failed", error);
+    } finally {
+      clearTimeout(timer);
+    }
+    return null;
+  }
+  async function tryNativeWatchlistToast(message, active2 = () => true) {
+    if (!active2()) return false;
+    const url = await (discovery ??= discover());
+    if (!url || !active2() || !document.querySelector(".toaster")) return false;
+    return new Promise((resolve) => {
+      const eventName = `ogt:watchlist-toast:${crypto.randomUUID()}`;
+      const script = document.createElement("script");
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        document.removeEventListener(eventName, answered);
+        script.remove();
+        resolve(ok);
+      };
+      const answered = (event) => finish(event.detail === "shown");
+      const timer = setTimeout(() => finish(false), 1e3);
+      document.addEventListener(eventName, answered);
+      script.type = "module";
+      script.onerror = () => finish(false);
+      script.textContent = `(async () => {
+      let result = 'unavailable';
+      try {
+        const module = await import(${JSON.stringify(url)});
+        const store = Object.values(module).find(value => value && typeof value.success === 'function' &&
+          typeof value.dismiss === 'function' && Array.isArray(value.list));
+        if (store && document.querySelector('.toaster')) { store.success(${JSON.stringify(message).replace(/</g, "\\u003c")}); result = 'shown'; }
+      } catch {}
+      document.dispatchEvent(new CustomEvent(${JSON.stringify(eventName)}, { detail: result }));
+    })();`;
+      document.head.append(script);
+    });
+  }
+
+  // src/features/watchlist/notification.js
+  var root;
+  var observed;
+  var resize;
+  var notices = [];
+  function icon(path, circle = false) {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg3.setAttribute("viewBox", "0 0 24 24");
+    svg3.setAttribute("aria-hidden", "true");
+    if (circle) {
+      const node2 = document.createElementNS(svg3.namespaceURI, "circle");
+      node2.setAttribute("cx", "12");
+      node2.setAttribute("cy", "12");
+      node2.setAttribute("r", "11");
+      node2.setAttribute("fill", "currentColor");
+      svg3.append(node2);
+    }
+    const node = document.createElementNS(svg3.namespaceURI, "path");
+    for (const [key, value] of Object.entries({ d: path, fill: "none", stroke: circle ? "#163516" : "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" })) node.setAttribute(key, value);
+    svg3.append(node);
+    return svg3;
+  }
+  function showWatchlistToast(message = "You added this title to your watchlist.") {
+    if (!root?.isConnected) {
+      resize?.disconnect();
+      root = el("div", { class: "ogt-toast ogt-watchlist-toasts" });
+      document.body.append(root);
+    }
+    const native = document.querySelector(".toaster");
+    const position = () => root?.style.setProperty("--ogt-native-toast-height", `${native?.isConnected && native.children.length ? native.getBoundingClientRect().height + 8 : 0}px`);
+    if (native !== observed) {
+      resize?.disconnect();
+      observed = native;
+      if (native && typeof ResizeObserver === "function") {
+        resize = new ResizeObserver(position);
+        resize.observe(native);
+      }
+    }
+    position();
+    const close = el("button", { type: "button", class: "ogt-watchlist-toast__close", "aria-label": "Close" }, icon("M6 6l12 12M18 6 6 18"));
+    const line = el("span", { class: "ogt-watchlist-toast__timer", "aria-hidden": "true" });
+    const node = el(
+      "div",
+      { class: "ogt-watchlist-toast", role: "status", "aria-atomic": "true" },
+      el("span", { class: "ogt-watchlist-toast__icon" }, icon("m7 12 3 3 7-7", true)),
+      el("p", { class: "ogt-watchlist-toast__message", text: message }),
+      close,
+      line
+    );
+    root.prepend(node);
+    let timer, animation, fraction = 1, started, duration, removed = false;
+    const holds = /* @__PURE__ */ new Set();
+    const remove = () => {
+      if (removed) return;
+      removed = true;
+      clearTimeout(timer);
+      animation?.cancel();
+      node.remove();
+      const index = notices.indexOf(remove);
+      if (index >= 0) notices.splice(index, 1);
+      if (!notices.length) {
+        resize?.disconnect();
+        observed = null;
+        root?.remove();
+        root = null;
+      }
+    };
+    const start2 = (ms) => {
+      duration = ms;
+      started = Date.now();
+      animation?.cancel();
+      animation = line.animate?.([{ transform: `scaleX(${fraction})` }, { transform: "scaleX(0)" }], { duration: ms, fill: "forwards" });
+      animation?.finished?.catch(() => {
+      });
+      timer = setTimeout(remove, ms);
+    };
+    const hold = (kind) => {
+      if (holds.has(kind)) return;
+      if (!holds.size) {
+        fraction *= Math.max(0, 1 - (Date.now() - started) / duration);
+        clearTimeout(timer);
+        animation?.pause();
+      }
+      holds.add(kind);
+    };
+    const release2 = (kind) => {
+      if (holds.delete(kind) && !holds.size) start2(1e3);
+    };
+    close.addEventListener("click", remove);
+    node.addEventListener("pointerenter", () => hold("pointer"));
+    node.addEventListener("pointerleave", () => release2("pointer"));
+    node.addEventListener("focusin", () => hold("focus"));
+    node.addEventListener("focusout", (event) => {
+      if (!(event.relatedTarget instanceof Node) || !node.contains(event.relatedTarget)) release2("focus");
+    });
+    notices.unshift(remove);
+    while (notices.length > 3) notices.at(-1)();
+    start2(5e3);
+    return { node, destroy: remove };
+  }
+  async function notifyWatchlistAdded({ title = "this title", active: active2 = () => true } = {}) {
+    const message = `You added ${title} to your watchlist.`;
+    try {
+      if (await tryNativeWatchlistToast(message, active2)) return;
+    } catch (error) {
+      debugError("native watchlist toast unavailable", error);
+    }
+    if (active2()) showWatchlistToast(message);
+  }
+
+  // src/features/watchlist/index.js
+  var ID3 = "ogt-watchlist";
+  var watchlist = {
+    id: "watchlist",
+    css,
+    match: (route) => Boolean(watchlistLookup(route)),
+    mount(route) {
+      const anchor = findActionStack();
+      if (!anchor || document.getElementById(ID3)) return null;
+      let destroyed = false;
+      let busy = false;
+      let session = 0;
+      let added = false;
+      let wasWatchlisted = false;
+      const nativeRefresh = createNativeWatchlistRefresh();
+      const pagePath = location.pathname;
+      const label = el("span", { class: "ogt-watchlist__title", text: "Add to watchlist" });
+      const glyph = el("span", { class: "ogt-watchlist__glyph", "aria-hidden": "true" });
+      glyph.append(watchlistIcon());
+      const button2 = el("button", {
+        type: "button",
+        class: "ogt-watchlist__button",
+        title: "Add using the toolkit’s Trakt account"
+      });
+      button2.append(glyph, el("span", { class: "ogt-watchlist__text" }, label));
+      const status = el("p", { class: "ogt-watchlist__status", role: "status", "aria-live": "polite" });
+      const node = el("div", { id: ID3, class: "ogt-watchlist" }, button2, status);
+      function syncVisibility() {
+        const watchlisted = readWatchlisted(anchor);
+        if (wasWatchlisted && !watchlisted) added = false;
+        wasWatchlisted = watchlisted;
+        node.hidden = added || watchlisted;
+      }
+      async function add() {
+        if (busy || node.hidden) return;
+        if (!isSignedIn()) {
+          status.textContent = "Sign in to Trakt through the toolkit menu first.";
+          return;
+        }
+        busy = true;
+        const epoch = session;
+        button2.disabled = true;
+        label.textContent = "Adding to watchlist…";
+        status.textContent = "";
+        const active2 = () => !destroyed && epoch === session && location.pathname === pagePath;
+        try {
+          const result = await watchlistApi.add(route, { active: active2 });
+          if (!active2()) return;
+          if (!result.cancelled) {
+            added = true;
+            syncVisibility();
+            void notifyWatchlistAdded({ title: result.title, active: active2 });
+            await nativeRefresh.refresh(anchor.querySelector(".list-control.summary"), route, { active: active2 });
+            return;
+          }
+        } catch (error) {
+          debugError("watchlist addition failed", error);
+          if (active2()) status.textContent = error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not add to watchlist. Check your toolkit sign-in and try again." : error.message;
+        } finally {
+          if (active2()) {
+            busy = false;
+            button2.disabled = false;
+            label.textContent = "Add to watchlist";
+          }
+        }
+      }
+      function authChanged() {
+        session++;
+        nativeRefresh.destroy();
+        busy = false;
+        button2.disabled = false;
+        added = false;
+        wasWatchlisted = false;
+        label.textContent = "Add to watchlist";
+        status.textContent = "";
+        syncVisibility();
+      }
+      button2.addEventListener("click", add);
+      document.addEventListener("ogt:authchange", authChanged);
+      const history2 = anchor.querySelector(".stacked");
+      if (history2) history2.after(node);
+      else anchor.append(node);
+      const observer = new MutationObserver(syncVisibility);
+      observer.observe(anchor, { childList: true, subtree: true, characterData: true });
+      syncVisibility();
+      return { node, destroy() {
+        destroyed = true;
+        nativeRefresh.destroy();
+        observer.disconnect();
+        button2.removeEventListener("click", add);
+        document.removeEventListener("ogt:authchange", authChanged);
+        node.remove();
+      } };
+    }
+  };
+
+  // src/features/watchlist/cards.js
+  var ID4 = "ogt-watchlist-cards";
+  var CARD = ".poster-card, .fanart-card";
+  var CONTROL = ".quick-icons .list-control.card, .quick-icons button.action.list";
+  var watchlistCards = {
+    id: "watchlist-cards",
+    match: () => true,
+    css: `
+    .ogt-watchlist-card { display: grid; place-items: center; flex: 0 0 auto;
+      inline-size: var(--action-width, 32px); block-size: var(--bar, 40px); min-block-size: 0;
+      padding: 0; border: 0; border-radius: 0; background: none;
+      color: var(--brand-fifth, #2b678f); cursor: pointer; }
+    .ogt-watchlist-card[hidden] { display: none !important; }
+    /* On a 1x desktop display, this is the troublesome 150–170% page-zoom band.
+       Resolution includes display scaling; it is not a universal browser zoom API. */
+    @media (1.5dppx <= resolution < 1.8dppx) {
+      .poster-card .ogt-watchlist-card { display: none !important; }
+    }
+    .ogt-watchlist-card svg { width: 20px; height: 24px; stroke-linejoin: round; }
+    .quick-icons.small .ogt-watchlist-card { block-size: calc(var(--bar, 35px) - 1px); }
+    .quick-icons.small .ogt-watchlist-card svg { width: 16px; height: 20px; }
+    .ogt-watchlist-card:is(:hover, :focus-visible):not(:disabled) {
+      background: var(--brand-fifth, #2b678f); color: var(--color-card-text, white); }
+    .ogt-watchlist-card:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+    .ogt-watchlist-card:disabled { opacity: .6; cursor: default; }
+  `,
+    mount() {
+      if (!document.body || document.getElementById(ID4)) return null;
+      const node = el("span", { id: ID4, hidden: true });
+      document.body.append(node);
+      const entries = /* @__PURE__ */ new Map();
+      const states = /* @__PURE__ */ new Map();
+      const nativeRefresh = createNativeWatchlistRefresh();
+      let destroyed = false, session = 0, scheduled = false;
+      function stateFor(key) {
+        if (!states.has(key)) states.set(key, { busy: false, added: false, wasWatchlisted: false });
+        return states.get(key);
+      }
+      function remove(entry) {
+        entry.button.removeEventListener("click", entry.click);
+        entry.button.remove();
+        entries.delete(entry.control);
+      }
+      async function add(entry, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const state = stateFor(entry.key);
+        if (state.busy || entry.button.hidden) return;
+        if (!isSignedIn()) {
+          toast("Sign in to Trakt through the toolkit menu first.");
+          return;
+        }
+        const epoch = session;
+        const pagePath = location.pathname;
+        const active2 = () => !destroyed && session === epoch && location.pathname === pagePath && [...entries.values()].some((e) => e.key === entry.key && e.control.isConnected && readCardRoute(e.card)?.key === entry.key);
+        state.busy = true;
+        scan();
+        try {
+          const result = await watchlistApi.add(entry.route, { active: active2 });
+          if (!active2() || result.cancelled) return;
+          state.added = true;
+          scan();
+          void notifyWatchlistAdded({ title: result.title, active: active2 });
+          await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
+        } catch (error) {
+          debugError("card watchlist addition failed", error);
+          if (active2()) toast(error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not add to watchlist. Check your toolkit sign-in and try again." : error.message);
+        } finally {
+          if (!destroyed && epoch === session) {
+            state.busy = false;
+            scan();
+          }
+        }
+      }
+      function scan() {
+        if (destroyed) return;
+        for (const entry of entries.values()) {
+          if (!entry.control.isConnected || !entry.button.isConnected || readCardRoute(entry.card)?.key !== entry.key) remove(entry);
+        }
+        for (const control of document.querySelectorAll(CONTROL)) {
+          if (entries.has(control)) continue;
+          const card = control.closest(CARD);
+          const route = card && readCardRoute(card);
+          if (!route) continue;
+          const button2 = el("button", {
+            type: "button",
+            class: "ogt-watchlist-card",
+            "aria-label": "Add to watchlist",
+            title: "Add to watchlist using the toolkit’s Trakt account"
+          }, watchlistIcon());
+          const entry = { control, card, route, key: route.key, button: button2 };
+          entry.click = (event) => add(entry, event);
+          button2.addEventListener("click", entry.click);
+          control.after(button2);
+          entries.set(control, entry);
+        }
+        const native = /* @__PURE__ */ new Map();
+        for (const entry of entries.values()) {
+          native.set(entry.key, Boolean(native.get(entry.key) || readCardWatchlisted(entry.control)));
+        }
+        for (const [key, watchlisted] of native) {
+          const state = stateFor(key);
+          if (state.wasWatchlisted && !watchlisted) state.added = false;
+          state.wasWatchlisted = watchlisted;
+        }
+        for (const entry of entries.values()) {
+          const state = stateFor(entry.key);
+          const hidden = state.added || state.wasWatchlisted;
+          if (entry.button.hidden !== hidden) entry.button.hidden = hidden;
+          if (entry.button.disabled !== state.busy) entry.button.disabled = state.busy;
+          const busy = String(state.busy);
+          if (entry.button.getAttribute("aria-busy") !== busy) entry.button.setAttribute("aria-busy", busy);
+        }
+      }
+      function schedule() {
+        if (scheduled || destroyed) return;
+        scheduled = true;
+        queueMicrotask(() => {
+          scheduled = false;
+          scan();
+        });
+      }
+      function authChanged() {
+        session++;
+        nativeRefresh.destroy();
+        states.clear();
+        scan();
+      }
+      const observer = new MutationObserver(schedule);
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["href", "aria-describedby"]
+      });
+      document.addEventListener("ogt:authchange", authChanged);
+      scan();
+      return { node, destroy() {
+        destroyed = true;
+        nativeRefresh.destroy();
+        observer.disconnect();
+        document.removeEventListener("ogt:authchange", authChanged);
+        for (const entry of entries.values()) remove(entry);
+        states.clear();
         node.remove();
       } };
     }
@@ -3762,7 +4401,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, monthReview];
+  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, monthReview];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))
@@ -3781,6 +4420,7 @@ MIT licensed.`);
     const openGate = () => {
       if (canMount) return;
       canMount = true;
+      rememberToastResources(moduleWatch.entries.keys());
       moduleWatch.stop();
       injectStyles(FEATURES.map((feature) => feature.css).filter(Boolean));
       host = createFeatureHost(FEATURES);

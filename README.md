@@ -4,7 +4,8 @@ An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds th
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
 **Status:** v0.2.0: custom links with presets and an inline editor, a season ratings chart, optional Trakt sign-in
-with a paused-playback manager and manual library additions, and in-page name pronunciation on person pages.
+with a paused-playback manager, manual library additions and one-click watchlist additions, and in-page name
+pronunciation on person pages.
 
 ## Install
 
@@ -59,6 +60,30 @@ Shows and seasons confirm the aired episode count before saving; whole shows exc
 separately). The add button disappears after saving, or whenever OG already shows a library control. Reload after
 adding to update OG’s own library status. Removing an item through OG restores the add action without a reload.
 The button uses OG’s design values for action styling and spacing, with separate toolkit classes.
+
+### Add to watchlist
+
+Movie, show, season and episode pages have a separate **Add to watchlist** action. Sign in through the toolkit menu
+first; one click adds that exact item to the toolkit’s Trakt account, which may differ from your OG account.
+The action hides after success or when OG’s **Listed On** detail includes **Watchlist**. Other list memberships
+leave it available. Movie/show additions ask OG’s list picker to reread membership and update its native controls
+without opening the popup. This uses OG’s signed-in account; it cannot mark a different OG account’s watchlist.
+Reload remains the fallback when OG is signed out or its picker cannot refresh, and for season/episode additions.
+Removing the item through OG restores the action once OG shows the change. This action only adds; use OG’s list
+picker to remove items.
+
+Movie and whole-show poster and fanart cards also have a bookmark shortcut beside the blue lists button,
+including cards loaded as you browse. Season and episode cards (including Up Next) have no shortcut. It uses
+the card’s own title and the same toolkit account. The shortcut hides when that card’s native list tooltip
+includes Watchlist, or after a successful add; custom lists alone keep it available.
+On a desktop display at 100% system scaling, poster shortcuts hide at 150–170% browser zoom and return at
+180%. Wider fanart cards are unaffected. This uses CSS resolution, which includes system/display scaling;
+it cannot distinguish browser zoom from display scaling. Card width alone does not hide the shortcut.
+
+Success shows **You added Spider-Man: Brand New Day to your watchlist.** (using the added title) in OG’s native
+notifier when available. Otherwise, a matching notification appears below the header on the right, with a green
+check, close button and five-second countdown.
+Hovering or focusing it pauses dismissal. Existing native notifications stay above the fallback.
 
 ### Name pronunciation
 
@@ -223,9 +248,11 @@ links, poster rating corners. Backlog:
 
 ## Trakt API compliance
 
-- Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection`,
+- Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection`, `/sync/watchlist`,
   `/sync/history`, `/sync/ratings`, `/users/me` and `/users/me/comments` through your own optional OAuth sign-in.
   No Trakt HTML fetching, no internal og endpoints, no reuse of og's session.
+  Native notification discovery reads only already-loaded public JavaScript assets, without credentials;
+  it does not make authenticated API requests.
   Pronunciation fetches Forvo's public search page (with `@connect forvo.com`) to find recordings.
 - Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with `Retry-After` on 429.
 - Nothing is uploaded, resold or redistributed; the script has no backend.
