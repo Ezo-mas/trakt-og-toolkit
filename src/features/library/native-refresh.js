@@ -15,12 +15,18 @@ export function isNativeLibraryStore(source) {
 /** Ask OG to reread its own account, not to apply toolkit results to its local state. */
 export function createNativeLibraryRefresh() {
   const pending = new Set();
+  const prepare = async (route, { active = () => true } = {}) => {
+    if (route.name !== 'title' || !['movie', 'show'].includes(route.kind) || !active() ||
+        !document.querySelector('header.top-nav .profile')) return null;
+    const url = await (discovery ??= discoverNativeModule(nativeLibraryImports, isNativeLibraryStore));
+    return active() && document.querySelector('header.top-nav .profile') ? url : null;
+  };
   return {
+    // Resolve cached public modules during the save; native account reads still start only after success.
+    prepare,
     async refresh(route, { active = () => true } = {}) {
-      if (route.name !== 'title' || !['movie', 'show'].includes(route.kind) || !active() ||
-          !document.querySelector('header.top-nav .profile')) return false;
-      const url = await (discovery ??= discoverNativeModule(nativeLibraryImports, isNativeLibraryStore));
-      if (!url || !active() || !document.querySelector('header.top-nav .profile')) return false;
+      const url = await prepare(route, { active });
+      if (!url) return false;
       return new Promise(resolve => {
         const id = `ogt:library-refresh:${crypto.randomUUID()}`;
         const script = document.createElement('script');

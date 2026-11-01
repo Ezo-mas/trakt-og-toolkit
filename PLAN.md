@@ -288,7 +288,8 @@ them across `/users/:id/lists`, `/collaborations` and `/liked`.
 sign-in and `POST /sync/collection` with the current date. Whole shows confirm the aired-episode count and skip
 specials; the button hides when og shows its own library control. Success uses the shared native-first
 notification with the title. Movie/show additions request OG’s own read-only collection refresh; unavailable
-native integration and season/episode pages retain the reload fallback. No toolkit library action on cards.
+native integration and season/episode pages retain the reload fallback. Module discovery overlaps the save;
+a disabled updating row fills the native-refresh handoff. No toolkit library action on cards.
 
 - A whole-show add uses one uncached `GET /shows/:id/seasons?extended=full,episodes`, which includes each
   episode's `first_aired` (`extended=episodes` alone does not). The Simpsons, 39 seasons: about 1 MB in 1 s.

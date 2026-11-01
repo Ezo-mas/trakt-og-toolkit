@@ -3703,11 +3703,17 @@
   }
   function createNativeLibraryRefresh() {
     const pending = /* @__PURE__ */ new Set();
+    const prepare = async (route, { active: active2 = () => true } = {}) => {
+      if (route.name !== "title" || !["movie", "show"].includes(route.kind) || !active2() || !document.querySelector("header.top-nav .profile")) return null;
+      const url = await (discovery2 ??= discoverNativeModule(nativeLibraryImports, isNativeLibraryStore));
+      return active2() && document.querySelector("header.top-nav .profile") ? url : null;
+    };
     return {
+      // Resolve cached public modules during the save; native account reads still start only after success.
+      prepare,
       async refresh(route, { active: active2 = () => true } = {}) {
-        if (route.name !== "title" || !["movie", "show"].includes(route.kind) || !active2() || !document.querySelector("header.top-nav .profile")) return false;
-        const url = await (discovery2 ??= discoverNativeModule(nativeLibraryImports, isNativeLibraryStore));
-        if (!url || !active2() || !document.querySelector("header.top-nav .profile")) return false;
+        const url = await prepare(route, { active: active2 });
+        if (!url) return false;
         return new Promise((resolve) => {
           const id = `ogt:library-refresh:${crypto.randomUUID()}`;
           const script = document.createElement("script");
@@ -3807,6 +3813,7 @@
       let busy = false;
       let session = 0;
       let added = false;
+      let refreshing = false;
       let wasCollected = false;
       const nativeRefresh = createNativeLibraryRefresh();
       const doc = anchor.ownerDocument;
@@ -3833,7 +3840,7 @@
         if (wasCollected && !collected) added = false;
         wasCollected = collected;
         const nativeLibrary = collected || titles.some((title) => /\badd to library\b/i.test(title.textContent));
-        node.hidden = added || nativeLibrary;
+        node.hidden = nativeLibrary || added && !refreshing;
       }
       async function add() {
         if (busy || node.hidden) return;
@@ -3848,11 +3855,14 @@
         status.textContent = "";
         const active2 = () => !destroyed && epoch === session && node.isConnected && doc.location.pathname === pagePath;
         const title = readLibraryTitle(doc);
+        void nativeRefresh.prepare(route, { active: active2 }).catch((error) => debugError("native library preparation unavailable", error));
         try {
           const result = await libraryApi.add(route, { confirm: (message) => window.confirm(message), active: active2 });
           if (!active2()) return;
           if (!result.cancelled) {
             added = true;
+            refreshing = route.name === "title";
+            label.textContent = "Updating library…";
             syncVisibility();
             void notifySuccess(`You added ${title} to your library.`, active2);
             try {
@@ -3867,6 +3877,8 @@
         } finally {
           if (active2()) {
             busy = false;
+            refreshing = false;
+            syncVisibility();
             button2.disabled = false;
             label.textContent = "Add to library";
           }
@@ -3876,6 +3888,7 @@
         session++;
         nativeRefresh.destroy();
         busy = false;
+        refreshing = false;
         button2.disabled = false;
         added = false;
         wasCollected = false;

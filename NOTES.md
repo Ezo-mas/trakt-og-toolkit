@@ -4,6 +4,19 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-01: library feedback and native refresh (feature 12)
 
+- The user's recording confirms native library controls refresh, with a short gap after success. OG's native
+  removal updates its local overlay optimistically, while toolkit additions wait for OG's authoritative reads.
+  There is no artificial delay to remove. Start public overlay-module discovery alongside the toolkit lookup/
+  save instead of after it; native account reads still begin only on successful POST. While refreshing, retain
+  a disabled **Updating library…** row until OG renders its own control (or refresh ends). This prevents the
+  empty-slot/layout jump without faking membership or a clickable remove action. Full network latency cannot
+  be eliminated by this change. Auth changes/failures reset the pending row as before.
+  Full tests/build pass; the built-bundle test proves discovery happens during a held lookup and the row
+  remains disabled through a held native refresh. Actual OG/Svelte Chromium and Firefox checks with delayed
+  native responses pass: the pending row and native control occupy the same vertical slot, with one toolkit
+  POST and no page errors. The user’s recording confirms the prior signed-in movie add/native-remove flow;
+  the new timing/handoff still needs their live check.
+
 - Branch `fix/library-button` starts at `e739dce` on `feature/watchlist-button`, retaining its watchlist work.
   No toolkit library shortcut is added to cards, and no version is bumped.
 - Library success now says **You added TITLE to your library.** through the same native notifier and styled

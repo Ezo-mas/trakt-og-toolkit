@@ -60,7 +60,9 @@ Shows and seasons confirm the aired episode count before saving; whole shows exc
 separately). The add button disappears after saving, or whenever OG already shows a library control.
 Success shows **You added Fight Club to your library.** (using the title) using the same native-first notification and matching
 fallback as watchlist additions. Movie/show saves ask OG to refresh its own collection state without a page
-reload or opening a popup. This reads OG’s signed-in account; different toolkit/OG accounts remain separate.
+reload or opening a popup. Module discovery runs during the save; a disabled **Updating library…** row keeps
+the stack steady until OG’s native control appears or the refresh finishes. Native reads still take network time.
+This reads OG’s signed-in account; different toolkit/OG accounts remain separate.
 If OG is signed out, the native module is unavailable or the browser blocks it, reload remains the fallback.
 Season/episode pages retain the reload fallback. Removing an item through OG restores the add action once OG
 shows the change. No toolkit library button is added to cards.

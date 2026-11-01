@@ -128,7 +128,6 @@ test('failed API writes never refresh native state or show success', async t => 
   const b = boot(t, { result: { added: { movies: 1 }, not_found: { movies: [{}] } } }); await wait();
   b.button().click(); await wait();
   assert.equal(b.refreshes(), 0);
-  assert.equal(b.assets.length, 0);
   assert.equal(b.document.querySelector('.ogt-watchlist-toast'), null);
   assert.equal(b.document.querySelector('#ogt-library').hidden, false);
 });
@@ -139,7 +138,7 @@ for (const change of ['auth', 'navigate']) test(`library ${change} during lookup
   else b.window.history.pushState({}, '', '/movies/another-title');
   for (const resume of b.pending) resume(); await wait();
   assert.equal(b.writes().length, 0);
-  assert.equal(b.assets.length, 0);
+  assert.equal(b.refreshes(), 0);
   assert.equal(b.document.querySelector('.ogt-watchlist-toast'), null);
 });
 
@@ -148,9 +147,31 @@ test('an account change while native refresh runs removes the bridge and ignores
   b.button().click(); await wait();
   assert.equal(b.refreshes(), 1);
   assert.equal(b.bridges[0].isConnected, true);
+  assert.equal(b.document.querySelector('#ogt-library').hidden, false);
+  assert.equal(b.button().disabled, true);
+  assert.match(b.button().textContent, /Updating library/);
   b.document.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
   assert.equal(b.bridges[0].isConnected, false);
   for (const resume of b.pending) resume(); await wait();
   assert.equal(b.document.querySelector('#ogt-library').hidden, false);
+  assert.equal(b.writes().length, 1);
+});
+
+test('public module preparation overlaps the save and the pending row hands off to native library UI', async t => {
+  const b = boot(t, { deferLookup: true, deferRefresh: true }); await wait();
+  b.button().click(); await wait();
+  assert.equal(b.assets.length, 2, 'discovery already finished while the API lookup is pending');
+  assert.equal(b.refreshes(), 0, 'preparation never reads native account state');
+  assert.equal(b.writes().length, 0);
+  for (const resume of b.pending.splice(0)) resume(); await wait();
+  assert.equal(b.writes().length, 1);
+  assert.equal(b.refreshes(), 1);
+  assert.equal(b.document.querySelector('#ogt-library').hidden, false);
+  assert.equal(b.button().disabled, true);
+  assert.match(b.button().textContent, /Updating library/);
+  assert.equal(b.assets.length, 2, 'refresh reuses the prepared module');
+  b.pending.shift()(); await wait();
+  assert.ok(b.document.querySelector('#native-collected'));
+  assert.equal(b.document.querySelector('#ogt-library').hidden, true);
   assert.equal(b.writes().length, 1);
 });
