@@ -2,7 +2,7 @@
 export function createNativeWatchlistRefresh() {
   const pending = new Set();
   return {
-    refresh(control, route, { active = () => true } = {}) {
+    refresh(control, route, { active = () => true, timeout = 10000 } = {}) {
       // loadPickerLists leaves seasons/episodes' watchlisted value unchanged in OG.
       if (route.name !== 'title' || !['movie', 'show'].includes(route.kind) || !control?.isConnected || !active()) {
         return Promise.resolve(false);
@@ -22,6 +22,7 @@ export function createNativeWatchlistRefresh() {
         const finish = result => {
           if (settled) return;
           settled = true;
+          clearTimeout(timer);
           observer.disconnect();
           picker.removeEventListener('beforetoggle', beforeToggle);
           doc.removeEventListener('ogt:authchange', cancel);
@@ -30,6 +31,8 @@ export function createNativeWatchlistRefresh() {
           resolve(result && active() && control.isConnected);
         };
         const cancel = () => finish(false);
+        // OG may ignore the keypress after an update; never leave the toolkit button busy.
+        const timer = setTimeout(cancel, timeout);
         const beforeToggle = event => {
           if (event.newState !== 'open') return;
           // OG has already reconciled its shared state before it tries to show the picker.
