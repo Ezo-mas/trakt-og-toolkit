@@ -253,7 +253,8 @@ links, poster rating corners. Backlog:
 - set playback progress by hand;
 - list preview posters that link to their titles;
 - all your lists in one view;
-- remove the season chart's **More** button (its watchers and comments lines are too flat to read).
+- remove the season chart's **More** button (its watchers and comments lines are too flat to read);
+- fix custom links on season and episode pages (they read the season/episode instead of the show), or show them only on title pages.
 
 ## Trakt API compliance
 

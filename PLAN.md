@@ -27,6 +27,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 13 | One-click Add to watchlist | OAuth | done; user verified in Zen and Brave with real API |
 | 14 | Add to library on poster cards | OAuth | dropped: cards too tight; watchlist fits cards better |
 | 15 | Season chart: remove the More button | — | small |
+| 16 | Custom links on season and episode pages | client ID optional | small; decide fix or hide first |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -347,6 +348,21 @@ against that scale, so their line is pinned at 0. It also costs one stats reques
   (`getEpisodeStats`, `mapStats`, the 30-episode limit and its hints).
 - Keep the your-ratings line and its legend.
 - Update README, NOTES.md and tests.
+
+## 16. Custom links on season and episode pages
+
+**Problem:** the custom links panel mounts on every show route, but `readTitleData` reads the page it is on, not
+the show. On season and episode pages the heading is the season or episode title, the year is that page's, and
+the IMDb/TMDB IDs come from og's link strip there, which only has the episode's IMDb and TMDB links (seasons have
+none). So `{title}`, `{year}`, `{imdb}` and `{tmdb}` either point at the wrong thing or are empty.
+
+**Decide first** (one of):
+- **Fix:** fill the variables with the show's values (show title, year and IDs from `GET /shows/:id?extended=full`,
+  or carried over from the show page), and preset `{season}`/`{episode}` from the route instead of the picker.
+- **Match og:** show the panel only on movie and show title pages, like og's own strip, which has no custom links
+  on seasons and only IMDb/TMDB on episodes.
+
+Either way, add tests with season and episode fixtures, and update README.
 
 ---
 
