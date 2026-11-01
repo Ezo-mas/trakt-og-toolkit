@@ -72,9 +72,9 @@ Reload remains the fallback when OG is signed out or its picker cannot refresh, 
 Removing the item through OG restores the action once OG shows the change. This action only adds; use OG’s list
 picker to remove items.
 
-Poster and fanart cards also have a bookmark shortcut beside the blue lists button, including cards loaded as
-you browse. It uses the card’s own title and the same toolkit account. The shortcut hides when that card’s native
-list tooltip includes Watchlist, or after a successful add; custom lists alone keep it available.
+Movie and whole-show poster and fanart cards also have a bookmark shortcut beside the blue lists button,
+including cards loaded as you browse. Season and episode cards (including Up Next) have no shortcut. It uses
+the card’s own title and the same toolkit account. The shortcut hides when that card’s native list tooltip includes Watchlist, or after a successful add; custom lists alone keep it available.
 
 Success shows **You added Spider-Man: Brand New Day to your watchlist.** (using the added title) in OG’s native
 notifier when available. Otherwise, a matching notification appears below the header on the right, with a green

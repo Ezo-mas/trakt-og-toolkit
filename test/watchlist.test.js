@@ -91,11 +91,11 @@ test('native watchlist reader distinguishes Watchlist from custom-list membershi
   assert.equal(readWatchlisted(anchor), false);
 });
 
-test('card route reader uses the image link for each media type and rejects external/unsupported links', t => {
+test('card route reader allows only whole movies/shows using their image links', t => {
   const window = new Window({ url: 'https://og.trakt.tv/movies/trending' }); t.after(() => window.close());
   for (const [href, expected] of [
     ['/movies/fight-club-1999', 'title'], ['/shows/breaking-bad', 'title'],
-    ['/shows/breaking-bad/seasons/0', 'season'], ['/shows/breaking-bad/seasons/1/episodes/2', 'episode'],
+    ['/shows/breaking-bad/seasons/0', undefined], ['/shows/breaking-bad/seasons/1/episodes/2', undefined],
     ['https://example.com/movies/test', undefined], ['/people/test', undefined], ['/movies/trending', undefined],
   ]) {
     window.document.body.innerHTML = watchlistCardHtml({ href });

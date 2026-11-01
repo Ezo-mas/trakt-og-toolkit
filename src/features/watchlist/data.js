@@ -31,7 +31,7 @@ export function readWatchlisted(anchor) {
     /^watchlist(?:\s*\+|$)/i.test(action.querySelector('.detail')?.textContent.trim() ?? ''));
 }
 
-/** Image links identify the card itself; subtitle links can point to a parent show/season. */
+/** Only whole movies/shows get shortcuts; subtitle links must not turn episodes into show actions. */
 export function readCardRoute(card) {
   const link = card.querySelector('a.poster[href], a.image-link[href]');
   if (!link) return null;
@@ -39,7 +39,7 @@ export function readCardRoute(card) {
     const url = new URL(link.getAttribute('href'), card.ownerDocument.location.href);
     if (url.origin !== card.ownerDocument.location.origin) return null;
     const route = parseRoute(url.pathname);
-    return watchlistLookup(route) ? route : null;
+    return route.name === 'title' && watchlistLookup(route) ? route : null;
   } catch { return null; }
 }
 

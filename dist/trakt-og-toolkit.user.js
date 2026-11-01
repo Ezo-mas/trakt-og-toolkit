@@ -3609,7 +3609,7 @@
       const url = new URL(link.getAttribute("href"), card.ownerDocument.location.href);
       if (url.origin !== card.ownerDocument.location.origin) return null;
       const route = parseRoute(url.pathname);
-      return watchlistLookup(route) ? route : null;
+      return route.name === "title" && watchlistLookup(route) ? route : null;
     } catch {
       return null;
     }

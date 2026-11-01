@@ -44,8 +44,7 @@ function nativeState(b, id, watchlisted, lists = true) {
 }
 
 test('built bundle adds beside the list icon on fanart/poster cards using each card’s own route', async t => {
-  for (const [href, type, small] of [['/movies/verity-2026', 'movies', false], ['/shows/breaking-bad', 'shows', true],
-    ['/shows/breaking-bad/seasons/0', 'seasons', true], ['/shows/breaking-bad/seasons/1/episodes/2', 'episodes', false]]) {
+  for (const [href, type, small] of [['/movies/verity-2026', 'movies', false], ['/shows/breaking-bad', 'shows', true]]) {
     await t.test(type, async t => {
       const b = boot(t, { html: watchlistCardHtml({ href, small }) }); await wait();
       const [button] = b.buttons(); assert.ok(button);
@@ -59,9 +58,9 @@ test('built bundle adds beside the list icon on fanart/poster cards using each c
       assert.equal(bubbled, false);
       assert.equal(b.writes().length, 1);
       assert.equal(b.writes()[0].url, 'https://api.trakt.tv/sync/watchlist');
-      assert.deepEqual(JSON.parse(b.writes()[0].data), { [type]: [{ ids: { trakt: type === 'seasons' ? 20 : 12 } }] });
+      assert.deepEqual(JSON.parse(b.writes()[0].data), { [type]: [{ ids: { trakt: 12 } }] });
       assert.equal(button.hidden, true);
-      assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, `You added ${type === 'seasons' ? 'Season 0' : 'Spider-Man: Brand New Day'} to your watchlist.`);
+      assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, 'You added Spider-Man: Brand New Day to your watchlist.');
     });
   }
 });
@@ -78,6 +77,21 @@ test('lazy/replaced/recycled cards mount once and unsupported cards get no short
   b.document.querySelector('article').remove();
   b.document.body.insertAdjacentHTML('beforeend', watchlistCardHtml({ href: '/people/test' })); await wait();
   assert.equal(b.buttons().length, 0);
+});
+
+test('Up Next episode and season cards have no shortcut, including recycled cards', async t => {
+  const b = boot(t, { html: watchlistCardHtml({ href: '/shows/breaking-bad/seasons/1/episodes/2' }) +
+    watchlistCardHtml({ id: 'season', href: '/shows/breaking-bad/seasons/1' }) });
+  for (const link of b.document.querySelectorAll('.titles-link')) link.setAttribute('href', '/shows/breaking-bad');
+  await wait();
+  assert.equal(b.buttons().length, 0, 'parent show subtitle links do not get shortcuts');
+  assert.equal(b.calls.length, 0);
+  const link = b.document.querySelector('.image-link');
+  link.setAttribute('href', '/shows/breaking-bad'); await wait();
+  assert.equal(b.buttons().length, 1, 'a whole-show card gets the shortcut');
+  link.setAttribute('href', '/shows/breaking-bad/seasons/1/episodes/3'); await wait();
+  assert.equal(b.buttons().length, 0, 'recycling a show into an episode removes its shortcut');
+  assert.equal(b.calls.length, 0);
 });
 
 test('card membership tracks native Watchlist additions/removals while custom lists keep the shortcut', async t => {

@@ -4,6 +4,11 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-01: one-click watchlist (feature 13)
 
+- Restricted card shortcuts to movies and whole shows at the user’s request. Up Next episode cards and season
+  cards have no bookmark action, even when their subtitles link to the parent show. Recycled cards lose the
+  shortcut when their canonical link becomes an episode/season. Title-page actions remain unchanged.
+  Unit and built-bundle integration tests cover excluded cards and show-to-episode recycling.
+
 - Softened the card bookmark to OG's muted list-action blue (`--brand-fifth`) instead of bright cyan, with rounded
   stroke joins. Hover uses the same muted blue; title-page action styling is unchanged.
 - Success notifications now match OG's wording: **You added <title> to your watchlist.**, including when native
