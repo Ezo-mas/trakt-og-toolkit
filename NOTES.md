@@ -8,8 +8,30 @@ Working notes and known issues. Newest first.
   The account distinction stays in button tooltips/README, rather than the success message. Native refresh
   failure no longer repeats the success toast with a reload hint; the addition is already saved.
   Checked `components/toast/toast.svelte.ts` and `Toaster.svelte`: OG's notifications are a private reactive Svelte
-  store, with no public window API or custom-event listener for external callers. The toolkit retains its own
-  toast rather than importing hashed private modules or inserting nodes into OG's managed toaster.
+  store, with no public window API or custom-event listener for external callers.
+- At the user's request, tested importing that store in the page realm: it does drive OG's real notifier.
+  The toolkit now discovers the root layout's toast import using its `list`/`dismiss` references, validates
+  the loaded module's `list`/`success`/`error`/`dismiss` shape, and invokes `success` through a temporary module
+  script in the page realm. Importing from a userscript sandbox alone would create a separate Svelte singleton.
+  No build hash/export alias is fixed in the source. Only already-loaded, same-origin immutable public assets
+  are eligible, fetched with `credentials: omit`/`force-cache`; discovery is cached for the page and bounded.
+  The bridge removes its script/listener and times out to the fallback if CSP or module changes block it.
+- The fallback is independent toolkit markup using OG's toast design tokens: top right below the header, dark
+  glass, green check/timer, Close button, five-second dismissal, pause on hover/focus and one second after leaving.
+  It stacks below existing native notices rather than overlapping or modifying them, and respects reduced motion.
+  Other toolkit notifications keep their existing appearance. No additional API writes or userscript grants.
+- Notification validation: `npm test` and build pass; pure discovery/validation tests plus fallback dismissal and
+  stacking tests. Chromium 156 and Firefox 157 booted the actual captured signed-out OG page and its real public
+  Svelte modules (not a modeled Toaster), then the built bundle saved through mocked GM requests. Both rendered
+  the actual native success toast with one POST and no fallback/remaining bridge script. Deliberately changed
+  the discovery response to test fallback: both matched native width (360px), font (14px), background and height
+  (52px), sat 8px below an existing native toast, and dismissed via Close. Also injected a real browser CSP
+  blocking inline module scripts: both browsers recorded the blocked bridge, removed it, and showed exactly
+  the matching fallback with one mocked POST and no page errors. Chromium also verified pause past five seconds
+  on hover, continued pause with keyboard focus, then dismissal one second after leaving. The saved page's UTC
+  zone must match the test browser, or OG's date-zone invalidation loops when its data requests are blocked.
+  Live Violentmonkey/Tampermonkey sandbox and CSP behavior still need the user's check; discovery/bridge failures
+  use the matching fallback rather than losing the success notification.
 
 - Native-refresh follow-up: movie/show saves now ask OG's existing `MediaList` control to reread membership.
   Its `ArrowDown` handler calls `open(true)` (always the picker read, even if QUICK_ADD is later enabled), then

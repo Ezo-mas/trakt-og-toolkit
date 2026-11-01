@@ -4,10 +4,10 @@ import { watchlistApi } from './api.js';
 import { readWatchlisted, watchlistLookup } from './data.js';
 import { css } from './styles.js';
 import { debugError } from '../../core/log.js';
-import { toast } from '../../ui/shell.js';
 import { findActionStack } from '../../ui/action-button.js';
 import { watchlistIcon } from './icon.js';
 import { createNativeWatchlistRefresh } from './native-refresh.js';
+import { notifyWatchlistAdded } from './notification.js';
 
 const ID = 'ogt-watchlist';
 export const watchlist = {
@@ -53,7 +53,7 @@ export const watchlist = {
         if (!result.cancelled) {
           added = true;
           syncVisibility();
-          toast('Added to your watchlist.');
+          void notifyWatchlistAdded({ active });
           await nativeRefresh.refresh(anchor.querySelector('.list-control.summary'), route, { active });
           return;
         }

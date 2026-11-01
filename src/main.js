@@ -19,6 +19,7 @@ import { monthReview } from './features/month-review/index.js';
 import { library } from './features/library/index.js';
 import { watchlist } from './features/watchlist/index.js';
 import { watchlistCards } from './features/watchlist/cards.js';
+import { rememberToastResources } from './features/watchlist/native-toast.js';
 import { registerMenu } from './menu.js';
 import { applyDebugSetting } from './settings.js';
 import { info, warn } from './core/log.js';
@@ -55,6 +56,7 @@ function start() {
   const openGate = () => {
     if (canMount) return;
     canMount = true;
+    rememberToastResources(moduleWatch.entries.keys());
     moduleWatch.stop();
 
     // Nothing above this point touches og's DOM: styles and the router are

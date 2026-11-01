@@ -6,6 +6,7 @@ import { watchlistApi } from './api.js';
 import { readCardRoute, readCardWatchlisted } from './data.js';
 import { watchlistIcon } from './icon.js';
 import { createNativeWatchlistRefresh } from './native-refresh.js';
+import { notifyWatchlistAdded } from './notification.js';
 
 const ID = 'ogt-watchlist-cards';
 const CARD = '.poster-card, .fanart-card';
@@ -64,7 +65,7 @@ export const watchlistCards = {
         if (!active() || result.cancelled) return;
         state.added = true;
         scan();
-        toast('Added to your watchlist.');
+        void notifyWatchlistAdded({ active });
         await nativeRefresh.refresh(entry.control, entry.route, { active });
       } catch (error) {
         debugError('card watchlist addition failed', error);

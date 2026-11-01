@@ -76,6 +76,10 @@ Poster and fanart cards also have a bookmark shortcut beside the blue lists butt
 you browse. It uses the card’s own title and the same toolkit account. The shortcut hides when that card’s native
 list tooltip includes Watchlist, or after a successful add; custom lists alone keep it available.
 
+Success shows **Added to your watchlist.** in OG’s native notifier when available. Otherwise, a matching
+notification appears below the header on the right, with a green check, close button and five-second countdown.
+Hovering or focusing it pauses dismissal. Existing native notifications stay above the fallback.
+
 ### Name pronunciation
 
 On person pages, **Pronounce** looks the name up on Forvo in the background and plays the first recording whose word
@@ -242,6 +246,8 @@ links, poster rating corners. Backlog:
 - Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection`, `/sync/watchlist`,
   `/sync/history`, `/sync/ratings`, `/users/me` and `/users/me/comments` through your own optional OAuth sign-in.
   No Trakt HTML fetching, no internal og endpoints, no reuse of og's session.
+  Native notification discovery reads only already-loaded public JavaScript assets, without credentials;
+  it does not make authenticated API requests.
   Pronunciation fetches Forvo's public search page (with `@connect forvo.com`) to find recordings.
 - Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with `Retry-After` on 429.
 - Nothing is uploaded, resold or redistributed; the script has no backend.
