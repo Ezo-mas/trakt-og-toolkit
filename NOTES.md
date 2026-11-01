@@ -4,6 +4,16 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-01: one-click watchlist (feature 13)
 
+- User clarified their Firefox failure is specifically 150–170% zoom; 180% grows the cards again. Removed
+  the fixed-width container query and all geometry/ResizeObserver hiding. Poster-only CSS now hides at
+  1.5 <= resolution < 1.8dppx and restores at 1.8dppx. Narrow cards alone no longer hide the shortcut.
+  This maps to that zoom band on a 1x/100%-scaled desktop; CSS resolution includes display scaling, so
+  this is an explicitly documented approximation, not a universal exact-zoom detector. Native membership
+  hiding, movie/show scope and fanart layout stay unchanged. Earlier overflow approaches below are superseded.
+  Full tests/build pass. Captured-page Chromium/Firefox checks emulate 1.0/1.3/1.5/1.7/1.8/2.0dppx at
+  150px and 240px card widths, verifying the media rule rather than actual browser toolbar zoom. The
+  signed-in Firefox page and display-scaling correspondence still require a live check.
+
 - User reported the first space-based fix still clips Social Feed ratings at 150% in Zen. The earlier browser
   check converted a fanart card and tested only two widths; it did not validate the actual signed-in Social
   Feed at 150%. A saved real poster with a modeled native rating button did not reproduce that exact failure.

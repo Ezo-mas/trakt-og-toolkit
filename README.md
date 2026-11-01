@@ -76,9 +76,9 @@ Movie and whole-show poster and fanart cards also have a bookmark shortcut besid
 including cards loaded as you browse. Season and episode cards (including Up Next) have no shortcut. It uses
 the card’s own title and the same toolkit account. The shortcut hides when that card’s native list tooltip
 includes Watchlist, or after a successful add; custom lists alone keep it available.
-On narrow poster cards, the shortcut hides when it would crowd the rating and returns when there is room,
-including after zooming or resizing. Poster action bars at 180 CSS pixels or narrower always hide it as a
-fallback, so a clipped native rating cannot prevent the shortcut from hiding.
+On a desktop display at 100% system scaling, poster shortcuts hide at 150–170% browser zoom and return at
+180%. Wider fanart cards are unaffected. This uses CSS resolution, which includes system/display scaling;
+it cannot distinguish browser zoom from display scaling. Card width alone does not hide the shortcut.
 
 Success shows **You added Spider-Man: Brand New Day to your watchlist.** (using the added title) in OG’s native
 notifier when available. Otherwise, a matching notification appears below the header on the right, with a green
