@@ -24,7 +24,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 10 | List preview posters link to titles | check og first | small |
 | 11 | All lists in one view | OAuth or public | lowest value |
 | 12 | Add to library button | OAuth | done |
-| 13 | One-click Add to watchlist | OAuth | small |
+| 13 | One-click Add to watchlist | OAuth | implemented; real signed-in check pending |
 | 14 | Add to library on poster cards | OAuth | small; after 12 |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
@@ -292,6 +292,9 @@ specials; the button hides when og shows its own library control.
   episode's `first_aired` (`extended=episodes` alone does not). The Simpsons, 39 seasons: about 1 MB in 1 s.
 
 ## 13. One-click Add to watchlist
+
+**Status:** implemented on movie, show, season and episode pages. Unit tests and built-bundle integration tests
+pass; Chromium/Firefox saved-page checks and remaining real signed-in checks are recorded in NOTES.md.
 
 **Goal:** og's "Listed on" button opens a list picker; adding to the watchlist takes several clicks. Add a separate
 button that only adds to the watchlist.

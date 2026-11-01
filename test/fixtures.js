@@ -1,5 +1,32 @@
 /** Trimmed, hand-written mirrors of the real og markup these selectors rely on. */
 
+/** Action-stack structure trimmed by hand from live signed-out captures on 2026-11-01:
+ * /movies/fight-club-1999, /shows/breaking-bad, and its /seasons/1 and /seasons/1/episodes/1.
+ * All four use this stack/list control. Icons, unrelated actions and Svelte hashes omitted.
+ * Signed-in Listed On/detail variants in tests are source-derived from MediaList at 4bdefaf4e. */
+export const WATCHLIST_HTML = `
+<main id="content">
+  <section class="summary-frame"><div class="container"><div class="columns">
+    <div class="info" id="overview"><div class="top"><div class="details"></div>
+      <div class="actions"><div class="action-buttons">
+        <div class="stacked"><div class="watch-control summary"><div class="summary-action">
+          <button type="button" class="main" aria-label="Add to history" aria-haspopup="dialog">
+            <span class="text"><span class="title">Add to history</span></span>
+          </button>
+        </div></div></div>
+        <div class="stacked"></div>
+        <div class="list-control summary"><div class="summary-action">
+          <button type="button" class="main" aria-haspopup="dialog" aria-expanded="false">
+            <span class="text"><span class="title">Add to list</span></span>
+          </button>
+          <div class="tiles"><button type="button" class="tile" aria-label="Pick a list" aria-haspopup="dialog"></button></div>
+        </div></div>
+        <div class="picker summary" popover="auto" role="dialog" aria-label="Lists"></div>
+      </div></div>
+    </div></div>
+  </div></div></section>
+</main>`;
+
 export const SHOW_HTML = `
 <main id="content">
   <section class="fanart-header with-stats">

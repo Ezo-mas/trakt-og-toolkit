@@ -367,15 +367,15 @@
   var STYLE_ID = "ogt-styles";
   function injectStyles(extra = []) {
     if (document.getElementById(STYLE_ID)) return;
-    const css = [CSS, ...extra].join("\n");
+    const css2 = [CSS, ...extra].join("\n");
     if (typeof GM_addStyle === "function") {
       try {
-        GM_addStyle(css);
+        GM_addStyle(css2);
         return;
       } catch {
       }
     }
-    const style = el("style", { id: STYLE_ID, text: css });
+    const style = el("style", { id: STYLE_ID, text: css2 });
     (document.head || document.documentElement).append(style);
   }
   var toastTimer = null;
@@ -3452,36 +3452,44 @@
   }
   var libraryApi = createLibraryApi();
 
-  // src/features/library/index.js
-  var ID2 = "ogt-library";
-  var library = {
-    id: "library",
-    css: `
-    .ogt-library { --action-color: var(--brand-quaternary, #129982); margin: 0; }
-    .ogt-library[hidden] { display: none !important; }
+  // src/ui/action-button.js
+  function findActionStack(doc = document) {
+    return doc.querySelector(".summary-frame #overview .top .actions .action-buttons") || doc.querySelector(".summary-frame #overview .top .actions");
+  }
+  function actionButtonCss(prefix, color) {
+    return `
+    .${prefix} { --action-color: ${color}; margin: 0; }
+    .${prefix}[hidden] { display: none !important; }
     /* Use OG's design values without inheriting its component state selectors. */
-    .ogt-library__button { display: flex; align-items: center; width: 100%;
+    .${prefix}__button { display: flex; align-items: center; width: 100%;
       height: var(--summary-action-height, 60px); padding: 0; border: 0;
       border-radius: var(--radius-summary-action, 6px);
       background: color-mix(in srgb, var(--action-color) var(--summary-action-tint, 3%), var(--color-action-bg, #202020));
       box-shadow: inset 0 0 0 var(--summary-action-outline, 1px) color-mix(in srgb, var(--action-color) var(--summary-action-outline-mix, 65%), transparent);
       color: var(--action-color); font: inherit; text-align: start; cursor: pointer;
       transition: background-color var(--transition-summary-action, 150ms), color var(--transition-summary-action, 150ms); }
-    .ogt-library__button:is(:hover, :focus-visible):not(:disabled) { background: var(--action-color); color: var(--color-text-inverse, white); box-shadow: none; }
-    .ogt-library__glyph { display: grid; place-items: center; flex-shrink: 0; align-self: stretch; width: var(--action-icon-width, 48px); }
-    .ogt-library__glyph svg { width: 24px; height: 28px; }
-    .ogt-library__text { flex: 1; min-width: 0; font-family: var(--font-headings, inherit); }
-    .ogt-library__title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    .${prefix}__button:is(:hover, :focus-visible):not(:disabled) { background: var(--action-color); color: var(--color-text-inverse, white); box-shadow: none; }
+    .${prefix}__glyph { display: grid; place-items: center; flex-shrink: 0; align-self: stretch; width: var(--action-icon-width, 48px); }
+    .${prefix}__glyph svg { width: 24px; height: 28px; }
+    .${prefix}__text { flex: 1; min-width: 0; font-family: var(--font-headings, inherit); }
+    .${prefix}__title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       font-size: var(--font-size-action, 13px); font-weight: var(--font-weight-headings-heavy, 700);
       letter-spacing: var(--summary-action-tracking, .04em); line-height: var(--summary-action-title-line, 1.3); text-transform: uppercase; }
-    .ogt-library__button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
-    .ogt-library__button:disabled { opacity: .6; cursor: default; }
-    .ogt-library__status { font: 12px/1.4 system-ui; margin: 6px 0 0; }
-    .ogt-library__status:empty { display: none; }
-  `,
+    .${prefix}__button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+    .${prefix}__button:disabled { opacity: .6; cursor: default; }
+    .${prefix}__status { font: 12px/1.4 system-ui; margin: 6px 0 0; }
+    .${prefix}__status:empty { display: none; }
+  `;
+  }
+
+  // src/features/library/index.js
+  var ID2 = "ogt-library";
+  var library = {
+    id: "library",
+    css: actionButtonCss("ogt-library", "var(--brand-quaternary, #129982)"),
     match: (route) => route.kind === "movie" && route.name === "title" || route.kind === "show" && ["title", "season", "episode"].includes(route.name),
     mount(route) {
-      const anchor = document.querySelector(".summary-frame #overview .top .actions .action-buttons") || document.querySelector(".summary-frame #overview .top .actions");
+      const anchor = findActionStack();
       if (!anchor || document.getElementById(ID2)) return null;
       let destroyed = false;
       let busy = false;
@@ -3550,6 +3558,153 @@
         added = false;
         wasCollected = false;
         label.textContent = "Add to library";
+        status.textContent = "";
+        syncVisibility();
+      }
+      button2.addEventListener("click", add);
+      document.addEventListener("ogt:authchange", authChanged);
+      const history2 = anchor.querySelector(".stacked");
+      if (history2) history2.after(node);
+      else anchor.append(node);
+      const observer = new MutationObserver(syncVisibility);
+      observer.observe(anchor, { childList: true, subtree: true, characterData: true });
+      syncVisibility();
+      return { node, destroy() {
+        destroyed = true;
+        observer.disconnect();
+        button2.removeEventListener("click", add);
+        document.removeEventListener("ogt:authchange", authChanged);
+        node.remove();
+      } };
+    }
+  };
+
+  // src/features/watchlist/data.js
+  function watchlistLookup(route) {
+    if (!route?.id) return null;
+    const id = encodeURIComponent(route.id);
+    if (route.kind === "movie" && route.name === "title") return { type: "movies", path: `/movies/${id}` };
+    if (route.kind !== "show") return null;
+    if (route.name === "title") return { type: "shows", path: `/shows/${id}` };
+    if (!Number.isSafeInteger(route.season) || route.season < 0) return null;
+    if (route.name === "season") return { type: "seasons", path: `/shows/${id}/seasons`, season: route.season };
+    if (route.name === "episode" && Number.isSafeInteger(route.episode) && route.episode > 0) {
+      return { type: "episodes", path: `/shows/${id}/seasons/${route.season}/episodes/${route.episode}` };
+    }
+    return null;
+  }
+  function watchlistBody(lookup, data) {
+    const item = lookup?.type === "seasons" ? Array.isArray(data) ? data.find((season) => season?.number === lookup.season) : null : data;
+    const id = item?.ids?.trakt;
+    if (!lookup || !Number.isSafeInteger(id) || id <= 0) throw new Error("Could not identify this title.");
+    return { [lookup.type]: [{ ids: { trakt: id } }] };
+  }
+  function readWatchlisted(anchor) {
+    return [...anchor.querySelectorAll(".summary-action")].some((action) => /^listed on$/i.test(action.querySelector(".title")?.textContent.trim() ?? "") && /^watchlist(?:\s*\+|$)/i.test(action.querySelector(".detail")?.textContent.trim() ?? ""));
+  }
+
+  // src/features/watchlist/api.js
+  function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn } = {}) {
+    return {
+      async add(route, { active: active2 = () => true } = {}) {
+        if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
+        const lookup = watchlistLookup(route);
+        if (!lookup) throw new Error("Unsupported watchlist page.");
+        if (!active2()) return { cancelled: true };
+        const body = watchlistBody(lookup, await get(lookup.path));
+        if (!active2() || !signedIn()) return { cancelled: true };
+        const result = await auth("POST", "/sync/watchlist", body);
+        if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
+          throw new Error("Trakt could not find this title.");
+        }
+        const counts = [result?.added?.[lookup.type], result?.existing?.[lookup.type]];
+        if (!counts.some((count) => Number.isSafeInteger(count) && count > 0)) {
+          throw new Error("Trakt did not confirm a watchlist addition.");
+        }
+        return { cancelled: false };
+      }
+    };
+  }
+  var watchlistApi = createWatchlistApi();
+
+  // src/features/watchlist/styles.js
+  var css = actionButtonCss("ogt-watchlist", "var(--brand-secondary, light-dark(#2474ae, #59a9e2))");
+
+  // src/features/watchlist/index.js
+  var ID3 = "ogt-watchlist";
+  var watchlist = {
+    id: "watchlist",
+    css,
+    match: (route) => Boolean(watchlistLookup(route)),
+    mount(route) {
+      const anchor = findActionStack();
+      if (!anchor || document.getElementById(ID3)) return null;
+      let destroyed = false;
+      let busy = false;
+      let session = 0;
+      let added = false;
+      let wasWatchlisted = false;
+      const label = el("span", { class: "ogt-watchlist__title", text: "Add to watchlist" });
+      const glyph = el("span", { class: "ogt-watchlist__glyph", "aria-hidden": "true" });
+      const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      for (const [name, value] of Object.entries({ viewBox: "0 0 24 28", fill: "none", stroke: "currentColor", "stroke-width": "1" })) svg3.setAttribute(name, value);
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", "M5 2h14v24l-7-5-7 5Z");
+      svg3.append(path);
+      glyph.append(svg3);
+      const button2 = el("button", {
+        type: "button",
+        class: "ogt-watchlist__button",
+        title: "Add using the toolkit’s Trakt account"
+      });
+      button2.append(glyph, el("span", { class: "ogt-watchlist__text" }, label));
+      const status = el("p", { class: "ogt-watchlist__status", role: "status", "aria-live": "polite" });
+      const node = el("div", { id: ID3, class: "ogt-watchlist" }, button2, status);
+      function syncVisibility() {
+        const watchlisted = readWatchlisted(anchor);
+        if (wasWatchlisted && !watchlisted) added = false;
+        wasWatchlisted = watchlisted;
+        node.hidden = added || watchlisted;
+      }
+      async function add() {
+        if (busy || node.hidden) return;
+        if (!isSignedIn()) {
+          status.textContent = "Sign in to Trakt through the toolkit menu first.";
+          return;
+        }
+        busy = true;
+        const epoch = session;
+        button2.disabled = true;
+        label.textContent = "Adding to watchlist…";
+        status.textContent = "";
+        const active2 = () => !destroyed && epoch === session;
+        try {
+          const result = await watchlistApi.add(route, { active: active2 });
+          if (!active2()) return;
+          if (!result.cancelled) {
+            added = true;
+            syncVisibility();
+            toast("Added to your toolkit Trakt account’s watchlist. Reload to update OG’s status.");
+            return;
+          }
+        } catch (error) {
+          debugError("watchlist addition failed", error);
+          if (active2()) status.textContent = error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not add to watchlist. Check your toolkit sign-in and try again." : error.message;
+        } finally {
+          if (active2()) {
+            busy = false;
+            button2.disabled = false;
+            label.textContent = "Add to watchlist";
+          }
+        }
+      }
+      function authChanged() {
+        session++;
+        busy = false;
+        button2.disabled = false;
+        added = false;
+        wasWatchlisted = false;
+        label.textContent = "Add to watchlist";
         status.textContent = "";
         syncVisibility();
       }
@@ -3762,7 +3917,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, monthReview];
+  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, monthReview];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))

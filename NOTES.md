@@ -2,6 +2,46 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-01: one-click watchlist (feature 13)
+
+- Started from main `1746380`. Checked live signed-out HTML for `/movies/fight-club-1999`,
+  `/shows/breaking-bad`, `/shows/breaking-bad/seasons/1` and `/shows/breaking-bad/seasons/1/episodes/1`.
+  All have `.summary-frame #overview .top .actions .action-buttons` and **Add to list**, not a direct watchlist
+  action. `WATCHLIST_HTML` is a hand-trimmed fixture of that shared structure.
+- Checked full trakt-og history at `4bdefaf4e`: `ActionButtons.svelte` delegates to `MediaList.svelte`.
+  `git log -S 'quickAdd'` and `git log -S 'QUICK_ADD'` trace `QUICK_ADD = false` to `858973bfb`
+  (2026-10-28): always open prompts because users cannot change the old quick-add account settings in og.
+  `ff795e338` also labels the signed-out button **Add to list**. `git log -S 'watchlist'` on `ActionButtons`
+  shows no subsequent standalone title-page action. A separate direct `WatchlistButton.svelte` exists, but its
+  current callers are dashboard `RecommendationSpotlight` and onboarding `PickPoster`, not title pages
+  (checked callers and `git log -S 'WatchlistButton'`). All four title routes exist in the source.
+- `SeasonPage` and `EpisodePage` also pass their exact `listTarget` to `ActionButtons` and get the same picker.
+  The toolkit therefore offers one-click adds on those pages too. Movies/shows resolve through their public
+  detail endpoint; seasons resolve through `/shows/:id/seasons` by season number (including season 0);
+  episodes use their exact detail endpoint. No collection expansion, aired-date filtering or confirmation is
+  needed: each POST to `/sync/watchlist` contains one numeric Trakt ID under its own media type.
+- Native `.selected` alone means membership in any list, not necessarily Watchlist. Read **Listed On** plus
+  `.detail` equal to **Watchlist** or beginning **Watchlist +**; **3 lists** keeps the action visible.
+  The source-derived signed-in variants are tested separately from the live signed-out fixture.
+  As with library, a mutation observer follows native changes, success hides locally, and a native
+  watchlisted → not-watchlisted transition restores the action. Toolkit and OG accounts can differ.
+- Shared `src/ui/action-button.js` extracts only feature 12's CSS and action-stack lookup; its generated CSS,
+  collection requests, observer and sign-in behavior are unchanged. Watchlist accepts a positive matching
+  `added` or `existing` count; empty responses and any non-empty/malformed `not_found` entries fail visibly.
+  Auth changes/navigation cancel pending lookups and ignore late write results. No authenticated watchlist
+  prefetch or private response cache was added.
+- Validation: `npm run build` and `npm test` pass, including library tests and watchlist unit/built-bundle
+  tests for all four media types, sign-in guidance, duplicate clicks, native changes, rejected additions,
+  account changes and navigation. Playwright's live og navigation returned Cloudflare 403, while browser-UA
+  curl captures succeeded. Local Chromium/Firefox checks use that captured movie HTML and og's downloaded CSS,
+  the built bundle at document-start, and mocked GM/API responses; they do not run Svelte or a userscript manager.
+  Passed in Chromium 156 and Firefox 157 at 1280px and 800px: 60px action height, keyboard focus, exact POST,
+  success hiding, native mixed-list removal restoring the action, sign-out guidance, navigation cleanup and no
+  page errors. At 390px og's own `MobileSplash` clips the app and prevents interaction; no phone pass is claimed.
+  Real signed-in checks still needed in Chromium and Firefox with Violentmonkey: actual watchlist POSTs
+  (including season/episode support), OG's live overlay updating/removing Watchlist alongside other lists,
+  and behavior when OG and toolkit use different accounts.
+
 ## 2026-11-01: last month in review (feature 6)
 
 - og check (trakt-og `4bdefaf4e`: `DashboardPage.svelte`, `RecapRibbon`, `LastThirtyDaysPanel`,

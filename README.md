@@ -4,7 +4,8 @@ An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds th
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
 **Status:** v0.2.0: custom links with presets and an inline editor, a season ratings chart, optional Trakt sign-in
-with a paused-playback manager and manual library additions, and in-page name pronunciation on person pages.
+with a paused-playback manager, manual library additions and one-click watchlist additions, and in-page name
+pronunciation on person pages.
 
 ## Install
 
@@ -59,6 +60,14 @@ Shows and seasons confirm the aired episode count before saving; whole shows exc
 separately). The add button disappears after saving, or whenever OG already shows a library control. Reload after
 adding to update OG’s own library status. Removing an item through OG restores the add action without a reload.
 The button uses OG’s design values for action styling and spacing, with separate toolkit classes.
+
+### Add to watchlist
+
+Movie, show, season and episode pages have a separate **Add to watchlist** action. Sign in through the toolkit menu
+first; one click adds that exact item to the toolkit’s Trakt account, which may differ from your OG account.
+The action hides after success or when OG’s **Listed On** detail includes **Watchlist**. Other list memberships
+leave it available. Reload to update OG’s status after adding; removing the item through OG restores the action
+once OG shows the change. This action only adds; use OG’s list picker to remove items.
 
 ### Name pronunciation
 
@@ -223,7 +232,7 @@ links, poster rating corners. Backlog:
 
 ## Trakt API compliance
 
-- Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection`,
+- Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection`, `/sync/watchlist`,
   `/sync/history`, `/sync/ratings`, `/users/me` and `/users/me/comments` through your own optional OAuth sign-in.
   No Trakt HTML fetching, no internal og endpoints, no reuse of og's session.
   Pronunciation fetches Forvo's public search page (with `@connect forvo.com`) to find recordings.
