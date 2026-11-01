@@ -4,6 +4,8 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-01: one-click watchlist (feature 13)
 
+- Softened the card bookmark to OG's muted list-action blue (`--brand-fifth`) instead of bright cyan, with rounded
+  stroke joins. Hover uses the same muted blue; title-page action styling is unchanged.
 - Success notifications now match OG's wording: **You added <title> to your watchlist.**, including when native
   refresh is unavailable. The title comes from the existing public API lookup, with no extra request; both
   the native bridge and fallback render it as text, including punctuation/markup-looking titles.

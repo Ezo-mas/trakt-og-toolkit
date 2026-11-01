@@ -4069,13 +4069,13 @@
     .ogt-watchlist-card { display: grid; place-items: center; flex: 0 0 auto;
       inline-size: var(--action-width, 32px); block-size: var(--bar, 40px); min-block-size: 0;
       padding: 0; border: 0; border-radius: 0; background: none;
-      color: var(--brand-secondary, light-dark(#2474ae, #59a9e2)); cursor: pointer; }
+      color: var(--brand-fifth, #2b678f); cursor: pointer; }
     .ogt-watchlist-card[hidden] { display: none !important; }
-    .ogt-watchlist-card svg { width: 20px; height: 24px; }
+    .ogt-watchlist-card svg { width: 20px; height: 24px; stroke-linejoin: round; }
     .quick-icons.small .ogt-watchlist-card { block-size: calc(var(--bar, 35px) - 1px); }
     .quick-icons.small .ogt-watchlist-card svg { width: 16px; height: 20px; }
     .ogt-watchlist-card:is(:hover, :focus-visible):not(:disabled) {
-      background: var(--brand-secondary, #2474ae); color: var(--color-card-text, white); }
+      background: var(--brand-fifth, #2b678f); color: var(--color-card-text, white); }
     .ogt-watchlist-card:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
     .ogt-watchlist-card:disabled { opacity: .6; cursor: default; }
   `,
