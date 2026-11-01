@@ -65,7 +65,7 @@ export const watchlistCards = {
         if (!active() || result.cancelled) return;
         state.added = true;
         scan();
-        void notifyWatchlistAdded({ active });
+        void notifyWatchlistAdded({ title: result.title, active });
         await nativeRefresh.refresh(entry.control, entry.route, { active });
       } catch (error) {
         debugError('card watchlist addition failed', error);

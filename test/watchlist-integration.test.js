@@ -26,7 +26,7 @@ function boot(t, { path = '/movies/fight-club-1999', signedIn = true, result = {
     const url = new URL(r.url);
     const isLookup = /^\/(movies|shows)\//.test(url.pathname);
     const body = r.method === 'POST' ? result : isLookup
-      ? url.pathname.endsWith('/seasons') ? [{ number: 1, ids: { trakt: 12 } }] : { ids: { trakt: 12 } }
+      ? url.pathname.endsWith('/seasons') ? [{ number: 1, ids: { trakt: 12 } }] : { ids: { trakt: 12 }, title: 'Spider-Man: Brand New Day' }
       : [];
     const respond = () => r.onload({ status: 200, responseText: JSON.stringify(body), responseHeaders: '' });
     if (isLookup && deferred === 'GET' || r.method === 'POST' && deferred === 'POST') pending.push(respond);
@@ -72,7 +72,7 @@ test('built bundle adds exactly once on all four page types, alongside the libra
     assert.deepEqual(JSON.parse(request.data), { [type]: [{ ids: { trakt: 12 } }] });
     assert.equal(request.headers.Authorization, 'Bearer private-access');
     assert.equal(b.panel().hidden, true);
-    assert.equal(b.document.querySelector('.ogt-toast').textContent, 'Added to your watchlist.');
+    assert.equal(b.document.querySelector('.ogt-toast').textContent, `You added ${type === 'seasons' ? 'Season 1' : 'Spider-Man: Brand New Day'} to your watchlist.`);
     assert.equal(b.document.getElementById('ogt-library').hidden, false);
     b.window.history.pushState({}, '', '/'); await wait(250);
     assert.equal(b.panel(), null);

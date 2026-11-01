@@ -3635,7 +3635,10 @@
         const lookup = watchlistLookup(route);
         if (!lookup) throw new Error("Unsupported watchlist page.");
         if (!active2()) return { cancelled: true };
-        const body = watchlistBody(lookup, await get(lookup.path));
+        const data = await get(lookup.path);
+        const body = watchlistBody(lookup, data);
+        const item = lookup.type === "seasons" ? data.find((season) => season?.number === lookup.season) : data;
+        const title = typeof item?.title === "string" && item.title.trim() ? item.title.trim() : lookup.type === "seasons" ? `Season ${lookup.season}` : "this title";
         if (!active2() || !signedIn()) return { cancelled: true };
         const result = await auth("POST", "/sync/watchlist", body);
         if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
@@ -3645,7 +3648,7 @@
         if (!counts.some((count) => Number.isSafeInteger(count) && count > 0)) {
           throw new Error("Trakt did not confirm a watchlist addition.");
         }
-        return { cancelled: false };
+        return { cancelled: false, title };
       }
     };
   }
@@ -3814,7 +3817,7 @@
     }
     return null;
   }
-  async function tryNativeWatchlistToast(active2 = () => true) {
+  async function tryNativeWatchlistToast(message, active2 = () => true) {
     if (!active2()) return false;
     const url = await (discovery ??= discover());
     if (!url || !active2() || !document.querySelector(".toaster")) return false;
@@ -3841,7 +3844,7 @@
         const module = await import(${JSON.stringify(url)});
         const store = Object.values(module).find(value => value && typeof value.success === 'function' &&
           typeof value.dismiss === 'function' && Array.isArray(value.list));
-        if (store && document.querySelector('.toaster')) { store.success('Added to your watchlist.'); result = 'shown'; }
+        if (store && document.querySelector('.toaster')) { store.success(${JSON.stringify(message).replace(/</g, "\\u003c")}); result = 'shown'; }
       } catch {}
       document.dispatchEvent(new CustomEvent(${JSON.stringify(eventName)}, { detail: result }));
     })();`;
@@ -3871,7 +3874,7 @@
     svg3.append(node);
     return svg3;
   }
-  function showWatchlistToast() {
+  function showWatchlistToast(message = "You added this title to your watchlist.") {
     if (!root?.isConnected) {
       resize?.disconnect();
       root = el("div", { class: "ogt-toast ogt-watchlist-toasts" });
@@ -3894,7 +3897,7 @@
       "div",
       { class: "ogt-watchlist-toast", role: "status", "aria-atomic": "true" },
       el("span", { class: "ogt-watchlist-toast__icon" }, icon("m7 12 3 3 7-7", true)),
-      el("p", { class: "ogt-watchlist-toast__message", text: "Added to your watchlist." }),
+      el("p", { class: "ogt-watchlist-toast__message", text: message }),
       close,
       line
     );
@@ -3949,13 +3952,14 @@
     start2(5e3);
     return { node, destroy: remove };
   }
-  async function notifyWatchlistAdded({ active: active2 = () => true } = {}) {
+  async function notifyWatchlistAdded({ title = "this title", active: active2 = () => true } = {}) {
+    const message = `You added ${title} to your watchlist.`;
     try {
-      if (await tryNativeWatchlistToast(active2)) return;
+      if (await tryNativeWatchlistToast(message, active2)) return;
     } catch (error) {
       debugError("native watchlist toast unavailable", error);
     }
-    if (active2()) showWatchlistToast();
+    if (active2()) showWatchlistToast(message);
   }
 
   // src/features/watchlist/index.js
@@ -4009,7 +4013,7 @@
           if (!result.cancelled) {
             added = true;
             syncVisibility();
-            void notifyWatchlistAdded({ active: active2 });
+            void notifyWatchlistAdded({ title: result.title, active: active2 });
             await nativeRefresh.refresh(anchor.querySelector(".list-control.summary"), route, { active: active2 });
             return;
           }
@@ -4111,7 +4115,7 @@
           if (!active2() || result.cancelled) return;
           state.added = true;
           scan();
-          void notifyWatchlistAdded({ active: active2 });
+          void notifyWatchlistAdded({ title: result.title, active: active2 });
           await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
         } catch (error) {
           debugError("card watchlist addition failed", error);

@@ -13,6 +13,16 @@ const cases = [
   ['/shows/breaking-bad/seasons/1/episodes/2', 'episodes', '/shows/breaking-bad/seasons/1/episodes/2', { ids: { trakt: 4 } }],
 ];
 
+test('successful additions return the API title without another lookup', async () => {
+  let reads = 0;
+  const title = 'Spider-Man: Brand New Day';
+  const api = createWatchlistApi({ signedIn: () => true,
+    get: async () => { reads++; return { ids: { trakt: 1 }, title }; },
+    auth: async () => ({ added: { movies: 1 } }) });
+  assert.deepEqual(await api.add(parseRoute('/movies/test')), { cancelled: false, title });
+  assert.equal(reads, 1);
+});
+
 test('watchlist resolves the exact movie/show/season/episode and posts just its Trakt ID', async () => {
   for (const [index, [path, type, lookupPath, data]] of cases.entries()) {
     const reads = [], writes = [];
@@ -45,7 +55,7 @@ test('watchlist requires a positive matching added/existing count and rejects no
   }
   const api = createWatchlistApi({ signedIn: () => true, get: async () => ({ ids: { trakt: 1 } }),
     auth: async () => ({ existing: { movies: 1 }, added: { movies: 0 }, not_found: { movies: [] } }) });
-  assert.deepEqual(await api.add(parseRoute('/movies/test')), { cancelled: false });
+  assert.deepEqual(await api.add(parseRoute('/movies/test')), { cancelled: false, title: 'this title' });
 });
 
 test('watchlist never writes when signed out, lookup fails, or the session/navigation changes', async () => {

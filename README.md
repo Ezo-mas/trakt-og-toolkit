@@ -76,8 +76,9 @@ Poster and fanart cards also have a bookmark shortcut beside the blue lists butt
 you browse. It uses the card’s own title and the same toolkit account. The shortcut hides when that card’s native
 list tooltip includes Watchlist, or after a successful add; custom lists alone keep it available.
 
-Success shows **Added to your watchlist.** in OG’s native notifier when available. Otherwise, a matching
-notification appears below the header on the right, with a green check, close button and five-second countdown.
+Success shows **You added Spider-Man: Brand New Day to your watchlist.** (using the added title) in OG’s native
+notifier when available. Otherwise, a matching notification appears below the header on the right, with a green
+check, close button and five-second countdown.
 Hovering or focusing it pauses dismissal. Existing native notifications stay above the fallback.
 
 ### Name pronunciation

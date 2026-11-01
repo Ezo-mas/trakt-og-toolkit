@@ -53,7 +53,7 @@ export const watchlist = {
         if (!result.cancelled) {
           added = true;
           syncVisibility();
-          void notifyWatchlistAdded({ active });
+          void notifyWatchlistAdded({ title: result.title, active });
           await nativeRefresh.refresh(anchor.querySelector('.list-control.summary'), route, { active });
           return;
         }

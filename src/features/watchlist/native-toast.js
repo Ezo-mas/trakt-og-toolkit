@@ -57,7 +57,7 @@ async function discover() {
 }
 
 /** Page-realm import reuses OG's existing Svelte singleton; a sandbox import would create a separate store. */
-export async function tryNativeWatchlistToast(active = () => true) {
+export async function tryNativeWatchlistToast(message, active = () => true) {
   if (!active()) return false;
   const url = await (discovery ??= discover());
   if (!url || !active() || !document.querySelector('.toaster')) return false;
@@ -84,7 +84,7 @@ export async function tryNativeWatchlistToast(active = () => true) {
         const module = await import(${JSON.stringify(url)});
         const store = Object.values(module).find(value => value && typeof value.success === 'function' &&
           typeof value.dismiss === 'function' && Array.isArray(value.list));
-        if (store && document.querySelector('.toaster')) { store.success('Added to your watchlist.'); result = 'shown'; }
+        if (store && document.querySelector('.toaster')) { store.success(${JSON.stringify(message).replace(/</g, '\\u003c')}); result = 'shown'; }
       } catch {}
       document.dispatchEvent(new CustomEvent(${JSON.stringify(eventName)}, { detail: result }));
     })();`;

@@ -21,7 +21,7 @@ function icon(path, circle = false) {
 }
 
 /** Independent markup, using OG's design tokens. Keep it below any existing native notices. */
-export function showWatchlistToast() {
+export function showWatchlistToast(message = 'You added this title to your watchlist.') {
   if (!root?.isConnected) {
     resize?.disconnect();
     root = el('div', { class: 'ogt-toast ogt-watchlist-toasts' });
@@ -38,7 +38,7 @@ export function showWatchlistToast() {
   const line = el('span', { class: 'ogt-watchlist-toast__timer', 'aria-hidden': 'true' });
   const node = el('div', { class: 'ogt-watchlist-toast', role: 'status', 'aria-atomic': 'true' },
     el('span', { class: 'ogt-watchlist-toast__icon' }, icon('m7 12 3 3 7-7', true)),
-    el('p', { class: 'ogt-watchlist-toast__message', text: 'Added to your watchlist.' }), close, line);
+    el('p', { class: 'ogt-watchlist-toast__message', text: message }), close, line);
   root.prepend(node);
   let timer, animation, fraction = 1, started, duration, removed = false;
   const holds = new Set();
@@ -74,8 +74,9 @@ export function showWatchlistToast() {
   return { node, destroy: remove };
 }
 
-export async function notifyWatchlistAdded({ active = () => true } = {}) {
-  try { if (await tryNativeWatchlistToast(active)) return; }
+export async function notifyWatchlistAdded({ title = 'this title', active = () => true } = {}) {
+  const message = `You added ${title} to your watchlist.`;
+  try { if (await tryNativeWatchlistToast(message, active)) return; }
   catch (error) { debugError('native watchlist toast unavailable', error); }
-  if (active()) showWatchlistToast();
+  if (active()) showWatchlistToast(message);
 }

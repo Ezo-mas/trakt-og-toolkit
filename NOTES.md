@@ -4,7 +4,12 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-01: one-click watchlist (feature 13)
 
-- Success notifications now say only **Added to your watchlist.**, including when native refresh is unavailable.
+- Success notifications now match OG's wording: **You added <title> to your watchlist.**, including when native
+  refresh is unavailable. The title comes from the existing public API lookup, with no extra request; both
+  the native bridge and fallback render it as text, including punctuation/markup-looking titles.
+  Verified the exact Spider-Man example in native/fallback paths in Chromium and Firefox. A Chromium native
+  test also rendered a title containing quotes, `</script>` and an HTML-looking image as literal text without
+  creating HTML or running its handler; unit/built-bundle tests cover API title propagation on pages and cards.
   The account distinction stays in button tooltips/README, rather than the success message. Native refresh
   failure no longer repeats the success toast with a reload hint; the addition is already saved.
   Checked `components/toast/toast.svelte.ts` and `Toaster.svelte`: OG's notifications are a private reactive Svelte

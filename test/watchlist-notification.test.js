@@ -30,9 +30,9 @@ test('fallback success notification has native-position classes, close control a
   });
   window.document.body.innerHTML = '<div class="toaster"><div class="toast success">Native notification</div></div>';
   const native = window.document.querySelector('.toaster').innerHTML;
-  const first = showWatchlistToast(); handles.push(first);
+  const first = showWatchlistToast('You added Spider-Man: Brand New Day to your watchlist.'); handles.push(first);
   assert.equal(first.node.getAttribute('role'), 'status');
-  assert.equal(first.node.querySelector('p').textContent, 'Added to your watchlist.');
+  assert.equal(first.node.querySelector('p').textContent, 'You added Spider-Man: Brand New Day to your watchlist.');
   assert.ok(first.node.querySelector('.ogt-watchlist-toast__timer'));
   assert.ok(first.node.querySelector('svg[aria-hidden="true"]'));
   assert.ok(first.node.parentElement.classList.contains('ogt-watchlist-toasts'));
@@ -44,4 +44,20 @@ test('fallback success notification has native-position classes, close control a
   second.destroy();
   assert.equal(window.document.querySelector('.ogt-watchlist-toasts'), null);
   assert.equal(window.document.querySelector('.toaster').innerHTML, native);
+});
+
+test('fallback renders punctuation and markup-looking titles as text', t => {
+  const window = new Window();
+  const saved = {};
+  for (const name of ['document', 'Node', 'ResizeObserver']) { saved[name] = globalThis[name]; globalThis[name] = window[name]; }
+  const message = 'You added A "title" </script><img src=x onerror=alert(1)> to your watchlist.';
+  const handle = showWatchlistToast(message);
+  t.after(() => {
+    handle.destroy(); window.close();
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete globalThis[name]; else globalThis[name] = value;
+    }
+  });
+  assert.equal(handle.node.querySelector('p').textContent, message);
+  assert.equal(handle.node.querySelector('img'), null);
 });

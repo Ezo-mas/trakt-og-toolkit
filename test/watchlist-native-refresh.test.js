@@ -86,7 +86,7 @@ test('built bundle refreshes native title/card membership after one toolkit POST
     window.GM_xmlhttpRequest = r => {
       if (r.method === 'POST') posts++;
       const data = r.method === 'POST' ? variant === 'failed-post' ? {} : { added: { movies: 1 } }
-        : new URL(r.url).pathname === '/movies/test' ? { ids: { trakt: 12 } } : [];
+        : new URL(r.url).pathname === '/movies/test' ? { ids: { trakt: 12 }, title: 'Spider-Man: Brand New Day' } : [];
       queueMicrotask(() => r.onload({ status: 200, responseText: JSON.stringify(data), responseHeaders: '' }));
       return { abort() {} };
     };
@@ -140,7 +140,7 @@ test('built bundle refreshes native title/card membership after one toolkit POST
       assert.equal(document.querySelector('.ogt-watchlist-card').hidden, nativeAdded);
       if (variant === 'native-failure') {
         assert.equal(document.getElementById('ogt-watchlist').hidden, true, 'native failure never rolls back the saved addition');
-        assert.equal(document.querySelector('.ogt-toast').textContent, 'Added to your watchlist.');
+        assert.equal(document.querySelector('.ogt-toast').textContent, 'You added Spider-Man: Brand New Day to your watchlist.');
       } else assert.doesNotMatch(document.querySelector('.ogt-toast').textContent, /Reload/);
     }
   });

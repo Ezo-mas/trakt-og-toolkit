@@ -24,7 +24,7 @@ function boot(t, { signedIn = true, html = watchlistCardHtml(), deferred = '', r
     calls.push(r);
     const path = new URL(r.url).pathname;
     const body = r.method === 'POST' ? result ?? { added: { [Object.keys(JSON.parse(r.data))[0]]: 1 } }
-      : path.endsWith('/seasons') ? [{ number: 0, ids: { trakt: 20 } }] : { ids: { trakt: 12 } };
+      : path.endsWith('/seasons') ? [{ number: 0, ids: { trakt: 20 } }] : { ids: { trakt: 12 }, title: 'Spider-Man: Brand New Day' };
     const respond = () => r.onload({ status: 200, responseText: JSON.stringify(body), responseHeaders: '' });
     if (r.method === deferred) pending.push(respond); else queueMicrotask(respond);
     return { abort() {} };
@@ -61,6 +61,7 @@ test('built bundle adds beside the list icon on fanart/poster cards using each c
       assert.equal(b.writes()[0].url, 'https://api.trakt.tv/sync/watchlist');
       assert.deepEqual(JSON.parse(b.writes()[0].data), { [type]: [{ ids: { trakt: type === 'seasons' ? 20 : 12 } }] });
       assert.equal(button.hidden, true);
+      assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, `You added ${type === 'seasons' ? 'Season 0' : 'Spider-Man: Brand New Day'} to your watchlist.`);
     });
   }
 });
