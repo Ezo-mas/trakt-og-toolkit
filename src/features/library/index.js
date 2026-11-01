@@ -1,7 +1,10 @@
 import { el } from '../../core/dom.js';
 import { isSignedIn } from '../../core/trakt.js';
 import { libraryApi } from './api.js';
-import { toast } from '../../ui/shell.js';
+import { notifySuccess } from '../../ui/success-notification.js';
+import { createNativeLibraryRefresh } from './native-refresh.js';
+import { readLibraryTitle } from './data.js';
+import { debugError } from '../../core/log.js';
 import { actionButtonCss, findActionStack } from '../../ui/action-button.js';
 
 const ID = 'ogt-library';
@@ -17,6 +20,9 @@ export const library = {
     let session = 0;
     let added = false;
     let wasCollected = false;
+    const nativeRefresh = createNativeLibraryRefresh();
+    const doc = anchor.ownerDocument;
+    const pagePath = doc.location.pathname;
     const label = el('span', { class: 'ogt-library__title', text: 'Add to library' });
     const glyph = el('span', { class: 'ogt-library__glyph', 'aria-hidden': 'true' });
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -46,14 +52,17 @@ export const library = {
       button.disabled = true;
       label.textContent = 'Adding to library…';
       status.textContent = '';
-      const active = () => !destroyed && epoch === session;
+      const active = () => !destroyed && epoch === session && node.isConnected && doc.location.pathname === pagePath;
+      const title = readLibraryTitle(doc);
       try {
         const result = await libraryApi.add(route, { confirm: message => window.confirm(message), active });
         if (!active()) return;
         if (!result.cancelled) {
           added = true;
           syncVisibility();
-          toast('Added to your toolkit Trakt account’s library. Reload to update OG’s status.');
+          void notifySuccess(`You added ${title} to your library.`, active);
+          try { await nativeRefresh.refresh(route, { active }); }
+          catch (error) { debugError('native library refresh unavailable', error); }
           return;
         }
       } catch (error) {
@@ -69,6 +78,7 @@ export const library = {
     }
     function authChanged() {
       session++;
+      nativeRefresh.destroy();
       busy = false;
       button.disabled = false;
       added = false;
@@ -88,6 +98,7 @@ export const library = {
     syncVisibility();
     return { node, destroy() {
       destroyed = true;
+      nativeRefresh.destroy();
       observer.disconnect();
       button.removeEventListener('click', add);
       document.removeEventListener('ogt:authchange', authChanged);

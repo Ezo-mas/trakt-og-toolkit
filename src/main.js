@@ -2,11 +2,13 @@
  * Trakt OG Toolkit — entry point.
  *
  * Adds the parts of classic Trakt that og.trakt.tv doesn't have (yet), without
- * reusing og's session or internal endpoints: everything here is either plain
- * DOM work or a documented Trakt API call with the user's own app and OAuth connection.
+ * reading og's session or calling internal endpoints. Manual API requests use
+ * the user's own app and OAuth connection; native UI bridges let og show notices
+ * and refresh its own signed-in state.
  */
 import { VERSION } from './meta.js';
 import { injectStyles } from './ui/shell.js';
+import { successNotificationCss } from './ui/success-notification-styles.js';
 import { createRouter, parseRoute } from './core/router.js';
 import { createFeatureHost } from './features/host.js';
 import { waitForPageReady, watchModuleResources } from './core/hydration.js';
@@ -19,7 +21,7 @@ import { monthReview } from './features/month-review/index.js';
 import { library } from './features/library/index.js';
 import { watchlist } from './features/watchlist/index.js';
 import { watchlistCards } from './features/watchlist/cards.js';
-import { rememberToastResources } from './features/watchlist/native-toast.js';
+import { rememberNativeResources } from './ui/native-modules.js';
 import { registerMenu } from './menu.js';
 import { applyDebugSetting } from './settings.js';
 import { info, warn } from './core/log.js';
@@ -56,12 +58,12 @@ function start() {
   const openGate = () => {
     if (canMount) return;
     canMount = true;
-    rememberToastResources(moduleWatch.entries.keys());
+    rememberNativeResources(moduleWatch.entries.keys());
     moduleWatch.stop();
 
     // Nothing above this point touches og's DOM: styles and the router are
     // created only once the page has finished hydrating.
-    injectStyles(FEATURES.map((feature) => feature.css).filter(Boolean));
+    injectStyles([successNotificationCss, ...FEATURES.map((feature) => feature.css).filter(Boolean)]);
     host = createFeatureHost(FEATURES);
     createRouter({
       onRoute(next) {

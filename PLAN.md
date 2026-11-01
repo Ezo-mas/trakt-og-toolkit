@@ -25,7 +25,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 11 | All lists in one view | OAuth or public | lowest value |
 | 12 | Add to library button | OAuth | done |
 | 13 | One-click Add to watchlist | OAuth | done; card shortcut added, live card check pending |
-| 14 | Add to library on poster cards | OAuth | small; after 12 |
+| 14 | Add to library on poster cards | OAuth | deferred; card layout undecided |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -286,7 +286,9 @@ them across `/users/:id/lists`, `/collaborations` and `/liked`.
 
 **Status:** done. An **Add to library** action in the title, season and episode action stack, using the toolkit's own
 sign-in and `POST /sync/collection` with the current date. Whole shows confirm the aired-episode count and skip
-specials; the button hides when og shows its own library control.
+specials; the button hides when og shows its own library control. Success uses the shared native-first
+notification with the title. Movie/show additions request OG’s own read-only collection refresh; unavailable
+native integration and season/episode pages retain the reload fallback. No toolkit library action on cards.
 
 - A whole-show add uses one uncached `GET /shows/:id/seasons?extended=full,episodes`, which includes each
   episode's `first_aired` (`extended=episodes` alone does not). The Simpsons, 39 seasons: about 1 MB in 1 s.
@@ -312,6 +314,8 @@ button that only adds to the watchlist.
 - **Check first:** whether og has added a direct watchlist action since 2026-10-30.
 
 ## 14. Add to library on poster cards
+
+**Status:** deferred pending the card-space decision; excluded from `fix/library-button`.
 
 **Goal:** feature 12 added **Add to library** to title, season and episode pages, but poster cards (show page season
 cards, lists, search, dashboards) still can't add. og hides the card's library control too: its quick icons only
