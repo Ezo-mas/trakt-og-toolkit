@@ -25,7 +25,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 11 | All lists in one view | OAuth or public | lowest value |
 | 12 | Add to library button | OAuth | done; user verified in Zen and Brave with real API |
 | 13 | One-click Add to watchlist | OAuth | done; user verified in Zen and Brave with real API |
-| 14 | Add to library on poster cards | OAuth | deferred; card layout undecided |
+| 14 | Add to library on poster cards | OAuth | dropped: cards too tight; watchlist fits cards better |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -317,7 +317,10 @@ button that only adds to the watchlist.
 
 ## 14. Add to library on poster cards
 
-**Status:** deferred pending the card-space decision; excluded from `fix/library-button`.
+**Status:** dropped (2026-11-01). og's cards are tighter than classic Trakt's, and browser zoom makes the fit
+harder still (feature 13 already has to hide its poster shortcut at 150–170%). One-click add to watchlist is the
+action that makes sense on a card; adding to the library stays on title, season and episode pages (feature 12).
+The notes below are kept for reference.
 
 **Goal:** feature 12 added **Add to library** to title, season and episode pages, but poster cards (show page season
 cards, lists, search, dashboards) still can't add. og hides the card's library control too: its quick icons only

@@ -250,9 +250,9 @@ src/
 See [PLAN.md](PLAN.md). Shipped or dropped because og now does it itself: ratings distribution, trailers, metadata
 links, poster rating corners. Backlog:
 
-- a last-month-in-review card;
-- a one-click **Add to watchlist** button, without picking a list;
-- **Add to library** on poster cards (deferred while card space is undecided).
+- set playback progress by hand;
+- list preview posters that link to their titles;
+- all your lists in one view.
 
 ## Trakt API compliance
 

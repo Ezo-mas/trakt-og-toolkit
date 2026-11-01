@@ -152,8 +152,8 @@ Working notes and known issues. Newest first.
   refresh path.
 - Follow-up: the user confirmed title-page adding works with the toolkit on their own account (browser/media
   types unspecified). Added a bookmark shortcut immediately after the blue lists control on poster/fanart cards,
-  including cards inserted or recycled during browsing. This extends feature 13; feature 14's library-on-cards
-  work remains separate.
+  including cards inserted or recycled during browsing. This extends feature 13; feature 14 (library on cards)
+  was later dropped: cards are too tight, and the watchlist is the card action that makes sense.
 - Card check: saved live `/movies/trending` and checked `QuickIcons`, `PosterCard`, `FanartCard`, `MediaList`,
   `Tooltip` and `ListedTip` at the upstream commit below. Cards still use the picker. The canonical image link
   identifies each card's own movie/show/season/episode, rather than the page route or a subtitle's parent show.
