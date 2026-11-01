@@ -28,6 +28,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 14 | Add to library on poster cards | OAuth | dropped: cards too tight; watchlist fits cards better |
 | 15 | Season chart: remove the More button | — | small |
 | 16 | Custom links on season and episode pages | client ID optional | small; decide fix or hide first |
+| 17 | Watchlist buttons on a person's credits | OAuth | medium; reuses feature 13 |
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -363,6 +364,23 @@ none). So `{title}`, `{year}`, `{imdb}` and `{tmdb}` either point at the wrong t
   on seasons and only IMDb/TMDB on episodes.
 
 Either way, add tests with season and episode fixtures, and update README.
+
+## 17. Watchlist buttons on a person's credits
+
+**Goal:** a person's page (`/people/:id`) lists their credits by year, each row with og's own action strip (watched,
+lists, play, rating). Like cards, the lists icon opens the picker, so adding to the watchlist takes several clicks.
+Feature 13's card shortcut doesn't reach these rows: they aren't `.poster-card`/`.fanart-card`.
+
+- **Per row:** the same bookmark shortcut as feature 13's cards, after the lists icon in the row's action strip.
+  Movie rows add the movie; show rows (including "1 episode" guest credits) add the whole show. Reuse
+  `watchlistApi`, the notification, the native refresh and the hide-when-watchlisted logic from feature 13.
+- **Watchlist all:** one button near the Department/Sort controls that adds every credit currently shown (the selected
+  department and filters, not the person's whole career). Confirm first with the count ("Add 93 titles to your
+  watchlist?"), skip rows og already shows as watchlisted, and send one `POST /sync/watchlist` with all of them
+  (in batches if Trakt limits the size). Report added/existing/not found counts.
+- **Check first:** the credits row markup at the current og commit, whether og added its own quick watchlist since,
+  and how the page loads more credits (lazy rows must get shortcuts too). IDs: prefer the row's link slug; resolve
+  Trakt IDs the same way feature 13 does.
 
 ---
 
