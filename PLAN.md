@@ -26,6 +26,16 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 12 | Add to library button | OAuth | done; user verified in Zen and Brave with real API |
 | 13 | One-click Add to watchlist | OAuth | done; user verified in Zen and Brave with real API |
 | 14 | Add to library on poster cards | OAuth | dropped: cards too tight; watchlist fits cards better |
+| 15 | Season chart: remove the More button | — | small |
+| 16 | Custom links on season and episode pages | client ID optional | small; decide fix or hide first |
+| 17 | Watchlist buttons on a person's credits | OAuth | medium; reuses feature 13 |
+| 18 | `npm run drift`: cover features 12–13 and og's native modules | — | small |
+| 19 | Undo on success notices | OAuth | small |
+| 20 | Turn features on and off from the menu | — | small |
+| 21 | Month review: browse earlier months | OAuth | small |
+
+**Next release:** bump to 0.3.0 once most bugs are ironed out (15, 16 and any new ones); until then main stays 0.2.0 and userscript
+managers won't offer an update.
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -334,6 +344,87 @@ show it for items already in the library (trakt-og `1cd3142`, `LIBRARY_ADDING = 
 - **Space:** fits. og showed its own library icon in this slot on every card until `1cd3142` hid it (the removed
   `LibrarySyncLink` card variant used the same size), so it takes back an existing gap rather than adding one.
 - **Check first:** whether og has turned `LIBRARY_ADDING` back on.
+
+## 15. Season chart: remove the More button
+
+**Goal:** feature 7's **More** button adds watchers (green) and comments (purple dashed) lines to the season chart.
+On a real season (2026-11-01, 22 episodes) both say almost nothing: watchers barely move (about 41.4k down to 40k)
+on an axis from 0, so the line sits flat on the 100% gridline and looks like a rating; comments are a few dozen
+against that scale, so their line is pinned at 0. It also costs one stats request per episode.
+
+- Remove the More/Less button, the right count axis, both lines, their legend entry and the stats requests
+  (`getEpisodeStats`, `mapStats`, the 30-episode limit and its hints).
+- Keep the your-ratings line and its legend.
+- Update README, NOTES.md and tests.
+
+## 16. Custom links on season and episode pages
+
+**Problem:** the custom links panel mounts on every show route, but `readTitleData` reads the page it is on, not
+the show. On season and episode pages the heading is the season or episode title, the year is that page's, and
+the IMDb/TMDB IDs come from og's link strip there, which only has the episode's IMDb and TMDB links (seasons have
+none). So `{title}`, `{year}`, `{imdb}` and `{tmdb}` either point at the wrong thing or are empty.
+
+**Decide first** (one of):
+- **Fix:** fill the variables with the show's values (show title, year and IDs from `GET /shows/:id?extended=full`,
+  or carried over from the show page), and preset `{season}`/`{episode}` from the route instead of the picker.
+- **Match og:** show the panel only on movie and show title pages, like og's own strip, which has no custom links
+  on seasons and only IMDb/TMDB on episodes.
+
+Either way, add tests with season and episode fixtures, and update README.
+
+## 17. Watchlist buttons on a person's credits
+
+**Goal:** a person's page (`/people/:id`) lists their credits by year, each row with og's own action strip (watched,
+lists, play, rating). Like cards, the lists icon opens the picker, so adding to the watchlist takes several clicks.
+Feature 13's card shortcut doesn't reach these rows: they aren't `.poster-card`/`.fanart-card`.
+
+- **Per row:** the same bookmark shortcut as feature 13's cards, after the lists icon in the row's action strip.
+  Movie rows add the movie; show rows (including "1 episode" guest credits) add the whole show. Reuse
+  `watchlistApi`, the notification, the native refresh and the hide-when-watchlisted logic from feature 13.
+- **Watchlist all:** one button near the Department/Sort controls that adds every credit currently shown (the selected
+  department and filters, not the person's whole career). Confirm first with the count ("Add 93 titles to your
+  watchlist?"), skip rows og already shows as watchlisted, and send one `POST /sync/watchlist` with all of them
+  (in batches if Trakt limits the size). Report added/existing/not found counts.
+- **Check first:** the credits row markup at the current og commit, whether og added its own quick watchlist since,
+  and how the page loads more credits (lazy rows must get shortcuts too). IDs: prefer the row's link slug; resolve
+  Trakt IDs the same way feature 13 does.
+
+## 18. `npm run drift`: cover features 12–13 and og's native modules
+
+**Goal:** the daily drift check (`scripts/og-drift-checks.mjs`) only covers markup for custom links, the season chart,
+playback and pronunciation. Features 12 and 13 depend on more, and when it changes they fall back quietly (toolkit
+notice instead of og's, reload instead of refresh), so nobody notices.
+
+- Markup: the title action stack (`findActionStack`), the summary list control and its `aria-keyshortcuts` picker
+  trigger, and card `.quick-icons` list controls on a listing page such as `/movies/trending`.
+- Native modules, statically: fetch the root layout (`/_app/immutable/nodes/0.*.js`), then run `nativeToastImports`
+  + `isNativeToastStore` and `nativeLibraryImports` + `isNativeLibraryStore` on it and its imports. Report "not found"
+  as drift. No page-realm code, no sign-in.
+
+## 19. Undo on success notices
+
+**Goal:** card and credits shortcuts are one click, so misclicks happen. Add **Undo** to the toolkit's watchlist and
+library success notices (the fallback toast; og's native notifier can't take a button).
+
+- Undo sends `POST /sync/watchlist/remove` or `POST /sync/collection/remove` with the same body as the add, then
+  restores the button and requests the same native refresh.
+- Only for the toolkit's own fallback notice, or show a small Undo in the button's place when og's notice was used.
+- Don't remove items that were already on the list before the click (`existing` in the add response).
+
+## 20. Turn features on and off from the menu
+
+**Goal:** about ten features now; let people hide the ones they don't want without editing the script.
+
+- One toggle per feature in the toolkit menu, stored with `GM_setValue`; the host skips disabled features and
+  removes their nodes when toggled off.
+- Everything on by default.
+
+## 21. Month review: browse earlier months
+
+**Goal:** the dashboard card only shows last month. Add previous/next arrows to step through earlier months.
+
+- Same requests as now with a different date range; cache each month.
+- Stop at the account's first history entry; no next arrow past last month.
 
 ---
 

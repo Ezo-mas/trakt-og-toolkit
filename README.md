@@ -252,7 +252,14 @@ links, poster rating corners. Backlog:
 
 - set playback progress by hand;
 - list preview posters that link to their titles;
-- all your lists in one view.
+- all your lists in one view;
+- remove the season chart's **More** button (its watchers and comments lines are too flat to read);
+- fix custom links on season and episode pages (they read the season/episode instead of the show), or show them only on title pages;
+- **Add to watchlist** on a person's credits, one row at a time or all shown credits at once;
+- extend `npm run drift` to the watchlist/library actions and og's native notifier and refresh modules;
+- **Undo** on watchlist and library success notices;
+- turn features on and off from the toolkit menu;
+- browse earlier months in the month review card.
 
 ## Trakt API compliance
 
