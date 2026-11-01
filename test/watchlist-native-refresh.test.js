@@ -140,7 +140,7 @@ test('built bundle refreshes native title/card membership after one toolkit POST
       assert.equal(document.querySelector('.ogt-watchlist-card').hidden, nativeAdded);
       if (variant === 'native-failure') {
         assert.equal(document.getElementById('ogt-watchlist').hidden, true, 'native failure never rolls back the saved addition');
-        assert.match(document.querySelector('.ogt-toast').textContent, /Added.*Reload/);
+        assert.equal(document.querySelector('.ogt-toast').textContent, 'Added to your watchlist.');
       } else assert.doesNotMatch(document.querySelector('.ogt-toast').textContent, /Reload/);
     }
   });

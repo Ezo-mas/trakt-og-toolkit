@@ -3775,9 +3775,8 @@
           if (!result.cancelled) {
             added = true;
             syncVisibility();
-            toast("Added to your toolkit Trakt account’s watchlist.");
-            const refreshed = await nativeRefresh.refresh(anchor.querySelector(".list-control.summary"), route, { active: active2 });
-            if (active2() && !refreshed) toast("Added to your toolkit Trakt account’s watchlist. Reload if OG’s status has not updated.");
+            toast("Added to your watchlist.");
+            await nativeRefresh.refresh(anchor.querySelector(".list-control.summary"), route, { active: active2 });
             return;
           }
         } catch (error) {
@@ -3878,9 +3877,8 @@
           if (!active2() || result.cancelled) return;
           state.added = true;
           scan();
-          toast("Added to your toolkit Trakt account’s watchlist.");
-          const refreshed = await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
-          if (active2() && !refreshed) toast("Added to your toolkit Trakt account’s watchlist. Reload if OG’s status has not updated.");
+          toast("Added to your watchlist.");
+          await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
         } catch (error) {
           debugError("card watchlist addition failed", error);
           if (active2()) toast(error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not add to watchlist. Check your toolkit sign-in and try again." : error.message);

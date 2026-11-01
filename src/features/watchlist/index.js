@@ -53,9 +53,8 @@ export const watchlist = {
         if (!result.cancelled) {
           added = true;
           syncVisibility();
-          toast('Added to your toolkit Trakt account’s watchlist.');
-          const refreshed = await nativeRefresh.refresh(anchor.querySelector('.list-control.summary'), route, { active });
-          if (active() && !refreshed) toast('Added to your toolkit Trakt account’s watchlist. Reload if OG’s status has not updated.');
+          toast('Added to your watchlist.');
+          await nativeRefresh.refresh(anchor.querySelector('.list-control.summary'), route, { active });
           return;
         }
       } catch (error) {

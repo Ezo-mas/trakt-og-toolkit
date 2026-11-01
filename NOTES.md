@@ -4,6 +4,13 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-01: one-click watchlist (feature 13)
 
+- Success notifications now say only **Added to your watchlist.**, including when native refresh is unavailable.
+  The account distinction stays in button tooltips/README, rather than the success message. Native refresh
+  failure no longer repeats the success toast with a reload hint; the addition is already saved.
+  Checked `components/toast/toast.svelte.ts` and `Toaster.svelte`: OG's notifications are a private reactive Svelte
+  store, with no public window API or custom-event listener for external callers. The toolkit retains its own
+  toast rather than importing hashed private modules or inserting nodes into OG's managed toaster.
+
 - Native-refresh follow-up: movie/show saves now ask OG's existing `MediaList` control to reread membership.
   Its `ArrowDown` handler calls `open(true)` (always the picker read, even if QUICK_ADD is later enabled), then
   `loadPickerLists` → `syncPickerOverlay` patches the same shared state used by OG's title buttons, card tooltips
@@ -12,14 +19,14 @@ Working notes and known issues. Newest first.
   The native app performs its own reads using its own account, so different accounts are not falsely reconciled.
 - Only attempt this with positive signed-in header markup (`header.top-nav .profile`), an idle closed picker,
   and its advertised ArrowDown shortcut/controlled popover. Missing/signed-out/busy controls and native load
-  failures preserve the successful toolkit add and show a reload fallback. Auth changes and teardown remove
+  failures preserve the successful toolkit add; reloading remains the fallback for native state. Auth changes and teardown remove
   refresh listeners/observers. The guard remains until the native load completes, including slow requests.
   Source detail: `loadPickerLists` explicitly omits fresh season/episode Watchlist membership, so those saves
   retain the reload fallback rather than claiming the picker can refresh them.
 - Refresh validation: unit tests cover the forced read-only event, popup suppression, signed-out/busy/open
   controls, season/episode skips, native load failures and cleanup. Built-bundle tests model MediaList's event
   contract to check one toolkit POST, no native click/write, updated title/card/picker membership, preservation
-  of custom lists, different accounts, a saved-add/reload fallback on native failure, and no refresh after a
+  of custom lists, different accounts, a preserved successful add on native failure, and no refresh after a
   rejected POST. Saved-page Chromium 156 and Firefox 157 checks passed for title and card actions using the
   real Popover API with a modeled native loader: one POST, one native read, checked Watchlist row, canceled
   popup opening and no page errors. This still needs a real signed-in userscript-manager check of the native

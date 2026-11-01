@@ -64,9 +64,8 @@ export const watchlistCards = {
         if (!active() || result.cancelled) return;
         state.added = true;
         scan();
-        toast('Added to your toolkit Trakt account’s watchlist.');
-        const refreshed = await nativeRefresh.refresh(entry.control, entry.route, { active });
-        if (active() && !refreshed) toast('Added to your toolkit Trakt account’s watchlist. Reload if OG’s status has not updated.');
+        toast('Added to your watchlist.');
+        await nativeRefresh.refresh(entry.control, entry.route, { active });
       } catch (error) {
         debugError('card watchlist addition failed', error);
         if (active()) toast(error.status === 429 ? 'Trakt rate limited this request; try again later.' :

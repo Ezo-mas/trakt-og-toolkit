@@ -72,7 +72,7 @@ test('built bundle adds exactly once on all four page types, alongside the libra
     assert.deepEqual(JSON.parse(request.data), { [type]: [{ ids: { trakt: 12 } }] });
     assert.equal(request.headers.Authorization, 'Bearer private-access');
     assert.equal(b.panel().hidden, true);
-    assert.match(b.document.querySelector('.ogt-toast').textContent, /toolkit Trakt account’s watchlist/);
+    assert.equal(b.document.querySelector('.ogt-toast').textContent, 'Added to your watchlist.');
     assert.equal(b.document.getElementById('ogt-library').hidden, false);
     b.window.history.pushState({}, '', '/'); await wait(250);
     assert.equal(b.panel(), null);
