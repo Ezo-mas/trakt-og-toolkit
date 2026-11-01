@@ -4,6 +4,26 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-01: one-click watchlist (feature 13)
 
+- Native-refresh follow-up: movie/show saves now ask OG's existing `MediaList` control to reread membership.
+  Its `ArrowDown` handler calls `open(true)` (always the picker read, even if QUICK_ADD is later enabled), then
+  `loadPickerLists` → `syncPickerOverlay` patches the same shared state used by OG's title buttons, card tooltips
+  and picker rows. Cancel the picker's opening `beforetoggle` event after reconciliation so no popup appears.
+  No native button click, second write, Svelte module import, cookie/token read or toolkit call to an og endpoint.
+  The native app performs its own reads using its own account, so different accounts are not falsely reconciled.
+- Only attempt this with positive signed-in header markup (`header.top-nav .profile`), an idle closed picker,
+  and its advertised ArrowDown shortcut/controlled popover. Missing/signed-out/busy controls and native load
+  failures preserve the successful toolkit add and show a reload fallback. Auth changes and teardown remove
+  refresh listeners/observers. The guard remains until the native load completes, including slow requests.
+  Source detail: `loadPickerLists` explicitly omits fresh season/episode Watchlist membership, so those saves
+  retain the reload fallback rather than claiming the picker can refresh them.
+- Refresh validation: unit tests cover the forced read-only event, popup suppression, signed-out/busy/open
+  controls, season/episode skips, native load failures and cleanup. Built-bundle tests model MediaList's event
+  contract to check one toolkit POST, no native click/write, updated title/card/picker membership, preservation
+  of custom lists, different accounts, a saved-add/reload fallback on native failure, and no refresh after a
+  rejected POST. Saved-page Chromium 156 and Firefox 157 checks passed for title and card actions using the
+  real Popover API with a modeled native loader: one POST, one native read, checked Watchlist row, canceled
+  popup opening and no page errors. This still needs a real signed-in userscript-manager check of the native
+  refresh path.
 - Follow-up: the user confirmed title-page adding works with the toolkit on their own account (browser/media
   types unspecified). Added a bookmark shortcut immediately after the blue lists control on poster/fanart cards,
   including cards inserted or recycled during browsing. This extends feature 13; feature 14's library-on-cards

@@ -16,12 +16,12 @@ export const WATCHLIST_HTML = `
         </div></div></div>
         <div class="stacked"></div>
         <div class="list-control summary"><div class="summary-action">
-          <button type="button" class="main" aria-haspopup="dialog" aria-expanded="false">
+          <button type="button" class="main" aria-haspopup="dialog" aria-expanded="false" aria-controls="native-list-picker" aria-keyshortcuts="ArrowDown">
             <span class="text"><span class="title">Add to list</span></span>
           </button>
           <div class="tiles"><button type="button" class="tile" aria-label="Pick a list" aria-haspopup="dialog"></button></div>
         </div></div>
-        <div class="picker summary" popover="auto" role="dialog" aria-label="Lists"></div>
+        <div id="native-list-picker" class="picker summary" popover="auto" role="dialog" aria-label="Lists"></div>
       </div></div>
     </div></div>
   </div></div></section>
@@ -36,10 +36,10 @@ export function watchlistCardHtml({ id = 'card-movie', href = '/movies/verity-20
     <div class="quick-icons${small ? ' small' : ''}"><div class="actions"><div class="tools">
       <div class="watch-control card"><button class="watch-trigger" aria-label="Add to watched history"></button></div>
       <div class="list-control card${small ? ' small' : ''}">
-        <button type="button" class="trigger" aria-label="Add to list" aria-describedby="${id}-tip" aria-haspopup="dialog"></button>
+        <button type="button" class="trigger" aria-label="Add to list" aria-describedby="${id}-tip" aria-haspopup="dialog" aria-controls="${id}-picker" aria-keyshortcuts="ArrowDown"></button>
         <span id="${id}-tip" class="tooltip" role="tooltip" popover="hint">Add to list</span>
       </div>
-      <div class="picker card" popover="auto" role="dialog"></div>
+      <div id="${id}-picker" class="picker card" popover="auto" role="dialog"></div>
       <button type="button" class="action favorite" aria-label="Add to favorites"></button>
       <button type="button" class="action watch-now" aria-label="Watch now"></button>
     </div></div><span class="percentage">77%</span></div>

@@ -66,8 +66,11 @@ The button uses OG’s design values for action styling and spacing, with separa
 Movie, show, season and episode pages have a separate **Add to watchlist** action. Sign in through the toolkit menu
 first; one click adds that exact item to the toolkit’s Trakt account, which may differ from your OG account.
 The action hides after success or when OG’s **Listed On** detail includes **Watchlist**. Other list memberships
-leave it available. Reload to update OG’s status after adding; removing the item through OG restores the action
-once OG shows the change. This action only adds; use OG’s list picker to remove items.
+leave it available. Movie/show additions ask OG’s list picker to reread membership and update its native controls
+without opening the popup. This uses OG’s signed-in account; it cannot mark a different OG account’s watchlist.
+Reload remains the fallback when OG is signed out or its picker cannot refresh, and for season/episode additions.
+Removing the item through OG restores the action once OG shows the change. This action only adds; use OG’s list
+picker to remove items.
 
 Poster and fanart cards also have a bookmark shortcut beside the blue lists button, including cards loaded as
 you browse. It uses the card’s own title and the same toolkit account. The shortcut hides when that card’s native

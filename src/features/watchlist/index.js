@@ -7,6 +7,7 @@ import { debugError } from '../../core/log.js';
 import { toast } from '../../ui/shell.js';
 import { findActionStack } from '../../ui/action-button.js';
 import { watchlistIcon } from './icon.js';
+import { createNativeWatchlistRefresh } from './native-refresh.js';
 
 const ID = 'ogt-watchlist';
 export const watchlist = {
@@ -21,6 +22,8 @@ export const watchlist = {
     let session = 0;
     let added = false;
     let wasWatchlisted = false;
+    const nativeRefresh = createNativeWatchlistRefresh();
+    const pagePath = location.pathname;
     const label = el('span', { class: 'ogt-watchlist__title', text: 'Add to watchlist' });
     const glyph = el('span', { class: 'ogt-watchlist__glyph', 'aria-hidden': 'true' });
     glyph.append(watchlistIcon());
@@ -43,14 +46,16 @@ export const watchlist = {
       button.disabled = true;
       label.textContent = 'Adding to watchlist…';
       status.textContent = '';
-      const active = () => !destroyed && epoch === session;
+      const active = () => !destroyed && epoch === session && location.pathname === pagePath;
       try {
         const result = await watchlistApi.add(route, { active });
         if (!active()) return;
         if (!result.cancelled) {
           added = true;
           syncVisibility();
-          toast('Added to your toolkit Trakt account’s watchlist. Reload to update OG’s status.');
+          toast('Added to your toolkit Trakt account’s watchlist.');
+          const refreshed = await nativeRefresh.refresh(anchor.querySelector('.list-control.summary'), route, { active });
+          if (active() && !refreshed) toast('Added to your toolkit Trakt account’s watchlist. Reload if OG’s status has not updated.');
           return;
         }
       } catch (error) {
@@ -67,6 +72,7 @@ export const watchlist = {
     }
     function authChanged() {
       session++;
+      nativeRefresh.destroy();
       busy = false;
       button.disabled = false;
       added = false;
@@ -86,6 +92,7 @@ export const watchlist = {
     syncVisibility();
     return { node, destroy() {
       destroyed = true;
+      nativeRefresh.destroy();
       observer.disconnect();
       button.removeEventListener('click', add);
       document.removeEventListener('ogt:authchange', authChanged);

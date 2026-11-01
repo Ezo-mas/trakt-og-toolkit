@@ -5,6 +5,7 @@ import { toast } from '../../ui/shell.js';
 import { watchlistApi } from './api.js';
 import { readCardRoute, readCardWatchlisted } from './data.js';
 import { watchlistIcon } from './icon.js';
+import { createNativeWatchlistRefresh } from './native-refresh.js';
 
 const ID = 'ogt-watchlist-cards';
 const CARD = '.poster-card, .fanart-card';
@@ -34,6 +35,7 @@ export const watchlistCards = {
     document.body.append(node);
     const entries = new Map();
     const states = new Map();
+    const nativeRefresh = createNativeWatchlistRefresh();
     let destroyed = false, session = 0, scheduled = false;
 
     function stateFor(key) {
@@ -61,7 +63,10 @@ export const watchlistCards = {
         const result = await watchlistApi.add(entry.route, { active });
         if (!active() || result.cancelled) return;
         state.added = true;
-        toast('Added to your toolkit Trakt account’s watchlist. Reload to update OG’s status.');
+        scan();
+        toast('Added to your toolkit Trakt account’s watchlist.');
+        const refreshed = await nativeRefresh.refresh(entry.control, entry.route, { active });
+        if (active() && !refreshed) toast('Added to your toolkit Trakt account’s watchlist. Reload if OG’s status has not updated.');
       } catch (error) {
         debugError('card watchlist addition failed', error);
         if (active()) toast(error.status === 429 ? 'Trakt rate limited this request; try again later.' :
@@ -113,6 +118,7 @@ export const watchlistCards = {
     }
     function authChanged() {
       session++;
+      nativeRefresh.destroy();
       states.clear();
       scan();
     }
@@ -123,6 +129,7 @@ export const watchlistCards = {
     scan();
     return { node, destroy() {
       destroyed = true;
+      nativeRefresh.destroy();
       observer.disconnect();
       document.removeEventListener('ogt:authchange', authChanged);
       for (const entry of entries.values()) remove(entry);

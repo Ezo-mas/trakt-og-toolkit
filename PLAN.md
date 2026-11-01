@@ -295,7 +295,8 @@ specials; the button hides when og shows its own library control.
 
 **Status:** implemented on movie, show, season and episode pages, plus poster/fanart cards beside the lists button.
 The user verified title-page adding with their toolkit account. Unit tests and built-bundle integration tests
-pass; saved-page browser checks and remaining live card checks are recorded in NOTES.md.
+pass. Movie/show saves now request OG's native picker membership refresh without opening it; seasons/episodes
+retain the reload fallback. Saved-page browser checks and remaining live checks are recorded in NOTES.md.
 
 **Goal:** og's "Listed on" button opens a list picker; adding to the watchlist takes several clicks. Add a separate
 button that only adds to the watchlist.

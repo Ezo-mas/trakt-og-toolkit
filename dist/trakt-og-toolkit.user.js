@@ -3666,6 +3666,64 @@
     return svg3;
   }
 
+  // src/features/watchlist/native-refresh.js
+  function createNativeWatchlistRefresh() {
+    const pending = /* @__PURE__ */ new Set();
+    return {
+      refresh(control, route, { active: active2 = () => true } = {}) {
+        if (route.name !== "title" || !["movie", "show"].includes(route.kind) || !control?.isConnected || !active2()) {
+          return Promise.resolve(false);
+        }
+        const doc = control.ownerDocument;
+        if (!doc.querySelector("header.top-nav .profile")) return Promise.resolve(false);
+        const trigger = control.querySelector('button[aria-controls][aria-keyshortcuts~="ArrowDown"]');
+        const picker = doc.getElementById(trigger?.getAttribute("aria-controls"));
+        if (!trigger || trigger.disabled || trigger.getAttribute("aria-busy") === "true" || trigger.getAttribute("aria-expanded") === "true" || !picker?.matches(".picker[popover]")) {
+          return Promise.resolve(false);
+        }
+        const view = doc.defaultView;
+        return new Promise((resolve) => {
+          let settled = false, began = false;
+          const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            observer.disconnect();
+            picker.removeEventListener("beforetoggle", beforeToggle);
+            doc.removeEventListener("ogt:authchange", cancel);
+            view.removeEventListener("popstate", cancel);
+            pending.delete(cancel);
+            resolve(result && active2() && control.isConnected);
+          };
+          const cancel = () => finish(false);
+          const beforeToggle = (event) => {
+            if (event.newState !== "open") return;
+            event.preventDefault();
+            finish(event.defaultPrevented);
+          };
+          const observer = new view.MutationObserver((records) => {
+            if (!active2() || !control.isConnected) {
+              finish(false);
+              return;
+            }
+            const busy = trigger.disabled || trigger.getAttribute("aria-busy") === "true";
+            const wasBusy = records.some((record) => record.target === trigger && (record.attributeName === "disabled" && record.oldValue !== null || record.attributeName === "aria-busy" && record.oldValue === "true"));
+            if (busy) began = true;
+            else if (began || wasBusy) finish(false);
+          });
+          pending.add(cancel);
+          picker.addEventListener("beforetoggle", beforeToggle);
+          doc.addEventListener("ogt:authchange", cancel);
+          view.addEventListener("popstate", cancel);
+          observer.observe(control, { attributes: true, subtree: true, attributeOldValue: true, attributeFilter: ["disabled", "aria-busy"] });
+          trigger.dispatchEvent(new view.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+        });
+      },
+      destroy() {
+        for (const cancel of [...pending]) cancel();
+      }
+    };
+  }
+
   // src/features/watchlist/index.js
   var ID3 = "ogt-watchlist";
   var watchlist = {
@@ -3680,6 +3738,8 @@
       let session = 0;
       let added = false;
       let wasWatchlisted = false;
+      const nativeRefresh = createNativeWatchlistRefresh();
+      const pagePath = location.pathname;
       const label = el("span", { class: "ogt-watchlist__title", text: "Add to watchlist" });
       const glyph = el("span", { class: "ogt-watchlist__glyph", "aria-hidden": "true" });
       glyph.append(watchlistIcon());
@@ -3708,14 +3768,16 @@
         button2.disabled = true;
         label.textContent = "Adding to watchlist…";
         status.textContent = "";
-        const active2 = () => !destroyed && epoch === session;
+        const active2 = () => !destroyed && epoch === session && location.pathname === pagePath;
         try {
           const result = await watchlistApi.add(route, { active: active2 });
           if (!active2()) return;
           if (!result.cancelled) {
             added = true;
             syncVisibility();
-            toast("Added to your toolkit Trakt account’s watchlist. Reload to update OG’s status.");
+            toast("Added to your toolkit Trakt account’s watchlist.");
+            const refreshed = await nativeRefresh.refresh(anchor.querySelector(".list-control.summary"), route, { active: active2 });
+            if (active2() && !refreshed) toast("Added to your toolkit Trakt account’s watchlist. Reload if OG’s status has not updated.");
             return;
           }
         } catch (error) {
@@ -3731,6 +3793,7 @@
       }
       function authChanged() {
         session++;
+        nativeRefresh.destroy();
         busy = false;
         button2.disabled = false;
         added = false;
@@ -3749,6 +3812,7 @@
       syncVisibility();
       return { node, destroy() {
         destroyed = true;
+        nativeRefresh.destroy();
         observer.disconnect();
         button2.removeEventListener("click", add);
         document.removeEventListener("ogt:authchange", authChanged);
@@ -3784,6 +3848,7 @@
       document.body.append(node);
       const entries = /* @__PURE__ */ new Map();
       const states = /* @__PURE__ */ new Map();
+      const nativeRefresh = createNativeWatchlistRefresh();
       let destroyed = false, session = 0, scheduled = false;
       function stateFor(key) {
         if (!states.has(key)) states.set(key, { busy: false, added: false, wasWatchlisted: false });
@@ -3812,7 +3877,10 @@
           const result = await watchlistApi.add(entry.route, { active: active2 });
           if (!active2() || result.cancelled) return;
           state.added = true;
-          toast("Added to your toolkit Trakt account’s watchlist. Reload to update OG’s status.");
+          scan();
+          toast("Added to your toolkit Trakt account’s watchlist.");
+          const refreshed = await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
+          if (active2() && !refreshed) toast("Added to your toolkit Trakt account’s watchlist. Reload if OG’s status has not updated.");
         } catch (error) {
           debugError("card watchlist addition failed", error);
           if (active2()) toast(error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not add to watchlist. Check your toolkit sign-in and try again." : error.message);
@@ -3873,6 +3941,7 @@
       }
       function authChanged() {
         session++;
+        nativeRefresh.destroy();
         states.clear();
         scan();
       }
@@ -3888,6 +3957,7 @@
       scan();
       return { node, destroy() {
         destroyed = true;
+        nativeRefresh.destroy();
         observer.disconnect();
         document.removeEventListener("ogt:authchange", authChanged);
         for (const entry of entries.values()) remove(entry);
