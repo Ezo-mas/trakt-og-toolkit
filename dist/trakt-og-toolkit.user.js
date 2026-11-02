@@ -907,7 +907,23 @@
   var TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
   var IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
   var SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
+  var SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
   function readTitleData(doc, route) {
+    if (route.kind === "show" && (route.name === "season" || route.name === "episode")) {
+      return {
+        kind: "show",
+        type: "tv",
+        plural: "shows",
+        id: route.id,
+        title: cleanTitle(showLinkTitle(doc)) || showTitleFromPageTitle(doc, route) || null,
+        // The page year is the season/episode's, and og prints the episode's IMDb id on
+        // episode pages. These come from the show lookup in api.js; until then, hide
+        // them rather than point at the wrong title or year.
+        year: null,
+        tmdb: null,
+        imdb: null
+      };
+    }
     const heading = doc.querySelector(".summary-title h1") || doc.querySelector("h1");
     const rawHeading = headingText(heading);
     const yearEl = doc.querySelector(".summary-title .year") || doc.querySelector(".year");
@@ -945,6 +961,36 @@
     if (!heading) return "";
     const direct = [...heading.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join(" ").trim();
     return direct || text(heading);
+  }
+  function showLinkTitle(doc) {
+    for (const link of doc.querySelectorAll(".title-tags a[href]")) {
+      if (SHOW_HREF_RE.test(link.getAttribute("href") || "")) return text(link);
+    }
+    return "";
+  }
+  function showTitleFromPageTitle(doc, route) {
+    const raw = text(doc.querySelector("title")).replace(/\s*[-–|]\s*Trakt.*$/i, "").trim();
+    const suffix = route.name === "season" ? /\s*:\s*Season\s+\d+\s*$/i : /\s+S\d+E\d+\s*:.*$/i;
+    return raw.replace(suffix, "").trim();
+  }
+  function selectionForRoute(route, stored = null) {
+    if (route.name === "season") return { season: route.season ?? null, episode: null };
+    if (route.name === "episode") return { season: route.season ?? null, episode: route.episode ?? null };
+    if (stored && typeof stored === "object") {
+      return { season: stored.season ?? null, episode: stored.episode ?? null };
+    }
+    return { season: null, episode: null };
+  }
+  function showTemplateData(show) {
+    if (!show || typeof show !== "object" || Array.isArray(show)) return null;
+    const title = typeof show.title === "string" ? show.title.trim() : "";
+    if (!title) return null;
+    return {
+      title,
+      year: Number.isInteger(show.year) && show.year > 0 ? show.year : null,
+      tmdb: Number.isSafeInteger(show.ids?.tmdb) && show.ids.tmdb > 0 ? show.ids.tmdb : null,
+      imdb: typeof show.ids?.imdb === "string" && /^tt\d+$/.test(show.ids.imdb) ? show.ids.imdb : null
+    };
   }
   function readSeasons(doc) {
     const found = /* @__PURE__ */ new Map();
@@ -1452,6 +1498,11 @@
     }
   }
 
+  // src/features/custom-links/api.js
+  function getShowDetails(id) {
+    return apiGet(`/shows/${encodeURIComponent(id)}?extended=full`);
+  }
+
   // src/features/custom-links/index.js
   var PANEL_ID = "ogt-custom-links";
   var TITLE_ID = "ogt-custom-links-title";
@@ -1478,11 +1529,12 @@
     if (template) link.dataset.ogtTemplate = template;
     return link;
   }
-  function createPanel(meta) {
+  function createPanel(meta, route) {
     let cancelled = false;
     let seasons = [];
     const timers = [];
-    let selection = getSelection(meta.kind, meta.id) || { season: null, episode: null };
+    const fixedSelection = route.name === "season" || route.name === "episode";
+    let selection = selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
     const linksRow = el("div", { class: "ogt-row ogt-links" });
     const controlsRow = el("div", { class: "ogt-row", hidden: true });
     const actionsRow = el("div", { class: "ogt-row ogt-link-actions" });
@@ -1730,10 +1782,10 @@
     editButton.addEventListener("click", openEditor);
     node.addEventListener("keydown", onKeyDown);
     function needsSelection() {
-      return getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
+      return !fixedSelection && getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
     }
     function persistSelection() {
-      if (selection.season != null) setSelection(meta.kind, meta.id, selection);
+      if (!fixedSelection && selection.season != null) setSelection(meta.kind, meta.id, selection);
     }
     const seasonSelect = el("select", { class: "ogt-select", "aria-label": "Season" });
     const episodeSlot = el("span", { class: "ogt-episode" });
@@ -1796,7 +1848,7 @@
       episodeSlot.replaceChildren(select);
     }
     function renderControls() {
-      const hasSeasons = meta.kind === "show" && seasons.length > 0 && needsSelection();
+      const hasSeasons = !fixedSelection && meta.kind === "show" && seasons.length > 0 && needsSelection();
       if (!hasSeasons) {
         controlsRow.hidden = true;
         return;
@@ -1820,7 +1872,7 @@
       updateLinkHrefs();
     }
     function loadSeasons() {
-      if (meta.kind !== "show") return;
+      if (meta.kind !== "show" || fixedSelection) return;
       seasons = readSeasons(document);
       if (seasons.length) renderControls();
       if (!getClientId()) {
@@ -1859,12 +1911,18 @@
         controlsRow.hidden = true;
       }
     }
+    function setMeta(next) {
+      if (cancelled || !next) return;
+      Object.assign(meta, next);
+      renderLinks();
+    }
     renderLinks();
     if (meta.kind === "show" && needsSelection()) loadSeasons();
     else renderControls();
     document.addEventListener("ogt:refresh", onRefresh);
     return {
       node,
+      setMeta,
       destroy() {
         cancelled = true;
         for (const timer of timers) clearTimeout(timer);
@@ -1885,8 +1943,17 @@
       if (!meta.id) return null;
       const mount = findMountPoint();
       if (!mount) return null;
-      const panel = createPanel(meta);
+      const panel = createPanel(meta, route);
       mount.parent.insertBefore(panel.node, mount.before);
+      const needsShowLookup = getCustomLinks().some((entry) => /\{(?:year|tmdb|imdb)\}/.test(entry.url));
+      if ((route.name === "season" || route.name === "episode") && needsShowLookup && getClientId()) {
+        getShowDetails(route.id).then((show) => {
+          const next = showTemplateData(show);
+          if (next && panel.node.isConnected) panel.setMeta(next);
+        }).catch((error) => {
+          if (panel.node.isConnected) debugError("show lookup failed", error);
+        });
+      }
       return panel;
     }
   };
@@ -2585,12 +2652,6 @@
       return `${command}${x},${y}`;
     }).join("");
   }
-  function mapStats(value) {
-    if (!value || !["watchers", "comments"].every((key) => Number.isSafeInteger(value[key]) && value[key] >= 0)) {
-      throw new Error("Invalid episode statistics.");
-    }
-    return { watchers: value.watchers, comments: value.comments };
-  }
 
   // src/features/your-ratings/api.js
   function createRatingsApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
@@ -2640,9 +2701,6 @@
 .ogt-season-chart__legend-community { color: light-dark(#c4161c, #ff6b6b); }
 .ogt-season-chart__personal { stroke: light-dark(#075c86, #83d5ff); fill: none; stroke-width: 2; }
 .ogt-season-chart__personal-dot { fill: light-dark(#075c86, #83d5ff); stroke: var(--ogt-surface); stroke-width: 1; }
-.ogt-season-chart__counts { fill: none; stroke-width: 1.5; }
-.ogt-season-chart__watchers { stroke: light-dark(#397a27, #a3d78e); }
-.ogt-season-chart__comments { stroke: light-dark(#8250a0, #d7a8f0); stroke-dasharray: 4 3; }
 .ogt-season-chart__legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 6px 0; font-size: .85rem; }
 .ogt-season-chart__legend-personal { color: light-dark(#075c86, #83d5ff); }
 .ogt-season-chart a:focus-visible circle { stroke: light-dark(#111, #fff); stroke-width: 3; }
@@ -2784,13 +2842,13 @@
     const lowest = Math.min(...rated.map((episode) => episode.rating));
     return Math.min(50, Math.floor(lowest / 10) * 10);
   }
-  function chartGeometry(episodes, allEpisodes = episodes, average = averageRating(episodes), width = CHART_WIDTH, scaleEpisodes = episodes, right = PLOT.right) {
+  function chartGeometry(episodes, allEpisodes = episodes, average = averageRating(episodes), width = CHART_WIDTH, scaleEpisodes = episodes) {
     const rated = ratedEpisodes(episodes);
     const allNumbers = allEpisodes.map((episode) => episode.number).filter(Number.isFinite);
     const first = allNumbers.length ? Math.min(...allNumbers) : 1;
     const last = allNumbers.length ? Math.max(...allNumbers) : first;
     const bottom = axisBottom(scaleEpisodes);
-    const plotWidth = width - PLOT.left - right;
+    const plotWidth = width - PLOT.left - PLOT.right;
     const plotHeight = CHART_HEIGHT - PLOT.top - PLOT.bottom;
     const slot = plotWidth / (last - first + 1);
     const x = (number) => PLOT.left + (number - first + 0.5) * slot;
@@ -2798,7 +2856,7 @@
     return {
       width,
       height: CHART_HEIGHT,
-      plot: { ...PLOT, right },
+      plot: { ...PLOT },
       axisBottom: bottom,
       slot,
       baseY: y(bottom),
@@ -2817,42 +2875,34 @@
     return `M${left},${base}V${top + r}Q${left},${top} ${left + r},${top}H${right - r}Q${right},${top} ${right},${top + r}V${base}Z`;
   }
 
-  // src/features/season-chart/extra.js
+  // src/features/season-chart/personal.js
   var NS2 = "http://www.w3.org/2000/svg";
-  function svg(tag, attrs, text2) {
+  function svg(tag, attributes, text2) {
     const node = document.createElementNS(NS2, tag);
-    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+    for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
     if (text2) node.textContent = text2;
     return node;
   }
-  function drawExtras(chart, episodes, geometry, personal, stats) {
-    const { plot, width, height, slot, axisBottom: axisBottom2 } = geometry;
-    const first = Math.min(...episodes.map((e) => e.number));
+  function drawPersonal(chart, episodes, geometry, personal) {
+    const { plot, height, slot, axisBottom: axisBottom2 } = geometry;
+    const first = Math.min(...episodes.map((episode) => episode.number));
     const x = (number) => plot.left + (number - first + 0.5) * slot;
     const y = (rating) => plot.top + (100 - rating) / (100 - axisBottom2) * (height - plot.top - plot.bottom);
-    const points = episodes.filter((e) => personal.some((p) => p.number === e.number)).map((e) => ({ ...e, x: x(e.number), y: y(personal.find((p) => p.number === e.number).rating * 10) }));
+    const points = episodes.filter((episode) => personal.some((rating) => rating.number === episode.number)).map((episode) => ({
+      ...episode,
+      x: x(episode.number),
+      y: y(personal.find((rating) => rating.number === episode.number).rating * 10)
+    }));
     chart.append(svg("path", { class: "ogt-season-chart__personal", d: linePath(points) }));
     for (const point of points) {
-      const label = `Your rating, Episode ${point.number}: ${personal.find((p) => p.number === point.number).rating} of 10`;
+      const rating = personal.find((entry) => entry.number === point.number).rating;
+      const label = `Your rating, Episode ${point.number}: ${rating} of 10`;
       const link = svg("a", { href: point.href, tabindex: "0", "aria-label": label });
-      link.append(svg("title", {}, label), svg("circle", { class: "ogt-season-chart__personal-dot", cx: point.x, cy: point.y, r: 4 }));
+      link.append(
+        svg("title", {}, label),
+        svg("circle", { class: "ogt-season-chart__personal-dot", cx: point.x, cy: point.y, r: 4 })
+      );
       chart.append(link);
-    }
-    if (!stats) return;
-    const max = Math.max(1, ...stats.flatMap((s) => [s.watchers, s.comments]));
-    const countY = (count) => plot.top + (1 - count / max) * (height - plot.top - plot.bottom);
-    for (const count of [0, Math.round(max / 2), max]) {
-      chart.append(svg("text", { class: "ogt-season-chart__axis", x: width - plot.right + 5, y: countY(count) + 4 }, String(count)));
-    }
-    for (const key of ["watchers", "comments"]) {
-      const series = stats.map((s) => ({ number: s.number, x: x(s.number), y: countY(s[key]) }));
-      chart.append(svg("path", { class: `ogt-season-chart__counts ogt-season-chart__${key}`, d: linePath(series) }));
-      for (const point of series) {
-        const label = `Episode ${point.number}: ${stats.find((s) => s.number === point.number)[key]} ${key}`;
-        const dot = svg("circle", { class: `ogt-season-chart__counts ogt-season-chart__${key}`, cx: point.x, cy: point.y, r: 3, tabindex: "0", role: "img", "aria-label": label });
-        dot.append(svg("title", {}, label));
-        chart.append(dot);
-      }
     }
   }
 
@@ -2862,9 +2912,6 @@
       `/shows/${encodeURIComponent(id)}/seasons/${encodeURIComponent(season)}?extended=full`
     );
     return Array.isArray(episodes) ? episodes : [];
-  }
-  async function getEpisodeStats(id, season, number) {
-    return apiGet(`/shows/${encodeURIComponent(id)}/seasons/${season}/episodes/${number}/stats`);
   }
 
   // src/features/season-chart/styles.js
@@ -2970,9 +3017,9 @@
     const averageText = average == null ? "—" : formatPercent(average);
     return `Season average: ${averageText} · Best: ${episodeName(best)} · Worst: ${episodeName(worst)}`;
   }
-  function drawChart(chart, episodes, average, targetWidth, personal = [], stats = null) {
+  function drawChart(chart, episodes, average, targetWidth, personal = []) {
     const scale = [...episodes, ...personal.map((p) => ({ ...p, rating: p.rating * 10 }))];
-    const geometry = chartGeometry(episodes, episodes, average, targetWidth, scale, stats ? 64 : 12);
+    const geometry = chartGeometry(episodes, episodes, average, targetWidth, scale);
     const { width, height, plot, ticks, points, averageY } = geometry;
     chart.replaceChildren();
     chart.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -3034,13 +3081,10 @@
       );
     }
     chart.append(...values);
-    drawExtras(chart, episodes, geometry, personal, stats);
+    drawPersonal(chart, episodes, geometry, personal);
   }
   function createPanel3(episodes, route) {
     let personal = [];
-    let stats = null;
-    let moreOpen = false;
-    let statsFlight = false;
     let authRevision = 0;
     let cancelled = false;
     let currentEpisodes = episodes;
@@ -3060,45 +3104,7 @@
       plot
     );
     const legend = el("div", { class: "ogt-season-chart__legend", hidden: true });
-    const more = el("button", { class: "ogt-chip", type: "button", text: "More", "aria-expanded": "false" });
-    const hint = el("span", { class: "ogt-hint", role: "status" });
-    node.append(legend, el("div", { class: "ogt-row" }, more, hint));
-    async function toggleMore() {
-      moreOpen = !moreOpen;
-      more.setAttribute("aria-expanded", String(moreOpen));
-      more.textContent = moreOpen ? "Less" : "More";
-      hint.hidden = !moreOpen;
-      render(currentEpisodes);
-      if (!moreOpen || stats || statsFlight) return;
-      if (currentEpisodes.length > 30) {
-        hint.textContent = "Episode statistics skipped for seasons over 30 episodes.";
-        return;
-      }
-      if (!getClientId()) {
-        hint.textContent = "Set a Trakt client ID to load episode statistics.";
-        return;
-      }
-      statsFlight = true;
-      hint.textContent = "Loading episode statistics…";
-      try {
-        const result = await Promise.all(currentEpisodes.map(async (episode) => ({
-          number: episode.number,
-          ...mapStats(await getEpisodeStats(route.id, route.season, episode.number))
-        })));
-        if (cancelled) return;
-        stats = result;
-        hint.textContent = "";
-        render(currentEpisodes);
-      } catch (error) {
-        if (!cancelled) {
-          hint.textContent = "Episode statistics unavailable.";
-          debugError("episode statistics failed", error);
-        }
-      } finally {
-        statsFlight = false;
-      }
-    }
-    more.addEventListener("click", toggleMore);
+    node.append(legend);
     async function loadPersonal() {
       const revision = ++authRevision;
       personal = [];
@@ -3124,9 +3130,8 @@
       summaryLine.textContent = [summary(currentEpisodes, average), averageLabel(visiblePersonal, currentEpisodes.length)].filter(Boolean).join(" · ");
       legend.replaceChildren(el("span", { class: "ogt-season-chart__legend-community", text: "Trakt community (bars)" }));
       if (visiblePersonal.length) legend.append(el("span", { class: "ogt-season-chart__legend-personal", text: "Your ratings (blue line)" }));
-      if (moreOpen && stats) legend.append(el("span", { text: "Watchers (green) · Comments (purple dashed) · Counts: right axis" }));
-      legend.hidden = !visiblePersonal.length && !(moreOpen && stats);
-      drawChart(chart, currentEpisodes, average, chartWidth(), visiblePersonal, moreOpen ? stats : null);
+      legend.hidden = !visiblePersonal.length;
+      drawChart(chart, currentEpisodes, average, chartWidth(), visiblePersonal);
     }
     let drawnWidth = 0;
     function chartWidth() {
@@ -3148,7 +3153,6 @@
         resize2?.disconnect();
         authRevision++;
         document.removeEventListener("ogt:authchange", loadPersonal);
-        more.removeEventListener("click", toggleMore);
         node.remove();
       }
     };
