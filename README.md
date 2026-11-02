@@ -17,13 +17,14 @@ It matches `https://og.trakt.tv/*` and `http://localhost:5173|5174/*` for develo
 
 ## What it does
 
-### Custom links panel (title pages)
+### Custom links panel (title, season and episode pages)
 
 A compact panel under the summary stats with user-configured links to your own services.
 
 - **Custom links** — manage your `Label | URL` templates in the inline editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{season}`, `{episode}`.
 - **Search presets** — optionally add Metacritic, Stremio, Plex and AniList links (og already links Rotten Tomatoes, Wikipedia, Letterboxd and, on anime, MyAnimeList itself).
-- **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}`. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
+- **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}` on a show page. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
+- **Season and episode pages** — the panel uses the show's title, year and TMDb/IMDb ids, not the season or episode heading, and takes `{season}`/`{episode}` from the URL. The title comes from og's show link; year and external ids come from `GET /shows/:id`. Without a client ID, `{year}`, `{tmdb}` and `{imdb}` links stay hidden rather than point at the season or episode.
 - **Examples**: Plex, Jellyfin, Sonarr, Radarr, or any streaming/library service og doesn't link to.
 
 ### Season chart
@@ -40,9 +41,6 @@ two episodes. Season cards on show pages and the Seasons page get a small blue h
 count; hover it for the number of rated episodes. Averages are plain means of episode ratings from the toolkit's account,
 which may differ from your og account. og already shows a season rating you set directly. Ratings stay in memory for
 ten minutes and are cleared when the account changes; nothing private enters the public API cache.
-
-**More** on a season chart loads watchers and comments, off by default, on a separate right-hand count axis.
-This needs a client ID and uses the shared request queue. Seasons with more than 30 episodes skip these requests.
 
 ### Last month in review
 
@@ -178,8 +176,8 @@ Notes:
 
 - Names are lowercase and case-sensitive: `{tmdb}`, not `{TMDb}`.
 - Values are URL-encoded for you, so `{title}` becomes `Breaking%20Bad`. Don't encode them yourself.
-- A link is hidden on pages where one of its placeholders has no value — a `{season}` link won't appear on a movie.
-  This is intentional, so one template works across shows and films.
+- A link is hidden on pages where one of its placeholders has no value — a `{season}` link won't appear on a movie, and
+  `{episode}` has no value on a season page. This is intentional, so one template works across shows and films.
 - URL templates must start with `http://` or `https://`.
 - Links are stored per browser, not synced. The inline editor checks that each saved link has a label and an HTTP(S) URL.
 
@@ -253,8 +251,6 @@ links, poster rating corners. Backlog:
 - set playback progress by hand;
 - list preview posters that link to their titles;
 - all your lists in one view;
-- remove the season chart's **More** button (its watchers and comments lines are too flat to read);
-- fix custom links on season and episode pages (they read the season/episode instead of the show), or show them only on title pages;
 - **Add to watchlist** on a person's credits, one row at a time or all shown credits at once;
 - extend `npm run drift` to the watchlist/library actions and og's native notifier and refresh modules;
 - **Undo** on watchlist and library success notices;

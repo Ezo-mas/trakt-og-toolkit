@@ -191,6 +191,61 @@ export const FORVO_MULTI_HTML = `
 </div></div>
 <script>var _AUDIO_HTTP_HOST='audio12.forvo.com';</script>`;
 
+/** Live `/shows/breaking-bad/seasons/1` capture, 2026-11-02; trimmed to the show link, season heading,
+ * external-id strip and summary mount anchors. The IMDb/TMDb links here are the show's. */
+export const SEASON_PAGE_HTML = `
+<main id="content">
+  <section class="fanart-header with-stats">
+    <div class="summary">
+      <div class="summary-title">
+        <div class="title-tags"><span class="part links">
+          <a class="link" href="/shows/breaking-bad" rel="up">Breaking Bad</a>
+        </span></div>
+        <h1>Season 1 <span class="year">2008</span> <span class="certification">TV-MA</span></h1>
+      </div>
+      <div class="stats"><div class="stats-inner"><div class="ratings-strip"><ul>
+        <li><a class="stat" href="https://www.imdb.com/title/tt0903747/episodes?season=1">IMDb</a></li>
+        <li><a class="stat" href="https://www.themoviedb.org/tv/1396/season/1">TMDb</a></li>
+      </ul></div></div></div>
+    </div>
+  </section>
+  <section class="summary-frame">
+    <div class="container"><div class="columns">
+      <aside class="sidebar"></aside>
+      <div class="info" id="overview"><div class="top"><div class="details"></div><div class="actions"></div></div></div>
+    </div></div>
+  </section>
+  <section class="episodes"><article class="row"><span class="rating-trigger"><span class="value">83%</span></span></article></section>
+</main>`;
+
+/** Live `/shows/breaking-bad/seasons/1/episodes/1` capture, 2026-11-02; trimmed to the show/season
+ * links, episode heading, external-id strip and summary mount anchors. IMDb here is the episode's. */
+export const EPISODE_PAGE_HTML = `
+<main id="content">
+  <section class="fanart-header with-stats">
+    <div class="summary">
+      <div class="episode-title">
+        <div class="title-tags"><span class="part links">
+          <a class="link before-slash" href="/shows/breaking-bad">Breaking Bad</a>
+          <a class="link after-slash" href="/shows/breaking-bad/seasons/1" rel="up">Season 1</a>
+        </span></div>
+        <h1><strong>1x01</strong> Pilot <span class="year">2008</span></h1>
+      </div>
+      <div class="stats"><div class="stats-inner"><div class="ratings-strip"><ul>
+        <li><a class="stat" href="https://www.imdb.com/title/tt0959621/ratings">IMDb</a></li>
+        <li><a class="stat" href="https://www.themoviedb.org/tv/1396/season/1/episode/1">TMDb</a></li>
+      </ul></div></div></div>
+    </div>
+  </section>
+  <section class="summary-frame">
+    <div class="container"><div class="columns">
+      <aside class="sidebar"></aside>
+      <div class="info" id="overview"><div class="top"><div class="details"></div><div class="actions"></div></div></div>
+    </div></div>
+  </section>
+  <section class="episodes"><article class="row"><span class="rating-trigger"><span class="value">83%</span></span></article></section>
+</main>`;
+
 // Live og.trakt.tv Breaking Bad capture, 2026-10-31; trimmed to semantic mount anchors.
 export const LIVE_RATINGS_SEASON_HTML = "<section class=\"episodes\"><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">83%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/1\" class=\"\"><span class=\"number\">1x01</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/1\" class=\"\">Pilot</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->January 21, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->59m<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill colored\"><!--[-1--><!--]--><!--[-1-->Series Premiere<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">83%</span></span></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">81%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/2\" class=\"\"><span class=\"number\">1x02</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/2\" class=\"\">Cat's in the Bag...</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->January 28, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->49m<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">81%</span></span></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">80%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/3\" class=\"\"><span class=\"number\">1x03</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/3\" class=\"\">...And the Bag's in the River</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->February 11, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->49m<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">80%</span></span></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">79%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/4\" class=\"\"><span class=\"number\">1x04</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/4\" class=\"\">Cancer Man</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->February 18, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->49m<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article></section>";
 

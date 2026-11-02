@@ -26,15 +26,15 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 12 | Add to library button | OAuth | done; user verified in Zen and Brave with real API |
 | 13 | One-click Add to watchlist | OAuth | done; user verified in Zen and Brave with real API |
 | 14 | Add to library on poster cards | OAuth | dropped: cards too tight; watchlist fits cards better |
-| 15 | Season chart: remove the More button | — | small |
-| 16 | Custom links on season and episode pages | client ID optional | small; decide fix or hide first |
+| 15 | Season chart: remove the More button | — | done |
+| 16 | Custom links on season and episode pages | client ID optional | done |
 | 17 | Watchlist buttons on a person's credits | OAuth | medium; reuses feature 13 |
 | 18 | `npm run drift`: cover features 12–13 and og's native modules | — | small |
 | 19 | Undo on success notices | OAuth | small |
 | 20 | Turn features on and off from the menu | — | small |
 | 21 | Month review: browse earlier months | OAuth | small |
 
-**Next release:** bump to 0.3.0 once most bugs are ironed out (15, 16 and any new ones); until then main stays 0.2.0 and userscript
+**Next release:** bump to 0.3.0 once most bugs are ironed out (any new ones); until then main stays 0.2.0 and userscript
 managers won't offer an update.
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
@@ -347,6 +347,10 @@ show it for items already in the library (trakt-og `1cd3142`, `LIBRARY_ADDING = 
 
 ## 15. Season chart: remove the More button
 
+**Status:** done (2026-11-02). The More button, watchers/comments lines, right count axis, stats requests and the
+30-episode limit are removed. The your-ratings line and its legend remain; normal and long seasons make no `/stats`
+requests.
+
 **Goal:** feature 7's **More** button adds watchers (green) and comments (purple dashed) lines to the season chart.
 On a real season (2026-11-01, 22 episodes) both say almost nothing: watchers barely move (about 41.4k down to 40k)
 on an axis from 0, so the line sits flat on the 100% gridline and looks like a rating; comments are a few dozen
@@ -358,6 +362,11 @@ against that scale, so their line is pinned at 0. It also costs one stats reques
 - Update README, NOTES.md and tests.
 
 ## 16. Custom links on season and episode pages
+
+**Status:** done (2026-11-02): the **Fix** option. Show title, year and TMDb/IMDb ids come from
+`GET /shows/:id?extended=full` (with the show link as the no-client-ID title fallback), and
+`{season}`/`{episode}` come from the route instead of the picker. Season and episode pages no longer show pickers or
+use the page's episode ids; title pages are unchanged.
 
 **Problem:** the custom links panel mounts on every show route, but `readTitleData` reads the page it is on, not
 the show. On season and episode pages the heading is the season or episode title, the year is that page's, and

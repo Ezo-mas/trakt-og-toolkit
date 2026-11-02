@@ -17,11 +17,14 @@ import {
   presetAlreadyAdded,
   readSeasons,
   readTitleData,
+  selectionForRoute,
+  showTemplateData,
   templateVars,
   validateCustomLinks,
 } from './data.js';
 import { PRESETS } from './presets.js';
 import { getSeasons } from '../../core/trakt.js';
+import { getShowDetails } from './api.js';
 
 const PANEL_ID = 'ogt-custom-links';
 const TITLE_ID = 'ogt-custom-links-title';
@@ -56,11 +59,13 @@ function chip({ label, href, template }) {
   return link;
 }
 
-function createPanel(meta) {
+function createPanel(meta, route) {
   let cancelled = false;
   let seasons = [];
   const timers = [];
-  let selection = getSelection(meta.kind, meta.id) || { season: null, episode: null };
+  // Season/episode pages take their values from the route; only title pages use the picker.
+  const fixedSelection = route.name === 'season' || route.name === 'episode';
+  let selection = selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
 
   const linksRow = el('div', { class: 'ogt-row ogt-links' });
   const controlsRow = el('div', { class: 'ogt-row', hidden: true });
@@ -332,11 +337,11 @@ function createPanel(meta) {
   node.addEventListener('keydown', onKeyDown);
 
   function needsSelection() {
-    return getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
+    return !fixedSelection && getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
   }
 
   function persistSelection() {
-    if (selection.season != null) setSelection(meta.kind, meta.id, selection);
+    if (!fixedSelection && selection.season != null) setSelection(meta.kind, meta.id, selection);
   }
 
   const seasonSelect = el('select', { class: 'ogt-select', 'aria-label': 'Season' });
@@ -406,7 +411,7 @@ function createPanel(meta) {
   }
 
   function renderControls() {
-    const hasSeasons = meta.kind === 'show' && seasons.length > 0 && needsSelection();
+    const hasSeasons = !fixedSelection && meta.kind === 'show' && seasons.length > 0 && needsSelection();
     if (!hasSeasons) {
       controlsRow.hidden = true;
       return;
@@ -439,7 +444,7 @@ function createPanel(meta) {
    *  ID is configured, the API is the source of truth; the rendered season cards are only the instant
    *  first paint (and the fallback when there is no key). */
   function loadSeasons() {
-    if (meta.kind !== 'show') return;
+    if (meta.kind !== 'show' || fixedSelection) return;
 
     seasons = readSeasons(document);
     if (seasons.length) renderControls();
@@ -487,6 +492,13 @@ function createPanel(meta) {
     }
   }
 
+  /** Replace the title-page values with the show's own once its lookup returns. */
+  function setMeta(next) {
+    if (cancelled || !next) return;
+    Object.assign(meta, next);
+    renderLinks();
+  }
+
   renderLinks();
   if (meta.kind === 'show' && needsSelection()) loadSeasons();
   else renderControls();
@@ -494,6 +506,7 @@ function createPanel(meta) {
 
   return {
     node,
+    setMeta,
     destroy() {
       cancelled = true;
       for (const timer of timers) clearTimeout(timer);
@@ -518,8 +531,25 @@ export const customLinks = {
     const mount = findMountPoint();
     if (!mount) return null;
 
-    const panel = createPanel(meta);
+    const panel = createPanel(meta, route);
     mount.parent.insertBefore(panel.node, mount.before);
+
+    // Season and episode pages need the show's own year and ids. The DOM show link
+    // already gives the title, so only fetch when a link asks for what it cannot
+    // provide; without a client ID those links stay hidden rather than point at the
+    // season or episode.
+    const needsShowLookup = getCustomLinks().some((entry) => /\{(?:year|tmdb|imdb)\}/.test(entry.url));
+    if ((route.name === 'season' || route.name === 'episode') && needsShowLookup && getClientId()) {
+      getShowDetails(route.id)
+        .then((show) => {
+          const next = showTemplateData(show);
+          if (next && panel.node.isConnected) panel.setMeta(next);
+        })
+        .catch((error) => {
+          if (panel.node.isConnected) debugError('show lookup failed', error);
+        });
+    }
+
     return panel;
   },
 };

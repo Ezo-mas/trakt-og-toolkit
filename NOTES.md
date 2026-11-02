@@ -2,6 +2,27 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-02: season chart cleanup and show-aware custom links (features 15 and 16)
+
+- Feature 15 removed the chart's **More** button, watchers/comments lines, right-hand count axis, legend entry and the
+  per-episode `/stats` requests. `getEpisodeStats`, `mapStats`, `drawExtras` and the 30-episode skip hint are gone;
+  the personal ratings line now draws in `season-chart/personal.js`. The static Y scale is back to the 12px right
+  gutter. `your-ratings-integration` now asserts that neither normal nor 31-episode seasons make a `/stats` request.
+- Feature 16 fixed custom links on season and episode pages rather than hiding the panel. Live checks on
+  2026-11-02 (`/shows/breaking-bad/seasons/1` and `/episodes/1`): the headings are **Season 1** / **1x01 Pilot**
+  with that season or episode's year, so title/year were wrong. The show name is available as the first
+  `.title-tags a[href^="/shows/"]` link to the show root. The season page's IMDb/TMDb links are the show's, but on an
+  episode page the IMDb link is the episode's (`tt0959621`), so page ids are not reused.
+- The panel now reads show title/year via `GET /shows/:id?extended=full` when a client ID is set, maps it through
+  `showTemplateData`, and replaces the DOM values in place. `{season}`/`{episode}` come from `selectionForRoute`:
+  season pages have the route season and no episode, episode pages have both, and title pages keep the picker and
+  stored selection. Season/episode pages never render the picker and never call the seasons endpoint.
+- Without a client ID, season/episode pages still use the show link for the title, while `{year}`, `{tmdb}` and
+  `{imdb}` links stay hidden instead of pointing at the season/episode. The page year is that season or episode's, so
+  it is not used as a fallback. Title pages are unchanged.
+- New live-shaped season and episode fixtures, `readTitleData`/`selectionForRoute`/`showTemplateData` unit tests, and
+  built-bundle integration tests cover the API-filled, no-client-ID and episode-IMDb cases.
+
 ## 2026-11-01: library feedback and native refresh (feature 12)
 
 - Live confirmation: the user tested and confirmed both PRs on a real account in Zen and Brave, using the
