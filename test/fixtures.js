@@ -194,5 +194,75 @@ export const FORVO_MULTI_HTML = `
 // Live og.trakt.tv Breaking Bad capture, 2026-10-31; trimmed to semantic mount anchors.
 export const LIVE_RATINGS_SEASON_HTML = "<section class=\"episodes\"><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">83%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/1\" class=\"\"><span class=\"number\">1x01</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/1\" class=\"\">Pilot</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->January 21, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->59m<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill colored\"><!--[-1--><!--]--><!--[-1-->Series Premiere<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">83%</span></span></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">81%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/2\" class=\"\"><span class=\"number\">1x02</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/2\" class=\"\">Cat's in the Bag...</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->January 28, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->49m<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">81%</span></span></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">80%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/3\" class=\"\"><span class=\"number\">1x03</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/3\" class=\"\">...And the Bag's in the River</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->February 11, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->49m<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">80%</span></span></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">79%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/4\" class=\"\"><span class=\"number\">1x04</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/4\" class=\"\">Cancer Man</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->February 18, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->49m<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article></section>";
 
+/** Live `/users/justin/lists` capture, 2026-11-02; trimmed to the lists section and heading the panel mounts after.
+ * The profile is public, so the real page needs no sign-in; Svelte hashes and unrelated rows are omitted. */
+export const LISTS_HTML = `
+<main id="content">
+  <section class="section-toolbar" aria-label="Page filters">
+    <div class="container"><div class="toolbar"><h1>Justin</h1></div></div>
+  </section>
+  <section class="lists" aria-labelledby="lists-heading">
+    <div class="container">
+      <h2 id="lists-heading" class="visually-hidden">Justin's personal lists</h2>
+      <div class="rows">
+        <article class="list-row"><div class="card">
+          <a class="fan" href="/users/justin/watchlist" tabindex="-1" aria-hidden="true"></a>
+          <div class="details"><h3><a href="/users/justin/watchlist">Watchlist</a></h3></div>
+        </div></article>
+      </div>
+    </div>
+  </section>
+</main>`;
+
+/** Source-derived from trakt-og's `listRowsSchema` and `likedListsSchema`; the API needs a client ID, so these
+ * are shaped like real responses rather than captured ones. */
+export const LISTS_COLLABORATIONS_JSON = JSON.stringify([
+  {
+    name: 'Sci-Fi Together',
+    description: 'Shared picks we both want to watch.',
+    privacy: 'public',
+    type: 'personal',
+    updated_at: '2026-10-31T12:00:00.000Z',
+    item_count: 12,
+    comment_count: 2,
+    likes: 4,
+    ids: { trakt: 9001, slug: 'sci-fi-together' },
+    user: { username: 'justin', name: 'Justin', ids: { slug: 'justin' } },
+    images: { posters: ['https://media.trakt.tv/images/lists/000/009/001/posters/medium/abc.jpg.webp'] },
+  },
+  {
+    name: 'Documentaries',
+    description: '',
+    privacy: 'public',
+    type: 'personal',
+    updated_at: '2026-10-20T12:00:00.000Z',
+    item_count: 1,
+    comment_count: 0,
+    likes: 1,
+    ids: { trakt: 9003, slug: 'documentaries' },
+    user: { username: 'sam', name: 'Sam', ids: { slug: 'sam' } },
+    images: { posters: [] },
+  },
+]);
+
+export const LISTS_LIKED_JSON = JSON.stringify([
+  {
+    liked_at: '2026-10-30T12:00:00.000Z',
+    list: {
+      name: 'Noir Essentials',
+      description: 'Rain, shadows and bad decisions.',
+      privacy: 'public',
+      type: 'official',
+      updated_at: '2026-10-01T12:00:00.000Z',
+      item_count: 8,
+      comment_count: 6,
+      likes: 210,
+      ids: { trakt: 9002, slug: 'noir-essentials' },
+      user: { username: 'trakt', name: 'Trakt Official', ids: { slug: 'trakt' } },
+      images: { posters: [] },
+    },
+  },
+]);
+
 // Live og.trakt.tv Breaking Bad capture, 2026-10-31; trimmed to semantic mount anchors.
 export const LIVE_RATINGS_SHOW_HTML = "<section class=\"seasons\"><article class=\"poster-card\"><a class=\"poster poster\" href=\"/shows/breaking-bad/seasons/5\"> <!--[-1--><!--]--> <!--[-1--><!--]--> <!--[-1--><!--]--> <!----></a><div class=\"quick-icons small\"><div class=\"actions\"><div class=\"tools\"></div></div> <button type=\"button\" class=\"rating-trigger card\" aria-label=\"Rate Season 5\"><span class=\"percentage\"><span class=\"value\">85%</span></span></button></div><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/5\"><h3 class=\"\"><!--[-1-->Season 5<!--]--></h3></a><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/5\"><span class=\"subtitle\"><!--[0-->16 episodes<!--]--></span></a></article><article class=\"poster-card\"><a class=\"poster poster\" href=\"/shows/breaking-bad/seasons/4\"> <!--[-1--><!--]--> <!--[-1--><!--]--> <!--[-1--><!--]--> <!----></a><div class=\"quick-icons small\"><div class=\"actions\"><div class=\"tools\"></div></div> <button type=\"button\" class=\"rating-trigger card\" aria-label=\"Rate Season 4\"><span class=\"percentage\"><span class=\"value\">85%</span></span></button></div><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/4\"><h3 class=\"\"><!--[-1-->Season 4<!--]--></h3></a><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/4\"><span class=\"subtitle\"><!--[0-->13 episodes<!--]--></span></a></article><article class=\"poster-card\"><a class=\"poster poster\" href=\"/shows/breaking-bad/seasons/3\"> <!--[-1--><!--]--> <!--[-1--><!--]--> <!--[-1--><!--]--> <!----></a><div class=\"quick-icons small\"><div class=\"actions\"><div class=\"tools\"></div></div> <button type=\"button\" class=\"rating-trigger card\" aria-label=\"Rate Season 3\"><span class=\"percentage\"><span class=\"value\">85%</span></span></button></div><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/3\"><h3 class=\"\"><!--[-1-->Season 3<!--]--></h3></a><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/3\"><span class=\"subtitle\"><!--[0-->13 episodes<!--]--></span></a></article><article class=\"poster-card\"><a class=\"poster poster\" href=\"/shows/breaking-bad/seasons/2\"> <!--[-1--><!--]--> <!--[-1--><!--]--> <!--[-1--><!--]--> <!----></a><div class=\"quick-icons small\"><div class=\"actions\"><div class=\"tools\"></div></div> <button type=\"button\" class=\"rating-trigger card\" aria-label=\"Rate Season 2\"><span class=\"percentage\"><span class=\"value\">85%</span></span></button></div><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/2\"><h3 class=\"\"><!--[-1-->Season 2<!--]--></h3></a><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/2\"><span class=\"subtitle\"><!--[0-->13 episodes<!--]--></span></a></article><article class=\"poster-card\"><a class=\"poster poster\" href=\"/shows/breaking-bad/seasons/1\"> <!--[-1--><!--]--> <!--[-1--><!--]--> <!--[-1--><!--]--> <!----></a><div class=\"quick-icons small\"><div class=\"actions\"><div class=\"tools\"></div></div> <button type=\"button\" class=\"rating-trigger card\" aria-label=\"Rate Season 1\"><span class=\"percentage\"><span class=\"value\">85%</span></span></button></div><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/1\"><h3 class=\"\"><!--[-1-->Season 1<!--]--></h3></a><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/1\"><span class=\"subtitle\"><!--[0-->7 episodes<!--]--></span></a></article></section>";

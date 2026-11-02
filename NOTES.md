@@ -2,6 +2,28 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-02: all lists in one view (feature 11)
+
+- og already offers its own Lists dropdown on the lists pages: **Personal**, **Collaborations**, and under **Liked**
+  both **Personal** and **Official** (`ListsPage.svelte`, `loadLists.ts`). The toolkit feature therefore doesn't add a
+  new view; it appends the other two indexes below the personal list for a single scroll. The button says **Show all
+  lists** rather than "Show all my lists", since it works on any public profile, not only the signed-in user's.
+- Live routes captured 2026-11-02: `/users/:id/lists`, `/users/:id/lists/collaborations`, `/users/:id/lists/liked`
+  and `/users/:id/lists/liked/official`. `parseRoute` names the first three `lists`, `lists-collaborations` and
+  `liked-lists`; individual lists and their comments stay `other`. The panel matches only `lists`.
+- Endpoints are public, so this uses `apiGet` and needs a client ID but no OAuth: `/users/:id/lists/collaborations`
+  returns list objects, and `/users/:id/likes/lists` returns `{ liked_at, list }` wrappers, newest first. Both are
+  fetched with `extended=images`. The API rejected curl without a client ID (403), so response shapes come from
+  trakt-og's `listRowsSchema` and `likedListsSchema`, not a live API capture; the page fixtures are likewise trimmed
+  from the live page rather than captured API bodies.
+- Liked lists usually have no posters in this response; og loads each list's summary near the viewport for its fan.
+  The panel does not make one request per list, so it shows a poster only when the index already includes it.
+- The panel mounts as a sibling after `section.lists` and uses og's `--container-sm/md/lg` and `--gutter` values so
+  it lines up with the list rows. Rows use plain text, validated HTTPS `media.trakt.tv` posters and in-site list
+  links. Partial failure still renders the group that loaded, with a one-line hint and **Try again**.
+- Pending: live browser check of the signed-in and signed-out profile pages in Firefox and a Chromium userscript
+  manager; current coverage is unit tests plus a built-bundle happy-dom test with mocked responses.
+
 ## 2026-11-01: library feedback and native refresh (feature 12)
 
 - Live confirmation: the user tested and confirmed both PRs on a real account in Zen and Brave, using the

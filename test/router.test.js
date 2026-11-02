@@ -81,3 +81,18 @@ test('person routes match only a person page', () => {
 });
 
 test('dashboard routes', () => { for (const path of ['/', '/dashboard', '/dashboard/']) assert.equal(parseRoute(path).name, 'dashboard'); });
+
+test('list indexes are named and keep the profile slug', () => {
+  const personal = parseRoute('/users/justin/lists');
+  assert.equal(personal.name, 'lists');
+  assert.equal(personal.id, 'justin');
+  assert.equal(parseRoute('/users/justin/lists/').name, 'lists');
+  assert.equal(parseRoute('/users/justin/lists/collaborations').name, 'lists-collaborations');
+  assert.equal(parseRoute('/users/justin/lists/liked').name, 'liked-lists');
+  assert.equal(parseRoute('/users/justin/lists/liked/official').name, 'liked-lists');
+
+  // A single list, its comments, and an unknown list sub-path are not indexes.
+  for (const path of ['/users/justin/lists/noir-essentials', '/users/justin/lists/noir-essentials/comments', '/users/justin/lists/official']) {
+    assert.equal(parseRoute(path).name, 'other', path);
+  }
+});

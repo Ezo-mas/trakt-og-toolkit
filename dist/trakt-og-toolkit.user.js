@@ -451,6 +451,11 @@
     if (progress) return { name: "progress", kind: null, id: progress[1], path, key: path };
     const person = path.match(/^\/people\/([^/]+)$/);
     if (person) return { name: "person", kind: "person", id: person[1], path, key: path };
+    const lists = path.match(/^\/users\/([^/]+)\/lists(?:\/collaborations|\/liked(?:\/official)?)?$/);
+    if (lists) {
+      const name2 = path.endsWith("/collaborations") ? "lists-collaborations" : path.includes("/liked") ? "liked-lists" : "lists";
+      return { name: name2, kind: null, id: lists[1], path, key: path };
+    }
     const match = path.match(TITLE_PATH);
     if (!match) {
       return { name: "other", kind: null, id: null, path, key: path };
@@ -953,10 +958,10 @@
       const match = link?.getAttribute("href")?.match(SEASON_HREF_RE);
       if (!match) continue;
       const number = Number(match[1]);
-      const count = Number(text(subtitle).match(/(\d+)/)?.[1]) || null;
+      const count2 = Number(text(subtitle).match(/(\d+)/)?.[1]) || null;
       const existing = found.get(number);
-      if (!existing || count && (!existing.episodes || count > existing.episodes)) {
-        found.set(number, { number, episodes: count });
+      if (!existing || count2 && (!existing.episodes || count2 > existing.episodes)) {
+        found.set(number, { number, episodes: count2 });
       }
     }
     return [...found.values()].sort((a, b) => a.number - b.number);
@@ -1124,7 +1129,7 @@
   function headerValue(headers2, name) {
     if (!headers2) return null;
     if (typeof headers2.get === "function") return headers2.get(name);
-    const line = String(headers2).split(/\r?\n/).find((row) => row.toLowerCase().startsWith(`${name}:`));
+    const line = String(headers2).split(/\r?\n/).find((row2) => row2.toLowerCase().startsWith(`${name}:`));
     return line ? line.slice(line.indexOf(":") + 1).trim() : null;
   }
   var cache = /* @__PURE__ */ new Map();
@@ -1754,25 +1759,25 @@
     }
     function renderEpisodeField() {
       const season = seasons.find((entry) => entry.number === selection.season);
-      const count = season?.episodes || null;
-      if (!count || count < 1) {
+      const count2 = season?.episodes || null;
+      if (!count2 || count2 < 1) {
         episodeSlot.replaceChildren(el("span", { text: "—" }));
         selection.episode = null;
         return;
       }
-      if (selection.episode == null || selection.episode > count) selection.episode = 1;
-      if (count > 8) {
+      if (selection.episode == null || selection.episode > count2) selection.episode = 1;
+      if (count2 > 8) {
         const input = el("input", {
           class: "ogt-input",
           type: "number",
           min: "1",
-          max: String(count),
+          max: String(count2),
           value: String(selection.episode),
           "aria-label": "Episode"
         });
         input.addEventListener("change", () => {
           const value = Number(input.value);
-          if (Number.isInteger(value) && value >= 1 && value <= count) {
+          if (Number.isInteger(value) && value >= 1 && value <= count2) {
             selection.episode = value;
             persistSelection();
             updateLinkHrefs();
@@ -1784,7 +1789,7 @@
         return;
       }
       const select = el("select", { class: "ogt-select", "aria-label": "Episode" });
-      for (let i = 1; i <= count; i++) {
+      for (let i = 1; i <= count2; i++) {
         select.append(el("option", { value: String(i), text: `Episode ${i}` }));
       }
       select.value = String(selection.episode);
@@ -1904,16 +1909,16 @@
   }
   function mapPlayback(rows, kind) {
     const mapped = [];
-    for (const row of Array.isArray(rows) ? rows : []) {
-      const media = kind === "movie" ? row?.movie : row?.show;
-      const episode = row?.episode;
-      if (!Number.isSafeInteger(row?.id) || row.id <= 0 || !media?.ids || typeof row.progress !== "number" || !Number.isFinite(row.progress) || row.progress < 0 || row.progress > 100 || !Number.isFinite(Date.parse(row.paused_at))) continue;
+    for (const row2 of Array.isArray(rows) ? rows : []) {
+      const media = kind === "movie" ? row2?.movie : row2?.show;
+      const episode = row2?.episode;
+      if (!Number.isSafeInteger(row2?.id) || row2.id <= 0 || !media?.ids || typeof row2.progress !== "number" || !Number.isFinite(row2.progress) || row2.progress < 0 || row2.progress > 100 || !Number.isFinite(Date.parse(row2.paused_at))) continue;
       if (kind === "episode" && (!Number.isInteger(episode?.season) || episode.season < 0 || !Number.isInteger(episode?.number) || episode.number < 1)) continue;
       const slug = media.ids.slug || media.ids.trakt;
       if (!slug) continue;
       const root2 = `/${kind === "movie" ? "movies" : "shows"}/${encodeURIComponent(slug)}`;
       mapped.push({
-        id: row.id,
+        id: row2.id,
         kind,
         ids: { ...media.ids },
         season: kind === "episode" ? episode.season : null,
@@ -1921,9 +1926,9 @@
         title: kind === "movie" ? media.title || "Untitled movie" : `${media.title || "Untitled show"} · ${episode.season}×${String(episode.number).padStart(2, "0")} · ${episode.title || "Untitled episode"}`,
         href: kind === "movie" ? root2 : `${root2}/seasons/${episode.season}/episodes/${episode.number}`,
         poster: posterUrl(media.images?.poster?.[0]),
-        progress: row.progress,
-        pausedAt: row.paused_at,
-        pausedMs: Date.parse(row.paused_at)
+        progress: row2.progress,
+        pausedAt: row2.paused_at,
+        pausedMs: Date.parse(row2.paused_at)
       });
     }
     return sortPlayback(mapped);
@@ -2081,7 +2086,7 @@
       if (!alive()) return;
       content.replaceChildren();
       if (!overview) {
-        const item = items.find((row) => matchesRoute(row, route));
+        const item = items.find((row2) => matchesRoute(row2, route));
         node.hidden = !item;
         if (!item) return;
         const clear2 = button("Clear", "one");
@@ -2097,12 +2102,12 @@
       }
       node.querySelector('[data-action="load"]').textContent = loaded ? "Refresh paused playback" : "Load paused playback";
       if (!loaded) return;
-      for (const id of selected) if (!items.some((row) => row.id === id)) selected.delete(id);
+      for (const id of selected) if (!items.some((row2) => row2.id === id)) selected.delete(id);
       if (!items.length) {
         content.append(el("p", { class: "ogt-hint", text: "No paused playback." }));
         return;
       }
-      const all = el("input", { type: "checkbox", dataset: { action: "all" }, checked: items.every((row) => selected.has(row.id)), "aria-label": "Select all paused items" });
+      const all = el("input", { type: "checkbox", dataset: { action: "all" }, checked: items.every((row2) => selected.has(row2.id)), "aria-label": "Select all paused items" });
       const tools = el(
         "div",
         { class: "ogt-playback__tools" },
@@ -2177,7 +2182,7 @@
           const days = node.querySelector('[aria-label="Age in days"]').value;
           if (days.trim() === "" || !Number.isInteger(Number(days)) || Number(days) < 0) {
             status.textContent = "Enter a whole number of days, zero or greater.";
-          } else await clear(olderThan(items, days).map((row) => row.id));
+          } else await clear(olderThan(items, days).map((row2) => row2.id));
         }
       } catch (error) {
         debugError("playback request failed", error);
@@ -2190,12 +2195,12 @@
       const input = event.target;
       if (input.dataset.action === "all") {
         selected.clear();
-        if (input.checked) for (const row of items) selected.add(row.id);
+        if (input.checked) for (const row2 of items) selected.add(row2.id);
         for (const box of node.querySelectorAll('[data-action="select"]')) box.checked = input.checked;
       } else if (input.dataset.action === "select") {
         if (input.checked) selected.add(Number(input.dataset.id));
         else selected.delete(Number(input.dataset.id));
-        node.querySelector('[data-action="all"]').checked = items.every((row) => selected.has(row.id));
+        node.querySelector('[data-action="all"]').checked = items.every((row2) => selected.has(row2.id));
       }
     }
     node.addEventListener("click", onClick);
@@ -2558,11 +2563,11 @@
   // src/features/your-ratings/data.js
   function mapRatings(rows) {
     const items = /* @__PURE__ */ new Map();
-    for (const row of rows) {
-      const show = row.show?.ids?.trakt;
-      const { season, number } = row.episode || {};
-      if (!Number.isSafeInteger(show) || show <= 0 || !Number.isInteger(season) || season < 0 || !Number.isInteger(number) || number < 1 || !Number.isInteger(row.rating) || row.rating < 1 || row.rating > 10) continue;
-      items.set(`${show}:${season}:${number}`, { show, slug: row.show.ids.slug, season, number, rating: row.rating });
+    for (const row2 of rows) {
+      const show = row2.show?.ids?.trakt;
+      const { season, number } = row2.episode || {};
+      if (!Number.isSafeInteger(show) || show <= 0 || !Number.isInteger(season) || season < 0 || !Number.isInteger(number) || number < 1 || !Number.isInteger(row2.rating) || row2.rating < 1 || row2.rating > 10) continue;
+      items.set(`${show}:${season}:${number}`, { show, slug: row2.show.ids.slug, season, number, rating: row2.rating });
     }
     return [...items.values()];
   }
@@ -2729,8 +2734,8 @@
   }
   function readSeasonEpisodes(doc) {
     const episodes = [];
-    for (const row of doc.querySelectorAll("section.episodes article.row")) {
-      const heading = row.querySelector(".titles h3");
+    for (const row2 of doc.querySelectorAll("section.episodes article.row")) {
+      const heading = row2.querySelector(".titles h3");
       const number = episodeNumber(text(heading?.querySelector(".number")));
       const links = heading?.querySelectorAll("a") || [];
       const titleLink = links[links.length - 1];
@@ -2738,7 +2743,7 @@
       episodes.push({
         number,
         title: text(titleLink),
-        rating: percent2(text(row.querySelector(".rating-trigger .value"))),
+        rating: percent2(text(row2.querySelector(".rating-trigger .value"))),
         votes: null,
         href: titleLink.getAttribute("href")
       });
@@ -2840,9 +2845,9 @@
     }
     if (!stats) return;
     const max = Math.max(1, ...stats.flatMap((s) => [s.watchers, s.comments]));
-    const countY = (count) => plot.top + (1 - count / max) * (height - plot.top - plot.bottom);
-    for (const count of [0, Math.round(max / 2), max]) {
-      chart.append(svg("text", { class: "ogt-season-chart__axis", x: width - plot.right + 5, y: countY(count) + 4 }, String(count)));
+    const countY = (count2) => plot.top + (1 - count2 / max) * (height - plot.top - plot.bottom);
+    for (const count2 of [0, Math.round(max / 2), max]) {
+      chart.append(svg("text", { class: "ogt-season-chart__axis", x: width - plot.right + 5, y: countY(count2) + 4 }, String(count2)));
     }
     for (const key of ["watchers", "comments"]) {
       const series = stats.map((s) => ({ number: s.number, x: x(s.number), y: countY(s[key]) }));
@@ -3208,17 +3213,17 @@
     return time >= Date.parse(span.start) && time < Date.parse(span.end);
   }
   function summarize(history2, ratings, comments, span) {
-    const plays = history2.filter((row) => inMonth(row.watched_at, span));
+    const plays = history2.filter((row2) => inMonth(row2.watched_at, span));
     const first = plays.reduce((a, b) => !a || Date.parse(b.watched_at) < Date.parse(a.watched_at) ? b : a, null);
-    const minutes = plays.reduce((sum, row) => {
-      const runtime = (row.episode || row.movie)?.runtime;
+    const minutes = plays.reduce((sum, row2) => {
+      const runtime = (row2.episode || row2.movie)?.runtime;
       return sum + (Number.isFinite(runtime) && runtime > 0 ? runtime : 0);
     }, 0);
     return {
       plays: plays.length,
       hours: Math.round(minutes / 60),
-      ratings: ratings.filter((row) => inMonth(row.rated_at, span)).length,
-      comments: comments.filter((row) => inMonth(row.comment?.created_at ?? row.created_at, span)).length,
+      ratings: ratings.filter((row2) => inMonth(row2.rated_at, span)).length,
+      comments: comments.filter((row2) => inMonth(row2.comment?.created_at ?? row2.created_at, span)).length,
       first
     };
   }
@@ -3274,7 +3279,7 @@
       const history2 = await paginate(apiAuthPage, "/sync/history", { start_at: span.start, end_at: span.end, extended: "full,images" });
       alive();
       let summary2 = { plays: 0 };
-      if (history2.some((row) => Date.parse(row.watched_at) >= Date.parse(span.start) && Date.parse(row.watched_at) < Date.parse(span.end))) {
+      if (history2.some((row2) => Date.parse(row2.watched_at) >= Date.parse(span.start) && Date.parse(row2.watched_at) < Date.parse(span.end))) {
         const [ratings, comments] = await Promise.all([
           apiAuth("GET", "/sync/ratings"),
           paginate(apiAuthPage, "/users/me/comments")
@@ -3433,6 +3438,369 @@
     }
   };
 
+  // src/features/all-lists/data.js
+  function posterUrl2(value) {
+    if (typeof value !== "string" || !value) return null;
+    try {
+      const url = new URL(value.startsWith("https://") ? value : `https://${value}`);
+      return url.protocol === "https:" && url.hostname === "media.trakt.tv" ? url.href : null;
+    } catch {
+      return null;
+    }
+  }
+  function count(value) {
+    return Number.isSafeInteger(value) && value >= 0 ? value : null;
+  }
+  function ownerName(user) {
+    return typeof user?.name === "string" && user.name.trim() ? user.name.trim() : user?.ids?.slug || user?.username || null;
+  }
+  function normalizeList(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const id = count(raw.ids?.trakt);
+    const slug = typeof raw.ids?.slug === "string" ? raw.ids.slug : "";
+    const ownerSlug = raw.user?.ids?.slug || raw.user?.username;
+    const name = typeof raw.name === "string" ? raw.name.trim() : "";
+    if (!id || !slug || typeof ownerSlug !== "string" || !ownerSlug || !name) return null;
+    const images = Array.isArray(raw.images?.posters) ? raw.images.posters : [];
+    return {
+      id,
+      slug,
+      name,
+      description: typeof raw.description === "string" ? raw.description.trim() : "",
+      owner: { slug: ownerSlug, name: ownerName(raw.user) },
+      itemCount: count(raw.item_count),
+      likes: count(raw.likes),
+      // One poster is enough for the compact row; liked lists normally come without any.
+      poster: posterUrl2(images[0])
+    };
+  }
+  function collaborationLists(payload) {
+    if (!Array.isArray(payload)) return [];
+    return payload.map(normalizeList).filter(Boolean);
+  }
+  function likedLists(payload) {
+    if (!Array.isArray(payload)) return [];
+    return payload.map((entry) => normalizeList(entry?.list)).filter(Boolean);
+  }
+  function listHref(list) {
+    return `/users/${encodeURIComponent(list.owner.slug)}/lists/${encodeURIComponent(list.slug)}`;
+  }
+  function itemCountLabel(value) {
+    if (!Number.isSafeInteger(value) || value < 0) return null;
+    return `${value} ${value === 1 ? "item" : "items"}`;
+  }
+
+  // src/features/all-lists/api.js
+  function userPath(id) {
+    return `/users/${encodeURIComponent(id)}`;
+  }
+  function getCollaborationLists(id) {
+    return apiGet(`${userPath(id)}/lists/collaborations?extended=images`);
+  }
+  function getLikedLists(id) {
+    return apiGet(`${userPath(id)}/likes/lists?extended=images`);
+  }
+
+  // src/features/all-lists/styles.js
+  var CSS7 = String.raw`
+/* Match og's Container so the panel lines up with the list rows above it. */
+.ogt-lists {
+  box-sizing: border-box;
+  inline-size: 100%;
+  margin-inline: auto;
+  padding-inline: calc(var(--gutter, 20px) / 2);
+}
+
+@media (min-width: 768px) {
+  .ogt-lists {
+    inline-size: var(--container-sm, 740px);
+  }
+}
+
+@media (min-width: 992px) {
+  .ogt-lists {
+    inline-size: var(--container-md, 960px);
+  }
+}
+
+@media (min-width: 1200px) {
+  .ogt-lists {
+    inline-size: var(--container-lg, 1160px);
+  }
+}
+
+.ogt-lists .ogt-panel {
+  margin-block-start: 0;
+}
+
+.ogt-lists__groups[hidden] {
+  display: none !important;
+}
+
+.ogt-lists__group + .ogt-lists__group {
+  margin-block-start: 16px;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--ogt-border);
+}
+
+.ogt-lists__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  color: var(--ogt-fg);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ogt-lists__count {
+  min-inline-size: 20px;
+  padding: 1px 6px;
+  border: 1px solid var(--ogt-border);
+  border-radius: 999px;
+  color: var(--ogt-muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.ogt-lists__items {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ogt-lists__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 5px;
+}
+
+.ogt-lists__item:hover {
+  background: var(--ogt-raised);
+}
+
+.ogt-lists__poster {
+  flex-shrink: 0;
+  inline-size: 34px;
+  block-size: 51px;
+  border-radius: 3px;
+  background: var(--ogt-raised);
+  object-fit: cover;
+}
+
+.ogt-lists__body {
+  min-inline-size: 0;
+}
+
+.ogt-lists__name {
+  color: var(--ogt-fg);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ogt-lists__name:hover,
+.ogt-lists__name:focus-visible {
+  color: var(--ogt-accent);
+  text-decoration: underline;
+}
+
+.ogt-lists__name:focus-visible {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 2px;
+}
+
+.ogt-lists__meta {
+  margin: 2px 0 0;
+  color: var(--ogt-muted);
+  font-size: 11px;
+}
+
+.ogt-lists__description {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 4px 0 0;
+  color: var(--ogt-fg);
+  font-size: 12px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+`;
+
+  // src/features/all-lists/index.js
+  var PANEL_ID3 = "ogt-all-lists";
+  var GROUPS_ID = "ogt-all-lists-groups";
+  var TITLE_ID2 = "ogt-all-lists-title";
+  function row(entry) {
+    const meta = [itemCountLabel(entry.itemCount), entry.owner.name ? `by ${entry.owner.name}` : null].filter(Boolean);
+    const poster = entry.poster ? el("img", {
+      class: "ogt-lists__poster",
+      src: entry.poster,
+      alt: "",
+      loading: "lazy",
+      decoding: "async",
+      referrerpolicy: "no-referrer"
+    }) : null;
+    poster?.addEventListener("error", () => poster.remove(), { once: true });
+    return el(
+      "li",
+      { class: "ogt-lists__item" },
+      poster,
+      el(
+        "div",
+        { class: "ogt-lists__body" },
+        el("a", { class: "ogt-lists__name", href: listHref(entry), text: entry.name }),
+        meta.length ? el("p", { class: "ogt-lists__meta", text: meta.join(" · ") }) : null,
+        entry.description ? el("p", { class: "ogt-lists__description", text: entry.description }) : null
+      )
+    );
+  }
+  function group({ key, title, lists, empty }) {
+    const headingId = `${GROUPS_ID}-${key}`;
+    return el(
+      "section",
+      { class: "ogt-lists__group", "aria-labelledby": headingId },
+      el(
+        "h3",
+        {
+          class: "ogt-lists__heading",
+          id: headingId,
+          "aria-label": `${title}, ${lists.length} ${lists.length === 1 ? "list" : "lists"}`
+        },
+        title,
+        el("span", { class: "ogt-lists__count", "aria-hidden": "true", text: String(lists.length) })
+      ),
+      lists.length ? el("ul", { class: "ogt-lists__items" }, ...lists.map(row)) : el("p", { class: "ogt-hint", text: empty })
+    );
+  }
+  function errorHint(failures, missingClientId) {
+    if (missingClientId) return "Set a Trakt API client ID in the toolkit menu to load the other lists.";
+    return `Couldn’t load ${failures.join(" or ")}.`;
+  }
+  function createPanel4(profile) {
+    let cancelled = false;
+    let loading = false;
+    let loaded = false;
+    let expanded = false;
+    const groups = el("div", { class: "ogt-lists__groups", id: GROUPS_ID, hidden: true });
+    const hint = el("p", { class: "ogt-hint", role: "status", hidden: true });
+    const toggle = el("button", {
+      class: "ogt-chip",
+      type: "button",
+      text: "Show all lists",
+      "aria-expanded": "false",
+      "aria-controls": GROUPS_ID
+    });
+    const retry = el("button", { class: "ogt-chip", type: "button", text: "Try again", hidden: true });
+    const node = el(
+      "section",
+      { class: "ogt-lists", id: PANEL_ID3, "aria-labelledby": TITLE_ID2 },
+      el(
+        "div",
+        { class: "ogt-panel" },
+        el(
+          "div",
+          { class: "ogt-head" },
+          el("h2", { class: "ogt-title", id: TITLE_ID2, text: "All lists" }),
+          el("span", { class: "ogt-badge", text: "og toolkit" })
+        ),
+        el("p", { class: "ogt-hint", text: "Collaborations and liked lists from this profile, without switching pages." }),
+        el("div", { class: "ogt-row" }, toggle, retry),
+        hint,
+        groups
+      )
+    );
+    function setExpanded(open) {
+      expanded = open;
+      groups.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.textContent = open ? "Hide all lists" : "Show all lists";
+    }
+    async function load() {
+      if (cancelled || loading) return;
+      loading = true;
+      toggle.setAttribute("aria-disabled", "true");
+      toggle.textContent = "Loading lists…";
+      hint.hidden = true;
+      retry.hidden = true;
+      const results = await Promise.allSettled([getCollaborationLists(profile), getLikedLists(profile)]);
+      if (cancelled) return;
+      loading = false;
+      toggle.removeAttribute("aria-disabled");
+      const [collaborations, liked] = results;
+      const failures = [];
+      const collaborationRows = collaborations.status === "fulfilled" ? collaborationLists(collaborations.value) : [];
+      const likedRows = liked.status === "fulfilled" ? likedLists(liked.value) : [];
+      if (collaborations.status === "rejected") failures.push("collaborations");
+      if (liked.status === "rejected") failures.push("liked lists");
+      groups.replaceChildren(
+        group({ key: "collaborations", title: "Collaborations", lists: collaborationRows, empty: "No collaborations." }),
+        group({ key: "liked", title: "Liked lists", lists: likedRows, empty: "No liked lists." })
+      );
+      const missingClientId = results.some(
+        (result) => result.status === "rejected" && result.reason?.name === "MissingClientIdError"
+      );
+      for (const result of results) {
+        if (result.status === "rejected") debugError("all-lists lookup failed", result.reason);
+      }
+      if (failures.length) {
+        hint.textContent = errorHint(failures, missingClientId);
+        hint.hidden = false;
+        retry.hidden = false;
+      }
+      loaded = collaborationRows.length > 0 || likedRows.length > 0 || failures.length === 0;
+      if (!collaborationRows.length && !likedRows.length && failures.length) {
+        loaded = false;
+        setExpanded(false);
+        return;
+      }
+      setExpanded(true);
+    }
+    function onToggle() {
+      if (loading) return;
+      if (expanded) {
+        setExpanded(false);
+        return;
+      }
+      if (loaded) {
+        setExpanded(true);
+        return;
+      }
+      void load();
+    }
+    toggle.addEventListener("click", onToggle);
+    retry.addEventListener("click", load);
+    return {
+      node,
+      destroy() {
+        cancelled = true;
+        toggle.removeEventListener("click", onToggle);
+        retry.removeEventListener("click", load);
+        node.remove();
+      }
+    };
+  }
+  var allLists = {
+    id: "all-lists",
+    css: CSS7,
+    match(route) {
+      return route.name === "lists";
+    },
+    mount(route) {
+      if (document.getElementById(PANEL_ID3)) return null;
+      const listsSection = document.getElementById("lists-heading")?.closest("section.lists") || document.querySelector("section.lists");
+      if (!listsSection) return null;
+      const panel = createPanel4(route.id);
+      listsSection.after(panel.node);
+      return panel;
+    }
+  };
+
   // src/features/library/api.js
   var validId = (id) => Number.isSafeInteger(id) && id > 0;
   function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
@@ -3477,7 +3845,7 @@
           throw new Error("Trakt could not find some items; the addition may be incomplete.");
         }
         const counts = [result?.added?.movies, result?.added?.episodes, result?.updated?.movies, result?.updated?.episodes];
-        if (!counts.some((count) => Number.isInteger(count) && count > 0)) throw new Error("Trakt did not confirm a library addition.");
+        if (!counts.some((count2) => Number.isInteger(count2) && count2 > 0)) throw new Error("Trakt did not confirm a library addition.");
         return { cancelled: false };
       }
     };
@@ -3981,7 +4349,7 @@
           throw new Error("Trakt could not find this title.");
         }
         const counts = [result?.added?.[lookup.type], result?.existing?.[lookup.type]];
-        if (!counts.some((count) => Number.isSafeInteger(count) && count > 0)) {
+        if (!counts.some((count2) => Number.isSafeInteger(count2) && count2 > 0)) {
           throw new Error("Trakt did not confirm a watchlist addition.");
         }
         return { cancelled: false, title };
@@ -4507,7 +4875,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, monthReview];
+  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, monthReview, allLists];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))

@@ -4,8 +4,8 @@ An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds th
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
 **Status:** v0.2.0: custom links with presets and an inline editor, a season ratings chart, optional Trakt sign-in
-with a paused-playback manager, manual library additions and one-click watchlist additions, and in-page name
-pronunciation on person pages.
+with a paused-playback manager, manual library additions and one-click watchlist additions, an all-lists view on
+profile pages, and in-page name pronunciation on person pages.
 
 ## Install
 
@@ -43,6 +43,14 @@ ten minutes and are cleared when the account changes; nothing private enters the
 
 **More** on a season chart loads watchers and comments, off by default, on a separate right-hand count axis.
 This needs a client ID and uses the shared request queue. Seasons with more than 30 episodes skip these requests.
+
+### All lists in one view
+
+On a profile’s personal lists page, **Show all lists** appends that profile’s **Collaborations** and **Liked lists**
+below the personal list, each under its own heading, so everything is one scroll instead of three pages. It reads
+the public list indexes with your Trakt client ID; no sign-in is needed. The button collapses the groups again, and
+a failed lookup shows a one-line hint with **Try again**. List rows link to the list, with owner, item count and
+poster when the API provides one.
 
 ### Last month in review
 
@@ -252,7 +260,6 @@ links, poster rating corners. Backlog:
 
 - set playback progress by hand;
 - list preview posters that link to their titles;
-- all your lists in one view;
 - remove the season chart's **More** button (its watchers and comments lines are too flat to read);
 - fix custom links on season and episode pages (they read the season/episode instead of the show), or show them only on title pages;
 - **Add to watchlist** on a person's credits, one row at a time or all shown credits at once;
