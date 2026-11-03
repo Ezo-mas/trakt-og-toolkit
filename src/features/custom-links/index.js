@@ -17,11 +17,14 @@ import {
   presetAlreadyAdded,
   readSeasons,
   readTitleData,
+  selectionForRoute,
+  showTemplateData,
   templateVars,
   validateCustomLinks,
 } from './data.js';
 import { PRESETS } from './presets.js';
 import { getSeasons } from '../../core/trakt.js';
+import { getShowDetails } from './api.js';
 
 const PANEL_ID = 'ogt-custom-links';
 const TITLE_ID = 'ogt-custom-links-title';
@@ -56,11 +59,13 @@ function chip({ label, href, template }) {
   return link;
 }
 
-function createPanel(meta) {
+function createPanel(meta, route) {
   let cancelled = false;
   let seasons = [];
   const timers = [];
-  let selection = getSelection(meta.kind, meta.id) || { season: null, episode: null };
+  // Season/episode pages take their values from the route; only title pages use the picker.
+  const fixedSelection = route.name === 'season' || route.name === 'episode';
+  let selection = selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
 
   const linksRow = el('div', { class: 'ogt-row ogt-links' });
   const controlsRow = el('div', { class: 'ogt-row', hidden: true });
@@ -115,7 +120,21 @@ function createPanel(meta) {
       if (missingPlaceholders(entry.url, values).length) continue;
       linksRow.append(chip({ label: entry.label, href: fillTemplate(entry.url, values), template: entry.url }));
     }
+    lookUpShow();
+  }
 
+  let showRequested = false;
+  /** Season/episode pages: fetch the show once a link needs what og's page doesn't give (the show's year, an episode
+   *  page's IMDb id). This runs on every render, so a link added in the editor triggers it too. Without a client ID
+   *  those links stay hidden rather than point at the season or episode. */
+  function lookUpShow() {
+    if (!fixedSelection || showRequested || !getClientId()) return;
+    const missing = ['year', 'tmdb', 'imdb'].filter((key) => meta[key] == null);
+    if (!getCustomLinks().some((entry) => missing.some((key) => entry.url.includes(`{${key}}`)))) return;
+    showRequested = true;
+    getShowDetails(route.id)
+      .then((show) => setMeta(showTemplateData(show)))
+      .catch((error) => { if (!cancelled) debugError('show lookup failed', error); });
   }
 
   let currentView = null;
@@ -332,11 +351,11 @@ function createPanel(meta) {
   node.addEventListener('keydown', onKeyDown);
 
   function needsSelection() {
-    return getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
+    return !fixedSelection && getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
   }
 
   function persistSelection() {
-    if (selection.season != null) setSelection(meta.kind, meta.id, selection);
+    if (!fixedSelection && selection.season != null) setSelection(meta.kind, meta.id, selection);
   }
 
   const seasonSelect = el('select', { class: 'ogt-select', 'aria-label': 'Season' });
@@ -406,7 +425,7 @@ function createPanel(meta) {
   }
 
   function renderControls() {
-    const hasSeasons = meta.kind === 'show' && seasons.length > 0 && needsSelection();
+    const hasSeasons = !fixedSelection && meta.kind === 'show' && seasons.length > 0 && needsSelection();
     if (!hasSeasons) {
       controlsRow.hidden = true;
       return;
@@ -439,7 +458,7 @@ function createPanel(meta) {
    *  ID is configured, the API is the source of truth; the rendered season cards are only the instant
    *  first paint (and the fallback when there is no key). */
   function loadSeasons() {
-    if (meta.kind !== 'show') return;
+    if (meta.kind !== 'show' || fixedSelection) return;
 
     seasons = readSeasons(document);
     if (seasons.length) renderControls();
@@ -487,6 +506,13 @@ function createPanel(meta) {
     }
   }
 
+  /** Fill in the show's own values once its lookup returns, keeping what og's page already gave. */
+  function setMeta(next) {
+    if (cancelled || !next) return;
+    for (const [key, value] of Object.entries(next)) if (value != null) meta[key] = value;
+    renderLinks();
+  }
+
   renderLinks();
   if (meta.kind === 'show' && needsSelection()) loadSeasons();
   else renderControls();
@@ -518,8 +544,9 @@ export const customLinks = {
     const mount = findMountPoint();
     if (!mount) return null;
 
-    const panel = createPanel(meta);
+    const panel = createPanel(meta, route);
     mount.parent.insertBefore(panel.node, mount.before);
+
     return panel;
   },
 };

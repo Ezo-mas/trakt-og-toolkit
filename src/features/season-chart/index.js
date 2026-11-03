@@ -12,9 +12,9 @@ import {
 } from './data.js';
 import { isSignedIn } from '../../core/trakt.js';
 import { ratingsApi } from '../your-ratings/api.js';
-import { averageLabel, forShow, mapStats } from '../your-ratings/data.js';
-import { drawExtras } from './extra.js';
-import { getEpisodeStats, getSeasonEpisodes } from './api.js';
+import { averageLabel, forShow } from '../your-ratings/data.js';
+import { drawPersonal } from './personal.js';
+import { getSeasonEpisodes } from './api.js';
 import { CSS } from './styles.js';
 
 const PANEL_ID = 'ogt-season-chart';
@@ -51,9 +51,9 @@ function summary(episodes, average) {
   return `Season average: ${averageText} · Best: ${episodeName(best)} · Worst: ${episodeName(worst)}`;
 }
 
-function drawChart(chart, episodes, average, targetWidth, personal = [], stats = null) {
+function drawChart(chart, episodes, average, targetWidth, personal = []) {
   const scale = [...episodes, ...personal.map((p) => ({ ...p, rating: p.rating * 10 }))];
-  const geometry = chartGeometry(episodes, episodes, average, targetWidth, scale, stats ? 64 : 12);
+  const geometry = chartGeometry(episodes, episodes, average, targetWidth, scale);
   const { width, height, plot, ticks, points, averageY } = geometry;
   chart.replaceChildren();
   chart.setAttribute('viewBox', `0 0 ${width} ${height}`);
@@ -123,14 +123,11 @@ function drawChart(chart, episodes, average, targetWidth, personal = [], stats =
   }
   // Labels last, so they sit above the average line.
   chart.append(...values);
-  drawExtras(chart, episodes, geometry, personal, stats);
+  drawPersonal(chart, episodes, geometry, personal);
 }
 
 function createPanel(episodes, route) {
   let personal = [];
-  let stats = null;
-  let moreOpen = false;
-  let statsFlight = false;
   let authRevision = 0;
   let cancelled = false;
   let currentEpisodes = episodes;
@@ -152,31 +149,7 @@ function createPanel(episodes, route) {
   );
 
   const legend = el('div', { class: 'ogt-season-chart__legend', hidden: true });
-  const more = el('button', { class: 'ogt-chip', type: 'button', text: 'More', 'aria-expanded': 'false' });
-  const hint = el('span', { class: 'ogt-hint', role: 'status' });
-  node.append(legend, el('div', { class: 'ogt-row' }, more, hint));
-  async function toggleMore() {
-    moreOpen = !moreOpen;
-    more.setAttribute('aria-expanded', String(moreOpen));
-    more.textContent = moreOpen ? 'Less' : 'More';
-    hint.hidden = !moreOpen;
-    render(currentEpisodes);
-    if (!moreOpen || stats || statsFlight) return;
-    if (currentEpisodes.length > 30) { hint.textContent = 'Episode statistics skipped for seasons over 30 episodes.'; return; }
-    if (!getClientId()) { hint.textContent = 'Set a Trakt client ID to load episode statistics.'; return; }
-    statsFlight = true;
-    hint.textContent = 'Loading episode statistics…';
-    try {
-      const result = await Promise.all(currentEpisodes.map(async (episode) => ({
-        number: episode.number, ...mapStats(await getEpisodeStats(route.id, route.season, episode.number)),
-      })));
-      if (cancelled) return;
-      stats = result; hint.textContent = ''; render(currentEpisodes);
-    } catch (error) {
-      if (!cancelled) { hint.textContent = 'Episode statistics unavailable.'; debugError('episode statistics failed', error); }
-    } finally { statsFlight = false; }
-  }
-  more.addEventListener('click', toggleMore);
+  node.append(legend);
   async function loadPersonal() {
     const revision = ++authRevision;
     personal = [];
@@ -201,9 +174,8 @@ function createPanel(episodes, route) {
     summaryLine.textContent = [summary(currentEpisodes, average), averageLabel(visiblePersonal, currentEpisodes.length)].filter(Boolean).join(' · ');
     legend.replaceChildren(el('span', { class: 'ogt-season-chart__legend-community', text: 'Trakt community (bars)' }));
     if (visiblePersonal.length) legend.append(el('span', { class: 'ogt-season-chart__legend-personal', text: 'Your ratings (blue line)' }));
-    if (moreOpen && stats) legend.append(el('span', { text: 'Watchers (green) · Comments (purple dashed) · Counts: right axis' }));
-    legend.hidden = !visiblePersonal.length && !(moreOpen && stats);
-    drawChart(chart, currentEpisodes, average, chartWidth(), visiblePersonal, moreOpen ? stats : null);
+    legend.hidden = !visiblePersonal.length;
+    drawChart(chart, currentEpisodes, average, chartWidth(), visiblePersonal);
   }
 
   // Draw at the panel's real width so the chart fills it without scaling text and dots up.
@@ -231,7 +203,6 @@ function createPanel(episodes, route) {
       resize?.disconnect();
       authRevision++;
       document.removeEventListener('ogt:authchange', loadPersonal);
-      more.removeEventListener('click', toggleMore);
       node.remove();
     },
   };

@@ -5,12 +5,32 @@ import { text } from '../../core/dom.js';
 const TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
 const IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
 const SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
+const SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
+const SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
 
 /**
  * Read what the page already knows: title, year, TMDb and IMDb ids.
  * og renders these in the summary's stats strip, so no API call is needed.
  */
 export function readTitleData(doc, route) {
+  // Season and episode headings describe that season/episode, not the show. Their title comes from og's show link,
+  // and ids from og's external links where those are the show's: TMDb's `tv/:id/season/…` always starts with the
+  // show, and so does IMDb's season link (`tt…/episodes?season=1`); an episode page's IMDb id is the episode's own.
+  // The year shown is the season/episode's, so the show's year (and an episode page's IMDb id) come from the show
+  // lookup in index.js; until then those links stay hidden rather than point at the wrong title or year.
+  if (route.kind === 'show' && (route.name === 'season' || route.name === 'episode')) {
+    return {
+      kind: 'show',
+      type: 'tv',
+      plural: 'shows',
+      id: route.id,
+      title: cleanTitle(showLinkTitle(doc)) || showTitleFromPageTitle(doc, route) || null,
+      year: null,
+      tmdb: firstMatch(doc, 'a[href*="themoviedb.org/tv/"]', TMDB_RE, (match) => Number(match[2])),
+      imdb: route.name === 'season' ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null,
+    };
+  }
+
   const heading = doc.querySelector('.summary-title h1') || doc.querySelector('h1');
   const rawHeading = headingText(heading);
 
@@ -65,6 +85,52 @@ function headingText(heading) {
     .join(' ')
     .trim();
   return direct || text(heading);
+}
+
+function firstMatch(doc, selector, pattern, value) {
+  for (const link of doc.querySelectorAll(selector)) {
+    const match = link.getAttribute('href')?.match(pattern);
+    if (match) return value(match);
+  }
+  return null;
+}
+
+/** The show link above a season or episode heading, e.g. "Breaking Bad". */
+function showLinkTitle(doc) {
+  for (const link of doc.querySelectorAll('.title-tags a[href]')) {
+    if (SHOW_HREF_RE.test(link.getAttribute('href') || '')) return text(link);
+  }
+  return '';
+}
+
+/** Last-resort show name from og's page title: "Breaking Bad: Season 1" / "Breaking Bad S01E01: Pilot". */
+function showTitleFromPageTitle(doc, route) {
+  const raw = text(doc.querySelector('title')).replace(/\s*[-–|]\s*Trakt.*$/i, '').trim();
+  const suffix = route.name === 'season' ? /\s*:\s*Season\s+\d+\s*$/i : /\s+S\d+E\d+\s*:.*$/i;
+  return raw.replace(suffix, '').trim();
+}
+
+/** Season/episode selection preset by the route; title pages keep their remembered picker values. */
+export function selectionForRoute(route, stored = null) {
+  if (route.name === 'season') return { season: route.season ?? null, episode: null };
+  if (route.name === 'episode') return { season: route.season ?? null, episode: route.episode ?? null };
+  if (stored && typeof stored === 'object') {
+    return { season: stored.season ?? null, episode: stored.episode ?? null };
+  }
+  return { season: null, episode: null };
+}
+
+/** Show values for the template variables, from `GET /shows/:id?extended=full`. */
+export function showTemplateData(show) {
+  if (!show || typeof show !== 'object' || Array.isArray(show)) return null;
+  const title = typeof show.title === 'string' ? show.title.trim() : '';
+  if (!title) return null;
+  return {
+    title,
+    year: Number.isInteger(show.year) && show.year > 0 ? show.year : null,
+    tmdb: Number.isSafeInteger(show.ids?.tmdb) && show.ids.tmdb > 0 ? show.ids.tmdb : null,
+    imdb: typeof show.ids?.imdb === 'string' && /^tt\d+$/.test(show.ids.imdb) ? show.ids.imdb : null,
+  };
 }
 
 /**

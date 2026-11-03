@@ -31,9 +31,3 @@ export function linePath(points) {
     return `${command}${x},${y}`;
   }).join('');
 }
-export function mapStats(value) {
-  if (!value || !['watchers', 'comments'].every((key) => Number.isSafeInteger(value[key]) && value[key] >= 0)) {
-    throw new Error('Invalid episode statistics.');
-  }
-  return { watchers: value.watchers, comments: value.comments };
-}

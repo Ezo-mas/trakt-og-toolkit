@@ -1,11 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Window } from 'happy-dom';
+import { parseRoute } from '../src/core/router.js';
+import { EPISODE_PAGE_HTML, SEASON_PAGE_HTML } from './fixtures.js';
 import {
   addPresets,
   filterPresetsByKind,
   mergeSeasons,
   moveLink,
   presetAlreadyAdded,
+  readTitleData,
+  selectionForRoute,
+  showTemplateData,
   validateCustomLinks,
 } from '../src/features/custom-links/data.js';
 
@@ -63,6 +69,55 @@ test('moveLink moves one row and leaves out-of-range moves unchanged', () => {
   assert.deepEqual(moveLink(links, 0, -1), links);
   assert.deepEqual(moveLink(links, 2, 1), links);
   assert.deepEqual(links, ['a', 'b', 'c']);
+});
+
+test('season and episode pages read the show context instead of the page heading', (t) => {
+  const seasonWindow = new Window();
+  seasonWindow.document.body.innerHTML = SEASON_PAGE_HTML;
+  const season = readTitleData(seasonWindow.document, parseRoute('/shows/breaking-bad/seasons/1'));
+  seasonWindow.close();
+  assert.deepEqual(
+    { title: season.title, year: season.year, id: season.id, tmdb: season.tmdb, imdb: season.imdb },
+    { title: 'Breaking Bad', year: null, id: 'breaking-bad', tmdb: 1396, imdb: 'tt0903747' },
+    'the page year belongs to the season; og\'s TMDb and IMDb season links carry the show ids',
+  );
+
+  const episodeWindow = new Window();
+  episodeWindow.document.body.innerHTML = EPISODE_PAGE_HTML;
+  const episode = readTitleData(episodeWindow.document, parseRoute('/shows/breaking-bad/seasons/1/episodes/1'));
+  episodeWindow.close();
+  assert.equal(episode.title, 'Breaking Bad', 'the show link wins over the episode heading');
+  assert.notEqual(episode.title, 'Pilot');
+  assert.equal(episode.year, null, 'the episode air year is not the show year');
+  assert.equal(episode.tmdb, 1396, 'TMDb episode links start with the show id');
+  assert.equal(episode.imdb, null, 'the episode page\'s IMDb id is the episode\'s own');
+});
+
+test('route selection presets season and episode, while title pages keep the stored picker values', () => {
+  assert.deepEqual(selectionForRoute(parseRoute('/shows/breaking-bad/seasons/2')), { season: 2, episode: null });
+  assert.deepEqual(
+    selectionForRoute(parseRoute('/shows/breaking-bad/seasons/2/episodes/5')),
+    { season: 2, episode: 5 },
+  );
+  assert.deepEqual(
+    selectionForRoute(parseRoute('/shows/breaking-bad'), { season: 3, episode: 4 }),
+    { season: 3, episode: 4 },
+  );
+  assert.deepEqual(selectionForRoute(parseRoute('/shows/breaking-bad'), null), { season: null, episode: null });
+});
+
+test('show lookup data supplies the show title, year and external ids, with validation', () => {
+  assert.deepEqual(
+    showTemplateData({ title: ' Breaking Bad ', year: 2008, ids: { trakt: 1388, tmdb: 1396, imdb: 'tt0903747' } }),
+    { title: 'Breaking Bad', year: 2008, tmdb: 1396, imdb: 'tt0903747' },
+  );
+  assert.deepEqual(showTemplateData({ title: 'Show', ids: { tmdb: 0, imdb: 'nope' } }), {
+    title: 'Show',
+    year: null,
+    tmdb: null,
+    imdb: null,
+  });
+  for (const bad of [null, [], 'show', { title: '  ' }]) assert.equal(showTemplateData(bad), null);
 });
 
 test('custom link validation requires label and URL with an HTTP scheme', () => {

@@ -6,7 +6,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
-import { SHOW_HTML, MOVIE_HTML, SEASON_HTML, PERSON_HTML, FORVO_HTML, FORVO_EMPTY_HTML, FORVO_MULTI_HTML } from './fixtures.js';
+import {
+  SHOW_HTML,
+  MOVIE_HTML,
+  SEASON_HTML,
+  SEASON_PAGE_HTML,
+  EPISODE_PAGE_HTML,
+  PERSON_HTML,
+  FORVO_HTML,
+  FORVO_EMPTY_HTML,
+  FORVO_MULTI_HTML,
+} from './fixtures.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -452,4 +462,128 @@ test('show pages do not mount pronunciation controls', async (t) => {
   t.after(() => window.close());
   await wait(50);
   assert.equal(document.querySelector('.ogt-pronounce__wrap'), null);
+});
+
+test('season pages fill custom links from the show and preset the route season', async (t) => {
+  const requested = [];
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
+    html: SEASON_PAGE_HTML,
+    storage: {
+      'trakt.clientId': 'client',
+      'watch.customLinks': [
+        { label: 'Show', url: 'https://e.test/{title}/{year}/{tmdb}/{imdb}/{season}' },
+        { label: 'Episode only', url: 'https://e.test/{episode}' },
+      ],
+    },
+    gmRequest(options) {
+      if (new URL(options.url).pathname === '/shows/breaking-bad') requested.push(options.url);
+      setTimeout(() => options.onload({
+        status: 200,
+        responseHeaders: '',
+        responseText: JSON.stringify({
+          title: 'Breaking Bad',
+          year: 2008,
+          ids: { trakt: 1388, slug: 'breaking-bad', tmdb: 1396, imdb: 'tt0903747' },
+        }),
+      }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(80);
+
+  assert.ok(panel(document), 'panel is mounted');
+  assert.equal(
+    chip(document, 'Show').getAttribute('href'),
+    'https://e.test/Breaking%20Bad/2008/1396/tt0903747/1',
+  );
+  assert.equal(Boolean(chip(document, 'Episode only')), false, 'the season page has no episode');
+  assert.equal(document.querySelectorAll('#ogt-custom-links select').length, 0, 'no picker on a season page');
+  assert.equal(requested.length, 1, 'one show lookup, for the year');
+  assert.equal(new URL(requested[0]).search, '', 'the basic show response has the year and ids');
+});
+
+test('season pages fill show ids from og\'s links and only look the show up for what the page lacks', async (t) => {
+  const requested = [];
+  const storage = {
+    'trakt.clientId': 'client',
+    'watch.customLinks': [{ label: 'Ids', url: 'https://e.test/{tmdb}/{imdb}/{season}' }],
+  };
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
+    html: SEASON_PAGE_HTML,
+    storage,
+    gmRequest(options) {
+      if (new URL(options.url).pathname === '/shows/breaking-bad') requested.push(options.url);
+      setTimeout(() => options.onload({ status: 200, responseHeaders: '', responseText: JSON.stringify(new URL(options.url).pathname === '/shows/breaking-bad' ? { title: 'Breaking Bad', year: 2008, ids: { tmdb: 1396, imdb: 'tt0903747' } } : []) }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(80);
+  assert.equal(chip(document, 'Ids').getAttribute('href'), 'https://e.test/1396/tt0903747/1');
+  assert.equal(requested.length, 0, 'no lookup while og\'s page has every value');
+
+  // A {year} link added later (the editor saves and refreshes) asks for the show then.
+  window.GM_setValue('watch.customLinks', [...storage['watch.customLinks'], { label: 'Year', url: 'https://e.test/{year}' }]);
+  document.dispatchEvent(new window.Event('ogt:refresh'));
+  await wait(80);
+  assert.equal(requested.length, 1);
+  assert.equal(chip(document, 'Year').getAttribute('href'), 'https://e.test/2008');
+});
+
+test('episode pages fill custom links from the show and preset the route season and episode', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1',
+    html: EPISODE_PAGE_HTML,
+    storage: {
+      'trakt.clientId': 'client',
+      'watch.customLinks': [
+        { label: 'Episode', url: 'https://e.test/{title}/{imdb}/{season}/{episode}' },
+      ],
+    },
+    gmRequest(options) {
+      setTimeout(() => options.onload({
+        status: 200,
+        responseHeaders: '',
+        responseText: JSON.stringify({
+          title: 'Breaking Bad',
+          year: 2008,
+          ids: { trakt: 1388, slug: 'breaking-bad', tmdb: 1396, imdb: 'tt0903747' },
+        }),
+      }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(80);
+
+  assert.equal(
+    chip(document, 'Episode').getAttribute('href'),
+    'https://e.test/Breaking%20Bad/tt0903747/1/1',
+    'the show\'s IMDb id is used, not the episode\'s tt0959621',
+  );
+  assert.equal(document.querySelectorAll('#ogt-custom-links select').length, 0, 'no picker on an episode page');
+});
+
+test('season pages without a client ID use the show link and og\'s ids, and hide year links', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
+    html: SEASON_PAGE_HTML,
+    storage: {
+      'watch.customLinks': [
+        { label: 'Season', url: 'https://e.test/{title}/{season}' },
+        { label: 'Ids', url: 'https://e.test/{tmdb}' },
+        { label: 'Year', url: 'https://e.test/{year}' },
+      ],
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  assert.equal(chip(document, 'Season').getAttribute('href'), 'https://e.test/Breaking%20Bad/1');
+  assert.equal(chip(document, 'Ids').getAttribute('href'), 'https://e.test/1396', 'og\'s TMDb season link has the show id');
+  // Compare a boolean: a failing assertion on a happy-dom element tries to print it and runs out of memory.
+  assert.equal(Boolean(chip(document, 'Year')), false, 'the page year is the season\'s, so no year link');
 });
