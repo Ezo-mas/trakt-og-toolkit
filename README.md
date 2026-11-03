@@ -3,9 +3,9 @@
 An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds the useful old-Trakt bits og doesn't have
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
-**Status:** v0.2.0: custom links with presets and an inline editor, a season ratings chart, optional Trakt sign-in
-with a paused-playback manager, manual library additions and one-click watchlist additions, an all-lists view on
-profile pages, and in-page name pronunciation on person pages.
+**Status:** v0.3.0: custom links with presets and an inline editor, a season ratings chart with your own ratings,
+optional Trakt sign-in with a paused-playback manager, a last-month-in-review dashboard card, manual library additions
+and one-click watchlist additions, an all-lists view on profile pages, and in-page name pronunciation on person pages.
 
 ## Install
 
@@ -265,7 +265,9 @@ links, poster rating corners. Backlog:
 - extend `npm run drift` to the watchlist/library actions and og's native notifier and refresh modules;
 - **Undo** on watchlist and library success notices;
 - turn features on and off from the toolkit menu;
-- browse earlier months in the month review card.
+- browse earlier months in the month review card;
+- custom link presets that open the exact show, season or episode on sites that support it (Stremio first);
+- a review and cleanup of the test suite.
 
 ## Trakt API compliance
 
