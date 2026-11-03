@@ -17,6 +17,11 @@ export const SELECTORS = [
   { feature: 'season chart', pages: ['season'], selector: '.rating-trigger .value', firstRow: true },
   { feature: 'playback badge', pages: ['movie', 'episode'], selector: '.summary-frame #overview .top' },
   { feature: 'pronunciation', pages: ['person'], selector: '.summary .summary-title h1', nonEmpty: true },
+  // Features 12 and 13 mount here; the picker trigger is also used for native refreshes.
+  { feature: 'title actions', pages: ['movie', 'show', 'season', 'episode'], selector: '.summary-frame #overview .top .actions' },
+  { feature: 'watchlist list control', pages: ['movie', 'show', 'season', 'episode'], selector: '.summary-frame #overview .top .actions .list-control.summary' },
+  { feature: 'watchlist picker trigger', pages: ['movie', 'show', 'season', 'episode'], selector: '.list-control.summary button[aria-controls][aria-keyshortcuts~="ArrowDown"]' },
+  { feature: 'watchlist card list controls', pages: ['listing'], selector: '.quick-icons .list-control.card, .quick-icons button.action.list' },
 ];
 
 /** Return each applicable check and whether it matched. */
