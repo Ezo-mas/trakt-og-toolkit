@@ -51,6 +51,21 @@ export function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSi
       }
       const counts = [result?.added?.movies, result?.added?.episodes, result?.updated?.movies, result?.updated?.episodes];
       if (!counts.some(count => Number.isInteger(count) && count > 0)) throw new Error('Trakt did not confirm a library addition.');
+      // Updated and existing items were already collected. The bulk response doesn't say which ids
+      // they were, so a mixed add can't be undone without risking the removal of those items.
+      const total = counts => (Number(counts?.movies) || 0) + (Number(counts?.episodes) || 0);
+      const undoable = total(result?.added) > 0 && total(result?.updated) === 0 && total(result?.existing) === 0;
+      return { cancelled: false, body, undoable };
+    },
+
+    /** Undo an addition with the exact body that was sent. */
+    async remove(body, { active = () => true } = {}) {
+      if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
+      if (!body || typeof body !== 'object' || !active()) return { cancelled: true };
+      const result = await auth('POST', '/sync/collection/remove', body);
+      if (Object.values(result?.not_found ?? {}).some(items => !Array.isArray(items) || items.length)) {
+        throw new Error('Trakt could not find some items.');
+      }
       return { cancelled: false };
     },
   };

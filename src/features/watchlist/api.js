@@ -23,7 +23,19 @@ export function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = is
       if (!counts.some(count => Number.isSafeInteger(count) && count > 0)) {
         throw new Error('Trakt did not confirm a watchlist addition.');
       }
-      return { cancelled: false, title };
+      // Existing entries must stay on the list, so they get no Undo.
+      return { cancelled: false, title, body, undoable: Number.isSafeInteger(result?.added?.[lookup.type]) && result.added[lookup.type] > 0 };
+    },
+
+    /** Undo an addition with the exact body that was sent. */
+    async remove(body, { active = () => true } = {}) {
+      if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
+      if (!body || typeof body !== 'object' || !active()) return { cancelled: true };
+      const result = await auth('POST', '/sync/watchlist/remove', body);
+      if (Object.values(result?.not_found ?? {}).some(items => !Array.isArray(items) || items.length)) {
+        throw new Error('Trakt could not find this title.');
+      }
+      return { cancelled: false };
     },
   };
 }
