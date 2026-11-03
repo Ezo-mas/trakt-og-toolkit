@@ -17,6 +17,12 @@ It matches `https://og.trakt.tv/*` and `http://localhost:5173|5174/*` for develo
 
 ## What it does
 
+### Turning features off
+
+Every feature has its own toggle in the userscript menu (`Trakt OG Toolkit: toggle …`). All features are on by default.
+Switching one off removes its UI immediately and keeps it off across reloads; switching it back on restores it without a
+reload. Toggles are stored in GM storage, separately from og's settings.
+
 ### Custom links panel (title, season and episode pages)
 
 A compact panel under the summary stats with user-configured links to your own services.
@@ -214,7 +220,8 @@ installer tab open. Every rebuild is picked up automatically. See `NOTES.md` for
 `npm run drift` fetches live **og.trakt.tv** pages and checks the selectors and panel mounts the toolkit relies on,
 including the title action stack, the summary list control and its picker trigger, and card quick-icon list controls on
 `/movies/trending`. It also follows og's app entry to its root layout and its static imports, then validates the public
-toast and library-refresh module shapes used by the native bridges without a page realm or sign-in. The daily GitHub
+toast and library-refresh module shapes used by the native bridges without a page realm or sign-in. Panel pages are
+booted a second time with their feature turned off, and the check fails if the panel still appears. The daily GitHub
 Actions workflow runs the same check at 06:00 UTC and can also be started manually. Run
 `npm run drift -- --save <dir>` to save the fetched HTML for inspecting markup or refreshing fixtures. The check
 needs a built bundle (`npm run build`); `npm test` stays offline.
@@ -226,7 +233,7 @@ src/
   main.js              entry point, router wiring
   meta.js              name, version, hosts
   config.js            API base, cache TTL, default client ID
-  settings.js          GM storage (client id, custom links, selections)
+  settings.js          GM storage (client id, custom links, selections, feature toggles)
   actions.js           prompts shared by the menu and the panel
   menu.js              userscript menu commands
   core/
@@ -269,7 +276,6 @@ links, poster rating corners. Backlog:
 - set playback progress by hand;
 - list preview posters that link to their titles;
 - **Add to watchlist** on a person's credits, one row at a time or all shown credits at once;
-- turn features on and off from the toolkit menu;
 - browse earlier months in the month review card;
 - custom link presets that open the exact show, season or episode on sites that support it (Stremio first);
 - a review and cleanup of the test suite.

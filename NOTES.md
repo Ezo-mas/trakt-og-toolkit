@@ -2,6 +2,25 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-03: feature toggles (feature 20)
+
+- Disabled feature ids live in `features.disabled` (GM storage). Storing the disabled list instead of an enabled list
+  keeps every new feature on by default and lets removed features leave harmless stale ids behind. Malformed values and
+  non-string entries are ignored.
+- `createFeatureHost` takes an `isEnabled(id)` predicate. It checks that before `match`, so a disabled feature is not
+  mounted and any existing node is destroyed. Commands dispatch `ogt:featurechange`, which main wires to the same
+  host sync used by auth changes and route settles; re-enabling mounts again without a reload. Injected feature CSS is
+  page-wide and stays in place while a feature is off.
+- Menu entries are `Trakt OG Toolkit: toggle <label>` from `FEATURE_LABELS` in `menu.js`. They are registered in
+  `FEATURE` order after the existing commands. Userscript menus have no portable submenu or checked state, so the
+  toast reports the new state; reopening the menu still shows the same generic toggle label.
+- Drift: panel pages now name their feature. On live `og.trakt.tv` captures the script boots the bundle once normally
+  and once with `features.disabled` set to that feature, then reports drift if the panel still mounts. The origin is
+  explicit (`OG_ORIGIN = 'https://og.trakt.tv'`); no classic `trakt.tv` page is fetched. This doubles the bundle boots
+  for panel pages, so the daily check takes roughly 10 seconds longer and peaks around 1.4 GB RSS (27 s locally).
+- Tests: `test/features-menu.test.js` covers host skip/destroy/remount, all menu labels, immediate toggle persistence,
+  stored-off loading and malformed storage. `npm test` and `npm run build` pass.
+
 ## 2026-11-03: drift coverage for watchlist/library actions and native modules (feature 18)
 
 - Live page checks now cover features 12–13: `.summary-frame #overview .top .actions`, the summary
