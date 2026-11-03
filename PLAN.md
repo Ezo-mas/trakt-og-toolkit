@@ -30,7 +30,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 16 | Custom links on season and episode pages | client ID optional | done |
 | 17 | Watchlist buttons on a person's credits | OAuth | medium; reuses feature 13 |
 | 18 | `npm run drift`: cover features 12–13 and og's native modules | — | small |
-| 19 | Undo on success notices | OAuth | small |
+| 19 | Undo on success notices | OAuth | done |
 | 20 | Turn features on and off from the menu | — | small |
 | 21 | Month review: browse earlier months | OAuth | small |
 | 22 | Custom link presets that open the exact show, season or episode | — | small; check each site first |
@@ -415,6 +415,11 @@ notice instead of og's, reload instead of refresh), so nobody notices.
   as drift. No page-realm code, no sign-in.
 
 ## 19. Undo on success notices
+
+**Status:** done (2026-11-03). Undo appears on the toolkit's matching fallback notice for newly added titles and
+library items; undoable saves use that notice because og's native notifier can't take a button. It sends the same body
+to the remove endpoint, restores the action and runs the same native refresh. Existing watchlist entries and collection
+adds that touched already-collected items get no Undo. Built-bundle tests cover the watchlist, library and card paths.
 
 **Goal:** card and credits shortcuts are one click, so misclicks happen. Add **Undo** to the toolkit's watchlist and
 library success notices (the fallback toast; og's native notifier can't take a button).

@@ -2,6 +2,30 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-03: undo on success notices (feature 19)
+
+- Undo lives on the toolkit's matching fallback notice, not og's native toaster. Undoable saves therefore show the
+  fallback notice directly; the native notifier is still preferred for other toolkit notices (and for additions that
+  were already on the list, which get no Undo). This keeps the button inside the notice, as og's private Svelte toast
+  store has no action API. The small in-place Undo variant was dropped: exercising it in a built-bundle native-toast
+  harness made happy-dom grow until the test process ran out of memory.
+- Remove calls use the exact add body: `POST /sync/watchlist/remove` or `POST /sync/collection/remove`. Undo restores
+  the action locally and then requests the same native refresh as the add (watchlist picker read for movies/shows,
+  native overlay refresh for library titles).
+- Undo is offered only when nothing pre-existed: watchlist checks the add response's `added` count for that media type
+  (`existing` gets no Undo); collection requires `added > 0` with `updated` and `existing` both 0 (api-help's
+  `collectionAddResponseSchema` reports all three). The collection response reports only counts, not which ids were
+  updated or already there, so a mixed season/show add is intentionally left without Undo rather than removing items
+  that were already in the library.
+- After navigating away, the notice's Undo is removed on click with a short note instead of writing: the page that made
+  the save is gone, so it can't restore its button.
+- `watchlistApi` and `libraryApi` now return the save `body` and an `undoable` flag. Each feature tracks an operation
+  generation so an Undo started while the add's native refresh is still running is not overwritten by that add's
+  `finally` block.
+- Tests: `test/undo.test.js` covers the remove bodies, the `existing`/`updated` guards, fallback toast failure and
+  retry, the stale-page Undo, and built-bundle Undo for the watchlist page, library page and cards. Existing
+  notification assertions now read `.ogt-watchlist-toast__message`, since the notice also contains Close/Undo text.
+
 ## v0.3.0 (2026-11-03)
 
 Release of everything since v0.2.0, so userscript managers offer the update:
