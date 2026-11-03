@@ -477,7 +477,7 @@ test('season pages fill custom links from the show and preset the route season',
       ],
     },
     gmRequest(options) {
-      requested.push(options.url);
+      if (new URL(options.url).pathname === '/shows/breaking-bad') requested.push(options.url);
       setTimeout(() => options.onload({
         status: 200,
         responseHeaders: '',
@@ -498,9 +498,9 @@ test('season pages fill custom links from the show and preset the route season',
     chip(document, 'Show').getAttribute('href'),
     'https://e.test/Breaking%20Bad/2008/1396/tt0903747/1',
   );
-  assert.equal(chip(document, 'Episode only'), undefined, 'the season page has no episode');
+  assert.equal(Boolean(chip(document, 'Episode only')), false, 'the season page has no episode');
   assert.equal(document.querySelectorAll('#ogt-custom-links select').length, 0, 'no picker on a season page');
-  assert.equal(new URL(requested[0]).pathname, '/shows/breaking-bad');
+  assert.equal(requested.length, 1, 'one show lookup, for the year');
   assert.equal(new URL(requested[0]).search, '', 'the basic show response has the year and ids');
 });
 

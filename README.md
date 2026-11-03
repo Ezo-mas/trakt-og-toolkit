@@ -4,8 +4,8 @@ An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds th
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
 **Status:** v0.2.0: custom links with presets and an inline editor, a season ratings chart, optional Trakt sign-in
-with a paused-playback manager, manual library additions and one-click watchlist additions, and in-page name
-pronunciation on person pages.
+with a paused-playback manager, manual library additions and one-click watchlist additions, an all-lists view on
+profile pages, and in-page name pronunciation on person pages.
 
 ## Install
 
@@ -41,6 +41,17 @@ two episodes. Season cards on show pages and the Seasons page get a small blue h
 count; hover it for the number of rated episodes. Averages are plain means of episode ratings from the toolkit's account,
 which may differ from your og account. og already shows a season rating you set directly. Ratings stay in memory for
 ten minutes and are cleared when the account changes; nothing private enters the public API cache.
+
+### All lists in one view
+
+og's **Lists** dropdown on a profile gains **All lists**, after Collaborations. On the personal lists page it keeps
+the personal lists under a **Personal** heading and adds the profile's **Collaborations** and **Liked** lists below,
+so everything is one scroll instead of three pages; from the other list pages it links there. Picking any of og's
+own choices goes back to its normal view. Rows look like og's own: when the page shows og's rows, the new ones
+reuse their classes, icons and count and share buttons, with owners' VIP labels and, signed in, a filled likes pill
+on lists you liked. Liked lists load every page (up to 2,500, like og), and
+each row's posters load as it nears the screen. Needs a client ID; with the toolkit sign-in, private lists you can
+see are included and rows get og's watched-progress link. The toolkit doesn't like, edit or leave lists.
 
 ### Last month in review
 
@@ -250,7 +261,6 @@ links, poster rating corners. Backlog:
 
 - set playback progress by hand;
 - list preview posters that link to their titles;
-- all your lists in one view;
 - **Add to watchlist** on a person's credits, one row at a time or all shown credits at once;
 - extend `npm run drift` to the watchlist/library actions and og's native notifier and refresh modules;
 - **Undo** on watchlist and library success notices;
@@ -261,6 +271,8 @@ links, poster rating corners. Backlog:
 
 - Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection`, `/sync/watchlist`,
   `/sync/history`, `/sync/ratings`, `/users/me` and `/users/me/comments` through your own optional OAuth sign-in.
+  All lists reads the public `/users/:id/lists/collaborations` and `/users/:id/likes/lists`, through that sign-in
+  when there is one.
   No Trakt HTML fetching or toolkit calls to internal og endpoints. Toolkit API writes use only its own OAuth
   connection.
   Native notification/collection-refresh discovery reads only already-loaded public JavaScript assets,
