@@ -31,7 +31,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 17 | Watchlist buttons on a person's credits | OAuth | medium; reuses feature 13 |
 | 18 | `npm run drift`: cover features 12–13 and og's native modules | — | done |
 | 19 | Undo on success notices | OAuth | done |
-| 20 | Turn features on and off from the menu | — | small |
+| 20 | Turn features on and off from the menu | — | done |
 | 21 | Month review: browse earlier months | OAuth | small |
 | 22 | Custom link presets that open the exact show, season or episode | — | small; check each site first |
 | 23 | Test suite review and cleanup | — | last |
@@ -436,6 +436,11 @@ library success notices (the fallback toast; og's native notifier can't take a b
 - Don't remove items that were already on the list before the click (`existing` in the add response).
 
 ## 20. Turn features on and off from the menu
+
+**Status:** done (2026-11-03). One **toggle** entry per feature in the userscript menu, backed by a disabled-id list in
+GM storage. The host skips disabled features before matching and destroys their mounted nodes on the next sync; the
+menu dispatches `ogt:featurechange` so a toggle takes effect without a reload. `npm run drift` also boots each live
+og.trakt.tv page with its panel's feature disabled and reports drift if the panel still mounts.
 
 **Goal:** about ten features now; let people hide the ones they don't want without editing the script.
 

@@ -564,7 +564,7 @@
 
   // src/features/host.js
   var RETRY_AFTER_MS = 400;
-  function createFeatureHost(features) {
+  function createFeatureHost(features, { isEnabled = () => true } = {}) {
     const mounted = /* @__PURE__ */ new Map();
     function unmount(id) {
       const entry = mounted.get(id);
@@ -579,6 +579,10 @@
     return function sync(route) {
       for (const feature of features) {
         let entry = mounted.get(feature.id);
+        if (!isEnabled(feature.id)) {
+          unmount(feature.id);
+          continue;
+        }
         const applies = feature.match(route);
         if (!applies) {
           unmount(feature.id);
@@ -850,6 +854,7 @@
     tokens: "trakt.oauth.tokens",
     redirectUri: "trakt.oauth.redirectUri",
     customLinks: "watch.customLinks",
+    features: "features.disabled",
     debug: "debug",
     selection: (kind, id) => `selection.${kind}.${id}`
   };
@@ -916,6 +921,23 @@
   function applyDebugSetting() {
     setVerbose(isDebug());
     return isVerbose();
+  }
+  function getDisabledFeatures() {
+    const stored = getValue(STORAGE.features, []);
+    if (!Array.isArray(stored)) return [];
+    return [...new Set(stored.filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim()))];
+  }
+  function isFeatureEnabled(id) {
+    return !getDisabledFeatures().includes(String(id));
+  }
+  function setFeatureEnabled(id, enabled) {
+    const featureId = String(id || "").trim();
+    if (!featureId) return true;
+    const disabled = new Set(getDisabledFeatures());
+    if (enabled) disabled.delete(featureId);
+    else disabled.add(featureId);
+    setValue(STORAGE.features, [...disabled]);
+    return !disabled.has(featureId);
   }
 
   // src/features/custom-links/data.js
@@ -5346,7 +5368,19 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
 
   // src/menu.js
   var ATTRIBUTION = `${NAME} uses Trakt but is not endorsed or certified by Trakt.`;
-  function registerMenu(getRouteKey = () => location.pathname) {
+  var FEATURE_LABELS = {
+    "custom-links": "Custom links",
+    "season-chart": "Season chart",
+    "your-ratings": "Your ratings",
+    playback: "Paused playback",
+    pronunciation: "Name pronunciation",
+    library: "Add to library",
+    watchlist: "Add to watchlist",
+    "watchlist-cards": "Watchlist card shortcuts",
+    "month-review": "Last month in review",
+    "all-lists": "All lists"
+  };
+  function registerMenu(getRouteKey = () => location.pathname, features = []) {
     if (typeof GM_registerMenuCommand !== "function") return;
     GM_registerMenuCommand("Trakt OG Toolkit: about", () => {
       toast(`${NAME} v${VERSION}`, { duration: 5e3 });
@@ -5388,6 +5422,14 @@ MIT licensed.`);
       clearCache();
       toast("API cache cleared.");
     });
+    for (const feature of features) {
+      const label = FEATURE_LABELS[feature.id] || feature.id.replace(/-/g, " ");
+      GM_registerMenuCommand(`Trakt OG Toolkit: toggle ${label}`, () => {
+        const enabled = setFeatureEnabled(feature.id, !isFeatureEnabled(feature.id));
+        toast(`${label} ${enabled ? "on" : "off"}.`);
+        document.dispatchEvent(new CustomEvent("ogt:featurechange", { detail: { id: feature.id, enabled } }));
+      });
+    }
   }
 
   // src/main.js
@@ -5407,13 +5449,14 @@ MIT licensed.`);
       if (canMount && host) host(route);
     };
     document.addEventListener("ogt:authchange", sync);
+    document.addEventListener("ogt:featurechange", sync);
     const openGate = () => {
       if (canMount) return;
       canMount = true;
       rememberNativeResources(moduleWatch.entries.keys());
       moduleWatch.stop();
       injectStyles([successNotificationCss, ...FEATURES.map((feature) => feature.css).filter(Boolean)]);
-      host = createFeatureHost(FEATURES);
+      host = createFeatureHost(FEATURES, { isEnabled: isFeatureEnabled });
       createRouter({
         onRoute(next) {
           route = next;
@@ -5448,7 +5491,7 @@ MIT licensed.`);
     } else {
       scheduleMount();
     }
-    registerMenu(() => route.key);
+    registerMenu(() => route.key, FEATURES);
     window.__OGT__ = {
       version: VERSION,
       route: () => parseRoute(),

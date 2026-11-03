@@ -3,15 +3,16 @@ import { get } from 'node:https';
 import { Window } from 'happy-dom';
 import { LOGIN_CHECKS, checkSelectors, unreachableReason } from './og-drift-checks.mjs';
 import { checkNativeModules } from './og-drift-native.mjs';
+import { STORAGE } from '../src/core/store.js';
 
 // Live checks always use og.trakt.tv; never the classic trakt.tv site.
 const OG_ORIGIN = 'https://og.trakt.tv';
 const pages = [
-  { name: 'movie', path: '/movies/the-matrix-1999', panel: '#ogt-custom-links' },
-  { name: 'show', path: '/shows/breaking-bad', panel: '#ogt-custom-links' },
-  { name: 'season', path: '/shows/breaking-bad/seasons/1', panel: '.ogt-season-chart' },
+  { name: 'movie', path: '/movies/the-matrix-1999', panel: '#ogt-custom-links', feature: 'custom-links' },
+  { name: 'show', path: '/shows/breaking-bad', panel: '#ogt-custom-links', feature: 'custom-links' },
+  { name: 'season', path: '/shows/breaking-bad/seasons/1', panel: '.ogt-season-chart', feature: 'season-chart' },
   { name: 'episode', path: '/shows/breaking-bad/seasons/1/episodes/1' },
-  { name: 'person', path: '/people/bryan-cranston', panel: '.ogt-pronounce' },
+  { name: 'person', path: '/people/bryan-cranston', panel: '.ogt-pronounce', feature: 'pronunciation' },
   { name: 'listing', path: '/movies/trending' },
 ];
 const args = process.argv.slice(2);
@@ -45,10 +46,10 @@ function fetchPage(url, redirects = 0, accept = 'text/html') {
   });
 }
 
-async function checkPanel(page, html, url) {
+async function checkPanel(page, html, url, { disabled = [] } = {}) {
   const window = new Window({ url });
   try {
-    window.GM_getValue = (key, fallback) => fallback;
+    window.GM_getValue = (key, fallback) => key === STORAGE.features && disabled.length ? disabled : fallback;
     window.GM_setValue = () => {};
     window.GM_deleteValue = () => {};
     window.GM_addStyle = () => {};
@@ -96,7 +97,12 @@ for (const [index, page] of pages.entries()) {
   const missing = checkSelectors(window.document, page.name).filter((check) => !check.ok);
   window.close();
   const details = missing.map((check) => `${check.feature}: ${check.selector}`);
-  if (page.panel && !(await checkPanel(page, html, url))) details.push(`bundle mount: ${page.panel}`);
+  if (page.panel) {
+    if (!(await checkPanel(page, html, url))) details.push(`bundle mount: ${page.panel}`);
+    else if (page.feature && await checkPanel(page, html, url, { disabled: [page.feature] })) {
+      details.push(`feature toggle: ${page.feature} did not hide ${page.panel}`);
+    }
+  }
   results.push({ page: page.name, status: details.length ? 'drift' : 'ok', details });
 }
 if (sampleHtml) {

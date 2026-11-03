@@ -1,6 +1,6 @@
 /** Tampermonkey/Violentmonkey menu entries. No-ops when the API is absent. */
 import { promptAddCustomLink, promptRemoveCustomLink, promptClientId } from './actions.js';
-import { applyDebugSetting, isDebug, setDebug, getClientId, getCustomLinks } from './settings.js';
+import { applyDebugSetting, isDebug, setDebug, getClientId, getCustomLinks, isFeatureEnabled, setFeatureEnabled } from './settings.js';
 import { cacheSize, clearCache } from './core/http.js';
 import { registerAuthMenu } from './oauth-menu.js';
 import { ping } from './core/trakt.js';
@@ -9,8 +9,21 @@ import { NAME, VERSION } from './meta.js';
 
 const ATTRIBUTION = `${NAME} uses Trakt but is not endorsed or certified by Trakt.`;
 
+export const FEATURE_LABELS = {
+  'custom-links': 'Custom links',
+  'season-chart': 'Season chart',
+  'your-ratings': 'Your ratings',
+  playback: 'Paused playback',
+  pronunciation: 'Name pronunciation',
+  library: 'Add to library',
+  watchlist: 'Add to watchlist',
+  'watchlist-cards': 'Watchlist card shortcuts',
+  'month-review': 'Last month in review',
+  'all-lists': 'All lists',
+};
+
 /** @param {() => string} getRouteKey */
-export function registerMenu(getRouteKey = () => location.pathname) {
+export function registerMenu(getRouteKey = () => location.pathname, features = []) {
   if (typeof GM_registerMenuCommand !== 'function') return;
 
   GM_registerMenuCommand('Trakt OG Toolkit: about', () => {
@@ -58,4 +71,13 @@ export function registerMenu(getRouteKey = () => location.pathname) {
     clearCache();
     toast('API cache cleared.');
   });
+  // One toggle per feature; disabled ids are stored, so new features stay on by default.
+  for (const feature of features) {
+    const label = FEATURE_LABELS[feature.id] || feature.id.replace(/-/g, ' ');
+    GM_registerMenuCommand(`Trakt OG Toolkit: toggle ${label}`, () => {
+      const enabled = setFeatureEnabled(feature.id, !isFeatureEnabled(feature.id));
+      toast(`${label} ${enabled ? 'on' : 'off'}.`);
+      document.dispatchEvent(new CustomEvent('ogt:featurechange', { detail: { id: feature.id, enabled } }));
+    });
+  }
 }

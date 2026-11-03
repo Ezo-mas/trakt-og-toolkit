@@ -72,3 +72,25 @@ export function applyDebugSetting() {
   setVerbose(isDebug());
   return isVerbose();
 }
+
+/** New features are enabled unless their id is explicitly stored as disabled. */
+export function getDisabledFeatures() {
+  const stored = getValue(STORAGE.features, []);
+  if (!Array.isArray(stored)) return [];
+  return [...new Set(stored.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim()))];
+}
+
+export function isFeatureEnabled(id) {
+  return !getDisabledFeatures().includes(String(id));
+}
+
+/** Returns the feature's state after saving. */
+export function setFeatureEnabled(id, enabled) {
+  const featureId = String(id || '').trim();
+  if (!featureId) return true;
+  const disabled = new Set(getDisabledFeatures());
+  if (enabled) disabled.delete(featureId);
+  else disabled.add(featureId);
+  setValue(STORAGE.features, [...disabled]);
+  return !disabled.has(featureId);
+}
