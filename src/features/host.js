@@ -10,7 +10,7 @@ import { debugError } from '../core/log.js';
 
 const RETRY_AFTER_MS = 400;
 
-export function createFeatureHost(features) {
+export function createFeatureHost(features, { isEnabled = () => true } = {}) {
   const mounted = new Map();
 
   function unmount(id) {
@@ -27,6 +27,10 @@ export function createFeatureHost(features) {
   return function sync(route) {
     for (const feature of features) {
       let entry = mounted.get(feature.id);
+      if (!isEnabled(feature.id)) {
+        unmount(feature.id);
+        continue;
+      }
       const applies = feature.match(route);
 
       if (!applies) {

@@ -24,7 +24,7 @@ import { watchlist } from './features/watchlist/index.js';
 import { watchlistCards } from './features/watchlist/cards.js';
 import { rememberNativeResources } from './ui/native-modules.js';
 import { registerMenu } from './menu.js';
-import { applyDebugSetting } from './settings.js';
+import { applyDebugSetting, isFeatureEnabled } from './settings.js';
 import { info, warn } from './core/log.js';
 import { cacheSize } from './core/http.js';
 
@@ -55,6 +55,7 @@ function start() {
   };
 
   document.addEventListener('ogt:authchange', sync);
+  document.addEventListener('ogt:featurechange', sync);
 
   const openGate = () => {
     if (canMount) return;
@@ -65,7 +66,7 @@ function start() {
     // Nothing above this point touches og's DOM: styles and the router are
     // created only once the page has finished hydrating.
     injectStyles([successNotificationCss, ...FEATURES.map((feature) => feature.css).filter(Boolean)]);
-    host = createFeatureHost(FEATURES);
+    host = createFeatureHost(FEATURES, { isEnabled: isFeatureEnabled });
     createRouter({
       onRoute(next) {
         route = next;
@@ -113,7 +114,7 @@ function start() {
     scheduleMount();
   }
 
-  registerMenu(() => route.key);
+  registerMenu(() => route.key, FEATURES);
 
   // Handy from the console; harmless if you never use it.
   window.__OGT__ = {
