@@ -33,9 +33,11 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 19 | Undo on success notices | OAuth | small |
 | 20 | Turn features on and off from the menu | — | small |
 | 21 | Month review: browse earlier months | OAuth | small |
+| 22 | Custom link presets that open the exact show, season or episode | — | small; check each site first |
+| 23 | Test suite review and cleanup | — | last |
 
-**Next release:** bump to 0.3.0 once most bugs are ironed out (any new ones); until then main stays 0.2.0 and userscript
-managers won't offer an update.
+**Released:** 0.3.0 on 2026-11-03 (features 6–8, 11–13, 15 and 16). Bump the version again whenever main should
+reach userscript managers; they only offer an update when `@version` changes.
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
@@ -436,6 +438,32 @@ library success notices (the fallback toast; og's native notifier can't take a b
 
 - Same requests as now with a different date range; cache each month.
 - Stop at the account's first history entry; no next arrow past last month.
+
+## 22. Custom link presets that open the exact show, season or episode
+
+**Goal:** the four presets (Metacritic, Stremio, Plex, AniList) all search `{title}`. That's right for sites without
+deep links, but on a season or episode page a site that can open that exact item should go there. Feature 16 already
+fills `{imdb}`, `{tmdb}`, `{season}` and `{episode}` with the show's values.
+
+- Stremio: `https://web.stremio.com/#/detail/series/{imdb}` for the show and
+  `…/detail/series/{imdb}/{imdb}:{season}:{episode}` for an episode (movies: `#/detail/movie/{imdb}`). Open each by hand
+  first; this shape is the usual one but unverified.
+- Look for others that take IMDb or TMDb ids plus season/episode in the URL (for example TMDb itself, Trakt classic,
+  subtitle sites); skip sites that need their own ids (Plex, Jellyfin) or have no episode pages (Metacritic, AniList).
+- A preset can be several templates; a link with a placeholder the page lacks already hides itself, so an episode
+  template simply doesn't show on show or movie pages. Keep the search preset as the fallback.
+
+## 23. Test suite review and cleanup
+
+**Goal:** the suite grew feature by feature (about 240 tests in 27 files) and has leftovers: checks for removed
+behaviour, overlapping integration tests, and fixtures that no longer match og.
+
+- Remove checks that only confirm deleted code stays deleted, and merge integration tests that cover the same path.
+- Replace hand-written fixtures with trimmed live captures where og's markup has moved on; keep each fixture's source
+  and trakt-og commit in a comment.
+- Never compare a happy-dom element in an assertion (`assert.equal(node, null)`): if it fails, Node prints the element
+  and runs out of memory. Compare `Boolean(node)` or a count; there are about 30 to change.
+- Run the suite with `NODE_OPTIONS=--max-old-space-size=512` while reviewing, so a runaway test fails fast.
 
 ---
 

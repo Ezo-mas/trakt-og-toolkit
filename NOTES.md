@@ -2,6 +2,21 @@
 
 Working notes and known issues. Newest first.
 
+## v0.3.0 (2026-11-03)
+
+Release of everything since v0.2.0, so userscript managers offer the update:
+
+- **Season chart:** your own ratings as a blue line with your average, plus a heart average on season cards
+  (features 7 and 8). The More button and its watchers/comments lines are gone (15).
+- **Last month in review** card on the dashboard (6).
+- **Add to library** on title, season and episode pages, and one-click **Add to watchlist** on pages and movie/show
+  cards, with og-style notices and og's own state refreshed without a reload (12 and 13).
+- **All lists** in og's Lists dropdown: personal, collaborations and liked lists in one scroll, styled like og's rows (11).
+- **Custom links** on season and episode pages use the show's title and ids, and take the season and episode from the
+  page (16).
+
+The user verified the watchlist, library and all-lists features on a real account in Zen and Brave. 238 tests pass.
+
 ## 2026-11-03: all lists in one view (feature 11)
 
 - The first version (a **Show all lists** button below the personal list) was replaced: **All lists** is now a choice
