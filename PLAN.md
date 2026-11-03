@@ -22,7 +22,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 8 | Your personal season and show averages | OAuth | done |
 | 9 | Playback extras: set progress | OAuth | small |
 | 10 | List preview posters link to titles | check og first | small |
-| 11 | All lists in one view | OAuth or public | lowest value |
+| 11 | All lists in one view | client ID; OAuth optional | done |
 | 12 | Add to library button | OAuth | done; user verified in Zen and Brave with real API |
 | 13 | One-click Add to watchlist | OAuth | done; user verified in Zen and Brave with real API |
 | 14 | Add to library on poster cards | OAuth | dropped: cards too tight; watchlist fits cards better |
@@ -283,7 +283,9 @@ hidden from screen readers. Classic made each poster link to its own title and a
   which is probably not worth it. Report and stop if so.
 - Rating corners: og's `CornerRating` already exists on posters elsewhere; only add one here if the stack doesn't.
 
-## 11. All lists in one view (lowest value)
+## 11. All lists in one view
+
+**Status:** done (2026-11-03). An **All lists** choice in og's Lists dropdown; see README and NOTES.md.
 
 **Goal:** classic's "All-In-One Lists View": personal, collaborations and liked lists on one page. og still splits
 them across `/users/:id/lists`, `/collaborations` and `/liked`.

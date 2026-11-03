@@ -25,6 +25,13 @@ function ownerName(user) {
   return typeof user?.name === 'string' && user.name.trim() ? user.name.trim() : user?.ids?.slug || user?.username || null;
 }
 
+/** og's label after an owner's name (`toVipBadge.ts`): staff outrank VIP; OG or EP tags a VIP. */
+export function vipBadge(user) {
+  if (user?.director === true) return { label: 'Director', tag: null };
+  if (user?.vip !== true) return null;
+  return { label: 'VIP', tag: user.vip_og === true ? 'OG' : user.vip_ep === true ? 'EP' : null };
+}
+
 /** One API list object as the panel uses it, or null when it has no usable link. */
 export function normalizeList(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -41,11 +48,15 @@ export function normalizeList(raw) {
     slug,
     name,
     description: typeof raw.description === 'string' ? raw.description.trim() : '',
-    owner: { slug: ownerSlug, name: ownerName(raw.user) },
+    owner: { slug: ownerSlug, name: ownerName(raw.user), avatar: posterUrl(raw.user?.images?.avatar?.full), vip: vipBadge(raw.user) },
     itemCount: count(raw.item_count),
+    commentCount: raw.allow_comments === true ? count(raw.comment_count) : null,
     likes: count(raw.likes),
-    // One poster is enough for the compact row; liked lists normally come without any.
-    poster: posterUrl(images[0]),
+    allowComments: raw.allow_comments === true,
+    privacy: typeof raw.privacy === 'string' ? raw.privacy : null,
+    kind: raw.type === 'official' ? 'official' : 'personal',
+    // OG fetches up to five posters from each list summary for its fan row.
+    posters: images.slice(0, 5).map(posterUrl).filter(Boolean),
   };
 }
 
@@ -65,10 +76,21 @@ export function likedLists(payload) {
 
 /** In-site link to a list, as og spells it. */
 export function listHref(list) {
+  if (list.kind === 'official') return `/lists/official/${encodeURIComponent(list.slug)}`;
   return `/users/${encodeURIComponent(list.owner.slug)}/lists/${encodeURIComponent(list.slug)}`;
 }
 
-export function itemCountLabel(value) {
-  if (!Number.isSafeInteger(value) || value < 0) return null;
-  return `${value} ${value === 1 ? 'item' : 'items'}`;
+/** OG's watched-progress route is scoped to the signed-in viewer, not the list owner. */
+export function listProgressHref(list, viewerSlug) {
+  if (!viewerSlug || list.kind === 'official') return null;
+  return `/users/${encodeURIComponent(viewerSlug)}/progress?list=${encodeURIComponent(list.id)}`;
+}
+
+/** og's ListTag names: a list shared by link gets the blue Link tag, friends-only lists "Following". */
+export function listPills(entry) {
+  if (entry.kind === 'official') return ['Official List'];
+  if (entry.privacy === 'private') return ['Private'];
+  if (entry.privacy === 'friends') return ['Following'];
+  if (entry.privacy === 'link') return ['Link'];
+  return [];
 }

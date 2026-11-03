@@ -39,11 +39,12 @@ export function parseRoute(pathname = location.pathname) {
   if (progress) return { name: 'progress', kind: null, id: progress[1], path, key: path };
   const person = path.match(/^\/people\/([^/]+)$/);
   if (person) return { name: 'person', kind: 'person', id: person[1], path, key: path };
-  // Lists live under the profile: personal, collaborations and liked lists. Individual lists
-  // and their comments are left as `other`; only the three indexes are named here.
-  const lists = path.match(/^\/users\/([^/]+)\/lists(?:\/collaborations|\/liked(?:\/official)?)?$/);
+  // Lists live under the profile: personal, smart, collaborations and liked lists. Individual lists
+  // and their comments are left as `other`; only the indexes are named here.
+  const lists = path.match(/^\/users\/([^/]+)\/(?:lists(?:\/collaborations|\/liked(?:\/official)?)?|smart-lists)$/);
   if (lists) {
-    const name = path.endsWith('/collaborations') ? 'lists-collaborations' : path.includes('/liked') ? 'liked-lists' : 'lists';
+    const name = path.endsWith('/smart-lists') ? 'smart-lists' : path.endsWith('/collaborations') ? 'lists-collaborations'
+      : path.includes('/liked') ? 'liked-lists' : 'lists';
     return { name, kind: null, id: lists[1], path, key: path };
   }
   const match = path.match(TITLE_PATH);

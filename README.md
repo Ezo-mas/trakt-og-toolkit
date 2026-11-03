@@ -46,11 +46,14 @@ This needs a client ID and uses the shared request queue. Seasons with more than
 
 ### All lists in one view
 
-On a profile’s personal lists page, **Show all lists** appends that profile’s **Collaborations** and **Liked lists**
-below the personal list, each under its own heading, so everything is one scroll instead of three pages. It reads
-the public list indexes with your Trakt client ID; no sign-in is needed. The button collapses the groups again, and
-a failed lookup shows a one-line hint with **Try again**. List rows link to the list, with owner, item count and
-poster when the API provides one.
+og's **Lists** dropdown on a profile gains **All lists**, after Collaborations. On the personal lists page it keeps
+the personal lists under a **Personal** heading and adds the profile's **Collaborations** and **Liked** lists below,
+so everything is one scroll instead of three pages; from the other list pages it links there. Picking any of og's
+own choices goes back to its normal view. Rows look like og's own: when the page shows og's rows, the new ones
+reuse their classes, icons and count and share buttons, with owners' VIP labels and, signed in, a filled likes pill
+on lists you liked. Liked lists load every page (up to 2,500, like og), and
+each row's posters load as it nears the screen. Needs a client ID; with the toolkit sign-in, private lists you can
+see are included and rows get og's watched-progress link. The toolkit doesn't like, edit or leave lists.
 
 ### Last month in review
 
@@ -272,6 +275,8 @@ links, poster rating corners. Backlog:
 
 - Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection`, `/sync/watchlist`,
   `/sync/history`, `/sync/ratings`, `/users/me` and `/users/me/comments` through your own optional OAuth sign-in.
+  All lists reads the public `/users/:id/lists/collaborations` and `/users/:id/likes/lists`, through that sign-in
+  when there is one.
   No Trakt HTML fetching or toolkit calls to internal og endpoints. Toolkit API writes use only its own OAuth
   connection.
   Native notification/collection-refresh discovery reads only already-loaded public JavaScript assets,

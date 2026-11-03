@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   collaborationLists,
-  itemCountLabel,
   likedLists,
   listHref,
   normalizeList,
+  vipBadge,
   posterUrl,
+  listPills,
+  listProgressHref,
 } from '../src/features/all-lists/data.js';
 
 const list = (overrides = {}) => ({
@@ -28,16 +30,20 @@ test('normalizeList keeps the fields the panel uses', () => {
     slug: 'sci-fi-together',
     name: 'Sci-Fi Together',
     description: 'Shared picks.',
-    owner: { slug: 'justin', name: 'Justin' },
+    owner: { slug: 'justin', name: 'Justin', avatar: null, vip: null },
     itemCount: 12,
+    commentCount: null,
+    allowComments: false,
     likes: 4,
-    poster: 'https://media.trakt.tv/images/lists/000/009/001/posters/medium/abc.jpg.webp',
+    privacy: 'public',
+    kind: 'personal',
+    posters: ['https://media.trakt.tv/images/lists/000/009/001/posters/medium/abc.jpg.webp'],
   });
 });
 
 test('normalizeList falls back to the username and rejects unusable entries', () => {
   const noName = normalizeList(list({ user: { username: 'justin', ids: { slug: 'justin' } } }));
-  assert.deepEqual(noName.owner, { slug: 'justin', name: 'justin' });
+  assert.deepEqual(noName.owner, { slug: 'justin', name: 'justin', avatar: null, vip: null });
 
   for (const bad of [
     null,
@@ -57,7 +63,7 @@ test('normalizeList leaves bad counts and images out', () => {
   const row = normalizeList(list({ item_count: -1, likes: 1.5, images: { posters: ['http://media.trakt.tv/a.jpg', 'https://evil.test/b.jpg'] } }));
   assert.equal(row.itemCount, null);
   assert.equal(row.likes, null);
-  assert.equal(row.poster, null);
+  assert.deepEqual(row.posters, []);
 });
 
 test('posterUrl accepts only HTTPS media.trakt.tv images', () => {
@@ -88,12 +94,29 @@ test('listHref encodes slugs as path segments', () => {
     listHref({ slug: 'what/if', owner: { slug: 'justin smith' } }),
     '/users/justin%20smith/lists/what%2Fif',
   );
+  assert.equal(listHref({ slug: 'staff-picks', kind: 'official', owner: { slug: 'trakt' } }), '/lists/official/staff-picks');
 });
 
-test('itemCountLabel handles one, many and unknown counts', () => {
-  assert.equal(itemCountLabel(1), '1 item');
-  assert.equal(itemCountLabel(12), '12 items');
-  assert.equal(itemCountLabel(0), '0 items');
-  assert.equal(itemCountLabel(null), null);
-  assert.equal(itemCountLabel(-1), null);
+test('list row pills follow OG list privacy and official-list semantics', () => {
+  assert.deepEqual(listPills(normalizeList(list({ privacy: 'private' }))), ['Private']);
+  assert.deepEqual(listPills(normalizeList(list({ privacy: 'link' }))), ['Link']);
+  assert.deepEqual(listPills(normalizeList(list({ privacy: 'friends' }))), ['Following']);
+  assert.deepEqual(listPills(normalizeList(list({ type: 'official', privacy: 'public' }))), ['Official List']);
+  assert.deepEqual(listPills(normalizeList(list({ privacy: 'public' }))), []);
+});
+
+test('progress links are viewer-scoped and absent for official lists or signed-out viewers', () => {
+  const entry = normalizeList(list());
+  assert.equal(listProgressHref(entry, 'viewer'), '/users/viewer/progress?list=9001');
+  assert.equal(listProgressHref(normalizeList(list({ type: 'official' })), 'viewer'), null);
+  assert.equal(listProgressHref(entry, null), null);
+});
+
+test('vipBadge follows og: staff outrank VIP, which may carry an OG or EP tag', () => {
+  assert.deepEqual(vipBadge({ director: true, vip: true }), { label: 'Director', tag: null });
+  assert.deepEqual(vipBadge({ vip: true, vip_og: true, vip_ep: true }), { label: 'VIP', tag: 'OG' });
+  assert.deepEqual(vipBadge({ vip: true, vip_ep: true }), { label: 'VIP', tag: 'EP' });
+  assert.deepEqual(vipBadge({ vip: true }), { label: 'VIP', tag: null });
+  assert.equal(vipBadge({ vip: false }), null);
+  assert.equal(vipBadge(null), null);
 });

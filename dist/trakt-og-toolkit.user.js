@@ -451,9 +451,9 @@
     if (progress) return { name: "progress", kind: null, id: progress[1], path, key: path };
     const person = path.match(/^\/people\/([^/]+)$/);
     if (person) return { name: "person", kind: "person", id: person[1], path, key: path };
-    const lists = path.match(/^\/users\/([^/]+)\/lists(?:\/collaborations|\/liked(?:\/official)?)?$/);
+    const lists = path.match(/^\/users\/([^/]+)\/(?:lists(?:\/collaborations|\/liked(?:\/official)?)?|smart-lists)$/);
     if (lists) {
-      const name2 = path.endsWith("/collaborations") ? "lists-collaborations" : path.includes("/liked") ? "liked-lists" : "lists";
+      const name2 = path.endsWith("/smart-lists") ? "smart-lists" : path.endsWith("/collaborations") ? "lists-collaborations" : path.includes("/liked") ? "liked-lists" : "lists";
       return { name: name2, kind: null, id: lists[1], path, key: path };
     }
     const match = path.match(TITLE_PATH);
@@ -1129,7 +1129,7 @@
   function headerValue(headers2, name) {
     if (!headers2) return null;
     if (typeof headers2.get === "function") return headers2.get(name);
-    const line = String(headers2).split(/\r?\n/).find((row2) => row2.toLowerCase().startsWith(`${name}:`));
+    const line = String(headers2).split(/\r?\n/).find((row) => row.toLowerCase().startsWith(`${name}:`));
     return line ? line.slice(line.indexOf(":") + 1).trim() : null;
   }
   var cache = /* @__PURE__ */ new Map();
@@ -1909,16 +1909,16 @@
   }
   function mapPlayback(rows, kind) {
     const mapped = [];
-    for (const row2 of Array.isArray(rows) ? rows : []) {
-      const media = kind === "movie" ? row2?.movie : row2?.show;
-      const episode = row2?.episode;
-      if (!Number.isSafeInteger(row2?.id) || row2.id <= 0 || !media?.ids || typeof row2.progress !== "number" || !Number.isFinite(row2.progress) || row2.progress < 0 || row2.progress > 100 || !Number.isFinite(Date.parse(row2.paused_at))) continue;
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const media = kind === "movie" ? row?.movie : row?.show;
+      const episode = row?.episode;
+      if (!Number.isSafeInteger(row?.id) || row.id <= 0 || !media?.ids || typeof row.progress !== "number" || !Number.isFinite(row.progress) || row.progress < 0 || row.progress > 100 || !Number.isFinite(Date.parse(row.paused_at))) continue;
       if (kind === "episode" && (!Number.isInteger(episode?.season) || episode.season < 0 || !Number.isInteger(episode?.number) || episode.number < 1)) continue;
       const slug = media.ids.slug || media.ids.trakt;
       if (!slug) continue;
       const root2 = `/${kind === "movie" ? "movies" : "shows"}/${encodeURIComponent(slug)}`;
       mapped.push({
-        id: row2.id,
+        id: row.id,
         kind,
         ids: { ...media.ids },
         season: kind === "episode" ? episode.season : null,
@@ -1926,9 +1926,9 @@
         title: kind === "movie" ? media.title || "Untitled movie" : `${media.title || "Untitled show"} · ${episode.season}×${String(episode.number).padStart(2, "0")} · ${episode.title || "Untitled episode"}`,
         href: kind === "movie" ? root2 : `${root2}/seasons/${episode.season}/episodes/${episode.number}`,
         poster: posterUrl(media.images?.poster?.[0]),
-        progress: row2.progress,
-        pausedAt: row2.paused_at,
-        pausedMs: Date.parse(row2.paused_at)
+        progress: row.progress,
+        pausedAt: row.paused_at,
+        pausedMs: Date.parse(row.paused_at)
       });
     }
     return sortPlayback(mapped);
@@ -2086,7 +2086,7 @@
       if (!alive()) return;
       content.replaceChildren();
       if (!overview) {
-        const item = items.find((row2) => matchesRoute(row2, route));
+        const item = items.find((row) => matchesRoute(row, route));
         node.hidden = !item;
         if (!item) return;
         const clear2 = button("Clear", "one");
@@ -2102,12 +2102,12 @@
       }
       node.querySelector('[data-action="load"]').textContent = loaded ? "Refresh paused playback" : "Load paused playback";
       if (!loaded) return;
-      for (const id of selected) if (!items.some((row2) => row2.id === id)) selected.delete(id);
+      for (const id of selected) if (!items.some((row) => row.id === id)) selected.delete(id);
       if (!items.length) {
         content.append(el("p", { class: "ogt-hint", text: "No paused playback." }));
         return;
       }
-      const all = el("input", { type: "checkbox", dataset: { action: "all" }, checked: items.every((row2) => selected.has(row2.id)), "aria-label": "Select all paused items" });
+      const all = el("input", { type: "checkbox", dataset: { action: "all" }, checked: items.every((row) => selected.has(row.id)), "aria-label": "Select all paused items" });
       const tools = el(
         "div",
         { class: "ogt-playback__tools" },
@@ -2182,7 +2182,7 @@
           const days = node.querySelector('[aria-label="Age in days"]').value;
           if (days.trim() === "" || !Number.isInteger(Number(days)) || Number(days) < 0) {
             status.textContent = "Enter a whole number of days, zero or greater.";
-          } else await clear(olderThan(items, days).map((row2) => row2.id));
+          } else await clear(olderThan(items, days).map((row) => row.id));
         }
       } catch (error) {
         debugError("playback request failed", error);
@@ -2195,12 +2195,12 @@
       const input = event.target;
       if (input.dataset.action === "all") {
         selected.clear();
-        if (input.checked) for (const row2 of items) selected.add(row2.id);
+        if (input.checked) for (const row of items) selected.add(row.id);
         for (const box of node.querySelectorAll('[data-action="select"]')) box.checked = input.checked;
       } else if (input.dataset.action === "select") {
         if (input.checked) selected.add(Number(input.dataset.id));
         else selected.delete(Number(input.dataset.id));
-        node.querySelector('[data-action="all"]').checked = items.every((row2) => selected.has(row2.id));
+        node.querySelector('[data-action="all"]').checked = items.every((row) => selected.has(row.id));
       }
     }
     node.addEventListener("click", onClick);
@@ -2563,11 +2563,11 @@
   // src/features/your-ratings/data.js
   function mapRatings(rows) {
     const items = /* @__PURE__ */ new Map();
-    for (const row2 of rows) {
-      const show = row2.show?.ids?.trakt;
-      const { season, number } = row2.episode || {};
-      if (!Number.isSafeInteger(show) || show <= 0 || !Number.isInteger(season) || season < 0 || !Number.isInteger(number) || number < 1 || !Number.isInteger(row2.rating) || row2.rating < 1 || row2.rating > 10) continue;
-      items.set(`${show}:${season}:${number}`, { show, slug: row2.show.ids.slug, season, number, rating: row2.rating });
+    for (const row of rows) {
+      const show = row.show?.ids?.trakt;
+      const { season, number } = row.episode || {};
+      if (!Number.isSafeInteger(show) || show <= 0 || !Number.isInteger(season) || season < 0 || !Number.isInteger(number) || number < 1 || !Number.isInteger(row.rating) || row.rating < 1 || row.rating > 10) continue;
+      items.set(`${show}:${season}:${number}`, { show, slug: row.show.ids.slug, season, number, rating: row.rating });
     }
     return [...items.values()];
   }
@@ -2734,8 +2734,8 @@
   }
   function readSeasonEpisodes(doc) {
     const episodes = [];
-    for (const row2 of doc.querySelectorAll("section.episodes article.row")) {
-      const heading = row2.querySelector(".titles h3");
+    for (const row of doc.querySelectorAll("section.episodes article.row")) {
+      const heading = row.querySelector(".titles h3");
       const number = episodeNumber(text(heading?.querySelector(".number")));
       const links = heading?.querySelectorAll("a") || [];
       const titleLink = links[links.length - 1];
@@ -2743,7 +2743,7 @@
       episodes.push({
         number,
         title: text(titleLink),
-        rating: percent2(text(row2.querySelector(".rating-trigger .value"))),
+        rating: percent2(text(row.querySelector(".rating-trigger .value"))),
         votes: null,
         href: titleLink.getAttribute("href")
       });
@@ -3213,17 +3213,17 @@
     return time >= Date.parse(span.start) && time < Date.parse(span.end);
   }
   function summarize(history2, ratings, comments, span) {
-    const plays = history2.filter((row2) => inMonth(row2.watched_at, span));
+    const plays = history2.filter((row) => inMonth(row.watched_at, span));
     const first = plays.reduce((a, b) => !a || Date.parse(b.watched_at) < Date.parse(a.watched_at) ? b : a, null);
-    const minutes = plays.reduce((sum, row2) => {
-      const runtime = (row2.episode || row2.movie)?.runtime;
+    const minutes = plays.reduce((sum, row) => {
+      const runtime = (row.episode || row.movie)?.runtime;
       return sum + (Number.isFinite(runtime) && runtime > 0 ? runtime : 0);
     }, 0);
     return {
       plays: plays.length,
       hours: Math.round(minutes / 60),
-      ratings: ratings.filter((row2) => inMonth(row2.rated_at, span)).length,
-      comments: comments.filter((row2) => inMonth(row2.comment?.created_at ?? row2.created_at, span)).length,
+      ratings: ratings.filter((row) => inMonth(row.rated_at, span)).length,
+      comments: comments.filter((row) => inMonth(row.comment?.created_at ?? row.created_at, span)).length,
       first
     };
   }
@@ -3279,7 +3279,7 @@
       const history2 = await paginate(apiAuthPage, "/sync/history", { start_at: span.start, end_at: span.end, extended: "full,images" });
       alive();
       let summary2 = { plays: 0 };
-      if (history2.some((row2) => Date.parse(row2.watched_at) >= Date.parse(span.start) && Date.parse(row2.watched_at) < Date.parse(span.end))) {
+      if (history2.some((row) => Date.parse(row.watched_at) >= Date.parse(span.start) && Date.parse(row.watched_at) < Date.parse(span.end))) {
         const [ratings, comments] = await Promise.all([
           apiAuth("GET", "/sync/ratings"),
           paginate(apiAuthPage, "/users/me/comments")
@@ -3437,420 +3437,6 @@
       } };
     }
   };
-
-  // src/features/all-lists/data.js
-  function posterUrl2(value) {
-    if (typeof value !== "string" || !value) return null;
-    try {
-      const url = new URL(value.startsWith("https://") ? value : `https://${value}`);
-      return url.protocol === "https:" && url.hostname === "media.trakt.tv" ? url.href : null;
-    } catch {
-      return null;
-    }
-  }
-  function count(value) {
-    return Number.isSafeInteger(value) && value >= 0 ? value : null;
-  }
-  function ownerName(user) {
-    return typeof user?.name === "string" && user.name.trim() ? user.name.trim() : user?.ids?.slug || user?.username || null;
-  }
-  function normalizeList(raw) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-    const id = count(raw.ids?.trakt);
-    const slug = typeof raw.ids?.slug === "string" ? raw.ids.slug : "";
-    const ownerSlug = raw.user?.ids?.slug || raw.user?.username;
-    const name = typeof raw.name === "string" ? raw.name.trim() : "";
-    if (!id || !slug || typeof ownerSlug !== "string" || !ownerSlug || !name) return null;
-    const images = Array.isArray(raw.images?.posters) ? raw.images.posters : [];
-    return {
-      id,
-      slug,
-      name,
-      description: typeof raw.description === "string" ? raw.description.trim() : "",
-      owner: { slug: ownerSlug, name: ownerName(raw.user) },
-      itemCount: count(raw.item_count),
-      likes: count(raw.likes),
-      // One poster is enough for the compact row; liked lists normally come without any.
-      poster: posterUrl2(images[0])
-    };
-  }
-  function collaborationLists(payload) {
-    if (!Array.isArray(payload)) return [];
-    return payload.map(normalizeList).filter(Boolean);
-  }
-  function likedLists(payload) {
-    if (!Array.isArray(payload)) return [];
-    return payload.map((entry) => normalizeList(entry?.list)).filter(Boolean);
-  }
-  function listHref(list) {
-    return `/users/${encodeURIComponent(list.owner.slug)}/lists/${encodeURIComponent(list.slug)}`;
-  }
-  function itemCountLabel(value) {
-    if (!Number.isSafeInteger(value) || value < 0) return null;
-    return `${value} ${value === 1 ? "item" : "items"}`;
-  }
-
-  // src/features/all-lists/api.js
-  function userPath(id) {
-    return `/users/${encodeURIComponent(id)}`;
-  }
-  function getCollaborationLists(id) {
-    return apiGet(`${userPath(id)}/lists/collaborations?extended=images`);
-  }
-  function getLikedLists(id) {
-    return apiGet(`${userPath(id)}/likes/lists?extended=images`);
-  }
-
-  // src/features/all-lists/styles.js
-  var CSS7 = String.raw`
-/* Match og's Container so the panel lines up with the list rows above it. */
-.ogt-lists {
-  box-sizing: border-box;
-  inline-size: 100%;
-  margin-inline: auto;
-  padding-inline: calc(var(--gutter, 20px) / 2);
-}
-
-@media (min-width: 768px) {
-  .ogt-lists {
-    inline-size: var(--container-sm, 740px);
-  }
-}
-
-@media (min-width: 992px) {
-  .ogt-lists {
-    inline-size: var(--container-md, 960px);
-  }
-}
-
-@media (min-width: 1200px) {
-  .ogt-lists {
-    inline-size: var(--container-lg, 1160px);
-  }
-}
-
-.ogt-lists .ogt-panel {
-  margin-block-start: 0;
-}
-
-.ogt-lists__groups[hidden] {
-  display: none !important;
-}
-
-.ogt-lists__group + .ogt-lists__group {
-  margin-block-start: 16px;
-  padding-block-start: 16px;
-  border-block-start: 1px solid var(--ogt-border);
-}
-
-.ogt-lists__heading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 6px;
-  color: var(--ogt-fg);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.ogt-lists__count {
-  min-inline-size: 20px;
-  padding: 1px 6px;
-  border: 1px solid var(--ogt-border);
-  border-radius: 999px;
-  color: var(--ogt-muted);
-  font-size: 10px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.ogt-lists__items {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.ogt-lists__item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 7px 8px;
-  border-radius: 5px;
-}
-
-.ogt-lists__item:hover {
-  background: var(--ogt-raised);
-}
-
-.ogt-lists__poster {
-  flex-shrink: 0;
-  inline-size: 34px;
-  block-size: 51px;
-  border-radius: 3px;
-  background: var(--ogt-raised);
-  object-fit: cover;
-}
-
-.ogt-lists__body {
-  min-inline-size: 0;
-}
-
-.ogt-lists__name {
-  color: var(--ogt-fg);
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.ogt-lists__name:hover,
-.ogt-lists__name:focus-visible {
-  color: var(--ogt-accent);
-  text-decoration: underline;
-}
-
-.ogt-lists__name:focus-visible {
-  outline: 2px solid var(--ogt-accent);
-  outline-offset: 2px;
-}
-
-.ogt-lists__meta {
-  margin: 2px 0 0;
-  color: var(--ogt-muted);
-  font-size: 11px;
-}
-
-.ogt-lists__description {
-  display: -webkit-box;
-  overflow: hidden;
-  margin: 4px 0 0;
-  color: var(--ogt-fg);
-  font-size: 12px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-`;
-
-  // src/features/all-lists/index.js
-  var PANEL_ID3 = "ogt-all-lists";
-  var GROUPS_ID = "ogt-all-lists-groups";
-  var TITLE_ID2 = "ogt-all-lists-title";
-  function row(entry) {
-    const meta = [itemCountLabel(entry.itemCount), entry.owner.name ? `by ${entry.owner.name}` : null].filter(Boolean);
-    const poster = entry.poster ? el("img", {
-      class: "ogt-lists__poster",
-      src: entry.poster,
-      alt: "",
-      loading: "lazy",
-      decoding: "async",
-      referrerpolicy: "no-referrer"
-    }) : null;
-    poster?.addEventListener("error", () => poster.remove(), { once: true });
-    return el(
-      "li",
-      { class: "ogt-lists__item" },
-      poster,
-      el(
-        "div",
-        { class: "ogt-lists__body" },
-        el("a", { class: "ogt-lists__name", href: listHref(entry), text: entry.name }),
-        meta.length ? el("p", { class: "ogt-lists__meta", text: meta.join(" · ") }) : null,
-        entry.description ? el("p", { class: "ogt-lists__description", text: entry.description }) : null
-      )
-    );
-  }
-  function group({ key, title, lists, empty }) {
-    const headingId = `${GROUPS_ID}-${key}`;
-    return el(
-      "section",
-      { class: "ogt-lists__group", "aria-labelledby": headingId },
-      el(
-        "h3",
-        {
-          class: "ogt-lists__heading",
-          id: headingId,
-          "aria-label": `${title}, ${lists.length} ${lists.length === 1 ? "list" : "lists"}`
-        },
-        title,
-        el("span", { class: "ogt-lists__count", "aria-hidden": "true", text: String(lists.length) })
-      ),
-      lists.length ? el("ul", { class: "ogt-lists__items" }, ...lists.map(row)) : el("p", { class: "ogt-hint", text: empty })
-    );
-  }
-  function errorHint(failures, missingClientId) {
-    if (missingClientId) return "Set a Trakt API client ID in the toolkit menu to load the other lists.";
-    return `Couldn’t load ${failures.join(" or ")}.`;
-  }
-  function createPanel4(profile) {
-    let cancelled = false;
-    let loading = false;
-    let loaded = false;
-    let expanded = false;
-    const groups = el("div", { class: "ogt-lists__groups", id: GROUPS_ID, hidden: true });
-    const hint = el("p", { class: "ogt-hint", role: "status", hidden: true });
-    const toggle = el("button", {
-      class: "ogt-chip",
-      type: "button",
-      text: "Show all lists",
-      "aria-expanded": "false",
-      "aria-controls": GROUPS_ID
-    });
-    const retry = el("button", { class: "ogt-chip", type: "button", text: "Try again", hidden: true });
-    const node = el(
-      "section",
-      { class: "ogt-lists", id: PANEL_ID3, "aria-labelledby": TITLE_ID2 },
-      el(
-        "div",
-        { class: "ogt-panel" },
-        el(
-          "div",
-          { class: "ogt-head" },
-          el("h2", { class: "ogt-title", id: TITLE_ID2, text: "All lists" }),
-          el("span", { class: "ogt-badge", text: "og toolkit" })
-        ),
-        el("p", { class: "ogt-hint", text: "Collaborations and liked lists from this profile, without switching pages." }),
-        el("div", { class: "ogt-row" }, toggle, retry),
-        hint,
-        groups
-      )
-    );
-    function setExpanded(open) {
-      expanded = open;
-      groups.hidden = !open;
-      toggle.setAttribute("aria-expanded", String(open));
-      toggle.textContent = open ? "Hide all lists" : "Show all lists";
-    }
-    async function load() {
-      if (cancelled || loading) return;
-      loading = true;
-      toggle.setAttribute("aria-disabled", "true");
-      toggle.textContent = "Loading lists…";
-      hint.hidden = true;
-      retry.hidden = true;
-      const results = await Promise.allSettled([getCollaborationLists(profile), getLikedLists(profile)]);
-      if (cancelled) return;
-      loading = false;
-      toggle.removeAttribute("aria-disabled");
-      const [collaborations, liked] = results;
-      const failures = [];
-      const collaborationRows = collaborations.status === "fulfilled" ? collaborationLists(collaborations.value) : [];
-      const likedRows = liked.status === "fulfilled" ? likedLists(liked.value) : [];
-      if (collaborations.status === "rejected") failures.push("collaborations");
-      if (liked.status === "rejected") failures.push("liked lists");
-      groups.replaceChildren(
-        group({ key: "collaborations", title: "Collaborations", lists: collaborationRows, empty: "No collaborations." }),
-        group({ key: "liked", title: "Liked lists", lists: likedRows, empty: "No liked lists." })
-      );
-      const missingClientId = results.some(
-        (result) => result.status === "rejected" && result.reason?.name === "MissingClientIdError"
-      );
-      for (const result of results) {
-        if (result.status === "rejected") debugError("all-lists lookup failed", result.reason);
-      }
-      if (failures.length) {
-        hint.textContent = errorHint(failures, missingClientId);
-        hint.hidden = false;
-        retry.hidden = false;
-      }
-      loaded = collaborationRows.length > 0 || likedRows.length > 0 || failures.length === 0;
-      if (!collaborationRows.length && !likedRows.length && failures.length) {
-        loaded = false;
-        setExpanded(false);
-        return;
-      }
-      setExpanded(true);
-    }
-    function onToggle() {
-      if (loading) return;
-      if (expanded) {
-        setExpanded(false);
-        return;
-      }
-      if (loaded) {
-        setExpanded(true);
-        return;
-      }
-      void load();
-    }
-    toggle.addEventListener("click", onToggle);
-    retry.addEventListener("click", load);
-    return {
-      node,
-      destroy() {
-        cancelled = true;
-        toggle.removeEventListener("click", onToggle);
-        retry.removeEventListener("click", load);
-        node.remove();
-      }
-    };
-  }
-  var allLists = {
-    id: "all-lists",
-    css: CSS7,
-    match(route) {
-      return route.name === "lists";
-    },
-    mount(route) {
-      if (document.getElementById(PANEL_ID3)) return null;
-      const listsSection = document.getElementById("lists-heading")?.closest("section.lists") || document.querySelector("section.lists");
-      if (!listsSection) return null;
-      const panel = createPanel4(route.id);
-      listsSection.after(panel.node);
-      return panel;
-    }
-  };
-
-  // src/features/library/api.js
-  var validId = (id) => Number.isSafeInteger(id) && id > 0;
-  function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
-    return {
-      async add(route, { confirm = () => true, active: active2 = () => true } = {}) {
-        if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
-        const id = encodeURIComponent(route.id);
-        const at = now();
-        const collected_at = new Date(at).toISOString();
-        let body;
-        if (route.kind === "movie" && route.name === "title") {
-          const movie = await get(`/movies/${id}`);
-          if (!validId(movie?.ids?.trakt)) throw new Error("Could not identify this movie.");
-          body = { movies: [{ ids: { trakt: movie.ids.trakt }, collected_at }] };
-        } else if (route.kind === "show" && ["title", "season", "episode"].includes(route.name)) {
-          const seasons = route.name === "title" ? await get(`/shows/${id}/seasons?extended=full,episodes`, { ttl: 0 }) : [{ number: route.season }];
-          if (!Array.isArray(seasons)) throw new Error("Could not load seasons.");
-          const episodes = [];
-          for (const season of seasons) {
-            if (!active2() || !signedIn()) return { cancelled: true };
-            if (!Number.isSafeInteger(season.number) || season.number < 0) continue;
-            if (route.name === "title" && season.number === 0) continue;
-            const path = `/shows/${id}/seasons/${season.number}`;
-            const rows = route.name === "title" ? season.episodes : route.name === "episode" ? [await get(`${path}/episodes/${route.episode}?extended=full`)] : await get(`${path}?extended=full`);
-            if (!Array.isArray(rows)) throw new Error("Could not load episodes.");
-            for (const episode of rows) {
-              if (validId(episode?.ids?.trakt) && Number.isFinite(Date.parse(episode.first_aired)) && Date.parse(episode.first_aired) <= at) {
-                episodes.push({ ids: { trakt: episode.ids.trakt }, collected_at });
-              }
-            }
-          }
-          body = { episodes: [...new Map(episodes.map((ep) => [ep.ids.trakt, ep])).values()] };
-          if (!body.episodes.length) throw new Error("No aired episodes to add.");
-          if (!active2() || !signedIn()) return { cancelled: true };
-          if (route.name !== "episode" && !confirm(`Add ${body.episodes.length} aired episode${body.episodes.length === 1 ? "" : "s"} to your toolkit Trakt account’s library?${route.name === "title" ? " Specials are excluded." : ""}`)) {
-            return { cancelled: true };
-          }
-        } else throw new Error("Unsupported library page.");
-        if (!active2() || !signedIn()) return { cancelled: true };
-        const result = await auth("POST", "/sync/collection", body);
-        if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
-          throw new Error("Trakt could not find some items; the addition may be incomplete.");
-        }
-        const counts = [result?.added?.movies, result?.added?.episodes, result?.updated?.movies, result?.updated?.episodes];
-        if (!counts.some((count2) => Number.isInteger(count2) && count2 > 0)) throw new Error("Trakt did not confirm a library addition.");
-        return { cancelled: false };
-      }
-    };
-  }
-  var libraryApi = createLibraryApi();
 
   // src/ui/native-modules.js
   var earlyResources = [];
@@ -4060,6 +3646,727 @@
     }
     if (active2()) showSuccessToast(message);
   }
+
+  // src/features/all-lists/data.js
+  function posterUrl2(value) {
+    if (typeof value !== "string" || !value) return null;
+    try {
+      const url = new URL(value.startsWith("https://") ? value : `https://${value}`);
+      return url.protocol === "https:" && url.hostname === "media.trakt.tv" ? url.href : null;
+    } catch {
+      return null;
+    }
+  }
+  function count(value) {
+    return Number.isSafeInteger(value) && value >= 0 ? value : null;
+  }
+  function ownerName(user) {
+    return typeof user?.name === "string" && user.name.trim() ? user.name.trim() : user?.ids?.slug || user?.username || null;
+  }
+  function vipBadge(user) {
+    if (user?.director === true) return { label: "Director", tag: null };
+    if (user?.vip !== true) return null;
+    return { label: "VIP", tag: user.vip_og === true ? "OG" : user.vip_ep === true ? "EP" : null };
+  }
+  function normalizeList(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const id = count(raw.ids?.trakt);
+    const slug = typeof raw.ids?.slug === "string" ? raw.ids.slug : "";
+    const ownerSlug = raw.user?.ids?.slug || raw.user?.username;
+    const name = typeof raw.name === "string" ? raw.name.trim() : "";
+    if (!id || !slug || typeof ownerSlug !== "string" || !ownerSlug || !name) return null;
+    const images = Array.isArray(raw.images?.posters) ? raw.images.posters : [];
+    return {
+      id,
+      slug,
+      name,
+      description: typeof raw.description === "string" ? raw.description.trim() : "",
+      owner: { slug: ownerSlug, name: ownerName(raw.user), avatar: posterUrl2(raw.user?.images?.avatar?.full), vip: vipBadge(raw.user) },
+      itemCount: count(raw.item_count),
+      commentCount: raw.allow_comments === true ? count(raw.comment_count) : null,
+      likes: count(raw.likes),
+      allowComments: raw.allow_comments === true,
+      privacy: typeof raw.privacy === "string" ? raw.privacy : null,
+      kind: raw.type === "official" ? "official" : "personal",
+      // OG fetches up to five posters from each list summary for its fan row.
+      posters: images.slice(0, 5).map(posterUrl2).filter(Boolean)
+    };
+  }
+  function collaborationLists(payload) {
+    if (!Array.isArray(payload)) return [];
+    return payload.map(normalizeList).filter(Boolean);
+  }
+  function likedLists(payload) {
+    if (!Array.isArray(payload)) return [];
+    return payload.map((entry) => normalizeList(entry?.list)).filter(Boolean);
+  }
+  function listHref(list) {
+    if (list.kind === "official") return `/lists/official/${encodeURIComponent(list.slug)}`;
+    return `/users/${encodeURIComponent(list.owner.slug)}/lists/${encodeURIComponent(list.slug)}`;
+  }
+  function listProgressHref(list, viewerSlug) {
+    if (!viewerSlug || list.kind === "official") return null;
+    return `/users/${encodeURIComponent(viewerSlug)}/progress?list=${encodeURIComponent(list.id)}`;
+  }
+  function listPills(entry) {
+    if (entry.kind === "official") return ["Official List"];
+    if (entry.privacy === "private") return ["Private"];
+    if (entry.privacy === "friends") return ["Following"];
+    if (entry.privacy === "link") return ["Link"];
+    return [];
+  }
+
+  // src/features/all-lists/api.js
+  var LIMIT = 250;
+  var MAX_PAGES = 10;
+  function userPath(id) {
+    return `/users/${encodeURIComponent(id)}`;
+  }
+  function getCollaborationLists(id) {
+    const path = `${userPath(id)}/lists/collaborations`;
+    return isSignedIn() ? apiAuth("GET", path, void 0, { extended: "images" }) : apiGet(`${path}?extended=images`);
+  }
+  async function getLikedLists(id) {
+    const path = `${userPath(id)}/likes/lists`;
+    if (isSignedIn()) {
+      const page = (n) => apiAuthPage(path, { extended: "images", page: n, limit: LIMIT });
+      const first = await page(1);
+      const count2 = Math.min(first.pages ?? 1, MAX_PAGES);
+      const rest = await Promise.all(Array.from({ length: count2 - 1 }, (_, i) => page(i + 2)));
+      return [first, ...rest].flatMap((result) => Array.isArray(result.data) ? result.data : []);
+    }
+    const rows = [];
+    for (let n = 1; n <= MAX_PAGES; n++) {
+      const page = await apiGet(`${path}?extended=images&page=${n}&limit=${LIMIT}`);
+      if (!Array.isArray(page)) break;
+      rows.push(...page);
+      if (page.length < LIMIT) break;
+    }
+    return rows;
+  }
+  function getListSummary(id) {
+    return apiGet(`/lists/${encodeURIComponent(id)}?extended=images`);
+  }
+  function getViewer() {
+    return apiAuth("GET", "/users/me");
+  }
+
+  // src/features/all-lists/styles.js
+  var CSS7 = String.raw`
+/* The view takes section.lists' own classes; rows take og's ListRow classes when the page has a native row.
+   The --fallback rules copy ListRow.svelte for a profile with no personal lists to borrow from. */
+/* og paints every section with --color-surface; the view is a div, so it needs the same, or the darker page shows
+   between the groups and under the last row. flow-root keeps the groups' margins inside it. */
+.ogt-all-lists { display: flow-root; margin: 0; padding-bottom: var(--gutter, 32px); background-color: var(--color-surface, #1d1d1d); }
+
+.ogt-all-lists__group { margin: 0; padding-top: var(--list-card-spacing, 24px); border: 0; }
+.ogt-all-lists__group + .ogt-all-lists__group { margin-top: 0; }
+.ogt-all-lists__group h2, .ogt-all-lists__personal-heading { margin: 0 0 var(--list-card-spacing, 24px); }
+.ogt-all-lists__personal-heading { padding-block-start: var(--list-card-spacing, 24px); }
+.ogt-all-lists__empty, .ogt-all-lists__loading, .ogt-all-lists__error { color: var(--color-text-secondary, #aaa); }
+
+.ogt-all-lists--fallback .list-row { container-type: inline-size; padding-block-start: var(--list-card-spacing, 24px); }
+.ogt-all-lists--fallback .card {
+  --poster-width: var(--list-card-poster-width, 160px);
+  --poster-height: var(--list-card-poster-height, 180px);
+  --sliver: var(--list-card-sliver, 24px);
+  display: grid;
+  grid-template-columns: calc(var(--poster-width) + (var(--sliver) * 4)) minmax(0, 1fr);
+  position: relative;
+  isolation: isolate;
+  column-gap: var(--list-card-gap, 24px);
+  row-gap: var(--list-card-row-gap, 12px);
+  color: var(--color-text, #fff);
+  --list-card-body-gap: var(--list-card-body-gap, 8px);
+}
+
+.ogt-all-lists--fallback .fan-frame { --rank-anchor-width: var(--poster-width); position: relative; align-self: start; }
+.ogt-all-lists--fallback .fan {
+  display: flex;
+  block-size: var(--poster-height);
+  overflow: hidden;
+  border-radius: var(--radius-list-card-fan, 6px);
+  background-color: var(--color-list-card-placeholder, #303030);
+}
+.ogt-all-lists--fallback .slot {
+  position: relative;
+  flex: none;
+  inline-size: var(--sliver);
+  block-size: var(--poster-height);
+  overflow: hidden;
+  transition: inline-size var(--transition-list-card-fan, .2s);
+}
+.ogt-all-lists--fallback .slot:not(:first-child) { box-shadow: var(--shadow-list-card-sliver); }
+.ogt-all-lists--fallback .slot:first-child { flex-basis: var(--poster-width); }
+.ogt-all-lists--fallback .poster { position: absolute; inset-block: 0; inset-inline-start: 0; display: block; inline-size: var(--poster-width); block-size: var(--poster-height); background: var(--color-card-bg, #252525); object-fit: cover; }
+.ogt-all-lists--fallback .placeholder { background-image: var(--image-placeholder-poster, repeating-linear-gradient(135deg, #303030 0 6px, transparent 6px 12px)); background-size: cover; }
+.ogt-all-lists--fallback .placeholder.empty, .ogt-all-lists--fallback .fan.empty { background: repeating-linear-gradient(135deg, var(--color-list-card-placeholder-line, #383838) 0 6px, transparent 6px 12px), var(--color-list-card-placeholder, #303030); }
+.ogt-all-lists--fallback .no-items { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; color: var(--color-stat-noun, #aaa); font-family: var(--font-headings); font-size: var(--font-size-list-card-empty, 14px); pointer-events: none; }
+.ogt-all-lists--fallback .no-items::before { content: '▤'; margin-bottom: 6px; font-size: var(--font-size-list-card-empty-icon, 20px); }
+.ogt-all-lists .poster.loading { background: linear-gradient(90deg, #303030, #414141, #303030); }
+@container (min-width: 520px) {
+  .ogt-all-lists--fallback .fan:hover .slot { inline-size: var(--sliver); }
+  .ogt-all-lists--fallback .fan:hover .slot:hover { inline-size: var(--poster-width); }
+}
+
+.ogt-all-lists--fallback .body { display: flex; min-inline-size: 0; flex-direction: column; gap: var(--list-card-body-gap, 8px); }
+.ogt-all-lists--fallback .head { display: flex; flex-wrap: wrap; inline-size: 100%; min-inline-size: 0; align-items: center; justify-content: space-between; gap: var(--list-card-body-gap, 8px) var(--list-card-foot-gap, 12px); }
+.ogt-all-lists--fallback .name-link { min-inline-size: 0; color: var(--color-text, #fff); }
+.ogt-all-lists--fallback .name-link:hover, .ogt-all-lists--fallback .card:hover .name-link { color: var(--color-link, #f31f35); }
+.ogt-all-lists--fallback .name-link h3 { margin: 0; font-weight: var(--font-weight-headings, 600); font-size: var(--font-size-h4, 18px); }
+.ogt-all-lists--fallback .chips { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--comment-tags-gap, 4px); margin-inline-start: auto; }
+.ogt-all-lists__tag { display: inline-flex; block-size: var(--comment-chip-height, 24px); align-items: center; gap: var(--list-card-chip-gap, 5px); padding-inline: var(--comment-chip-padding, 8px); overflow: hidden; border: 1px solid color-mix(in srgb, var(--ogt-list-tag-color) var(--list-card-chip-line, 40%), transparent); border-radius: var(--radius-list-card-chip, 5px); background: color-mix(in srgb, var(--ogt-list-tag-color) var(--list-card-chip-tint, 10%), transparent); color: color-mix(in srgb, var(--ogt-list-tag-color), var(--color-list-card-chip-lift, white) var(--list-card-chip-lift, 10%)); font-family: var(--font-headings); font-size: var(--font-size-comment-tag, 12px); white-space: nowrap; }
+/* og's VipLabel (compact pill), for owners on pages without a native label to copy. */
+.ogt-vip { display: inline-flex; align-items: stretch; overflow: hidden; block-size: var(--label-vip-height-small, 18px);
+  margin-inline-start: 5px; border-radius: calc(var(--label-vip-height-small, 18px) / 2); background-color: var(--brand-primary, #ed1c24);
+  color: var(--color-text-inverse, #fff); font-family: var(--font-headings); font-size: var(--font-size-label-vip-small, 11px);
+  font-weight: var(--font-weight-headings-heavy, 700); letter-spacing: var(--label-vip-tracking, .04em); line-height: 1;
+  text-transform: uppercase; text-shadow: none; vertical-align: middle; white-space: nowrap; }
+.ogt-vip__name, .ogt-vip__tag { display: inline-flex; align-items: center; }
+.ogt-vip__name { gap: var(--label-vip-gap-small, 3px); padding: var(--label-vip-name-padding-small, 0 7px 0 4px); }
+.ogt-vip__mark { display: flex; font-size: var(--label-vip-mark-small, 12px); }
+.ogt-vip__mark svg { block-size: 1em; inline-size: auto; translate: 0 var(--label-vip-mark-shift, 0); }
+.ogt-vip__tag { padding: var(--label-vip-segment-padding-small, 0 6px); background-color: var(--color-label-ep, #8e44ad); text-decoration: none; }
+
+.ogt-all-lists__icon { display: block; flex: none; width: 16px; height: 16px; }
+.ogt-all-lists__tag .ogt-all-lists__icon { width: 12px; height: 12px; }
+.ogt-all-lists--fallback .by { display: flex; flex-wrap: wrap; align-items: center; row-gap: var(--list-card-body-gap, 8px); margin: 0; color: var(--color-stat-noun, #aaa); font-family: var(--font-headings); font-size: var(--font-size-list-row-meta, 14px); }
+.ogt-all-lists--fallback .owner { display: inline-flex; align-items: center; gap: var(--space-stat, 6px); color: var(--color-text, #fff); text-decoration: none; }
+.ogt-all-lists--fallback .avatar { display: inline-flex; inline-size: var(--list-card-avatar-size, 24px); block-size: var(--list-card-avatar-size, 24px); flex: 0 0 var(--list-card-avatar-size, 24px); overflow: hidden; border-radius: 50%; background: var(--color-avatar-border, #353535); }
+.ogt-all-lists--fallback .avatar img { inline-size: 100%; block-size: 100%; object-fit: cover; }
+.ogt-all-lists--fallback .overview { max-inline-size: 80ch; margin-block-start: var(--list-card-bubble-gap, 8px); color: var(--color-list-card-description, var(--color-text-secondary, #aaa)); overflow-wrap: break-word; }
+.ogt-all-lists--fallback .clamp { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.ogt-all-lists--fallback .foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--list-card-foot-gap, 8px) var(--space-stats, 12px); margin-block-start: auto; padding-block-start: var(--list-card-foot-gap, 8px); font-family: var(--font-headings); font-size: var(--font-size-list-row-meta, 14px); white-space: nowrap; }
+.ogt-all-lists--fallback .counts, .ogt-all-lists--fallback .tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--list-counts-gap, 8px); }
+.ogt-all-lists__count { display: inline-flex; block-size: var(--control-height, 36px); align-items: center; gap: var(--glass-action-gap-card, 8px); padding-inline: var(--glass-action-padding-card, 12px); border: 1px solid var(--color-control-border, #444); border-radius: var(--radius-control, 6px); background: var(--color-control-bg, transparent); color: var(--color-control-text, #ddd); font-family: var(--font-body); font-size: var(--font-size-glass-action, 14px); text-decoration: none; white-space: nowrap; }
+.ogt-all-lists__count strong { font-weight: 700; }
+.ogt-all-lists__count-icon { inline-size: 14px; block-size: 14px; color: var(--color-action-share, #00baff); }
+.ogt-all-lists__count-icon { display: block; flex: none; }
+.ogt-all-lists__count.comments .ogt-all-lists__count-icon { color: var(--color-stat-noun, #aaa); }
+.ogt-all-lists--fallback .action { display: inline-grid; inline-size: var(--comment-tool-size, 28px); block-size: var(--comment-tool-size, 28px); place-items: center; border-radius: var(--radius-comment-tool, 4px); color: var(--color-stat-noun, #aaa); text-decoration: none; }
+.ogt-all-lists--fallback button.action { padding: 0; border: 0; background: transparent; font: inherit; cursor: pointer; }
+.ogt-all-lists--fallback .action:hover { background: var(--color-comment-chip, #333); }
+.ogt-all-lists--fallback .progress { color: var(--color-text, #fff); }
+.ogt-all-lists--fallback .share { color: var(--color-action-share, #00baff); }
+
+@container (max-width: 600px) {
+  .ogt-all-lists--fallback .card { grid-template-columns: minmax(0, 1fr); }
+  .ogt-all-lists--fallback .fan { gap: var(--list-card-poster-gap-narrow, 8px); block-size: auto; overflow: visible; background: none; }
+  .ogt-all-lists--fallback .fan.empty { block-size: var(--poster-height); }
+  .ogt-all-lists--fallback .slot, .ogt-all-lists--fallback .slot:first-child { flex: 1; inline-size: auto; border-radius: var(--radius-list-card-poster-narrow, 4px); box-shadow: none; }
+  .ogt-all-lists--fallback .slot { block-size: auto; }
+  .ogt-all-lists--fallback .poster { position: relative; inline-size: 100%; block-size: auto; aspect-ratio: var(--ratio-poster, 2 / 3); }
+}
+`;
+
+  // src/features/all-lists/index.js
+  var ROOT_ID = "ogt-all-lists";
+  var OPTION_ID = "ogt-all-lists-option";
+  var HASH = "#ogt-all-lists";
+  var ROUTES = ["lists", "smart-lists", "lists-collaborations", "liked-lists"];
+  var posterRequests = /* @__PURE__ */ new Map();
+  var ICONS = {
+    Private: ["--color-list-chip-private", "M5 10h14v11H5z M8 10V7a4 4 0 0 1 8 0v3"],
+    Following: ["--color-list-chip-following", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20a7 7 0 0 1 14 0Z"],
+    Link: ["--color-list-chip-link", "M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1 M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"],
+    "Official List": ["--color-list-chip-official", "M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"],
+    likes: "M7 10v10H4V10h3Zm2 10h8a2 2 0 0 0 2-1.6l1-6A2 2 0 0 0 18 10h-4l.6-3.2A2.5 2.5 0 0 0 12 4l-3 6v10Z",
+    items: "M6 3h8l4 4v14H6V3Zm8 0v5h4",
+    comments: "M21 11a7 7 0 0 1-7 7H9l-4 3v-4a7 7 0 1 1 16-6Z",
+    progress: "M4 5h16v5H4z M4 14h16v5H4z M7 7.5h.01 M7 16.5h.01",
+    share: "M12 16V3M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"
+  };
+  var VIP_MARK = "M104 363Q133 394 172 412Q211 430 256 430Q279 430 300.50 425Q322 420 342 411L199 269L104 363M198 182L90 290L76 276L323 29Q307 24 290 21Q273 18 256 18Q213 18 176 34Q138 50 110 78Q82 106 66 144Q50 181 50 224Q50 259 61 290.50Q72 322 91 348L199 240L206 247L361 401Q363 400 365.50 398.50Q368 397 370 396L199 225L95 329L81 314L199 196L206 203L387 383Q389 382 391 380Q393 378 395 377L200 182L198 182M360 64L242 182L228 167L346 49L360 64M263 204L249 190L351 88L366 102L263 204M409 362Q434 335 448 299.50Q462 264 462 224Q462 162 429 112Q396 62 343 37L214 167L409 362M256-6Q208-6 166 12Q124 30 93 61Q62 92 44 134Q26 176 26 224Q26 272 44 314Q62 356 93 387Q124 418 166 436Q208 454 256 454Q304 454 346 436Q388 418 419 387Q450 356 468 314Q486 272 486 224Q486 176 468 134Q450 92 419 61Q388 30 346 12Q304-6 256-6M256 480Q203 480 156 460Q110 440 75 405Q40 370 20 324Q0 277 0 224Q0 171 20 124Q40 78 75 43Q110 8 156-12Q203-32 256-32Q309-32 356-12Q402 8 437 43Q472 78 492 124Q512 171 512 224Q512 277 492 324Q472 370 437 405Q402 440 356 460Q309 480 256 480";
+  var LIKED_ICON = ["0 0 512 512", "M313 33Q333 37 344 53Q355 69 351 89L349 101Q341 141 320 176L464 176Q484 177 498 190Q511 204 512 224Q511 253 486 267Q503 281 504 304Q504 322 493 335Q482 348 465 351Q472 362 472 376Q470 410 439 422Q440 427 440 432Q439 452 426 466Q412 479 392 480L295 480Q265 480 241 464L203 438Q161 409 160 358L160 320L160 272L160 247Q161 201 196 172L203 166Q244 133 255 82L257 71Q261 51 277 40Q293 29 313 33M32 192L96 192L32 192L96 192Q110 192 119 201Q128 210 128 224L128 448Q128 462 119 471Q110 480 96 480L32 480Q18 480 9 471Q0 462 0 448L0 224Q0 210 9 201Q18 192 32 192"];
+  function icon2(pathData, className = "ogt-all-lists__icon") {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg3.setAttribute("viewBox", "0 0 24 24");
+    svg3.setAttribute("class", className);
+    svg3.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    for (const [name, value] of Object.entries({
+      d: pathData,
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "1.8",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    })) path.setAttribute(name, value);
+    svg3.append(path);
+    return svg3;
+  }
+  function findDropdown() {
+    for (const trigger of document.querySelectorAll("button[popovertarget]")) {
+      if (!/^(?:Lists|Liked):/i.test(text(trigger.querySelector(".section")))) continue;
+      const menu = document.getElementById(trigger.getAttribute("popovertarget"));
+      if (menu) return { trigger, menu };
+    }
+    return null;
+  }
+  function nativeParts(lists) {
+    const row = lists.querySelector("article.list-row");
+    if (!row) return null;
+    const scoped = (node) => [...node?.classList ?? []].filter((name) => name.startsWith("svelte-")).join(" ");
+    const counts = [...lists.querySelectorAll(".list-row .counts a.count")];
+    return {
+      row: scoped(row),
+      icon: scoped(lists.querySelector(".list-row svg.icon")),
+      likes: lists.querySelector(".list-row .counts > .glass-action"),
+      items: counts.find((count2) => !count2.getAttribute("href")?.endsWith("/comments")),
+      comments: counts.find((count2) => count2.getAttribute("href")?.endsWith("/comments")),
+      tag: lists.querySelector(".list-row .chips .tag.tint"),
+      text: scoped(lists.querySelector(".list-row .comment-text")),
+      share: lists.querySelector(".list-row .tools > span.share"),
+      vip: lists.querySelector(".list-row .by .label-vip"),
+      progress: lists.querySelector(".list-row .tools a.progress")
+    };
+  }
+  function createRows(native) {
+    const part = (tag2, name, props = {}, ...children) => el(tag2, { ...props, class: [name, native?.row].filter(Boolean).join(" ") }, ...children);
+    const ownIcon = (path) => icon2(path, ["icon", native?.icon].filter(Boolean).join(" "));
+    function count2(kind, value, href, word, liked = false) {
+      if (value == null) return null;
+      const words = value === 1 ? word : `${word}s`;
+      const template = native?.[kind];
+      if (kind === "likes" && template) {
+        const classes = template.className.split(" ").filter((name) => !liked || name !== "glass");
+        if (liked) classes.push("tinted", "selected");
+        const node = el(
+          "span",
+          {
+            class: classes.join(" "),
+            style: liked ? "--action: var(--color-list-card-like)" : template.getAttribute("style"),
+            title: `${value.toLocaleString("en-US")} ${words}${liked ? " · you liked this list" : ""}`
+          },
+          ...[...template.childNodes].map((child) => child.cloneNode(true))
+        );
+        const svg3 = liked && node.querySelector(".icon svg");
+        if (svg3) {
+          svg3.setAttribute("viewBox", LIKED_ICON[0]);
+          svg3.querySelector("path")?.setAttribute("d", LIKED_ICON[1]);
+        }
+        const number = node.querySelector(".number");
+        if (number) number.textContent = value.toLocaleString("en-US");
+        const label = node.querySelector(".count-text");
+        if (label) label.textContent = ` ${words}`;
+        return node;
+      }
+      if (template) {
+        const node = template.cloneNode(true);
+        node.removeAttribute("aria-describedby");
+        node.setAttribute("href", href);
+        node.querySelector("strong").textContent = value.toLocaleString("en-US");
+        node.querySelector(".count-text").textContent = words;
+        return node;
+      }
+      return el(
+        "a",
+        { class: `ogt-all-lists__count ${kind}`, href },
+        icon2(ICONS[kind], "ogt-all-lists__count-icon"),
+        el("strong", { text: value.toLocaleString("en-US") }),
+        el("span", { text: ` ${words}` })
+      );
+    }
+    function tag(label) {
+      const [color, path] = ICONS[label];
+      if (native?.tag) {
+        return el("span", { class: native.tag.className, style: `--tone: var(${color})` }, ownIcon(path), label);
+      }
+      return el("span", { class: "ogt-all-lists__tag", style: `--ogt-list-tag-color: var(${color}, #888)` }, icon2(path), label);
+    }
+    function share(entry) {
+      const url = new URL(listHref(entry), location.origin).href;
+      const copy = () => void shareList(entry.name, url);
+      if (native?.share) {
+        const node = native.share.cloneNode(true);
+        node.querySelector("[popover]")?.remove();
+        const button2 = node.querySelector("button");
+        button2?.removeAttribute("aria-describedby");
+        button2?.setAttribute("title", "Copy Link");
+        button2?.addEventListener("click", copy);
+        return node;
+      }
+      return el(
+        "button",
+        { type: "button", class: "action share", title: "Copy Link", "aria-label": "Copy Link", on: { click: copy } },
+        icon2(ICONS.share)
+      );
+    }
+    function progress(href) {
+      if (!href) return null;
+      if (native?.progress) {
+        const node = native.progress.cloneNode(true);
+        node.removeAttribute("aria-describedby");
+        node.setAttribute("href", href);
+        node.setAttribute("title", "View watched progress");
+        return node;
+      }
+      return part(
+        "a",
+        "action progress",
+        { href, title: "View watched progress", "aria-label": "View watched progress" },
+        ownIcon(ICONS.progress)
+      );
+    }
+    function fan(entry, posters, loading) {
+      const node = part("a", `fan${entry.itemCount === 0 ? " empty" : ""}`, { href: listHref(entry), tabindex: "-1", "aria-hidden": "true" });
+      if (entry.itemCount === 0) return node;
+      for (let i = 0; i < 5; i++) {
+        const poster = posters[i];
+        node.append(part("span", "slot", {}, poster ? part("img", "poster", { src: poster, alt: "", loading: "lazy", decoding: "async", referrerpolicy: "no-referrer" }) : part("span", loading ? "poster loading" : `poster placeholder${posters.length ? " empty" : ""}`)));
+      }
+      return node;
+    }
+    function vip(badge) {
+      if (!badge) return null;
+      const title = badge.tag === "OG" ? "Original VIP Member" : "Executive Producer";
+      if (native?.vip) {
+        const node = native.vip.cloneNode(true);
+        node.querySelectorAll("[popover], .tag, .years").forEach((extra) => extra.remove());
+        const name = node.querySelector(".name");
+        const mark = name?.querySelector(".mark");
+        if (name && mark) {
+          name.replaceChildren(mark, badge.label);
+          const scope = [...name.classList].filter((c) => c.startsWith("svelte-"));
+          if (badge.tag) node.append(el("abbr", { class: ["tag", ...scope].join(" "), text: badge.tag, title }));
+          return node;
+        }
+      }
+      const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg3.setAttribute("class", ["icon", native?.icon].filter(Boolean).join(" "));
+      svg3.setAttribute("viewBox", "0 0 512 512");
+      svg3.setAttribute("aria-hidden", "true");
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("fill", "currentColor");
+      path.setAttribute("d", VIP_MARK);
+      svg3.append(path);
+      return el(
+        "span",
+        { class: "ogt-vip" },
+        el("span", { class: "ogt-vip__name" }, el("span", { class: "ogt-vip__mark" }, svg3), badge.label),
+        badge.tag ? el("abbr", { class: "ogt-vip__tag", text: badge.tag, title }) : null
+      );
+    }
+    function description(value) {
+      if (!value) return null;
+      const paragraphs = value.split(/\n\s*\n/).map((paragraph) => el(
+        "p",
+        { class: native?.text || null },
+        paragraph.trim().split("\n").flatMap((line, i) => i ? [el("br"), line] : [line])
+      ));
+      return part("div", "overview", {}, part(
+        "div",
+        "clamp",
+        {},
+        native?.text ? el("div", { class: `comment-text ${native.text}` }, ...paragraphs) : paragraphs
+      ));
+    }
+    return function row(entry, { viewerSlug, loading, liked = false }) {
+      const href = listHref(entry);
+      const pills = listPills(entry);
+      const avatar = entry.kind === "official" ? null : entry.owner.avatar;
+      const frame = part("div", "fan-frame", {}, fan(entry, entry.posters, loading));
+      if (entry.itemCount === 0) frame.append(part("span", "no-items", { text: "No items yet" }));
+      const node = part(
+        "article",
+        "list-row",
+        { dataset: { listId: entry.id } },
+        part(
+          "div",
+          "card",
+          {},
+          frame,
+          part(
+            "div",
+            "body",
+            {},
+            part(
+              "div",
+              "head",
+              {},
+              part("a", "name-link", { href }, part("h3", "", { text: entry.name })),
+              pills.length ? part("span", "chips", {}, pills.map(tag)) : null
+            ),
+            part(
+              "p",
+              "by",
+              {},
+              part(
+                "a",
+                "owner",
+                { href: `/users/${encodeURIComponent(entry.owner.slug)}` },
+                part("span", "avatar", {}, avatar ? part("img", "", { src: avatar, alt: "" }) : null),
+                entry.owner.name
+              ),
+              vip(entry.owner.vip)
+            ),
+            description(entry.description),
+            part(
+              "footer",
+              "foot",
+              {},
+              part(
+                "div",
+                "counts",
+                {},
+                count2("likes", entry.likes, href, "like", liked),
+                count2("items", entry.itemCount, href, "item"),
+                entry.allowComments ? count2("comments", entry.commentCount, `${href}/comments`, "comment") : null
+              ),
+              part(
+                "div",
+                "tools",
+                {},
+                progress(listProgressHref(entry, viewerSlug)),
+                native?.share ? share(entry) : part("span", "share", {}, share(entry))
+              )
+            )
+          )
+        )
+      );
+      node.setPosters = (posters) => node.querySelector(".fan").replaceWith(fan(entry, posters, false));
+      return node;
+    };
+  }
+  async function shareList(title, url) {
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title, url });
+        return;
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      void notifySuccess("Link copied to your clipboard!");
+    } catch (error) {
+      debugError("could not copy the list link", error);
+    }
+  }
+  function postersFor(id) {
+    if (!posterRequests.has(id)) {
+      posterRequests.set(id, getListSummary(id).then((summary2) => (Array.isArray(summary2?.images?.posters) ? summary2.images.posters : []).map(posterUrl2).filter(Boolean).slice(0, 5)).catch((error) => {
+        posterRequests.delete(id);
+        debugError(`could not load posters for list ${id}`, error);
+        return [];
+      }));
+    }
+    return posterRequests.get(id);
+  }
+  function createView(profile, lists) {
+    const container = lists.querySelector(":scope > .container");
+    const node = el("div", { id: ROOT_ID, class: `${lists.className} ogt-all-lists` });
+    let cancelled = false;
+    let loading = null;
+    let observer = null;
+    function group(name, title, rows, empty) {
+      return el(
+        "div",
+        { role: "region", class: `ogt-all-lists__group ogt-all-lists__group--${name}`, "aria-label": title },
+        el(
+          "div",
+          { class: container?.className || "container" },
+          el("h2", { class: "ogt-all-lists__heading", text: title }),
+          rows.length ? el("div", { class: "rows" }, rows) : el("p", { class: "ogt-all-lists__empty", text: empty })
+        )
+      );
+    }
+    async function load() {
+      node.replaceChildren(el("p", { class: "ogt-all-lists__loading", text: "Loading collaborations and liked lists…" }));
+      const results = await Promise.allSettled([
+        getCollaborationLists(profile),
+        getLikedLists(profile),
+        isSignedIn() ? getViewer() : Promise.resolve(null)
+      ]);
+      if (cancelled) return;
+      for (const result of results) if (result.status === "rejected") debugError("all-lists lookup failed", result.reason);
+      const [collaborations, liked, viewer] = results.map((result) => result.status === "fulfilled" ? result.value : null);
+      const viewerSlug = viewer?.ids?.slug || viewer?.username || null;
+      const likedRows = likedLists(liked);
+      let likedIds = /* @__PURE__ */ new Set();
+      if (viewerSlug === profile) likedIds = new Set(likedRows.map((entry) => entry.id));
+      else if (viewerSlug) {
+        try {
+          likedIds = new Set(likedLists(await getLikedLists(viewerSlug)).map((entry) => entry.id));
+        } catch (error) {
+          debugError("viewer liked lists lookup failed", error);
+        }
+        if (cancelled) return;
+      }
+      const native = nativeParts(lists);
+      node.classList.toggle("ogt-all-lists--fallback", !native);
+      const row = createRows(native);
+      const waiting2 = /* @__PURE__ */ new Map();
+      const likedNodes = likedRows.map((entry) => {
+        const pending = entry.itemCount > 0 && !entry.posters.length;
+        const rowNode = row(entry, { viewerSlug, loading: pending, liked: likedIds.has(entry.id) });
+        if (pending) waiting2.set(rowNode, entry);
+        return rowNode;
+      });
+      node.replaceChildren(
+        group("collaborations", "Collaborations", collaborationLists(collaborations).map((entry) => row(entry, { viewerSlug, liked: likedIds.has(entry.id) })), "No collaborations."),
+        group("liked", "Liked", likedNodes, "No liked lists.")
+      );
+      const failed = results.slice(0, 2).filter((result) => result.status === "rejected");
+      if (failed.length) {
+        const missingId = failed.some((result) => result.reason instanceof MissingClientIdError);
+        node.prepend(el("p", { class: "ogt-all-lists__error", role: "status", text: missingId ? "Set a Trakt API client ID in the toolkit menu to load collaborations and liked lists." : "Some lists could not be loaded. Try again later." }));
+      }
+      const fill = (rowNode) => {
+        const entry = waiting2.get(rowNode);
+        waiting2.delete(rowNode);
+        void postersFor(entry.id).then((posters) => {
+          if (!cancelled) rowNode.setPosters(posters);
+        });
+      };
+      if (typeof IntersectionObserver === "function") {
+        observer = new IntersectionObserver((changes) => {
+          for (const change of changes) {
+            if (!change.isIntersecting || !waiting2.has(change.target)) continue;
+            observer.unobserve(change.target);
+            fill(change.target);
+          }
+        }, { rootMargin: "300px" });
+        for (const rowNode of waiting2.keys()) observer.observe(rowNode);
+      } else {
+        for (const rowNode of [...waiting2.keys()]) fill(rowNode);
+      }
+    }
+    return {
+      node,
+      load() {
+        loading ??= load().catch((error) => debugError("all-lists render failed", error));
+        return loading;
+      },
+      destroy() {
+        cancelled = true;
+        observer?.disconnect();
+        node.remove();
+      }
+    };
+  }
+  var allLists = {
+    id: "all-lists",
+    css: CSS7,
+    match: (route) => ROUTES.includes(route.name),
+    mount(route) {
+      const dropdown = findDropdown();
+      const lists = document.querySelector("section.lists");
+      const source = dropdown && [...dropdown.menu.querySelectorAll("a[href]")].find((link) => link.getAttribute("href").endsWith("/lists/collaborations"));
+      if (!source || !lists || document.getElementById(OPTION_ID)) return null;
+      const { trigger, menu } = dropdown;
+      const profile = decodeURIComponent(route.id);
+      const option = source.cloneNode(false);
+      option.textContent = "All lists";
+      option.setAttribute("href", `/users/${route.id}/lists${HASH}`);
+      option.removeAttribute("aria-current");
+      option.removeAttribute("aria-label");
+      const item = el("li", { id: OPTION_ID }, option);
+      source.closest("li").after(item);
+      const view = createView(profile, lists);
+      const heading = el("h2", { class: "ogt-all-lists__personal-heading", text: "Personal" });
+      const label = [...trigger.childNodes].find((child) => child.nodeType === Node.TEXT_NODE && child.textContent.trim());
+      const originalLabel = label?.textContent;
+      const current = [...menu.querySelectorAll("a[aria-current]")];
+      let active2 = false;
+      function show() {
+        menu.hidePopover?.();
+        if (active2) return;
+        active2 = true;
+        for (const link of current) link.removeAttribute("aria-current");
+        option.setAttribute("aria-current", "page");
+        if (label) label.textContent = originalLabel.replace(originalLabel.trim(), "All lists");
+        const container = lists.querySelector(":scope > .container") || lists;
+        container.prepend(heading);
+        lists.after(view.node);
+        void view.load();
+      }
+      function hide() {
+        if (!active2) return;
+        active2 = false;
+        option.removeAttribute("aria-current");
+        for (const link of current) link.setAttribute("aria-current", "page");
+        if (label) label.textContent = originalLabel;
+        heading.remove();
+        view.node.remove();
+      }
+      function choose(event) {
+        if (route.name !== "lists") return;
+        event.preventDefault();
+        show();
+      }
+      function chooseNative(event) {
+        if (!option.contains(event.target) && event.target.closest?.("a[href]")) hide();
+      }
+      option.addEventListener("click", choose);
+      menu.addEventListener("click", chooseNative);
+      if (route.name === "lists" && location.hash === HASH) {
+        history.replaceState(history.state, "", location.pathname + location.search);
+        show();
+      }
+      return {
+        node: item,
+        destroy() {
+          menu.removeEventListener("click", chooseNative);
+          hide();
+          view.destroy();
+          item.remove();
+        }
+      };
+    }
+  };
+
+  // src/features/library/api.js
+  var validId = (id) => Number.isSafeInteger(id) && id > 0;
+  function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
+    return {
+      async add(route, { confirm = () => true, active: active2 = () => true } = {}) {
+        if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
+        const id = encodeURIComponent(route.id);
+        const at = now();
+        const collected_at = new Date(at).toISOString();
+        let body;
+        if (route.kind === "movie" && route.name === "title") {
+          const movie = await get(`/movies/${id}`);
+          if (!validId(movie?.ids?.trakt)) throw new Error("Could not identify this movie.");
+          body = { movies: [{ ids: { trakt: movie.ids.trakt }, collected_at }] };
+        } else if (route.kind === "show" && ["title", "season", "episode"].includes(route.name)) {
+          const seasons = route.name === "title" ? await get(`/shows/${id}/seasons?extended=full,episodes`, { ttl: 0 }) : [{ number: route.season }];
+          if (!Array.isArray(seasons)) throw new Error("Could not load seasons.");
+          const episodes = [];
+          for (const season of seasons) {
+            if (!active2() || !signedIn()) return { cancelled: true };
+            if (!Number.isSafeInteger(season.number) || season.number < 0) continue;
+            if (route.name === "title" && season.number === 0) continue;
+            const path = `/shows/${id}/seasons/${season.number}`;
+            const rows = route.name === "title" ? season.episodes : route.name === "episode" ? [await get(`${path}/episodes/${route.episode}?extended=full`)] : await get(`${path}?extended=full`);
+            if (!Array.isArray(rows)) throw new Error("Could not load episodes.");
+            for (const episode of rows) {
+              if (validId(episode?.ids?.trakt) && Number.isFinite(Date.parse(episode.first_aired)) && Date.parse(episode.first_aired) <= at) {
+                episodes.push({ ids: { trakt: episode.ids.trakt }, collected_at });
+              }
+            }
+          }
+          body = { episodes: [...new Map(episodes.map((ep) => [ep.ids.trakt, ep])).values()] };
+          if (!body.episodes.length) throw new Error("No aired episodes to add.");
+          if (!active2() || !signedIn()) return { cancelled: true };
+          if (route.name !== "episode" && !confirm(`Add ${body.episodes.length} aired episode${body.episodes.length === 1 ? "" : "s"} to your toolkit Trakt account’s library?${route.name === "title" ? " Specials are excluded." : ""}`)) {
+            return { cancelled: true };
+          }
+        } else throw new Error("Unsupported library page.");
+        if (!active2() || !signedIn()) return { cancelled: true };
+        const result = await auth("POST", "/sync/collection", body);
+        if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
+          throw new Error("Trakt could not find some items; the addition may be incomplete.");
+        }
+        const counts = [result?.added?.movies, result?.added?.episodes, result?.updated?.movies, result?.updated?.episodes];
+        if (!counts.some((count2) => Number.isInteger(count2) && count2 > 0)) throw new Error("Trakt did not confirm a library addition.");
+        return { cancelled: false };
+      }
+    };
+  }
+  var libraryApi = createLibraryApi();
 
   // src/features/library/native-refresh.js
   var discovery2;

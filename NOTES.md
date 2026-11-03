@@ -2,27 +2,37 @@
 
 Working notes and known issues. Newest first.
 
-## 2026-11-02: all lists in one view (feature 11)
+## 2026-11-03: all lists in one view (feature 11)
 
-- og already offers its own Lists dropdown on the lists pages: **Personal**, **Collaborations**, and under **Liked**
-  both **Personal** and **Official** (`ListsPage.svelte`, `loadLists.ts`). The toolkit feature therefore doesn't add a
-  new view; it appends the other two indexes below the personal list for a single scroll. The button says **Show all
-  lists** rather than "Show all my lists", since it works on any public profile, not only the signed-in user's.
-- Live routes captured 2026-11-02: `/users/:id/lists`, `/users/:id/lists/collaborations`, `/users/:id/lists/liked`
-  and `/users/:id/lists/liked/official`. `parseRoute` names the first three `lists`, `lists-collaborations` and
-  `liked-lists`; individual lists and their comments stay `other`. The panel matches only `lists`.
-- Endpoints are public, so this uses `apiGet` and needs a client ID but no OAuth: `/users/:id/lists/collaborations`
-  returns list objects, and `/users/:id/likes/lists` returns `{ liked_at, list }` wrappers, newest first. Both are
-  fetched with `extended=images`. The API rejected curl without a client ID (403), so response shapes come from
-  trakt-og's `listRowsSchema` and `likedListsSchema`, not a live API capture; the page fixtures are likewise trimmed
-  from the live page rather than captured API bodies.
-- Liked lists usually have no posters in this response; og loads each list's summary near the viewport for its fan.
-  The panel does not make one request per list, so it shows a poster only when the index already includes it.
-- The panel mounts as a sibling after `section.lists` and uses og's `--container-sm/md/lg` and `--gutter` values so
-  it lines up with the list rows. Rows use plain text, validated HTTPS `media.trakt.tv` posters and in-site list
-  links. Partial failure still renders the group that loaded, with a one-line hint and **Try again**.
-- Pending: live browser check of the signed-in and signed-out profile pages in Firefox and a Chromium userscript
-  manager; current coverage is unit tests plus a built-bundle happy-dom test with mocked responses.
+- The first version (a **Show all lists** button below the personal list) was replaced: **All lists** is now a choice
+  in og's own Lists dropdown (`ListsPage.svelte`), added after Collaborations as a real link to
+  `/users/:id/lists#ogt-all-lists`. On the personal page the click switches in place; from smart, collaborations and
+  liked pages og's router follows the link and the hash opens the view. Any other dropdown choice restores og's view.
+- Routes (trakt-og d41f511): `/users/:id/lists`, `/smart-lists`, `/lists/collaborations`, `/lists/liked`,
+  `/lists/liked/official`. `parseRoute` names them; single lists, `/smart-lists/:slug` and comments stay `other`.
+- Requests follow `loadLists.ts`: collaborations in one request (not paginated); liked lists in pages of 250, up to
+  ten, newest first. Signed in, both go through the toolkit's OAuth (private lists the viewer can see, page-count
+  header); signed out, `apiGet` with the client ID reads liked pages until a short one, since the public cache keeps
+  no headers. `/users/:id/likes/lists` sends empty posters, so each liked row reads `/lists/:id?extended=images` as it
+  nears the viewport (as og's `fetchListPosters.ts` does), once per list per page load.
+- Styling: rows use ListRow's markup. When the page has a native row, the view takes `section.lists`' and its
+  container's classes, rows take ListRow's `svelte-*` scope class, and the likes, count, tag, share and progress
+  elements are cloned from og's own (tooltips stripped), so og's CSS styles them. The toolkit CSS applies only under
+  `.ogt-all-lists--fallback` (a profile with no personal rows). Checked against a saved live page with og's CSS.
+- Tags follow `ListTag.svelte`: Private, Following (friends), the blue Link (shared by link), Official List.
+- Like og's rows: owners get og's VIP label (Director, VIP, OG/EP tag from the list's `user` fields, cloned from a
+  native `.label-vip` when the page has one, else drawn with og's VipLabel CSS ported to `.ogt-vip`; the years star
+  is left out), descriptions keep single-newline line breaks, and signed in, the
+  likes pill is filled (GlassAction `tinted selected`, solid thumb) for lists the viewer liked. On the viewer's own
+  profile that's every liked row; elsewhere it reads the viewer's liked lists too. Not copied: og's "Following"
+  relation tag on owners the viewer follows (needs the viewer's network).
+- Dropped from the second draft: "Stop collaborating". og's `leaveList.ts` calls `DELETE /lists/:id/collaborators/:user`,
+  which it notes has no public API contract (official client only), so it would fail for a toolkit app; it was also
+  irreversible without a confirm. Likes stay a count: the toolkit doesn't like or unlike lists.
+- Tests: `all-lists.test.js` (data) and `all-lists-integration.test.js` (built bundle on a trimmed live page fixture,
+  `ALL_LISTS_HTML`): menu placement, in-place switch and restore, native classes, liked paging signed in and out,
+  the link from other pages, pages left alone, error messages and the fallback.
+- Pending: live check in a userscript manager, signed in and out.
 
 ## 2026-11-01: library feedback and native refresh (feature 12)
 
