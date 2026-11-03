@@ -11,17 +11,24 @@ Working notes and known issues. Newest first.
 - Feature 16 fixed custom links on season and episode pages rather than hiding the panel. Live checks on
   2026-11-02 (`/shows/breaking-bad/seasons/1` and `/episodes/1`): the headings are **Season 1** / **1x01 Pilot**
   with that season or episode's year, so title/year were wrong. The show name is available as the first
-  `.title-tags a[href^="/shows/"]` link to the show root. The season page's IMDb/TMDb links are the show's, but on an
-  episode page the IMDb link is the episode's (`tt0959621`), so page ids are not reused.
-- The panel now reads show title/year via `GET /shows/:id?extended=full` when a client ID is set, maps it through
-  `showTemplateData`, and replaces the DOM values in place. `{season}`/`{episode}` come from `selectionForRoute`:
+  `.title-tags a[href^="/shows/"]` link to the show root. og's TMDb links start with the show id on both pages
+  (`tv/1396/season/1`, `tv/1396/season/1/episode/1`) and the season page's IMDb link is the show's
+  (`tt0903747/episodes?season=1`), so those are read from the page; an episode page's IMDb link is the episode's
+  (`tt0959621`) and is not reused.
+- Only what the page lacks is looked up: the show's year, and an episode page's IMDb id. With a client ID, the panel
+  fetches the basic `GET /shows/:id` (title, year and ids; `extended=full` isn't needed) once a link needs one of
+  those, checked on every render, so a link added in the editor triggers it too. `showTemplateData` fills only the
+  missing values. `{season}`/`{episode}` come from `selectionForRoute`:
   season pages have the route season and no episode, episode pages have both, and title pages keep the picker and
   stored selection. Season/episode pages never render the picker and never call the seasons endpoint.
-- Without a client ID, season/episode pages still use the show link for the title, while `{year}`, `{tmdb}` and
-  `{imdb}` links stay hidden instead of pointing at the season/episode. The page year is that season or episode's, so
+- Without a client ID, season/episode pages still use the show link for the title and og's show ids, while `{year}`
+  links (and `{imdb}` on episode pages) stay hidden instead of pointing at the season/episode. The page year is that season or episode's, so
   it is not used as a fallback. Title pages are unchanged.
 - New live-shaped season and episode fixtures, `readTitleData`/`selectionForRoute`/`showTemplateData` unit tests, and
-  built-bundle integration tests cover the API-filled, no-client-ID and episode-IMDb cases.
+  built-bundle integration tests cover the API-filled, no-client-ID and episode-IMDb cases. `npm run drift` checks the
+  show link and the show-id links on live season and episode pages.
+- Test pitfall: a failing `assert.equal(element, undefined)` on a happy-dom element makes Node print the element, which
+  runs the test process out of memory. Compare a boolean instead.
 
 ## 2026-11-01: library feedback and native refresh (feature 12)
 

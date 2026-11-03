@@ -908,6 +908,7 @@
   var IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
   var SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
   var SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
+  var SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
   function readTitleData(doc, route) {
     if (route.kind === "show" && (route.name === "season" || route.name === "episode")) {
       return {
@@ -916,12 +917,9 @@
         plural: "shows",
         id: route.id,
         title: cleanTitle(showLinkTitle(doc)) || showTitleFromPageTitle(doc, route) || null,
-        // The page year is the season/episode's, and og prints the episode's IMDb id on
-        // episode pages. These come from the show lookup in api.js; until then, hide
-        // them rather than point at the wrong title or year.
         year: null,
-        tmdb: null,
-        imdb: null
+        tmdb: firstMatch(doc, 'a[href*="themoviedb.org/tv/"]', TMDB_RE, (match) => Number(match[2])),
+        imdb: route.name === "season" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null
       };
     }
     const heading = doc.querySelector(".summary-title h1") || doc.querySelector("h1");
@@ -961,6 +959,13 @@
     if (!heading) return "";
     const direct = [...heading.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join(" ").trim();
     return direct || text(heading);
+  }
+  function firstMatch(doc, selector, pattern, value) {
+    for (const link of doc.querySelectorAll(selector)) {
+      const match = link.getAttribute("href")?.match(pattern);
+      if (match) return value(match);
+    }
+    return null;
   }
   function showLinkTitle(doc) {
     for (const link of doc.querySelectorAll(".title-tags a[href]")) {
@@ -1500,7 +1505,7 @@
 
   // src/features/custom-links/api.js
   function getShowDetails(id) {
-    return apiGet(`/shows/${encodeURIComponent(id)}?extended=full`);
+    return apiGet(`/shows/${encodeURIComponent(id)}`);
   }
 
   // src/features/custom-links/index.js
@@ -1582,6 +1587,17 @@
         if (missingPlaceholders(entry.url, values).length) continue;
         linksRow.append(chip({ label: entry.label, href: fillTemplate(entry.url, values), template: entry.url }));
       }
+      lookUpShow();
+    }
+    let showRequested = false;
+    function lookUpShow() {
+      if (!fixedSelection || showRequested || !getClientId()) return;
+      const missing = ["year", "tmdb", "imdb"].filter((key) => meta[key] == null);
+      if (!getCustomLinks().some((entry) => missing.some((key) => entry.url.includes(`{${key}}`)))) return;
+      showRequested = true;
+      getShowDetails(route.id).then((show) => setMeta(showTemplateData(show))).catch((error) => {
+        if (!cancelled) debugError("show lookup failed", error);
+      });
     }
     let currentView = null;
     let returnFocus = null;
@@ -1913,7 +1929,7 @@
     }
     function setMeta(next) {
       if (cancelled || !next) return;
-      Object.assign(meta, next);
+      for (const [key, value] of Object.entries(next)) if (value != null) meta[key] = value;
       renderLinks();
     }
     renderLinks();
@@ -1922,7 +1938,6 @@
     document.addEventListener("ogt:refresh", onRefresh);
     return {
       node,
-      setMeta,
       destroy() {
         cancelled = true;
         for (const timer of timers) clearTimeout(timer);
@@ -1945,15 +1960,6 @@
       if (!mount) return null;
       const panel = createPanel(meta, route);
       mount.parent.insertBefore(panel.node, mount.before);
-      const needsShowLookup = getCustomLinks().some((entry) => /\{(?:year|tmdb|imdb)\}/.test(entry.url));
-      if ((route.name === "season" || route.name === "episode") && needsShowLookup && getClientId()) {
-        getShowDetails(route.id).then((show) => {
-          const next = showTemplateData(show);
-          if (next && panel.node.isConnected) panel.setMeta(next);
-        }).catch((error) => {
-          if (panel.node.isConnected) debugError("show lookup failed", error);
-        });
-      }
       return panel;
     }
   };

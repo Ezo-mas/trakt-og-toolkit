@@ -24,7 +24,7 @@ A compact panel under the summary stats with user-configured links to your own s
 - **Custom links** — manage your `Label | URL` templates in the inline editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{season}`, `{episode}`.
 - **Search presets** — optionally add Metacritic, Stremio, Plex and AniList links (og already links Rotten Tomatoes, Wikipedia, Letterboxd and, on anime, MyAnimeList itself).
 - **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}` on a show page. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
-- **Season and episode pages** — the panel uses the show's title, year and TMDb/IMDb ids, not the season or episode heading, and takes `{season}`/`{episode}` from the URL. The title comes from og's show link; year and external ids come from `GET /shows/:id`. Without a client ID, `{year}`, `{tmdb}` and `{imdb}` links stay hidden rather than point at the season or episode.
+- **Season and episode pages** — the panel uses the show's title, year and TMDb/IMDb ids, not the season or episode heading, and takes `{season}`/`{episode}` from the URL. The title and TMDb id come from og's show link and external links (and the IMDb id on season pages); the year, and an episode page's IMDb id, come from `GET /shows/:id`. Without a client ID, those links stay hidden rather than point at the season or episode.
 - **Examples**: Plex, Jellyfin, Sonarr, Radarr, or any streaming/library service og doesn't link to.
 
 ### Season chart

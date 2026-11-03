@@ -120,7 +120,21 @@ function createPanel(meta, route) {
       if (missingPlaceholders(entry.url, values).length) continue;
       linksRow.append(chip({ label: entry.label, href: fillTemplate(entry.url, values), template: entry.url }));
     }
+    lookUpShow();
+  }
 
+  let showRequested = false;
+  /** Season/episode pages: fetch the show once a link needs what og's page doesn't give (the show's year, an episode
+   *  page's IMDb id). This runs on every render, so a link added in the editor triggers it too. Without a client ID
+   *  those links stay hidden rather than point at the season or episode. */
+  function lookUpShow() {
+    if (!fixedSelection || showRequested || !getClientId()) return;
+    const missing = ['year', 'tmdb', 'imdb'].filter((key) => meta[key] == null);
+    if (!getCustomLinks().some((entry) => missing.some((key) => entry.url.includes(`{${key}}`)))) return;
+    showRequested = true;
+    getShowDetails(route.id)
+      .then((show) => setMeta(showTemplateData(show)))
+      .catch((error) => { if (!cancelled) debugError('show lookup failed', error); });
   }
 
   let currentView = null;
@@ -492,10 +506,10 @@ function createPanel(meta, route) {
     }
   }
 
-  /** Replace the title-page values with the show's own once its lookup returns. */
+  /** Fill in the show's own values once its lookup returns, keeping what og's page already gave. */
   function setMeta(next) {
     if (cancelled || !next) return;
-    Object.assign(meta, next);
+    for (const [key, value] of Object.entries(next)) if (value != null) meta[key] = value;
     renderLinks();
   }
 
@@ -506,7 +520,6 @@ function createPanel(meta, route) {
 
   return {
     node,
-    setMeta,
     destroy() {
       cancelled = true;
       for (const timer of timers) clearTimeout(timer);
@@ -533,22 +546,6 @@ export const customLinks = {
 
     const panel = createPanel(meta, route);
     mount.parent.insertBefore(panel.node, mount.before);
-
-    // Season and episode pages need the show's own year and ids. The DOM show link
-    // already gives the title, so only fetch when a link asks for what it cannot
-    // provide; without a client ID those links stay hidden rather than point at the
-    // season or episode.
-    const needsShowLookup = getCustomLinks().some((entry) => /\{(?:year|tmdb|imdb)\}/.test(entry.url));
-    if ((route.name === 'season' || route.name === 'episode') && needsShowLookup && getClientId()) {
-      getShowDetails(route.id)
-        .then((show) => {
-          const next = showTemplateData(show);
-          if (next && panel.node.isConnected) panel.setMeta(next);
-        })
-        .catch((error) => {
-          if (panel.node.isConnected) debugError('show lookup failed', error);
-        });
-    }
 
     return panel;
   },

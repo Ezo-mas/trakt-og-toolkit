@@ -78,8 +78,8 @@ test('season and episode pages read the show context instead of the page heading
   seasonWindow.close();
   assert.deepEqual(
     { title: season.title, year: season.year, id: season.id, tmdb: season.tmdb, imdb: season.imdb },
-    { title: 'Breaking Bad', year: null, id: 'breaking-bad', tmdb: null, imdb: null },
-    'the page year belongs to the season, not the show',
+    { title: 'Breaking Bad', year: null, id: 'breaking-bad', tmdb: 1396, imdb: 'tt0903747' },
+    'the page year belongs to the season; og\'s TMDb and IMDb season links carry the show ids',
   );
 
   const episodeWindow = new Window();
@@ -89,8 +89,8 @@ test('season and episode pages read the show context instead of the page heading
   assert.equal(episode.title, 'Breaking Bad', 'the show link wins over the episode heading');
   assert.notEqual(episode.title, 'Pilot');
   assert.equal(episode.year, null, 'the episode air year is not the show year');
-  assert.equal(episode.tmdb, null, 'the episode page\'s external ids are not reused');
-  assert.equal(episode.imdb, null);
+  assert.equal(episode.tmdb, 1396, 'TMDb episode links start with the show id');
+  assert.equal(episode.imdb, null, 'the episode page\'s IMDb id is the episode\'s own');
 });
 
 test('route selection presets season and episode, while title pages keep the stored picker values', () => {

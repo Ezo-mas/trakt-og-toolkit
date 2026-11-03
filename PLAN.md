@@ -363,8 +363,8 @@ against that scale, so their line is pinned at 0. It also costs one stats reques
 
 ## 16. Custom links on season and episode pages
 
-**Status:** done (2026-11-02): the **Fix** option. Show title, year and TMDb/IMDb ids come from
-`GET /shows/:id?extended=full` (with the show link as the no-client-ID title fallback), and
+**Status:** done (2026-11-02): the **Fix** option. The show title comes from og's show link and its TMDb (and, on
+season pages, IMDb) id from og's own links; the year, and an episode page's IMDb id, from `GET /shows/:id`; and
 `{season}`/`{episode}` come from the route instead of the picker. Season and episode pages no longer show pickers or
 use the page's episode ids; title pages are unchanged.
 
