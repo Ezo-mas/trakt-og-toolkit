@@ -416,6 +416,16 @@
   .ogt-watchlist-toast__icon { display: flex; color: var(--color-toast-success, #6cc96c); }
   .ogt-watchlist-toast__icon svg { inline-size: var(--font-size-toast-icon, 18px); block-size: var(--font-size-toast-icon, 18px); }
   .ogt-watchlist-toast__message { margin: 0; overflow-wrap: anywhere; }
+  .ogt-watchlist-toast__actions { display: flex; align-items: center; gap: var(--toast-action-gap, 2px); }
+  .ogt-watchlist-toast__undo {
+    min-block-size: 0; padding: var(--toast-undo-padding, 4px 8px); border: 0; border-radius: var(--radius-toast-close, 4px);
+    background: none; color: var(--color-toast-success, #6cc96c); font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .ogt-watchlist-toast__undo:is(:hover, :focus-visible) { background: var(--color-toast-close-hover, #ffffff15); color: var(--color-toast-text, white); }
+  .ogt-watchlist-toast__undo:focus-visible { outline: 2px solid currentColor; }
+  .ogt-watchlist-toast__undo:disabled { opacity: .6; cursor: default; }
+  .ogt-watchlist-toast__error { grid-column: 2 / -1; margin: 0; color: var(--color-toast-error, #f0a6a6); font-size: var(--font-size-toast-error, 12px); }
+  .ogt-watchlist-toast__error:empty { display: none; }
   .ogt-watchlist-toast__close {
     display: grid; place-items: center; min-block-size: 0; padding: 0; border: 0;
     inline-size: var(--toast-close-size, 28px); block-size: var(--toast-close-size, 28px);
@@ -3570,7 +3580,7 @@
     svg3.append(node);
     return svg3;
   }
-  function showSuccessToast(message = "You added this title to your watchlist.") {
+  function showSuccessToast(message = "You added this title to your watchlist.", { onUndo, active: active2 = () => true } = {}) {
     if (!root?.isConnected) {
       resize?.disconnect();
       root = el("div", { class: "ogt-toast ogt-watchlist-toasts" });
@@ -3589,16 +3599,22 @@
     position();
     const close = el("button", { type: "button", class: "ogt-watchlist-toast__close", "aria-label": "Close" }, icon("M6 6l12 12M18 6 6 18"));
     const line = el("span", { class: "ogt-watchlist-toast__timer", "aria-hidden": "true" });
+    const actions = el("div", { class: "ogt-watchlist-toast__actions" });
+    const undo = typeof onUndo === "function" ? el("button", { type: "button", class: "ogt-watchlist-toast__undo", text: "Undo" }) : null;
+    if (undo) actions.append(undo);
+    actions.append(close);
+    const error = el("p", { class: "ogt-watchlist-toast__error", "aria-live": "polite" });
     const node = el(
       "div",
       { class: "ogt-watchlist-toast", role: "status", "aria-atomic": "true" },
       el("span", { class: "ogt-watchlist-toast__icon" }, icon("m7 12 3 3 7-7", true)),
       el("p", { class: "ogt-watchlist-toast__message", text: message }),
-      close,
+      actions,
+      error,
       line
     );
     root.prepend(node);
-    let timer, animation, fraction = 1, started, duration, removed = false;
+    let timer, animation, fraction = 1, started, duration, removed = false, undoing = false;
     const holds = /* @__PURE__ */ new Set();
     const remove = () => {
       if (removed) return;
@@ -3636,7 +3652,33 @@
     const release2 = (kind) => {
       if (holds.delete(kind) && !holds.size) start2(1e3);
     };
+    const runUndo = async () => {
+      if (!undo || undoing || removed) return;
+      if (!active2()) {
+        undo.remove();
+        error.textContent = "Undo is only available on the page you saved from.";
+        return;
+      }
+      undoing = true;
+      hold("undo");
+      undo.disabled = true;
+      undo.textContent = "Undoing…";
+      error.textContent = "";
+      try {
+        if (await onUndo() === false) throw new Error("Undo was not confirmed.");
+        remove();
+      } catch (undoError) {
+        debugError("success notice undo failed", undoError);
+        if (removed) return;
+        error.textContent = "Could not undo. Try again.";
+        undoing = false;
+        undo.disabled = false;
+        undo.textContent = "Undo";
+        release2("undo");
+      }
+    };
     close.addEventListener("click", remove);
+    undo?.addEventListener("click", runUndo);
     node.addEventListener("pointerenter", () => hold("pointer"));
     node.addEventListener("pointerleave", () => release2("pointer"));
     node.addEventListener("focusin", () => hold("focus"));
@@ -3648,13 +3690,18 @@
     start2(5e3);
     return { node, destroy: remove };
   }
-  async function notifySuccess(message, active2 = () => true) {
+  async function notifySuccess(message, active2 = () => true, { undo } = {}) {
+    if (typeof undo === "function") {
+      if (!active2()) return { native: false, handle: null };
+      return { native: false, handle: showSuccessToast(message, { onUndo: undo, active: active2 }) };
+    }
     try {
-      if (await tryNativeToast(message, active2)) return;
+      if (await tryNativeToast(message, active2)) return { native: true };
     } catch (error) {
       debugError("native success toast unavailable", error);
     }
-    if (active2()) showSuccessToast(message);
+    if (!active2()) return { native: false, handle: null };
+    return { native: false, handle: showSuccessToast(message) };
   }
 
   // src/features/all-lists/data.js
@@ -4372,6 +4419,18 @@
         }
         const counts = [result?.added?.movies, result?.added?.episodes, result?.updated?.movies, result?.updated?.episodes];
         if (!counts.some((count2) => Number.isInteger(count2) && count2 > 0)) throw new Error("Trakt did not confirm a library addition.");
+        const total = (counts2) => (Number(counts2?.movies) || 0) + (Number(counts2?.episodes) || 0);
+        const undoable = total(result?.added) > 0 && total(result?.updated) === 0 && total(result?.existing) === 0;
+        return { cancelled: false, body, undoable };
+      },
+      /** Undo an addition with the exact body that was sent. */
+      async remove(body, { active: active2 = () => true } = {}) {
+        if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
+        if (!body || typeof body !== "object" || !active2()) return { cancelled: true };
+        const result = await auth("POST", "/sync/collection/remove", body);
+        if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
+          throw new Error("Trakt could not find some items.");
+        }
         return { cancelled: false };
       }
     };
@@ -4496,7 +4555,9 @@
       if (!anchor || document.getElementById(ID2)) return null;
       let destroyed = false;
       let busy = false;
+      let undoing = false;
       let session = 0;
+      let operation = 0;
       let added = false;
       let refreshing = false;
       let wasCollected = false;
@@ -4528,13 +4589,14 @@
         node.hidden = nativeLibrary || added && !refreshing;
       }
       async function add() {
-        if (busy || node.hidden) return;
+        if (busy || undoing || node.hidden) return;
         if (!isSignedIn()) {
           status.textContent = "Sign in to Trakt through the toolkit menu first.";
           return;
         }
         busy = true;
         const epoch = session;
+        const operationId = ++operation;
         button2.disabled = true;
         label.textContent = "Adding to library…";
         status.textContent = "";
@@ -4549,7 +4611,9 @@
             refreshing = route.name === "title";
             label.textContent = "Updating library…";
             syncVisibility();
-            void notifySuccess(`You added ${title} to your library.`, active2);
+            void notifySuccess(`You added ${title} to your library.`, active2, {
+              undo: result.undoable ? () => undo(result.body) : void 0
+            });
             try {
               await nativeRefresh.refresh(route, { active: active2 });
             } catch (error) {
@@ -4560,7 +4624,44 @@
         } catch (error) {
           if (active2()) status.textContent = error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not add to library. Check your toolkit sign-in and try again." : error.message;
         } finally {
-          if (active2()) {
+          if (active2() && operation === operationId) {
+            busy = false;
+            refreshing = false;
+            syncVisibility();
+            button2.disabled = false;
+            label.textContent = "Add to library";
+          }
+        }
+      }
+      async function undo(body) {
+        if (undoing || !body) return false;
+        if (!isSignedIn()) {
+          status.textContent = "Sign in to Trakt through the toolkit menu first.";
+          return false;
+        }
+        undoing = true;
+        busy = false;
+        const epoch = session;
+        const operationId = ++operation;
+        button2.disabled = true;
+        label.textContent = "Undoing…";
+        status.textContent = "";
+        const active2 = () => !destroyed && epoch === session && node.isConnected && doc.location.pathname === pagePath;
+        try {
+          await libraryApi.remove(body, { active: active2 });
+          if (!active2()) return false;
+          added = false;
+          refreshing = false;
+          syncVisibility();
+          await nativeRefresh.refresh(route, { active: active2 });
+          return true;
+        } catch (error) {
+          debugError("library undo failed", error);
+          if (active2()) status.textContent = error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not undo. Check your toolkit sign-in and try again." : error.message;
+          return false;
+        } finally {
+          if (active2() && operation === operationId) {
+            undoing = false;
             busy = false;
             refreshing = false;
             syncVisibility();
@@ -4571,8 +4672,10 @@
       }
       function authChanged() {
         session++;
+        operation++;
         nativeRefresh.destroy();
         busy = false;
+        undoing = false;
         refreshing = false;
         button2.disabled = false;
         added = false;
@@ -4669,7 +4772,17 @@
         if (!counts.some((count2) => Number.isSafeInteger(count2) && count2 > 0)) {
           throw new Error("Trakt did not confirm a watchlist addition.");
         }
-        return { cancelled: false, title };
+        return { cancelled: false, title, body, undoable: Number.isSafeInteger(result?.added?.[lookup.type]) && result.added[lookup.type] > 0 };
+      },
+      /** Undo an addition with the exact body that was sent. */
+      async remove(body, { active: active2 = () => true } = {}) {
+        if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
+        if (!body || typeof body !== "object" || !active2()) return { cancelled: true };
+        const result = await auth("POST", "/sync/watchlist/remove", body);
+        if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
+          throw new Error("Trakt could not find this title.");
+        }
+        return { cancelled: false };
       }
     };
   }
@@ -4751,8 +4864,8 @@
   }
 
   // src/features/watchlist/notification.js
-  function notifyWatchlistAdded({ title = "this title", active: active2 = () => true } = {}) {
-    return notifySuccess(`You added ${title} to your watchlist.`, active2);
+  function notifyWatchlistAdded({ title = "this title", active: active2 = () => true, onUndo } = {}) {
+    return notifySuccess(`You added ${title} to your watchlist.`, active2, { undo: onUndo });
   }
 
   // src/features/watchlist/index.js
@@ -4766,7 +4879,9 @@
       if (!anchor || document.getElementById(ID3)) return null;
       let destroyed = false;
       let busy = false;
+      let undoing = false;
       let session = 0;
+      let operation = 0;
       let added = false;
       let wasWatchlisted = false;
       const nativeRefresh = createNativeWatchlistRefresh();
@@ -4789,13 +4904,14 @@
         node.hidden = added || watchlisted;
       }
       async function add() {
-        if (busy || node.hidden) return;
+        if (busy || undoing || node.hidden) return;
         if (!isSignedIn()) {
           status.textContent = "Sign in to Trakt through the toolkit menu first.";
           return;
         }
         busy = true;
         const epoch = session;
+        const operationId = ++operation;
         button2.disabled = true;
         label.textContent = "Adding to watchlist…";
         status.textContent = "";
@@ -4806,7 +4922,11 @@
           if (!result.cancelled) {
             added = true;
             syncVisibility();
-            void notifyWatchlistAdded({ title: result.title, active: active2 });
+            void notifyWatchlistAdded({
+              title: result.title,
+              active: active2,
+              onUndo: result.undoable ? () => undo(result.body) : void 0
+            });
             await nativeRefresh.refresh(anchor.querySelector(".list-control.summary"), route, { active: active2 });
             return;
           }
@@ -4814,7 +4934,41 @@
           debugError("watchlist addition failed", error);
           if (active2()) status.textContent = error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not add to watchlist. Check your toolkit sign-in and try again." : error.message;
         } finally {
-          if (active2()) {
+          if (active2() && operation === operationId) {
+            busy = false;
+            button2.disabled = false;
+            label.textContent = "Add to watchlist";
+          }
+        }
+      }
+      async function undo(body) {
+        if (undoing || !body) return false;
+        if (!isSignedIn()) {
+          status.textContent = "Sign in to Trakt through the toolkit menu first.";
+          return false;
+        }
+        undoing = true;
+        busy = false;
+        const epoch = session;
+        const operationId = ++operation;
+        button2.disabled = true;
+        label.textContent = "Undoing…";
+        status.textContent = "";
+        const active2 = () => !destroyed && epoch === session && location.pathname === pagePath;
+        try {
+          await watchlistApi.remove(body, { active: active2 });
+          if (!active2()) return false;
+          added = false;
+          syncVisibility();
+          await nativeRefresh.refresh(anchor.querySelector(".list-control.summary"), route, { active: active2 });
+          return true;
+        } catch (error) {
+          debugError("watchlist undo failed", error);
+          if (active2()) status.textContent = error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not undo. Check your toolkit sign-in and try again." : error.message;
+          return false;
+        } finally {
+          if (active2() && operation === operationId) {
+            undoing = false;
             busy = false;
             button2.disabled = false;
             label.textContent = "Add to watchlist";
@@ -4823,8 +4977,10 @@
       }
       function authChanged() {
         session++;
+        operation++;
         nativeRefresh.destroy();
         busy = false;
+        undoing = false;
         button2.disabled = false;
         added = false;
         wasWatchlisted = false;
@@ -4886,7 +5042,13 @@
       const nativeRefresh = createNativeWatchlistRefresh();
       let destroyed = false, session = 0, scheduled = false;
       function stateFor(key) {
-        if (!states.has(key)) states.set(key, { busy: false, added: false, wasWatchlisted: false });
+        if (!states.has(key)) states.set(key, {
+          busy: false,
+          undoing: false,
+          operation: 0,
+          added: false,
+          wasWatchlisted: false
+        });
         return states.get(key);
       }
       function remove(entry) {
@@ -4894,16 +5056,23 @@
         entry.button.remove();
         entries.delete(entry.control);
       }
+      function updateButton(entry, state) {
+        entry.button.hidden = state.added || state.wasWatchlisted;
+        entry.button.disabled = state.busy || state.undoing;
+        const busy = String(state.busy || state.undoing);
+        if (entry.button.getAttribute("aria-busy") !== busy) entry.button.setAttribute("aria-busy", busy);
+      }
       async function add(entry, event) {
         event.preventDefault();
         event.stopPropagation();
         const state = stateFor(entry.key);
-        if (state.busy || entry.button.hidden) return;
+        if (state.busy || state.undoing || entry.button.hidden) return;
         if (!isSignedIn()) {
           toast("Sign in to Trakt through the toolkit menu first.");
           return;
         }
         const epoch = session;
+        const operation = ++state.operation;
         const pagePath = location.pathname;
         const active2 = () => !destroyed && session === epoch && location.pathname === pagePath && [...entries.values()].some((e) => e.key === entry.key && e.control.isConnected && readCardRoute(e.card)?.key === entry.key);
         state.busy = true;
@@ -4913,13 +5082,50 @@
           if (!active2() || result.cancelled) return;
           state.added = true;
           scan();
-          void notifyWatchlistAdded({ title: result.title, active: active2 });
+          void notifyWatchlistAdded({
+            title: result.title,
+            active: active2,
+            onUndo: result.undoable ? () => undo(entry, result.body) : void 0
+          });
           await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
         } catch (error) {
           debugError("card watchlist addition failed", error);
           if (active2()) toast(error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not add to watchlist. Check your toolkit sign-in and try again." : error.message);
         } finally {
-          if (!destroyed && epoch === session) {
+          if (!destroyed && epoch === session && state.operation === operation) {
+            state.busy = false;
+            scan();
+          }
+        }
+      }
+      async function undo(entry, body) {
+        const state = stateFor(entry.key);
+        if (state.undoing || !body) return false;
+        if (!isSignedIn()) {
+          toast("Sign in to Trakt through the toolkit menu first.");
+          return false;
+        }
+        const epoch = session;
+        const operation = ++state.operation;
+        const pagePath = location.pathname;
+        const active2 = () => !destroyed && session === epoch && location.pathname === pagePath && [...entries.values()].some((e) => e.key === entry.key && e.control.isConnected && readCardRoute(e.card)?.key === entry.key);
+        state.undoing = true;
+        state.busy = false;
+        scan();
+        try {
+          await watchlistApi.remove(body, { active: active2 });
+          if (!active2()) return false;
+          state.added = false;
+          scan();
+          await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
+          return true;
+        } catch (error) {
+          debugError("card watchlist undo failed", error);
+          if (active2()) toast(error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not undo. Check your toolkit sign-in and try again." : error.message);
+          return false;
+        } finally {
+          if (!destroyed && epoch === session && state.operation === operation) {
+            state.undoing = false;
             state.busy = false;
             scan();
           }
@@ -4956,14 +5162,7 @@
           if (state.wasWatchlisted && !watchlisted) state.added = false;
           state.wasWatchlisted = watchlisted;
         }
-        for (const entry of entries.values()) {
-          const state = stateFor(entry.key);
-          const hidden = state.added || state.wasWatchlisted;
-          if (entry.button.hidden !== hidden) entry.button.hidden = hidden;
-          if (entry.button.disabled !== state.busy) entry.button.disabled = state.busy;
-          const busy = String(state.busy);
-          if (entry.button.getAttribute("aria-busy") !== busy) entry.button.setAttribute("aria-busy", busy);
-        }
+        for (const entry of entries.values()) updateButton(entry, stateFor(entry.key));
       }
       function schedule() {
         if (scheduled || destroyed) return;

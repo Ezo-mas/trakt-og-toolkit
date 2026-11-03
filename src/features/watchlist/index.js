@@ -19,7 +19,9 @@ export const watchlist = {
     if (!anchor || document.getElementById(ID)) return null;
     let destroyed = false;
     let busy = false;
+    let undoing = false;
     let session = 0;
+    let operation = 0;
     let added = false;
     let wasWatchlisted = false;
     const nativeRefresh = createNativeWatchlistRefresh();
@@ -39,10 +41,11 @@ export const watchlist = {
       node.hidden = added || watchlisted;
     }
     async function add() {
-      if (busy || node.hidden) return;
+      if (busy || undoing || node.hidden) return;
       if (!isSignedIn()) { status.textContent = 'Sign in to Trakt through the toolkit menu first.'; return; }
       busy = true;
       const epoch = session;
+      const operationId = ++operation;
       button.disabled = true;
       label.textContent = 'Adding to watchlist…';
       status.textContent = '';
@@ -53,7 +56,11 @@ export const watchlist = {
         if (!result.cancelled) {
           added = true;
           syncVisibility();
-          void notifyWatchlistAdded({ title: result.title, active });
+          void notifyWatchlistAdded({
+            title: result.title,
+            active,
+            onUndo: result.undoable ? () => undo(result.body) : undefined,
+          });
           await nativeRefresh.refresh(anchor.querySelector('.list-control.summary'), route, { active });
           return;
         }
@@ -62,7 +69,39 @@ export const watchlist = {
         if (active()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.' :
           error.status ? 'Could not add to watchlist. Check your toolkit sign-in and try again.' : error.message;
       } finally {
-        if (active()) {
+        if (active() && operation === operationId) {
+          busy = false;
+          button.disabled = false;
+          label.textContent = 'Add to watchlist';
+        }
+      }
+    }
+    async function undo(body) {
+      if (undoing || !body) return false;
+      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt through the toolkit menu first.'; return false; }
+      undoing = true;
+      busy = false;
+      const epoch = session;
+      const operationId = ++operation;
+      button.disabled = true;
+      label.textContent = 'Undoing…';
+      status.textContent = '';
+      const active = () => !destroyed && epoch === session && location.pathname === pagePath;
+      try {
+        await watchlistApi.remove(body, { active });
+        if (!active()) return false;
+        added = false;
+        syncVisibility();
+        await nativeRefresh.refresh(anchor.querySelector('.list-control.summary'), route, { active });
+        return true;
+      } catch (error) {
+        debugError('watchlist undo failed', error);
+        if (active()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.' :
+          error.status ? 'Could not undo. Check your toolkit sign-in and try again.' : error.message;
+        return false;
+      } finally {
+        if (active() && operation === operationId) {
+          undoing = false;
           busy = false;
           button.disabled = false;
           label.textContent = 'Add to watchlist';
@@ -71,8 +110,10 @@ export const watchlist = {
     }
     function authChanged() {
       session++;
+      operation++;
       nativeRefresh.destroy();
       busy = false;
+      undoing = false;
       button.disabled = false;
       added = false;
       wasWatchlisted = false;

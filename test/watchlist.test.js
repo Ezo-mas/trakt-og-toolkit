@@ -19,7 +19,8 @@ test('successful additions return the API title without another lookup', async (
   const api = createWatchlistApi({ signedIn: () => true,
     get: async () => { reads++; return { ids: { trakt: 1 }, title }; },
     auth: async () => ({ added: { movies: 1 } }) });
-  assert.deepEqual(await api.add(parseRoute('/movies/test')), { cancelled: false, title });
+  assert.deepEqual(await api.add(parseRoute('/movies/test')), { cancelled: false, title,
+    body: { movies: [{ ids: { trakt: 1 } }] }, undoable: true });
   assert.equal(reads, 1);
 });
 
@@ -55,7 +56,8 @@ test('watchlist requires a positive matching added/existing count and rejects no
   }
   const api = createWatchlistApi({ signedIn: () => true, get: async () => ({ ids: { trakt: 1 } }),
     auth: async () => ({ existing: { movies: 1 }, added: { movies: 0 }, not_found: { movies: [] } }) });
-  assert.deepEqual(await api.add(parseRoute('/movies/test')), { cancelled: false, title: 'this title' });
+  assert.deepEqual(await api.add(parseRoute('/movies/test')), { cancelled: false, title: 'this title',
+    body: { movies: [{ ids: { trakt: 1 } }] }, undoable: false });
 });
 
 test('watchlist never writes when signed out, lookup fails, or the session/navigation changes', async () => {

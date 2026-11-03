@@ -146,7 +146,7 @@ test('built bundle refreshes native title/card membership after one toolkit POST
       assert.equal(document.querySelector('.ogt-watchlist-card').hidden, nativeAdded);
       if (variant === 'native-failure') {
         assert.equal(document.getElementById('ogt-watchlist').hidden, true, 'native failure never rolls back the saved addition');
-        assert.equal(document.querySelector('.ogt-toast').textContent, 'You added Spider-Man: Brand New Day to your watchlist.');
+        assert.equal(document.querySelector('.ogt-watchlist-toast__message').textContent, 'You added Spider-Man: Brand New Day to your watchlist.');
       } else assert.doesNotMatch(document.querySelector('.ogt-toast').textContent, /Reload/);
     }
   });

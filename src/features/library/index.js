@@ -17,7 +17,9 @@ export const library = {
     if (!anchor || document.getElementById(ID)) return null;
     let destroyed = false;
     let busy = false;
+    let undoing = false;
     let session = 0;
+    let operation = 0;
     let added = false;
     let refreshing = false;
     let wasCollected = false;
@@ -46,10 +48,11 @@ export const library = {
       node.hidden = nativeLibrary || (added && !refreshing);
     }
     async function add() {
-      if (busy || node.hidden) return;
+      if (busy || undoing || node.hidden) return;
       if (!isSignedIn()) { status.textContent = 'Sign in to Trakt through the toolkit menu first.'; return; }
       busy = true;
       const epoch = session;
+      const operationId = ++operation;
       button.disabled = true;
       label.textContent = 'Adding to library…';
       status.textContent = '';
@@ -64,7 +67,9 @@ export const library = {
           refreshing = route.name === 'title';
           label.textContent = 'Updating library…';
           syncVisibility();
-          void notifySuccess(`You added ${title} to your library.`, active);
+          void notifySuccess(`You added ${title} to your library.`, active, {
+            undo: result.undoable ? () => undo(result.body) : undefined,
+          });
           try { await nativeRefresh.refresh(route, { active }); }
           catch (error) { debugError('native library refresh unavailable', error); }
           return;
@@ -73,7 +78,42 @@ export const library = {
         if (active()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.' :
           error.status ? 'Could not add to library. Check your toolkit sign-in and try again.' : error.message;
       } finally {
-        if (active()) {
+        if (active() && operation === operationId) {
+          busy = false;
+          refreshing = false;
+          syncVisibility();
+          button.disabled = false;
+          label.textContent = 'Add to library';
+        }
+      }
+    }
+    async function undo(body) {
+      if (undoing || !body) return false;
+      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt through the toolkit menu first.'; return false; }
+      undoing = true;
+      busy = false;
+      const epoch = session;
+      const operationId = ++operation;
+      button.disabled = true;
+      label.textContent = 'Undoing…';
+      status.textContent = '';
+      const active = () => !destroyed && epoch === session && node.isConnected && doc.location.pathname === pagePath;
+      try {
+        await libraryApi.remove(body, { active });
+        if (!active()) return false;
+        added = false;
+        refreshing = false;
+        syncVisibility();
+        await nativeRefresh.refresh(route, { active });
+        return true;
+      } catch (error) {
+        debugError('library undo failed', error);
+        if (active()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.' :
+          error.status ? 'Could not undo. Check your toolkit sign-in and try again.' : error.message;
+        return false;
+      } finally {
+        if (active() && operation === operationId) {
+          undoing = false;
           busy = false;
           refreshing = false;
           syncVisibility();
@@ -84,8 +124,10 @@ export const library = {
     }
     function authChanged() {
       session++;
+      operation++;
       nativeRefresh.destroy();
       busy = false;
+      undoing = false;
       refreshing = false;
       button.disabled = false;
       added = false;

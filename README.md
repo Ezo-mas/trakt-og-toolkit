@@ -67,8 +67,10 @@ Movie, show, season and episode pages have an **Add to library** button in the a
 toolkit menu first: it uses that Trakt account, independently of OG’s login. Additions use the current date.
 Shows and seasons confirm the aired episode count before saving; whole shows exclude specials (add season 0
 separately). The add button disappears after saving, or whenever OG already shows a library control.
-Success shows **You added Fight Club to your library.** (using the title) using the same native-first notification and matching
-fallback as watchlist additions. Movie/show saves ask OG to refresh its own collection state without a page
+Success shows **You added Fight Club to your library.** (using the title) in the matching toolkit notice, with an
+**Undo** button when the save added new items. OG’s native notifier cannot hold a button, so undoable library additions
+use the toolkit notice. Undo removes the same items from the toolkit account and asks OG to refresh its collection
+state; items that were already in the library are not offered an Undo. Movie/show saves ask OG to refresh its own collection state without a page
 reload or opening a popup. Module discovery runs during the save; a disabled **Updating library…** row keeps
 the stack steady until OG’s native control appears or the refresh finishes. Native reads still take network time.
 This reads OG’s signed-in account; different toolkit/OG accounts remain separate.
@@ -96,10 +98,12 @@ On a desktop display at 100% system scaling, poster shortcuts hide at 150–170%
 180%. Wider fanart cards are unaffected. This uses CSS resolution, which includes system/display scaling;
 it cannot distinguish browser zoom from display scaling. Card width alone does not hide the shortcut.
 
-Success shows **You added Spider-Man: Brand New Day to your watchlist.** (using the added title) in OG’s native
-notifier when available. Otherwise, a matching notification appears below the header on the right, with a green
-check, close button and five-second countdown.
-Hovering or focusing it pauses dismissal. Existing native notifications stay above the fallback.
+Success shows **You added Spider-Man: Brand New Day to your watchlist.** (using the added title) in the matching
+toolkit notice, with an **Undo** button for newly added titles. It appears below the header on the right, with a green
+check, close button and five-second countdown. OG’s native notifier cannot hold a button, so undoable additions use
+this notice; other toolkit notices still prefer OG’s native one. Undo removes the title with the same request body
+and refreshes OG’s native controls. Titles that were already on the watchlist are not offered an Undo.
+Hovering or focusing the notice pauses dismissal. Existing native notifications stay above the fallback.
 
 ### Name pronunciation
 
@@ -263,7 +267,6 @@ links, poster rating corners. Backlog:
 - list preview posters that link to their titles;
 - **Add to watchlist** on a person's credits, one row at a time or all shown credits at once;
 - extend `npm run drift` to the watchlist/library actions and og's native notifier and refresh modules;
-- **Undo** on watchlist and library success notices;
 - turn features on and off from the toolkit menu;
 - browse earlier months in the month review card;
 - custom link presets that open the exact show, season or episode on sites that support it (Stremio first);

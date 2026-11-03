@@ -72,7 +72,7 @@ test('built bundle adds exactly once on all four page types, alongside the libra
     assert.deepEqual(JSON.parse(request.data), { [type]: [{ ids: { trakt: 12 } }] });
     assert.equal(request.headers.Authorization, 'Bearer private-access');
     assert.equal(b.panel().hidden, true);
-    assert.equal(b.document.querySelector('.ogt-toast').textContent, `You added ${type === 'seasons' ? 'Season 1' : 'Spider-Man: Brand New Day'} to your watchlist.`);
+    assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, `You added ${type === 'seasons' ? 'Season 1' : 'Spider-Man: Brand New Day'} to your watchlist.`);
     assert.equal(b.document.getElementById('ogt-library').hidden, false);
     b.window.history.pushState({}, '', '/'); await wait(250);
     assert.equal(b.panel(), null);

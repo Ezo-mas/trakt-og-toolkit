@@ -45,7 +45,9 @@ export const watchlistCards = {
     let destroyed = false, session = 0, scheduled = false;
 
     function stateFor(key) {
-      if (!states.has(key)) states.set(key, { busy: false, added: false, wasWatchlisted: false });
+      if (!states.has(key)) states.set(key, {
+        busy: false, undoing: false, operation: 0, added: false, wasWatchlisted: false,
+      });
       return states.get(key);
     }
     function remove(entry) {
@@ -53,13 +55,20 @@ export const watchlistCards = {
       entry.button.remove();
       entries.delete(entry.control);
     }
+    function updateButton(entry, state) {
+      entry.button.hidden = state.added || state.wasWatchlisted;
+      entry.button.disabled = state.busy || state.undoing;
+      const busy = String(state.busy || state.undoing);
+      if (entry.button.getAttribute('aria-busy') !== busy) entry.button.setAttribute('aria-busy', busy);
+    }
     async function add(entry, event) {
       event.preventDefault();
       event.stopPropagation();
       const state = stateFor(entry.key);
-      if (state.busy || entry.button.hidden) return;
+      if (state.busy || state.undoing || entry.button.hidden) return;
       if (!isSignedIn()) { toast('Sign in to Trakt through the toolkit menu first.'); return; }
       const epoch = session;
+      const operation = ++state.operation;
       const pagePath = location.pathname;
       const active = () => !destroyed && session === epoch && location.pathname === pagePath && [...entries.values()].some(e =>
         e.key === entry.key && e.control.isConnected && readCardRoute(e.card)?.key === entry.key);
@@ -70,14 +79,53 @@ export const watchlistCards = {
         if (!active() || result.cancelled) return;
         state.added = true;
         scan();
-        void notifyWatchlistAdded({ title: result.title, active });
+        void notifyWatchlistAdded({
+          title: result.title,
+          active,
+          onUndo: result.undoable ? () => undo(entry, result.body) : undefined,
+        });
         await nativeRefresh.refresh(entry.control, entry.route, { active });
       } catch (error) {
         debugError('card watchlist addition failed', error);
         if (active()) toast(error.status === 429 ? 'Trakt rate limited this request; try again later.' :
           error.status ? 'Could not add to watchlist. Check your toolkit sign-in and try again.' : error.message);
       } finally {
-        if (!destroyed && epoch === session) { state.busy = false; scan(); }
+        if (!destroyed && epoch === session && state.operation === operation) {
+          state.busy = false;
+          scan();
+        }
+      }
+    }
+    async function undo(entry, body) {
+      const state = stateFor(entry.key);
+      if (state.undoing || !body) return false;
+      if (!isSignedIn()) { toast('Sign in to Trakt through the toolkit menu first.'); return false; }
+      const epoch = session;
+      const operation = ++state.operation;
+      const pagePath = location.pathname;
+      const active = () => !destroyed && session === epoch && location.pathname === pagePath && [...entries.values()].some(e =>
+        e.key === entry.key && e.control.isConnected && readCardRoute(e.card)?.key === entry.key);
+      state.undoing = true;
+      state.busy = false;
+      scan();
+      try {
+        await watchlistApi.remove(body, { active });
+        if (!active()) return false;
+        state.added = false;
+        scan();
+        await nativeRefresh.refresh(entry.control, entry.route, { active });
+        return true;
+      } catch (error) {
+        debugError('card watchlist undo failed', error);
+        if (active()) toast(error.status === 429 ? 'Trakt rate limited this request; try again later.' :
+          error.status ? 'Could not undo. Check your toolkit sign-in and try again.' : error.message);
+        return false;
+      } finally {
+        if (!destroyed && epoch === session && state.operation === operation) {
+          state.undoing = false;
+          state.busy = false;
+          scan();
+        }
       }
     }
     function scan() {
@@ -107,14 +155,7 @@ export const watchlistCards = {
         if (state.wasWatchlisted && !watchlisted) state.added = false;
         state.wasWatchlisted = watchlisted;
       }
-      for (const entry of entries.values()) {
-        const state = stateFor(entry.key);
-        const hidden = state.added || state.wasWatchlisted;
-        if (entry.button.hidden !== hidden) entry.button.hidden = hidden;
-        if (entry.button.disabled !== state.busy) entry.button.disabled = state.busy;
-        const busy = String(state.busy);
-        if (entry.button.getAttribute('aria-busy') !== busy) entry.button.setAttribute('aria-busy', busy);
-      }
+      for (const entry of entries.values()) updateButton(entry, stateFor(entry.key));
     }
     function schedule() {
       if (scheduled || destroyed) return;

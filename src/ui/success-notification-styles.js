@@ -16,6 +16,16 @@ export const successNotificationCss = `
   .ogt-watchlist-toast__icon { display: flex; color: var(--color-toast-success, #6cc96c); }
   .ogt-watchlist-toast__icon svg { inline-size: var(--font-size-toast-icon, 18px); block-size: var(--font-size-toast-icon, 18px); }
   .ogt-watchlist-toast__message { margin: 0; overflow-wrap: anywhere; }
+  .ogt-watchlist-toast__actions { display: flex; align-items: center; gap: var(--toast-action-gap, 2px); }
+  .ogt-watchlist-toast__undo {
+    min-block-size: 0; padding: var(--toast-undo-padding, 4px 8px); border: 0; border-radius: var(--radius-toast-close, 4px);
+    background: none; color: var(--color-toast-success, #6cc96c); font: inherit; font-weight: 600; cursor: pointer;
+  }
+  .ogt-watchlist-toast__undo:is(:hover, :focus-visible) { background: var(--color-toast-close-hover, #ffffff15); color: var(--color-toast-text, white); }
+  .ogt-watchlist-toast__undo:focus-visible { outline: 2px solid currentColor; }
+  .ogt-watchlist-toast__undo:disabled { opacity: .6; cursor: default; }
+  .ogt-watchlist-toast__error { grid-column: 2 / -1; margin: 0; color: var(--color-toast-error, #f0a6a6); font-size: var(--font-size-toast-error, 12px); }
+  .ogt-watchlist-toast__error:empty { display: none; }
   .ogt-watchlist-toast__close {
     display: grid; place-items: center; min-block-size: 0; padding: 0; border: 0;
     inline-size: var(--toast-close-size, 28px); block-size: var(--toast-close-size, 28px);
