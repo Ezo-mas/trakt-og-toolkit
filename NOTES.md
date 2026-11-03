@@ -2,6 +2,25 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-03: drift coverage for watchlist/library actions and native modules (feature 18)
+
+- Live page checks now cover features 12–13: `.summary-frame #overview .top .actions`, the summary
+  `.list-control.summary`, its `button[aria-controls][aria-keyshortcuts~="ArrowDown"]` picker trigger, and
+  `.quick-icons .list-control.card` on the `/movies/trending` listing page. The listing page is a separate drift page;
+  it has no toolkit panel to boot.
+- Native modules are checked statically. A page gives the SvelteKit app entry (`/_app/immutable/entry/app.*.js`); app.js
+  gives `../nodes/0.*.js`; the root layout gives its same-origin static imports. The imports feed the same
+  `nativeToastImports`/`isNativeToastStore` and `nativeLibraryImports`/`isNativeLibraryStore` validators the runtime
+  uses, and only already-loaded public chunks are read. Missing layout/import/store is drift. No page-realm script is
+  injected and no account is used.
+- The drift script uses an explicit `OG_ORIGIN = 'https://og.trakt.tv'`; it never fetches classic `trakt.tv`. The
+  current live layout and app entry resolve the root and both stores as of this check.
+- Tests: `test/og-drift.test.js` covers the action/list-control/picker/card selectors and the static native discovery
+  (app entry → root layout → chunk validation, missing layout, missing stores). `npm run drift` was run live against
+  og.trakt.tv; all pages and the native row passed.
+- `npm run drift` peaks around 1 GB RSS (main was ~860 MB before the listing page): happy-dom parses each full live page
+  and boots the bundle into it. Don't run it under the 512 MB test heap cap; that cap is for `npm test`.
+
 ## 2026-11-03: undo on success notices (feature 19)
 
 - Undo lives on the toolkit's matching fallback notice, not og's native toaster. Undoable saves therefore show the

@@ -1,15 +1,18 @@
-import { LOGIN_CHECKS } from './og-drift-checks.mjs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { get } from 'node:https';
 import { Window } from 'happy-dom';
-import { checkSelectors, unreachableReason } from './og-drift-checks.mjs';
+import { LOGIN_CHECKS, checkSelectors, unreachableReason } from './og-drift-checks.mjs';
+import { checkNativeModules } from './og-drift-native.mjs';
 
+// Live checks always use og.trakt.tv; never the classic trakt.tv site.
+const OG_ORIGIN = 'https://og.trakt.tv';
 const pages = [
   { name: 'movie', path: '/movies/the-matrix-1999', panel: '#ogt-custom-links' },
   { name: 'show', path: '/shows/breaking-bad', panel: '#ogt-custom-links' },
   { name: 'season', path: '/shows/breaking-bad/seasons/1', panel: '.ogt-season-chart' },
   { name: 'episode', path: '/shows/breaking-bad/seasons/1/episodes/1' },
   { name: 'person', path: '/people/bryan-cranston', panel: '.ogt-pronounce' },
+  { name: 'listing', path: '/movies/trending' },
 ];
 const args = process.argv.slice(2);
 if (args.length && (args.length !== 2 || args[0] !== '--save' || !args[1])) {
@@ -21,17 +24,17 @@ if (saveDir) await mkdir(saveDir, { recursive: true });
 const bundle = await readFile(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function fetchPage(url, redirects = 0) {
+function fetchPage(url, redirects = 0, accept = 'text/html') {
   return new Promise((resolve, reject) => {
     const request = get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36', Accept: 'text/html' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36', Accept: accept },
       maxHeaderSize: 65536,
       signal: AbortSignal.timeout(30000),
     }, (response) => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         response.resume();
         if (redirects >= 10) return reject(new Error('too many redirects'));
-        return resolve(fetchPage(new URL(response.headers.location, url).href, redirects + 1));
+        return resolve(fetchPage(new URL(response.headers.location, url).href, redirects + 1, accept));
       }
       const chunks = [];
       response.on('data', (chunk) => chunks.push(chunk));
@@ -60,10 +63,17 @@ async function checkPanel(page, html, url) {
   }
 }
 
+async function fetchAsset(url) {
+  const response = await fetchPage(url, 0, '*/*');
+  if (response.status !== 200) throw new Error(`HTTP ${response.status}`);
+  return response.html;
+}
+
 const results = [];
+let sampleHtml = null, sampleUrl = null;
 for (const [index, page] of pages.entries()) {
   if (index) await wait(500);
-  const url = `https://og.trakt.tv${page.path}`;
+  const url = `${OG_ORIGIN}${page.path}`;
   let response;
   let html;
   try {
@@ -79,6 +89,8 @@ for (const [index, page] of pages.entries()) {
     results.push({ page: page.name, status: 'unreachable', details: [reason] });
     continue;
   }
+  sampleHtml ??= html;
+  sampleUrl ??= url;
   const window = new Window({ url });
   window.document.write(html);
   const missing = checkSelectors(window.document, page.name).filter((check) => !check.ok);
@@ -86,6 +98,10 @@ for (const [index, page] of pages.entries()) {
   const details = missing.map((check) => `${check.feature}: ${check.selector}`);
   if (page.panel && !(await checkPanel(page, html, url))) details.push(`bundle mount: ${page.panel}`);
   results.push({ page: page.name, status: details.length ? 'drift' : 'ok', details });
+}
+if (sampleHtml) {
+  const nativeDetails = await checkNativeModules({ html: sampleHtml, pageUrl: sampleUrl, read: fetchAsset });
+  results.push({ page: 'native', status: nativeDetails.length ? 'drift' : 'ok', details: nativeDetails });
 }
 
 console.log('Page     Status       Details');

@@ -211,8 +211,11 @@ installer tab open. Every rebuild is picked up automatically. See `NOTES.md` for
 
 ## Keeping up with og
 
-`npm run drift` fetches live og pages and checks the selectors and panel mounts the toolkit relies on. The daily
-GitHub Actions workflow runs the same check at 06:00 UTC and can also be started manually. Run
+`npm run drift` fetches live **og.trakt.tv** pages and checks the selectors and panel mounts the toolkit relies on,
+including the title action stack, the summary list control and its picker trigger, and card quick-icon list controls on
+`/movies/trending`. It also follows og's app entry to its root layout and its static imports, then validates the public
+toast and library-refresh module shapes used by the native bridges without a page realm or sign-in. The daily GitHub
+Actions workflow runs the same check at 06:00 UTC and can also be started manually. Run
 `npm run drift -- --save <dir>` to save the fetched HTML for inspecting markup or refreshing fixtures. The check
 needs a built bundle (`npm run build`); `npm test` stays offline.
 
@@ -266,7 +269,6 @@ links, poster rating corners. Backlog:
 - set playback progress by hand;
 - list preview posters that link to their titles;
 - **Add to watchlist** on a person's credits, one row at a time or all shown credits at once;
-- extend `npm run drift` to the watchlist/library actions and og's native notifier and refresh modules;
 - turn features on and off from the toolkit menu;
 - browse earlier months in the month review card;
 - custom link presets that open the exact show, season or episode on sites that support it (Stremio first);

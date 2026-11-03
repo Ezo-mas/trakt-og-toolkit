@@ -29,7 +29,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 15 | Season chart: remove the More button | — | done |
 | 16 | Custom links on season and episode pages | client ID optional | done |
 | 17 | Watchlist buttons on a person's credits | OAuth | medium; reuses feature 13 |
-| 18 | `npm run drift`: cover features 12–13 and og's native modules | — | small |
+| 18 | `npm run drift`: cover features 12–13 and og's native modules | — | done |
 | 19 | Undo on success notices | OAuth | done |
 | 20 | Turn features on and off from the menu | — | small |
 | 21 | Month review: browse earlier months | OAuth | small |
@@ -403,6 +403,12 @@ Feature 13's card shortcut doesn't reach these rows: they aren't `.poster-card`/
   Trakt IDs the same way feature 13 does.
 
 ## 18. `npm run drift`: cover features 12–13 and og's native modules
+
+**Status:** done (2026-11-03). `npm run drift` now checks the title action stack, the summary list control and picker
+trigger, and card quick-icon list controls on `/movies/trending`. A separate static check follows the live og app entry
+to the root layout, reads its same-origin static imports, and validates the toast and library-refresh store shapes with
+`nativeToastImports`/`isNativeToastStore` and `nativeLibraryImports`/`isNativeLibraryStore`. Missing layouts, imports or
+stores are reported as drift; no page realm or sign-in is used.
 
 **Goal:** the daily drift check (`scripts/og-drift-checks.mjs`) only covers markup for custom links, the season chart,
 playback and pronunciation. Features 12 and 13 depend on more, and when it changes they fall back quietly (toolkit
