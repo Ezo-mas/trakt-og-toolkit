@@ -2,6 +2,29 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-04: watchlist shortcuts on person credits (feature 17, per-row part)
+
+- Live `/people/bryan-cranston` capture (2026-11-04): 211 `article.credit-row` entries, each with an
+  `a.poster` link to `/movies/:slug` or `/shows/:slug`, and the same card-sized `ListControl`
+  (`.quick-icons.small.row .list-control.card.small`) used on posters. Guest credits show the show link and a
+  "1 episode" pill, so the whole show is the right watchlist target. There is no native watchlist shortcut in
+  the row: only watched, lists, play and rating.
+- The row action strip sets `--quick-icons-row-cell: 32px` for `--bar` and `--action-width`, so the shortcut uses
+  the card button markup, icon and styling with those variables and no poster-zoom hiding. It inserts directly
+  after the `.list-control`, inside `.tools`. Cards and credit rows share one factory
+  (`src/features/watchlist/shortcuts.js`: state per route, add/undo, native-membership hiding, the picker refresh);
+  each feature only supplies its targets, route reader, class and CSS. The picker trigger and popover have the same
+  shape as cards, so movie/show additions refresh og's own membership without opening the popup.
+- The page rendered all credits server-side in this capture; no load-more button or lazy rows were found. The
+  feature still observes the document and handles rows swapped or added later, and it is keyed by route so a
+  title listed twice shares one in-flight add.
+- Bulk **Watchlist all** from the feature plan was deliberately not built (the request covered the row button).
+  README's roadmap still lists adding all shown credits at once.
+- Tests: `test/watchlist.test.js` covers credit-row route/control reading;
+  `test/watchlist-credits-integration.test.js` covers built-bundle mounting, movie/show adds, native membership,
+  custom-list names, lazy/removed rows, signed-out guidance and route teardown. `npm run drift` now checks the
+  credit-row poster link and list control on the live person page.
+
 ## 2026-11-03: feature toggles (feature 20)
 
 - Disabled feature ids live in `features.disabled` (GM storage). Storing the disabled list instead of an enabled list

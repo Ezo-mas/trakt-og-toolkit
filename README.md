@@ -104,6 +104,11 @@ On a desktop display at 100% system scaling, poster shortcuts hide at 150–170%
 180%. Wider fanart cards are unaffected. This uses CSS resolution, which includes system/display scaling;
 it cannot distinguish browser zoom from display scaling. Card width alone does not hide the shortcut.
 
+On a person’s page, every credit row also has the same bookmark shortcut next to its blue lists icon. Movie
+rows add the movie; show rows, including a guest credit for a single episode, add the whole show. It uses the
+row’s own link and toolkit account, hides when the row’s native list tooltip includes Watchlist, and appears
+for rows rendered as you browse. The watchlist-all action for a whole credits page is not built yet.
+
 Success shows **You added Spider-Man: Brand New Day to your watchlist.** (using the added title) in the matching
 toolkit notice, with an **Undo** button for newly added titles. It appears below the header on the right, with a green
 check, close button and five-second countdown. OG’s native notifier cannot hold a button, so undoable additions use
@@ -275,7 +280,7 @@ links, poster rating corners. Backlog:
 
 - set playback progress by hand;
 - list preview posters that link to their titles;
-- **Add to watchlist** on a person's credits, one row at a time or all shown credits at once;
+- **Add all shown credits** to the watchlist with one action from a person's page;
 - browse earlier months in the month review card;
 - custom link presets that open the exact show, season or episode on sites that support it (Stremio first);
 - a review and cleanup of the test suite.
