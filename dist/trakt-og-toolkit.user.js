@@ -2704,6 +2704,19 @@
     }
     return [...items.values()];
   }
+  function mapAllRatings(rows) {
+    const ofType = (type) => {
+      const items = /* @__PURE__ */ new Map();
+      for (const row of rows) {
+        if (row.type !== type || !Number.isInteger(row.rating) || row.rating < 1 || row.rating > 10) continue;
+        const id = row[type]?.ids?.trakt;
+        if (!Number.isSafeInteger(id) || id <= 0) continue;
+        items.set(id, row.rating);
+      }
+      return items;
+    };
+    return { movie: ofType("movie"), show: ofType("show"), season: ofType("season"), episode: ofType("episode") };
+  }
   function forShow(items, id) {
     const show = /^\d+$/.test(String(id)) ? Number(id) : items.find((item) => item.slug === id)?.show;
     return items.filter((item) => item.show === show);
@@ -2757,7 +2770,34 @@
         if (flight === pending) flight = null;
       }
     }
-    return { load, resetSession };
+    async function loadAll() {
+      if (!signedIn()) {
+        resetSession();
+        return { movie: /* @__PURE__ */ new Map(), show: /* @__PURE__ */ new Map(), season: /* @__PURE__ */ new Map(), episode: /* @__PURE__ */ new Map() };
+      }
+      if (cache3 && cache3.until > now() && cache3.all) return cache3.all;
+      if (flight) {
+        await flight;
+        if (cache3?.all) return cache3.all;
+      }
+      const epoch = generation3;
+      const pending = (async () => {
+        const rows = await auth("GET", "/sync/ratings");
+        if (epoch !== generation3 || !signedIn()) throw new Error("Ratings session changed.");
+        if (!Array.isArray(rows)) throw new Error("Invalid ratings response.");
+        const all = mapAllRatings(rows);
+        const items = mapRatings(rows.filter((r) => r.type === "episode"));
+        cache3 = { items, all, until: now() + 10 * 6e4 };
+        return all;
+      })();
+      flight = pending;
+      try {
+        return await pending;
+      } finally {
+        if (flight === pending) flight = null;
+      }
+    }
+    return { load, loadAll, resetSession };
   }
   var ratingsApi = createRatingsApi();
   if (typeof document !== "undefined") document.addEventListener("ogt:authchange", ratingsApi.resetSession);
@@ -4639,13 +4679,69 @@
 }
 `;
 
+  // src/features/list-preview/corner-rating.js
+  function cornerRating(rating, label = `Your rating: ${rating}`) {
+    if (!Number.isInteger(rating) || rating < 1 || rating > 10) return null;
+    const corner = el("div", {
+      class: "ogt-corner-rating",
+      role: "img",
+      "aria-label": label,
+      style: `--rating-color: var(--rating-${rating})`
+    });
+    const text2 = el("span", { class: "ogt-corner-rating-text", "aria-hidden": "true" }, String(rating));
+    corner.appendChild(text2);
+    return corner;
+  }
+  var cornerRatingStyles = `
+:root {
+  --rating-1: #616161;
+  --rating-2: #675b5b;
+  --rating-3: #705252;
+  --rating-4: #7a4747;
+  --rating-5: #863c3c;
+  --rating-6: #922f30;
+  --rating-7: #9e2424;
+  --rating-8: #a81918;
+  --rating-9: #b11010;
+  --rating-10: #b70a0a;
+}
+
+.ogt-corner-rating {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 10;
+  width: 30px;
+  height: 30px;
+  background-color: var(--rating-color);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  pointer-events: none;
+}
+
+/* OG's geometry: a 15 by 30 box, 7px in, text on its top 12px, turned 45 degrees. */
+.ogt-corner-rating-text {
+  position: absolute;
+  top: 0;
+  left: 7px;
+  width: 15px;
+  height: 30px;
+  color: var(--color-card-text, #fff);
+  font-family: var(--font-headings, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
+  font-weight: var(--font-weight-headings-heavy, 700);
+  font-size: var(--font-size-card-subtitle, 11px);
+  line-height: 12px;
+  text-align: center;
+  rotate: 45deg;
+}
+`;
+
   // src/features/list-preview/index.js
   var ID2 = "ogt-list-preview";
   var SLOT = ".list-row .fan .slot";
   var FAN = ".list-row .fan";
   var listPreview = {
     id: "list-preview",
-    css,
+    css: css + cornerRatingStyles,
     match(route) {
       return ["lists", "lists-collaborations", "liked-lists", "smart-lists"].includes(route.name) || /^\/users\/[^/]+\/(?:lists|smart-lists)(?:\/|$)/.test(route.path) || /^\/lists(?:\/|$)/.test(route.path);
     },
@@ -4655,8 +4751,19 @@
       document.body.append(marker);
       const slots = /* @__PURE__ */ new Map();
       const navs = /* @__PURE__ */ new Map();
+      const corners = /* @__PURE__ */ new Map();
+      let ratings = null;
       let destroyed = false;
       let scheduled = false;
+      async function loadRatings() {
+        try {
+          ratings = await ratingsApi.loadAll();
+        } catch (err) {
+          console.warn("[ogt] Could not load ratings for list previews:", err);
+          ratings = { movie: /* @__PURE__ */ new Map(), show: /* @__PURE__ */ new Map(), season: /* @__PURE__ */ new Map(), episode: /* @__PURE__ */ new Map() };
+        }
+        schedule();
+      }
       function scan() {
         if (destroyed) return;
         const seenSlots = /* @__PURE__ */ new Set();
@@ -4666,14 +4773,30 @@
           if (!info2) {
             slots.delete(slot);
             slot.classList.remove("ogt-list-preview-slot");
+            corners.get(slot)?.remove();
+            corners.delete(slot);
             continue;
           }
           slot.classList.add("ogt-list-preview-slot");
           slots.set(slot, info2);
+          if (ratings && !corners.has(slot)) {
+            const ratingMap = info2.kind === "movie" ? ratings.movie : ratings.show;
+            const rating = ratingMap.get(info2.id);
+            if (rating) {
+              const corner = cornerRating(rating, `Your rating: ${rating} of 10`);
+              if (corner) {
+                slot.style.position = "relative";
+                slot.appendChild(corner);
+                corners.set(slot, corner);
+              }
+            }
+          }
         }
         for (const slot of slots.keys()) {
           if (seenSlots.has(slot) && slot.isConnected) continue;
           slot.classList.remove("ogt-list-preview-slot");
+          corners.get(slot)?.remove();
+          corners.delete(slot);
           slots.delete(slot);
         }
         const seenFans = /* @__PURE__ */ new Set();
@@ -4723,6 +4846,8 @@
       });
       document.addEventListener("click", navigate, true);
       document.addEventListener("auxclick", navigate, true);
+      document.addEventListener("ogt:authchange", loadRatings);
+      loadRatings();
       scan();
       return {
         node: marker,
@@ -4731,9 +4856,12 @@
           observer.disconnect();
           document.removeEventListener("click", navigate, true);
           document.removeEventListener("auxclick", navigate, true);
+          document.removeEventListener("ogt:authchange", loadRatings);
           for (const slot of slots.keys()) slot.classList.remove("ogt-list-preview-slot");
+          for (const corner of corners.values()) corner.remove();
           for (const { nav } of navs.values()) nav.remove();
           slots.clear();
+          corners.clear();
           navs.clear();
           marker.remove();
         }

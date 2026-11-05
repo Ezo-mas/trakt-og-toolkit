@@ -1,6 +1,8 @@
 import { el } from '../../core/dom.js';
 import { readListPoster } from './data.js';
 import { css } from './styles.js';
+import { cornerRating, cornerRatingStyles } from './corner-rating.js';
+import { ratingsApi } from '../your-ratings/api.js';
 
 const ID = 'ogt-list-preview';
 const SLOT = '.list-row .fan .slot';
@@ -11,10 +13,12 @@ const FAN = '.list-row .fan';
  * the media URL, so pointer clicks go to that title while the fan's list link stays intact. The fan is
  * already an anchor, so the slots are not wrapped in nested links; a hidden nav after the stack carries
  * real title links for keyboard and screen-reader users.
+ * 
+ * Your ratings appear as colored corner badges on each poster, matching classic OG.
  */
 export const listPreview = {
   id: 'list-preview',
-  css,
+  css: css + cornerRatingStyles,
   match(route) {
     return ['lists', 'lists-collaborations', 'liked-lists', 'smart-lists'].includes(route.name) ||
       /^\/users\/[^/]+\/(?:lists|smart-lists)(?:\/|$)/.test(route.path) || /^\/lists(?:\/|$)/.test(route.path);
@@ -25,8 +29,20 @@ export const listPreview = {
     document.body.append(marker);
     const slots = new Map();
     const navs = new Map();
+    const corners = new Map();
+    let ratings = null;
     let destroyed = false;
     let scheduled = false;
+
+    async function loadRatings() {
+      try {
+        ratings = await ratingsApi.loadAll();
+      } catch (err) {
+        console.warn('[ogt] Could not load ratings for list previews:', err);
+        ratings = { movie: new Map(), show: new Map(), season: new Map(), episode: new Map() };
+      }
+      schedule();
+    }
 
     function scan() {
       if (destroyed) return;
@@ -37,14 +53,32 @@ export const listPreview = {
         if (!info) {
           slots.delete(slot);
           slot.classList.remove('ogt-list-preview-slot');
+          corners.get(slot)?.remove();
+          corners.delete(slot);
           continue;
         }
         slot.classList.add('ogt-list-preview-slot');
         slots.set(slot, info);
+        
+        // Add rating corner if we have ratings loaded
+        if (ratings && !corners.has(slot)) {
+          const ratingMap = info.kind === 'movie' ? ratings.movie : ratings.show;
+          const rating = ratingMap.get(info.id);
+          if (rating) {
+            const corner = cornerRating(rating, `Your rating: ${rating} of 10`);
+            if (corner) {
+              slot.style.position = 'relative';
+              slot.appendChild(corner);
+              corners.set(slot, corner);
+            }
+          }
+        }
       }
       for (const slot of slots.keys()) {
         if (seenSlots.has(slot) && slot.isConnected) continue;
         slot.classList.remove('ogt-list-preview-slot');
+        corners.get(slot)?.remove();
+        corners.delete(slot);
         slots.delete(slot);
       }
 
@@ -90,6 +124,9 @@ export const listPreview = {
       attributes: true, attributeFilter: ['src', 'aria-describedby'] });
     document.addEventListener('click', navigate, true);
     document.addEventListener('auxclick', navigate, true);
+    document.addEventListener('ogt:authchange', loadRatings);
+    
+    loadRatings();
     scan();
 
     return {
@@ -99,9 +136,12 @@ export const listPreview = {
         observer.disconnect();
         document.removeEventListener('click', navigate, true);
         document.removeEventListener('auxclick', navigate, true);
+        document.removeEventListener('ogt:authchange', loadRatings);
         for (const slot of slots.keys()) slot.classList.remove('ogt-list-preview-slot');
+        for (const corner of corners.values()) corner.remove();
         for (const { nav } of navs.values()) nav.remove();
         slots.clear();
+        corners.clear();
         navs.clear();
         marker.remove();
       },
