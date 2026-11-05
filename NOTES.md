@@ -2,6 +2,20 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-05: Stremio seasons need the `?season=` query (feature 22)
+
+- Clicking the deep links through in a real browser: the show and episode routes work, but a season page
+  (`og.trakt.tv/shows/<slug>/seasons/6`) landed on the plain series page. So the preset gained a fourth deep route,
+  `detail/series/{imdb}?season={season}`, ordered between the episode route and the plain series route. A route's
+  query string doesn't reach `useParams()`, but Stremio's own season control writes the season as a query param
+  (`src/routes/MetaDetails/useSeason.js`, `development` on 2026-11-05): it reads `?season=` with `useSearchParams`
+  when no video id sets one, and `?season=0` selects specials. The episode route still wins whenever `{episode}`
+  also has a value, so pickers and episode pages keep opening one episode.
+- The shape is source-verified, not clicked through: Stremio itself navigates to `pathname?season=N` when the
+  season select changes, so this is its own format.
+- A season page gets `{imdb}` from og's `…/episodes` IMDb link, so the season route fills without a client ID. An
+  episode page's missing show IMDb id still needs the client-ID show lookup, or the search fallback as before.
+
 ## 2026-11-04: custom link presets that open the exact title (feature 22)
 
 - Stremio's web route is `#/detail/:type/:id/:videoId?` (`src/routes/MetaDetails/MetaDetails.js`, `development` on

@@ -12,12 +12,15 @@ export const PRESETS = [
     url: 'https://web.stremio.com/#/search?search={title}',
     kinds: ['movie', 'show'],
     /**
-     * Exact-item routes, most specific first: `#/detail/:type/:id/:videoId?`. Stremio's
-     * MetaDetails reads those params, and its episode search builds the video id as
-     * `<id>:<season>:<episode>`, so the same shape opens one episode directly.
+     * Exact-item routes, most specific first. MetaDetails reads `type`, `id` and `videoId`
+     * from `useParams()`, and its episode search builds the video id as
+     * `<id>:<season>:<episode>`, so that shape opens one episode directly. With `videoId`
+     * unset, `useSeason` reads `?season=` from the same URL, so a season page opens that
+     * season's episode list.
      */
     deep: [
       { url: 'https://web.stremio.com/#/detail/series/{imdb}/{imdb}:{season}:{episode}', kinds: ['show'] },
+      { url: 'https://web.stremio.com/#/detail/series/{imdb}?season={season}', kinds: ['show'] },
       { url: 'https://web.stremio.com/#/detail/movie/{imdb}', kinds: ['movie'] },
       { url: 'https://web.stremio.com/#/detail/series/{imdb}', kinds: ['show'] },
     ],

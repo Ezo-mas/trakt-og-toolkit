@@ -6,7 +6,7 @@ import { PRESETS, presetTemplateUrls, resolvePresetUrl } from '../src/features/c
 const stremio = PRESETS.find((preset) => preset.label === 'Stremio');
 const filled = (vars, kind) => fillTemplate(resolvePresetUrl(stremio.url, vars, kind), vars);
 
-test('Stremio opens the exact movie, show and episode pages', () => {
+test('Stremio opens the exact movie, show, season and episode pages', () => {
   assert.equal(
     filled({ title: 'The Dark', imdb: 'tt0465676' }, 'movie'),
     'https://web.stremio.com/#/detail/movie/tt0465676',
@@ -16,6 +16,15 @@ test('Stremio opens the exact movie, show and episode pages', () => {
     'https://web.stremio.com/#/detail/series/tt0903747',
   );
   assert.equal(
+    filled({ title: 'Star Wars: The Clone Wars', imdb: 'tt0458290', season: 6 }, 'show'),
+    'https://web.stremio.com/#/detail/series/tt0458290?season=6',
+  );
+  assert.equal(
+    filled({ title: 'Show specials', imdb: 'tt0903747', season: 0 }, 'show'),
+    'https://web.stremio.com/#/detail/series/tt0903747?season=0',
+    'season 0 is a value, not a missing placeholder',
+  );
+  assert.equal(
     filled({ title: 'Breaking Bad', imdb: 'tt0903747', season: 1, episode: 2 }, 'show'),
     'https://web.stremio.com/#/detail/series/tt0903747/tt0903747:1:2',
   );
@@ -23,6 +32,11 @@ test('Stremio opens the exact movie, show and episode pages', () => {
 
 test('Stremio keeps its search URL when a deep link cannot be filled', () => {
   assert.equal(resolvePresetUrl(stremio.url, { title: 'Breaking Bad' }, 'show'), stremio.url);
+  assert.equal(
+    resolvePresetUrl(stremio.url, { title: 'Breaking Bad', season: 1 }, 'show'),
+    stremio.url,
+    'the season route needs the IMDb id',
+  );
   assert.equal(
     resolvePresetUrl(stremio.url, { title: 'Breaking Bad', season: 1, episode: 1 }, 'show'),
     stremio.url,
@@ -47,6 +61,7 @@ test('presetTemplateUrls lists the search fallback and every deep route for the 
   assert.deepEqual(presetTemplateUrls(stremio.url, 'show'), [
     stremio.url,
     'https://web.stremio.com/#/detail/series/{imdb}/{imdb}:{season}:{episode}',
+    'https://web.stremio.com/#/detail/series/{imdb}?season={season}',
     'https://web.stremio.com/#/detail/series/{imdb}',
   ]);
   assert.deepEqual(presetTemplateUrls(stremio.url, 'movie'), [

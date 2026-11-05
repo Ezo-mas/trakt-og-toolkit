@@ -194,8 +194,8 @@ test('Stremio opens the exact movie and show, and falls back to search without a
   await wait(50);
   assert.equal(
     chip(season.document, 'Stremio').getAttribute('href'),
-    'https://web.stremio.com/#/detail/series/tt0903747',
-    'a season page has no episode id, so the series page stays the target',
+    'https://web.stremio.com/#/detail/series/tt0903747?season=1',
+    'a season page has no episode id, so the series page opens with the season selected',
   );
 
   const episode = boot({

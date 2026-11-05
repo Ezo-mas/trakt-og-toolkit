@@ -467,10 +467,12 @@ previous click: read the first history page for `X-Pagination-Page-Count`, then 
 
 ## 22. Custom link presets that open the exact show, season or episode
 
-**Status:** done (2026-11-04). Stremio's preset opens the exact movie, show or episode through `#/detail/:type/:id/:videoId?`
-and falls back to its existing search URL when the page lacks the IMDb id. Metacritic, Plex and AniList stay searches:
-Plex needs its own ids, and Metacritic and AniList have no episode pages. TMDb, IMDb, Letterboxd, Rotten Tomatoes,
-Wikipedia and Trakt itself are already linked by og or are the same site, so no presets were added for them.
+**Status:** done (2026-11-04). Stremio's preset opens the exact movie, show, season or episode through
+`#/detail/:type/:id/:videoId?`, with `?season=` selecting the season when no episode id is given (added 2026-11-05),
+and falls back to its existing search URL when the page lacks the IMDb id. Show and episode deep links were clicked
+through on 2026-11-05; the season shape follows `useSeason` in Stremio's source. Metacritic, Plex and AniList stay
+searches: Plex needs its own ids, and Metacritic and AniList have no episode pages. TMDb, IMDb, Letterboxd, Rotten
+Tomatoes, Wikipedia and Trakt itself are already linked by og or are the same site, so no presets were added for them.
 
 **Goal:** the four presets (Metacritic, Stremio, Plex, AniList) all search `{title}`. That's right for sites without
 deep links, but on a season or episode page a site that can open that exact item should go there. Feature 16 already
