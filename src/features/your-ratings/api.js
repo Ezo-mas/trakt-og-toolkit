@@ -1,5 +1,5 @@
 import { apiAuth, isSignedIn } from '../../core/trakt.js';
-import { mapRatings } from './data.js';
+import { mapRatings, mapAllRatings } from './data.js';
 
 export function createRatingsApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
   let cache = null;
@@ -23,7 +23,28 @@ export function createRatingsApi({ auth = apiAuth, signedIn = isSignedIn, now = 
     try { return await pending; }
     finally { if (flight === pending) flight = null; }
   }
-  return { load, resetSession };
+  async function loadAll() {
+    if (!signedIn()) { resetSession(); return { movie: new Map(), show: new Map(), season: new Map(), episode: new Map() }; }
+    if (cache && cache.until > now() && cache.all) return cache.all;
+    if (flight) {
+      await flight;
+      if (cache?.all) return cache.all;
+    }
+    const epoch = generation;
+    const pending = (async () => {
+      const rows = await auth('GET', '/sync/ratings');
+      if (epoch !== generation || !signedIn()) throw new Error('Ratings session changed.');
+      if (!Array.isArray(rows)) throw new Error('Invalid ratings response.');
+      const all = mapAllRatings(rows);
+      const items = mapRatings(rows.filter(r => r.type === 'episode'));
+      cache = { items, all, until: now() + 10 * 60000 };
+      return all;
+    })();
+    flight = pending;
+    try { return await pending; }
+    finally { if (flight === pending) flight = null; }
+  }
+  return { load, loadAll, resetSession };
 }
 export const ratingsApi = createRatingsApi();
 if (typeof document !== 'undefined') document.addEventListener('ogt:authchange', ratingsApi.resetSession);

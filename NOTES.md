@@ -16,6 +16,11 @@ Working notes and known issues. Newest first.
 - Tests: `test/list-preview.test.js` covers URL parsing and tooltip titles;
   `test/list-preview-integration.test.js` covers the built bundle, pointer activation, later and removed rows,
   nav links and route teardown.
+- Rating corners: `corner-rating.js` creates OG's colored triangle badges (top-right, 30×30px, `clip-path` polygon,
+  rating text rotated 45°). `ratingsApi.loadAll()` fetches `/sync/ratings` (all types) once per page with 10-minute
+  cache; `mapAllRatings()` splits by type into Maps keyed by Trakt ID. Badges overlay slots when `ratings.movie` or
+  `ratings.show` has that poster's ID. Ratings reload on `ogt:authchange`. Test: `test/list-preview-ratings.test.js`
+  covers badge creation and validation.
 
 ## 2026-11-04/05: custom link presets that open the exact title (feature 22)
 
