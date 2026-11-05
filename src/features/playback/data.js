@@ -1,7 +1,7 @@
 /** Pure mapping of Trakt playback entries; IDs belong to playback, not media. */
 const DAY = 24 * 60 * 60 * 1000;
 const MOVIE_IDS = ['trakt', 'slug', 'imdb', 'tmdb'];
-const EPISODE_IDS = ['trakt', 'imdb', 'tmdb', 'tvdb'];
+export const EPISODE_IDS = ['trakt', 'imdb', 'tmdb', 'tvdb'];
 
 /** One identifying id is enough; prefer the most specific stable one. */
 export function pickIds(ids, keys) {
@@ -16,12 +16,16 @@ export function pickIds(ids, keys) {
   return null;
 }
 
-/** A finite 0–100 percentage, normalized to one decimal; empty/other input is invalid. */
+/**
+ * A finite 1–100 percentage, normalized to one decimal; empty/other input is invalid. Trakt ignores scrobbles under
+ * 1% (422), and start has already removed the old progress by then, so 0 is refused up front (Clear removes it).
+ */
 export function normalizeProgress(value) {
   if (value == null || typeof value === 'string' && value.trim() === '') return null;
   const progress = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(progress) || progress < 0 || progress > 100) return null;
-  return Math.round(progress * 10) / 10;
+  if (!Number.isFinite(progress)) return null;
+  const rounded = Math.round(progress * 10) / 10;
+  return rounded >= 1 && rounded <= 100 ? rounded : null;
 }
 
 function posterUrl(value) {

@@ -2045,8 +2045,9 @@
   function normalizeProgress(value) {
     if (value == null || typeof value === "string" && value.trim() === "") return null;
     const progress = typeof value === "number" ? value : Number(value);
-    if (!Number.isFinite(progress) || progress < 0 || progress > 100) return null;
-    return Math.round(progress * 10) / 10;
+    if (!Number.isFinite(progress)) return null;
+    const rounded = Math.round(progress * 10) / 10;
+    return rounded >= 1 && rounded <= 100 ? rounded : null;
   }
   function posterUrl(value) {
     if (typeof value !== "string" || !value) return null;
@@ -2115,10 +2116,6 @@
 
   // src/features/playback/api.js
   var TTL = 6e4;
-  var scrobbleEpisodeIds = /* @__PURE__ */ new Set(["trakt", "imdb", "tmdb", "tvdb"]);
-  function pickIdsForEpisode(ids) {
-    return ids && typeof ids === "object" && [...scrobbleEpisodeIds].some((key) => key === "trakt" || key === "tmdb" || key === "tvdb" ? Number.isSafeInteger(ids[key]) && ids[key] > 0 : typeof ids[key] === "string" && ids[key].trim() !== "");
-  }
   function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isSignedIn, now = Date.now } = {}) {
     const cache3 = /* @__PURE__ */ new Map();
     const flights2 = /* @__PURE__ */ new Map();
@@ -2197,28 +2194,34 @@
       return { cancelled: false, cleared, failed };
     }
     async function episodeIdsFor(item) {
-      if (pickIdsForEpisode(item.episodeIds)) return item.episodeIds;
+      if (pickIds(item.episodeIds, EPISODE_IDS)) return item.episodeIds;
       if (!item.ids || !Number.isInteger(item.season) || !Number.isInteger(item.episode)) {
         throw new Error("Could not identify this episode.");
       }
       const showId = item.ids.slug || item.ids.trakt;
       if (!showId) throw new Error("Could not identify this episode.");
       const episode = await get(`/shows/${encodeURIComponent(showId)}/seasons/${item.season}/episodes/${item.episode}`);
-      if (!pickIdsForEpisode(episode?.ids)) throw new Error("Could not identify this episode.");
+      if (!pickIds(episode?.ids, EPISODE_IDS)) throw new Error("Could not identify this episode.");
       return episode.ids;
     }
-    async function setProgress(item, progress) {
+    async function setProgress(item, progress, epoch = session) {
       if (!signedIn()) throw new Error("Sign in to Trakt first.");
       const value = normalizeProgress(progress);
       if (!item || value == null) throw new Error("Invalid progress.");
-      const epoch = session;
       const episodeIds = item.kind === "movie" ? null : await episodeIdsFor(item);
       if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
       const body = scrobbleBody(item, value, episodeIds);
       await auth("POST", "/scrobble/start", body);
-      if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
-      await auth("POST", "/scrobble/pause", body);
       invalidate();
+      try {
+        if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
+        await auth("POST", "/scrobble/pause", body);
+      } catch (error) {
+        error.partial = true;
+        throw error;
+      } finally {
+        invalidate();
+      }
       return { progress: value, body };
     }
     async function setRouteProgress(route, progress) {
@@ -2226,15 +2229,16 @@
       const value = normalizeProgress(progress);
       if (value == null) throw new Error("Invalid progress.");
       if (!route?.id) throw new Error("Unsupported playback page.");
+      const epoch = session;
       if (route.kind === "movie") {
         const movie = await get(`/movies/${encodeURIComponent(route.id)}`);
-        return setProgress({ kind: "movie", ids: movie?.ids, title: movie?.title, year: movie?.year }, value);
+        return setProgress({ kind: "movie", ids: movie?.ids, title: movie?.title, year: movie?.year }, value, epoch);
       }
       if (route.name !== "episode" || !Number.isInteger(route.season) || !Number.isInteger(route.episode)) {
         throw new Error("Unsupported playback page.");
       }
       const episode = await get(`/shows/${encodeURIComponent(route.id)}/seasons/${route.season}/episodes/${route.episode}`);
-      return setProgress({ kind: "episode", episodeIds: episode?.ids, season: route.season, episode: route.episode }, value);
+      return setProgress({ kind: "episode", episodeIds: episode?.ids, season: route.season, episode: route.episode }, value, epoch);
     }
     return { load, loadAll, clearItems, setProgress, setRouteProgress, invalidate, resetSession };
   }
@@ -2303,6 +2307,8 @@
           content.append(el("p", { class: "ogt-hint", text: "No saved playback." }), button("Save progress…", "save"));
           return;
         }
+        const save = button("Save progress…", "save");
+        save.dataset.id = String(item.id);
         const clear2 = button("Clear", "one");
         clear2.dataset.id = String(item.id);
         content.append(el(
@@ -2310,6 +2316,7 @@
           { class: "ogt-playback__tools" },
           el("span", { text: `${percent(item.progress)} paused` }),
           el("progress", { class: "ogt-playback__meter", max: 100, value: item.progress, "aria-label": "Saved playback progress" }),
+          save,
           clear2
         ));
         return;
@@ -2385,20 +2392,31 @@
     }
     async function saveProgress(item) {
       status.textContent = "";
-      const current = item ? Math.round(item.progress) : 0;
-      const value = window.prompt("Progress percentage (0–100)", String(current));
+      const value = window.prompt("Progress percentage (1–100)", item ? String(Number(item.progress.toFixed(1))) : "");
       if (value == null || !alive2()) return;
       const progress = normalizeProgress(value);
       if (progress == null) {
-        status.textContent = "Enter a percentage from 0 to 100.";
+        status.textContent = "Enter a percentage from 1 to 100.";
         return;
       }
       const title = item?.title ?? "this title";
       if (!window.confirm(`Set progress to ${percent(progress)} for ${title}? It may briefly show as watching on your Trakt profile.`)) return;
       if (!alive2()) return;
       status.textContent = "Saving progress…";
-      if (item) await playbackApi.setProgress(item, progress);
-      else await playbackApi.setRouteProgress(route, progress);
+      try {
+        if (item) await playbackApi.setProgress(item, progress);
+        else await playbackApi.setRouteProgress(route, progress);
+      } catch (error) {
+        if (!error.partial) throw error;
+        debugError("playback pause failed after start", error);
+        if (!alive2()) return;
+        items = [];
+        render();
+        await read(true).catch(() => {
+        });
+        if (alive2()) status.textContent = "Trakt started playback but did not save the pause, so earlier progress for this title was removed; try again.";
+        return;
+      }
       if (!alive2()) return;
       items = [];
       render();
@@ -2422,8 +2440,8 @@
           await read(true);
           if (alive2()) status.textContent = "";
         } else if (action === "save") {
-          const item = overview ? items.find((row) => row.id === Number(target.dataset.id)) : null;
-          if (overview && !item) return;
+          const item = target.dataset.id ? items.find((row) => row.id === Number(target.dataset.id)) : null;
+          if (target.dataset.id && !item) return;
           await saveProgress(item);
         } else if (action === "one") await clear([Number(target.dataset.id)]);
         else if (action === "selected") await clear([...selected]);

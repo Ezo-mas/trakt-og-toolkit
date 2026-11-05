@@ -268,9 +268,9 @@ directly, so there is no season-ratings fetch.
 
 ## 9. Playback extras: set progress
 
-**Status:** done (2026-11-05). A **Save progress…** action appears on movie and episode pages with no saved
-playback and on every row in the overview. It asks for a percentage, confirms with a watching-status warning, then
-sends `/scrobble/start` and `/scrobble/pause`; it never sends `/scrobble/stop`.
+**Status:** done (2026-11-05). A **Save progress…** action appears on movie and episode pages (with or without
+saved playback) and on every row in the overview. It asks for a 1–100 percentage, confirms with a watching-status
+warning, then sends `/scrobble/start` and `/scrobble/pause`; it never sends `/scrobble/stop`.
 
 **Goal:** classic's manager could also set progress. Add it as an opt-in action.
 

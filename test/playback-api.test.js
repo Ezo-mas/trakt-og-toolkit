@@ -120,7 +120,7 @@ test('failed start sends no pause and a failed pause rejects', async () => {
   const pauseFailure = createPlaybackApi({ signedIn: () => true, auth: async (method, path) => {
     pausePaths.push(path); if (path.endsWith('/pause')) throw new Error('pause failed');
   } });
-  await assert.rejects(pauseFailure.setProgress(movieItem, 10), /pause failed/);
+  await assert.rejects(pauseFailure.setProgress(movieItem, 10), (error) => /pause failed/.test(error.message) && error.partial === true);
   assert.deepEqual(pausePaths, ['/scrobble/start', '/scrobble/pause']);
 });
 test('session changes during episode lookup stop the scrobble', async () => {
@@ -141,4 +141,14 @@ test('failed/malformed loads are not cached and session changes stop queued dele
   assert.equal(calls, 2);
   const result = await api.clearItems([1, 2, 3, 4, 5], () => true);
   assert.equal(result.cleared.length, 1); assert.equal(result.failed.length, 4);
+});
+test('a failed start is not partial, and a session change during a movie lookup sends nothing', async () => {
+  const startFailure = createPlaybackApi({ signedIn: () => true, auth: async () => { throw new Error('start failed'); } });
+  await assert.rejects(startFailure.setProgress(movieItem, 10), (error) => error.partial === undefined);
+  let api; const writes = [];
+  api = createPlaybackApi({ signedIn: () => true, get: async () => { api.resetSession(); return { ids: { trakt: 1 }, title: 'The Dark', year: 2005 }; },
+    auth: async (...args) => { writes.push(args); return {}; } });
+  await assert.rejects(api.setRouteProgress({ name: 'title', kind: 'movie', id: 'the-dark-2005' }, 20), /session changed/);
+  assert.equal(writes.length, 0);
+  await assert.rejects(api.setProgress(movieItem, 0), /Invalid progress/);
 });

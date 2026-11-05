@@ -38,9 +38,10 @@ test('age filter uses strict elapsed days and excludes invalid inputs', () => {
 });
 test('normalizes percentages to one decimal and rejects empty or out-of-range values', () => {
   assert.equal(normalizeProgress('42.55'), 42.6);
-  assert.equal(normalizeProgress(0), 0);
+  assert.equal(normalizeProgress(1), 1);
+  assert.equal(normalizeProgress(0.95), 1);
   assert.equal(normalizeProgress(100), 100);
-  for (const value of [null, undefined, '', ' ', -1, 101, 'abc', Infinity]) assert.equal(normalizeProgress(value), null);
+  for (const value of [null, undefined, '', ' ', 0, 0.94, -1, 100.1, 101, 'abc', Infinity]) assert.equal(normalizeProgress(value), null);
 });
 test('scrobble bodies carry movie title/year or an episode id', () => {
   assert.deepEqual(scrobbleBody({ kind: 'movie', ids: { slug: 'the-dark-2005', trakt: 1 }, title: 'The Dark', year: 2005 }, 42.55),
