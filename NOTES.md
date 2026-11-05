@@ -15,6 +15,12 @@ Working notes and known issues. Newest first.
   season select changes, so this is its own format.
 - A season page gets `{imdb}` from og's `…/episodes` IMDb link, so the season route fills without a client ID. An
   episode page's missing show IMDb id still needs the client-ID show lookup, or the search fallback as before.
+- The episode id `{show imdb}:{season}:{episode}` is not a UI filter: `useMetaDetails` passes it straight into the
+  addon request as `streamPath` (`stream/series/{videoId}.json`) and MetaDetails then shows the streams list instead
+  of the episode list. `?season=` is the filter: `VideosList` only uses it to pick a season's rows. Stremio's own
+  links percent-encode the id's colons (`{show imdb}%3A{season}%3A{episode}`, built in its episode search), but
+  `useParams()` decodes the path segment, so the raw-colon deep links were clicked through and land on the identical
+  value.
 
 ## 2026-11-04: custom link presets that open the exact title (feature 22)
 
