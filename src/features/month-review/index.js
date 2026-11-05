@@ -89,10 +89,11 @@ export const monthReview = {
       prevButton = el('button', { type: 'button', class: 'ogt-review__arrow', 'aria-label': 'Previous month', title: 'Previous month', on: { click: () => navigate(-1) } }, chevron(-1));
       nextButton = el('button', { type: 'button', class: 'ogt-review__arrow', 'aria-label': 'Next month', title: 'Next month', on: { click: () => navigate(1) } }, chevron(1));
       hideButton = el('button', { type: 'button', class: 'ogt-review__hide', text: '× Hide', on: { click: hide } });
-      // Hide keeps its top slot as one full-width strip: it runs from the left chip's edge across to the chips' edge
-      // (both combined) with the label right-aligned, and the heading follows below.
-      const top = el('div', { class: 'ogt-review__top' }, hideButton,
-        el('h2', {}, 'your ', el('em', { text: span.label.toLocaleLowerCase() }), ' in review'));
+      // Hide stays at the top right, but sized to the month-nav chips: fixed to the pair's combined
+      // length so its edges line up with the ‹ › pair below - starts on the left chip's edge.
+      const top = el('div', { class: 'ogt-review__top' },
+        el('h2', {}, 'your ', el('em', { text: span.label.toLocaleLowerCase() }), ' in review'),
+        hideButton);
       const nav = el('div', { class: 'ogt-review__nav' }, prevButton, nextButton);
       const inner = el('div', { class: 'ogt-review__inner' });
       const art = data.plays ? fanart(data.first) : null;

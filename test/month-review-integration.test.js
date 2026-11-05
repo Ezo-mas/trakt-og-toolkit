@@ -50,8 +50,7 @@ test('built bundle renders under ribbon, links review, remembers hide and signs 
   assert.equal(node.previousElementSibling.tagName, 'NAV'); assert.equal(node.hidden, false);
   assert.equal(node.querySelectorAll('.ogt-review__tile').length, 4);
   assert.equal(node.querySelector('.ogt-review__hide').parentElement.className, 'ogt-review__top',
-    'Hide owns the full-width strip above the heading');
-  assert.equal(node.querySelector('.ogt-review__top').firstElementChild.className, 'ogt-review__hide');
+    'Hide stays in the heading row at the top right');
   assert.equal(node.querySelectorAll('.ogt-review__arrow').length, 2);
   assert.match(node.textContent, /First movie/); assert.match(node.querySelector('a').href, /users\/tester\/mir\/\d{4}\/\d+/);
   assert.equal(node.querySelector('img').src, 'https://media.trakt.tv/fanart.jpg');
