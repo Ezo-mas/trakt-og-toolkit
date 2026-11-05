@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
-import { lastMonth } from '../src/features/month-review/data.js';
+import { lastMonth, shiftMonth } from '../src/features/month-review/data.js';
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = () => new Promise((resolve) => setTimeout(resolve, 80));
-function boot(t, { signedIn = true, zero = false, failed = false, dismissed = false } = {}) {
+function boot(t, { signedIn = true, zero = false, failed = false, dismissed = false, earliest = null, firstPages = 1 } = {}) {
   const window = new Window({ url: 'https://og.trakt.tv/dashboard' });
   t.after(() => window.close());
   const span = lastMonth(); const store = new Map(); const calls = [];
+  const first = earliest || span;
   if (signedIn) {
     store.set('trakt.clientId', 'client');
     store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 });
@@ -23,12 +24,19 @@ function boot(t, { signedIn = true, zero = false, failed = false, dismissed = fa
     calls.push(request);
     const url = new URL(request.url);
     let data = [];
+    let pages = 1;
     if (url.pathname === '/users/me') data = { username: 'tester', ids: { slug: 'tester' } };
-    if (url.pathname === '/sync/history' && !zero) data = [{ watched_at: span.start,
-      movie: { title: 'First movie', runtime: 120, images: { fanart: ['media.trakt.tv/fanart.jpg'] } } }];
+    if (url.pathname === '/sync/history' && !zero && !url.searchParams.has('start_at')) {
+      pages = firstPages;
+      if (Number(url.searchParams.get('page')) === firstPages) data = [{ watched_at: first.start,
+        movie: { title: 'First movie', runtime: 120, images: { fanart: ['media.trakt.tv/fanart.jpg'] } } }];
+    } else if (url.pathname === '/sync/history' && !zero) {
+      data = [{ watched_at: url.searchParams.get('start_at'),
+        movie: { title: 'First movie', runtime: 120, images: { fanart: ['media.trakt.tv/fanart.jpg'] } } }];
+    }
     if (url.pathname === '/sync/ratings') data = [{ rated_at: span.start }];
     if (url.pathname === '/users/me/comments') data = [{ comment: { created_at: span.start } }];
-    queueMicrotask(() => request.onload({ status: failed ? 403 : 200, responseText: JSON.stringify(data), responseHeaders: 'X-Pagination-Page-Count: 1' }));
+    queueMicrotask(() => request.onload({ status: failed ? 403 : 200, responseText: JSON.stringify(data), responseHeaders: `X-Pagination-Page-Count: ${pages}` }));
     return { abort() {} };
   };
   // Dashboard is session-only: semantic fixture transcribed from RecapRibbon.svelte.
@@ -47,7 +55,7 @@ test('built bundle renders under ribbon, links review, remembers hide and signs 
   assert.equal(ratings.length, 1); assert.equal(new URL(ratings[0].url).search, '', 'ratings load in one unpaginated request');
   node.querySelector('img').dispatchEvent(new b.window.Event('error'));
   assert.equal(node.querySelector('img'), null, 'a failed fanart leaves no broken image');
-  node.querySelector('button').click(); assert.equal(node.hidden, true);
+  node.querySelector('.ogt-review__hide').click(); assert.equal(node.hidden, true);
   assert.equal(b.store.get('review.dismissed.tester'), lastMonth().key);
   b.store.delete('trakt.oauth.tokens'); b.doc.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
   assert.equal(b.doc.querySelector('#ogt-month-review'), null);
@@ -72,4 +80,32 @@ test('returning to the dashboard reuses the account/month cache', async (t) => {
   await new Promise((r) => setTimeout(r, 500));
   assert.equal(b.doc.querySelector('#ogt-month-review').hidden, false);
   assert.equal(b.calls.filter((r) => new URL(r.url).pathname === '/sync/history').length, 1);
+});
+test('arrows browse earlier months, reuse cached months, and stop at the first history month', async (t) => {
+  const previous = shiftMonth(lastMonth(), -1);
+  const earliest = shiftMonth(lastMonth(), -2);
+  const b = boot(t, { earliest, firstPages: 2 }); await wait();
+  const node = b.doc.querySelector('#ogt-month-review');
+  const arrow = (label) => node.querySelector(`[aria-label="${label} month"]`);
+  const title = () => node.querySelector('h2').textContent;
+  const monthsRequested = () => b.calls.filter((r) => {
+    const url = new URL(r.url);
+    return url.pathname === '/sync/history' && url.searchParams.has('start_at');
+  }).map((r) => new URL(r.url).searchParams.get('start_at'));
+  assert.equal(arrow('Next').disabled, true, 'no next past last month');
+  assert.equal(arrow('Previous').disabled, false);
+  arrow('Previous').click(); await wait(); await wait();
+  assert.match(title(), new RegExp(previous.label, 'i'));
+  assert.equal(b.calls.filter((r) => new URL(r.url).pathname === '/users/me').length, 1, 'the account is reused');
+  arrow('Previous').click(); await wait(); await wait();
+  assert.match(title(), new RegExp(earliest.label, 'i'));
+  assert.equal(arrow('Previous').disabled, true, 'no previous before the first history month');
+  assert.equal(arrow('Next').disabled, false);
+  assert.deepEqual(monthsRequested(), [lastMonth().start, previous.start, earliest.start]);
+  arrow('Next').click(); await wait(); await wait();
+  assert.match(title(), new RegExp(previous.label, 'i'));
+  assert.equal(monthsRequested().length, 3, 'returning to a visited month uses its cache');
+  arrow('Next').click(); await wait(); await wait();
+  assert.match(title(), new RegExp(lastMonth().label, 'i'));
+  assert.equal(arrow('Next').disabled, true);
 });

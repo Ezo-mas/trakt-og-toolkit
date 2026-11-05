@@ -2,8 +2,8 @@ import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
 import { isSignedIn } from '../../core/trakt.js';
 import { STORAGE, setPrivateValue } from '../../core/store.js';
-import { loadReview } from './api.js';
-import { fanart } from './data.js';
+import { loadFirstMonth, loadReview } from './api.js';
+import { fanart, lastMonth, shiftMonth } from './data.js';
 import { CSS } from './styles.js';
 // Decorative SVGs keep the tiles crisp without depending on og's icon font.
 function tileIcon(kind) {
@@ -29,38 +29,114 @@ export const monthReview = {
     const anchor = document.querySelector('nav.ribbon');
     if (!anchor) return null;
     let destroyed = false;
-    const node = el('section', { class: 'ogt-review', id: 'ogt-month-review', hidden: true, 'aria-label': 'Last month in review' });
+    let review = null;
+    let user = null;
+    let busy = false;
+    let token = 0;
+    let earliest;
+    let earliestFailed = false;
+    let prevButton = null;
+    let nextButton = null;
+    let hideButton = null;
+    const node = el('section', { class: 'ogt-review', id: 'ogt-month-review', hidden: true, 'aria-label': 'Month in review' });
     anchor.after(node);
-    const hide = () => { if (review) setPrivateValue(STORAGE.dismissedReview(review.user), review.span.key); node.hidden = true; };
-    let review;
-    loadReview().then((data) => {
-      if (destroyed || !isSignedIn() || !data?.plays) return;
+    const hide = () => {
+      if (review) setPrivateValue(STORAGE.dismissedReview(review.user), review.span.key);
+      node.hidden = true;
+    };
+    const updateNav = () => {
+      if (prevButton) prevButton.disabled = busy || Boolean(earliest && review.span.key <= earliest.key);
+      if (nextButton) nextButton.disabled = busy || !review || review.span.key >= lastMonth().key;
+      if (hideButton) hideButton.disabled = busy;
+    };
+    const ensureEarliest = async () => {
+      if (earliest !== undefined || earliestFailed) return earliest;
+      try {
+        earliest = await loadFirstMonth();
+      } catch (error) {
+        earliestFailed = true;
+        if (!destroyed && isSignedIn()) debugError('month review first history failed', error);
+      }
+      return earliest;
+    };
+    const navigate = async (delta) => {
+      if (busy || !review) return;
+      const target = shiftMonth(review.span, delta);
+      if (delta > 0 && target.key > lastMonth().key) return;
+      if (delta < 0) {
+        busy = true; updateNav();
+        try { await ensureEarliest(); } finally { if (!destroyed) { busy = false; updateNav(); } }
+        if (destroyed) return;
+        if (earliest && target.key < earliest.key) return;
+      }
+      await show(target);
+    };
+    const render = (data) => {
       review = data;
-      const { span, first } = data;
-      const media = first.show || first.movie;
-      const art = fanart(first);
-      const grid = el('div', { class: 'ogt-review__grid' });
-      for (const key of ['plays', 'hours', 'ratings', 'comments']) grid.append(el('div', { class: 'ogt-review__tile' },
-        tileIcon(key), el('div', { class: 'ogt-review__value' },
-          el('strong', { text: data[key].toLocaleString() }), el('span', { text: key }))));
-      grid.append(el('div', { class: 'ogt-review__first' }, el('small', {}, 'First play', el('span', {}, 'of ', el('b', { text: span.label }))),
-        el('div', {}, el('strong', { class: 'ogt-review__title', text: media?.title || 'Untitled' }),
-          first.episode ? el('span', { class: 'ogt-review__episode' },
-            el('b', { text: `${first.episode.season}x${String(first.episode.number).padStart(2, '0')}` }),
-            ` “${first.episode.title || 'Untitled episode'}”`) : null)));
+      const { span } = data;
+      prevButton = el('button', { type: 'button', class: 'ogt-review__arrow', 'aria-label': 'Previous month', title: 'Previous month', text: '‹', on: { click: () => navigate(-1) } });
+      nextButton = el('button', { type: 'button', class: 'ogt-review__arrow', 'aria-label': 'Next month', title: 'Next month', text: '›', on: { click: () => navigate(1) } });
+      hideButton = el('button', { type: 'button', class: 'ogt-review__hide', text: '× Hide', on: { click: hide } });
+      const top = el('div', { class: 'ogt-review__top' },
+        el('h2', {}, 'your ', el('em', { text: span.label.toLocaleLowerCase() }), ' in review'),
+        el('div', { class: 'ogt-review__nav' }, prevButton, nextButton, hideButton));
+      const inner = el('div', { class: 'ogt-review__inner' });
+      const art = data.plays ? fanart(data.first) : null;
       // A fanart that fails to load leaves the plain background instead of a broken-image box.
       const image = art ? el('img', { class: 'ogt-review__art', src: art, alt: '', referrerpolicy: 'no-referrer' }) : null;
       image?.addEventListener('error', () => image.remove(), { once: true });
-      node.append(...(image ? [image] : []),
-        el('button', { type: 'button', class: 'ogt-review__hide', text: '× Hide', on: { click: hide } }),
-        el('div', { class: 'ogt-review__inner' }, el('h2', {}, 'your ', el('em', { text: span.label.toLocaleLowerCase() }), ' in review'), grid,
-          el('a', { class: 'ogt-review__link', text: 'Month in Review →', href: `https://app.trakt.tv/users/${encodeURIComponent(data.user)}/mir/${span.year}/${span.month}`, target: '_blank', rel: 'noopener noreferrer' })));
+      inner.append(...(image ? [image] : []), top);
+      if (data.plays) {
+        const first = data.first;
+        const media = first?.show || first?.movie;
+        const grid = el('div', { class: 'ogt-review__grid' });
+        for (const key of ['plays', 'hours', 'ratings', 'comments']) grid.append(el('div', { class: 'ogt-review__tile' },
+          tileIcon(key), el('div', { class: 'ogt-review__value' },
+            el('strong', { text: (data[key] || 0).toLocaleString() }), el('span', { text: key }))));
+        grid.append(el('div', { class: 'ogt-review__first' }, el('small', {}, 'First play', el('span', {}, 'of ', el('b', { text: span.label }))),
+          el('div', {}, el('strong', { class: 'ogt-review__title', text: media?.title || 'Untitled' }),
+            first?.episode ? el('span', { class: 'ogt-review__episode' },
+              el('b', { text: `${first.episode.season}x${String(first.episode.number).padStart(2, '0')}` }),
+              ` “${first.episode.title || 'Untitled episode'}”`) : null)));
+        inner.append(grid);
+      } else {
+        inner.append(el('p', { class: 'ogt-review__empty', text: `No plays in ${span.label} ${span.year}.` }));
+      }
+      inner.append(el('a', { class: 'ogt-review__link', text: 'Month in Review →', href: `https://app.trakt.tv/users/${encodeURIComponent(data.user)}/mir/${span.year}/${span.month}`, target: '_blank', rel: 'noopener noreferrer' }));
+      node.className = 'ogt-review';
+      node.setAttribute('aria-label', `${span.label} ${span.year} in review`);
+      node.replaceChildren(inner);
       node.hidden = false;
-    }).catch((error) => {
-      if (destroyed || !isSignedIn()) return;
-      debugError('month review failed', error);
-      node.className = 'ogt-review-hint'; node.textContent = 'Could not load last month’s review; try again later.'; node.hidden = false;
-    });
-    return { node, destroy() { destroyed = true; node.querySelector('button')?.removeEventListener('click', hide); node.remove(); } };
+      updateNav();
+    };
+    const show = async (span, initial = false) => {
+      if (busy) return;
+      busy = true; updateNav();
+      const epoch = ++token;
+      node.setAttribute('aria-busy', 'true');
+      try {
+        const data = await loadReview(span, new Date(), user);
+        if (destroyed || epoch !== token || !isSignedIn()) return;
+        if (!data) { node.hidden = true; return; }
+        user = data.user;
+        if (!data.plays && initial) { node.hidden = true; return; }
+        render(data);
+      } catch (error) {
+        if (destroyed || epoch !== token || !isSignedIn()) return;
+        debugError('month review failed', error);
+        prevButton = nextButton = hideButton = null;
+        node.className = 'ogt-review-hint';
+        node.textContent = 'Could not load this month’s review; try again later.';
+        node.hidden = false;
+      } finally {
+        if (epoch === token) {
+          busy = false;
+          node.removeAttribute('aria-busy');
+          updateNav();
+        }
+      }
+    };
+    show(lastMonth(), true);
+    return { node, destroy() { destroyed = true; token++; node.remove(); } };
   },
 };

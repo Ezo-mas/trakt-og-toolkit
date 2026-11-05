@@ -2,6 +2,23 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-04: month review browsing (feature 21)
+
+- `monthSpan(year, month)` and `shiftMonth` centralize local calendar months; `lastMonth` is now a thin wrapper.
+  Earlier months are settled and stay cached indefinitely, while the last month keeps the existing daily refresh
+  during the first seven days (`monthCacheFresh`). Keys stay `review.<user>.<YYYY-MM>`.
+- The oldest history month is found lazily on the first previous click, so a dashboard visit without browsing pays
+  no extra request. `/sync/history?page=1&limit=100` supplies `X-Pagination-Page-Count`; the last page's oldest
+  `watched_at` gives the stop month. The answer is cached in memory for the signed-in session and cleared on
+  `ogt:authchange`.
+- The card rerenders per month. Next is disabled on last month; previous is disabled on the first history month.
+  Earlier months with no plays show an empty card, so gaps between plays remain navigable instead of dead-ending.
+  Hide still stores the viewed month's dismissal key and closes the card; the initial zero-play last month stays hidden.
+- Browsing reuses the account from the first load: `loadReview(span, now, user)` only calls `/users/me` for the
+  initial month. In-flight loads dedupe by month so quickly clicking the same target shares one request set.
+- Tests: unit coverage for month shifting/cache freshness and a built-bundle test that browses two months back,
+  returns through a cached month, checks the single account lookup and verifies both arrow stops. Build and tests pass.
+
 ## 2026-11-04: watchlist shortcuts on person credits (feature 17, per-row part)
 
 - Live `/people/bryan-cranston` capture (2026-11-04): 211 `article.credit-row` entries, each with an

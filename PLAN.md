@@ -32,7 +32,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 18 | `npm run drift`: cover features 12–13 and og's native modules | — | done |
 | 19 | Undo on success notices | OAuth | done |
 | 20 | Turn features on and off from the menu | — | done |
-| 21 | Month review: browse earlier months | OAuth | small |
+| 21 | Month review: browse earlier months | OAuth | done |
 | 22 | Custom link presets that open the exact show, season or episode | — | small; check each site first |
 | 23 | Test suite review and cleanup | — | last |
 
@@ -454,6 +454,11 @@ og.trakt.tv page with its panel's feature disabled and reports drift if the pane
 - Everything on by default.
 
 ## 21. Month review: browse earlier months
+
+**Status:** done (2026-11-04). Previous/next arrows step through earlier months. Next stops at last month;
+previous stops at the month holding the oldest history entry. Every month reuses the account/month cache, and
+months with no plays stay navigable with an empty card. The oldest month is looked up lazily on the first
+previous click: read the first history page for `X-Pagination-Page-Count`, then read the last page.
 
 **Goal:** the dashboard card only shows last month. Add previous/next arrows to step through earlier months.
 

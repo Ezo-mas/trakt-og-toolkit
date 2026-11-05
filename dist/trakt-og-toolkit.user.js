@@ -2055,13 +2055,13 @@
   var TTL = 6e4;
   function createPlaybackApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
     const cache3 = /* @__PURE__ */ new Map();
-    const flights = /* @__PURE__ */ new Map();
+    const flights2 = /* @__PURE__ */ new Map();
     let revision = 0;
     let session = 0;
     function invalidate() {
       revision += 1;
       cache3.clear();
-      flights.clear();
+      flights2.clear();
     }
     function resetSession() {
       session += 1;
@@ -2075,10 +2075,10 @@
       if (force) invalidate();
       const hit = cache3.get(kind);
       if (hit && hit.until > now()) return hit.items;
-      if (flights.has(kind)) return flights.get(kind);
+      if (flights2.has(kind)) return flights2.get(kind);
       const rev = revision;
       const epoch = session;
-      const flight2 = (async () => {
+      const flight = (async () => {
         const rows = await auth("GET", `/sync/playback/${kind === "movie" ? "movies" : "episodes"}`, void 0, { extended: "images" });
         if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
         if (!Array.isArray(rows)) throw new Error("Invalid playback response.");
@@ -2086,11 +2086,11 @@
         if (rev === revision) cache3.set(kind, { items, until: now() + TTL });
         return items;
       })();
-      flights.set(kind, flight2);
+      flights2.set(kind, flight);
       try {
-        return await flight2;
+        return await flight;
       } finally {
-        if (flights.get(kind) === flight2) flights.delete(kind);
+        if (flights2.get(kind) === flight) flights2.delete(kind);
       }
     }
     async function loadAll({ force = false } = {}) {
@@ -2179,7 +2179,7 @@
       status,
       content
     );
-    function alive() {
+    function alive2() {
       return !destroyed && isSignedIn();
     }
     function lock(next) {
@@ -2188,7 +2188,7 @@
       for (const input of node.querySelectorAll("button, input")) input.disabled = next;
     }
     function render() {
-      if (!alive()) return;
+      if (!alive2()) return;
       content.replaceChildren();
       if (!overview) {
         const item = items.find((row) => matchesRoute(row, route));
@@ -2245,7 +2245,7 @@
     }
     async function read(force = false) {
       items = overview ? await playbackApi.loadAll({ force }) : await playbackApi.load(kind, { force });
-      if (!alive()) return;
+      if (!alive2()) return;
       loaded = true;
       render();
     }
@@ -2255,7 +2255,7 @@
         return;
       }
       const result = await playbackApi.clearItems(ids, (message2) => window.confirm(message2));
-      if (result.cancelled || !alive()) return;
+      if (result.cancelled || !alive2()) return;
       selected.clear();
       const summary2 = `${result.cleared.length} cleared${result.failed.length ? `; ${result.failed.length} failed — try again` : ""}.`;
       items = [];
@@ -2267,20 +2267,20 @@
         debugError("playback refresh failed", error);
         message = `${summary2} Could not refresh playback; try Refresh.`;
       }
-      if (!alive()) return;
+      if (!alive2()) return;
       if (!overview && node.hidden) toast(`Paused playback: ${message}`);
       else status.textContent = message;
     }
     async function onClick(event) {
       const target = event.target.closest("button[data-action]");
-      if (!target || !node.contains(target) || busy || !alive()) return;
+      if (!target || !node.contains(target) || busy || !alive2()) return;
       const action = target.dataset.action;
       lock(true);
       try {
         if (action === "load") {
           status.textContent = "Loading paused playback…";
           await read(true);
-          if (alive()) status.textContent = "";
+          if (alive2()) status.textContent = "";
         } else if (action === "one") await clear([Number(target.dataset.id)]);
         else if (action === "selected") await clear([...selected]);
         else if (action === "age") {
@@ -2291,9 +2291,9 @@
         }
       } catch (error) {
         debugError("playback request failed", error);
-        if (alive()) status.textContent = "Could not load paused playback; try again.";
+        if (alive2()) status.textContent = "Could not load paused playback; try again.";
       } finally {
-        if (alive()) lock(false);
+        if (alive2()) lock(false);
       }
     }
     function onChange(event) {
@@ -2312,7 +2312,7 @@
     node.addEventListener("change", onChange);
     if (!overview) {
       read().catch((error) => {
-        if (alive()) debugError("playback badge lookup failed", error);
+        if (alive2()) debugError("playback badge lookup failed", error);
       });
     }
     return { node, destroy() {
@@ -2699,12 +2699,12 @@
   // src/features/your-ratings/api.js
   function createRatingsApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
     let cache3 = null;
-    let flight2 = null;
+    let flight = null;
     let generation3 = 0;
     function resetSession() {
       generation3++;
       cache3 = null;
-      flight2 = null;
+      flight = null;
     }
     async function load() {
       if (!signedIn()) {
@@ -2712,7 +2712,7 @@
         return [];
       }
       if (cache3 && cache3.until > now()) return cache3.items;
-      if (flight2) return flight2;
+      if (flight) return flight;
       const epoch = generation3;
       const pending = (async () => {
         const rows = await auth("GET", "/sync/ratings/episodes");
@@ -2722,11 +2722,11 @@
         cache3 = { items, until: now() + 10 * 6e4 };
         return items;
       })();
-      flight2 = pending;
+      flight = pending;
       try {
         return await pending;
       } finally {
-        if (flight2 === pending) flight2 = null;
+        if (flight === pending) flight = null;
       }
     }
     return { load, resetSession };
@@ -3237,9 +3237,9 @@
   };
 
   // src/features/month-review/data.js
-  function lastMonth(now = /* @__PURE__ */ new Date()) {
-    const end = new Date(now.getFullYear(), now.getMonth(), 1);
-    const start2 = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  function monthSpan(year, month) {
+    const start2 = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 1);
     return {
       start: start2.toISOString(),
       end: end.toISOString(),
@@ -3249,6 +3249,13 @@
       // og is English-only; match it whatever the browser language.
       label: start2.toLocaleString("en-US", { month: "long" })
     };
+  }
+  function lastMonth(now = /* @__PURE__ */ new Date()) {
+    return monthSpan(now.getFullYear(), now.getMonth());
+  }
+  function shiftMonth(span, delta) {
+    const date = new Date(span.year, span.month - 1 + delta, 1);
+    return monthSpan(date.getFullYear(), date.getMonth() + 1);
   }
   function inMonth(value, span) {
     const time = Date.parse(value);
@@ -3297,45 +3304,88 @@
     }
   }
   var generation2 = 0;
-  var flight;
+  var flights = /* @__PURE__ */ new Map();
+  var firstFlight;
+  var firstMonth;
   if (typeof document !== "undefined") document.addEventListener("ogt:authchange", () => {
     generation2++;
-    flight = null;
+    flights.clear();
+    firstFlight = null;
+    firstMonth = void 0;
   });
-  function loadReview(now = /* @__PURE__ */ new Date()) {
-    if (flight) return flight;
+  function alive(epoch) {
+    if (generation2 !== epoch || !isSignedIn()) throw new Error("Review session changed.");
+  }
+  function loadReview(span = lastMonth(), now = /* @__PURE__ */ new Date(), user = null) {
+    const existing = flights.get(span.key);
+    if (existing) return existing;
     const epoch = generation2;
-    const alive = () => {
-      if (generation2 !== epoch || !isSignedIn()) throw new Error("Review session changed.");
-    };
     const task = (async () => {
-      const profile = await apiAuth("GET", "/users/me");
-      alive();
-      const user = profile?.ids?.slug || profile?.username;
-      if (!user) throw new Error("Missing review user.");
-      const span = lastMonth(now);
-      if (getPrivateValue(STORAGE.dismissedReview(user)) === span.key) return null;
-      const key = STORAGE.monthReview(user, span.key);
+      let username = user;
+      if (!username) {
+        const profile = await apiAuth("GET", "/users/me");
+        username = profile?.ids?.slug || profile?.username;
+      }
+      if (!username) throw new Error("Missing review user.");
+      alive(epoch);
+      if (getPrivateValue(STORAGE.dismissedReview(username)) === span.key) return null;
+      const key = STORAGE.monthReview(username, span.key);
       const cached = getPrivateValue(key);
-      if (freshCache(cached, now)) return { ...cached.summary, user, span };
+      if (cached && (span.key < lastMonth(now).key || freshCache(cached, now))) {
+        return { ...cached.summary, user: username, span };
+      }
       const history2 = await paginate(apiAuthPage, "/sync/history", { start_at: span.start, end_at: span.end, extended: "full,images" });
-      alive();
-      let summary2 = { plays: 0 };
+      alive(epoch);
+      let summary2 = { plays: 0, hours: 0, ratings: 0, comments: 0, first: null };
       if (history2.some((row) => Date.parse(row.watched_at) >= Date.parse(span.start) && Date.parse(row.watched_at) < Date.parse(span.end))) {
         const [ratings, comments] = await Promise.all([
           apiAuth("GET", "/sync/ratings"),
           paginate(apiAuthPage, "/users/me/comments")
         ]);
         if (!Array.isArray(ratings)) throw new Error("Invalid review response.");
-        alive();
+        alive(epoch);
         summary2 = summarize(history2, ratings, comments, span);
       }
       setPrivateValue(key, { savedAt: now.getTime(), summary: summary2 });
-      return { ...summary2, user, span };
+      return { ...summary2, user: username, span };
     })();
-    flight = task;
+    flights.set(span.key, task);
     task.finally(() => {
-      if (flight === task) flight = null;
+      if (flights.get(span.key) === task) flights.delete(span.key);
+    }).catch(() => {
+    });
+    return task;
+  }
+  function loadFirstMonth() {
+    if (firstMonth !== void 0) return Promise.resolve(firstMonth);
+    if (firstFlight) return firstFlight;
+    const epoch = generation2;
+    const task = (async () => {
+      const head = await apiAuthPage("/sync/history", { page: 1, limit: 100 });
+      alive(epoch);
+      if (!Array.isArray(head.data)) throw new Error("Invalid review response.");
+      let rows = head.data;
+      if (head.pages && head.pages > 1) {
+        const tail = await apiAuthPage("/sync/history", { page: head.pages, limit: 100 });
+        alive(epoch);
+        if (!Array.isArray(tail.data)) throw new Error("Invalid review response.");
+        rows = tail.data;
+      }
+      const oldest = rows.reduce((found, row) => {
+        const time = Date.parse(row?.watched_at);
+        return Number.isFinite(time) && (!found || time < found.time) ? { time, row } : found;
+      }, null);
+      if (!oldest) {
+        firstMonth = null;
+        return null;
+      }
+      const date = new Date(oldest.time);
+      firstMonth = monthSpan(date.getFullYear(), date.getMonth() + 1);
+      return firstMonth;
+    })();
+    firstFlight = task;
+    task.finally(() => {
+      if (firstFlight === task) firstFlight = null;
     }).catch(() => {
     });
     return task;
@@ -3354,6 +3404,14 @@
 @media(min-width:1200px) { .ogt-review__inner { inline-size:var(--container-lg,1160px); } }
 .ogt-review h2 { font-size:clamp(32px,4vw,48px); font-family:var(--font-headings, inherit); font-weight:700; letter-spacing:-.025em; line-height:1.1; margin:0 0 28px; color:white; }
 .ogt-review em { color:var(--brand-primary,#ed1c24); font-style:normal; }
+.ogt-review__top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:28px; }
+.ogt-review__top h2 { margin:0; }
+.ogt-review__nav { display:flex; align-items:center; gap:4px; flex:none; }
+.ogt-review__arrow { width:36px; height:36px; border:1px solid rgba(255,255,255,.45); border-radius:50%; background:rgba(0,0,0,.25); color:white; font:inherit; font-size:22px; line-height:1; cursor:pointer; padding:0; }
+.ogt-review__arrow:hover:not(:disabled) { background:rgba(255,255,255,.15); }
+.ogt-review__arrow:disabled { opacity:.35; cursor:default; }
+.ogt-review__arrow:focus-visible { outline:2px solid white; outline-offset:3px; }
+.ogt-review__empty { font-size:18px; color:#ddd; margin:0 0 26px; }
 .ogt-review__grid { display:grid; /* The first-play box hugs its title, like classic's, up to 480px. */ grid-template-columns:144px 144px fit-content(480px); gap:10px; }
 .ogt-review__tile,.ogt-review__first { background:rgba(120,24,30,.38); border-radius:var(--radius-dashboard-panel,var(--radius-container,12px)); padding:10px 12px; }
 .ogt-review__tile { display:grid; grid-template-columns:36px minmax(0,1fr); align-items:center; column-gap:10px; min-width:0; min-height:64px; box-sizing:border-box; }
@@ -3370,9 +3428,10 @@
 .ogt-review__link { font-size:15px; display:inline-block; margin-top:26px; padding:10px 14px; background:var(--brand-primary,#ed1c24); text-decoration:none; color:white!important; border-radius:var(--radius-action-button,var(--radius-object,8px)); font-weight:bold; }
 .ogt-review__link:hover { background:var(--brand-primary-darken,#c61017); }
 .ogt-review__link:focus-visible,.ogt-review__hide:focus-visible { outline:2px solid white; outline-offset:3px; }
-.ogt-review__hide { position:absolute; right:12px; top:8px; border:0; background:transparent; color:white; font:inherit; font-size:14px; cursor:pointer; }
+.ogt-review__hide { border:0; background:transparent; color:white; font:inherit; font-size:14px; cursor:pointer; padding:8px; }
+.ogt-review__hide:disabled { opacity:.35; cursor:default; }
 .ogt-review-hint { padding:12px 24px; color:light-dark(#555,#bbb); }
-@media(max-width:600px) { .ogt-review__grid { grid-template-columns:1fr 1fr; } .ogt-review__first { grid-column:1 / 3; grid-row:3; } }
+@media(max-width:600px) { .ogt-review__top { flex-wrap:wrap; } .ogt-review__grid { grid-template-columns:1fr 1fr; } .ogt-review__first { grid-column:1 / 3; grid-row:3; } }
 `;
 
   // src/features/month-review/index.js
@@ -3410,71 +3469,153 @@
       const anchor = document.querySelector("nav.ribbon");
       if (!anchor) return null;
       let destroyed = false;
-      const node = el("section", { class: "ogt-review", id: "ogt-month-review", hidden: true, "aria-label": "Last month in review" });
+      let review = null;
+      let user = null;
+      let busy = false;
+      let token = 0;
+      let earliest;
+      let earliestFailed = false;
+      let prevButton = null;
+      let nextButton = null;
+      let hideButton = null;
+      const node = el("section", { class: "ogt-review", id: "ogt-month-review", hidden: true, "aria-label": "Month in review" });
       anchor.after(node);
       const hide = () => {
         if (review) setPrivateValue(STORAGE.dismissedReview(review.user), review.span.key);
         node.hidden = true;
       };
-      let review;
-      loadReview().then((data) => {
-        if (destroyed || !isSignedIn() || !data?.plays) return;
+      const updateNav = () => {
+        if (prevButton) prevButton.disabled = busy || Boolean(earliest && review.span.key <= earliest.key);
+        if (nextButton) nextButton.disabled = busy || !review || review.span.key >= lastMonth().key;
+        if (hideButton) hideButton.disabled = busy;
+      };
+      const ensureEarliest = async () => {
+        if (earliest !== void 0 || earliestFailed) return earliest;
+        try {
+          earliest = await loadFirstMonth();
+        } catch (error) {
+          earliestFailed = true;
+          if (!destroyed && isSignedIn()) debugError("month review first history failed", error);
+        }
+        return earliest;
+      };
+      const navigate = async (delta) => {
+        if (busy || !review) return;
+        const target = shiftMonth(review.span, delta);
+        if (delta > 0 && target.key > lastMonth().key) return;
+        if (delta < 0) {
+          busy = true;
+          updateNav();
+          try {
+            await ensureEarliest();
+          } finally {
+            if (!destroyed) {
+              busy = false;
+              updateNav();
+            }
+          }
+          if (destroyed) return;
+          if (earliest && target.key < earliest.key) return;
+        }
+        await show(target);
+      };
+      const render = (data) => {
         review = data;
-        const { span, first } = data;
-        const media = first.show || first.movie;
-        const art = fanart(first);
-        const grid = el("div", { class: "ogt-review__grid" });
-        for (const key of ["plays", "hours", "ratings", "comments"]) grid.append(el(
+        const { span } = data;
+        prevButton = el("button", { type: "button", class: "ogt-review__arrow", "aria-label": "Previous month", title: "Previous month", text: "‹", on: { click: () => navigate(-1) } });
+        nextButton = el("button", { type: "button", class: "ogt-review__arrow", "aria-label": "Next month", title: "Next month", text: "›", on: { click: () => navigate(1) } });
+        hideButton = el("button", { type: "button", class: "ogt-review__hide", text: "× Hide", on: { click: hide } });
+        const top = el(
           "div",
-          { class: "ogt-review__tile" },
-          tileIcon(key),
-          el(
-            "div",
-            { class: "ogt-review__value" },
-            el("strong", { text: data[key].toLocaleString() }),
-            el("span", { text: key })
-          )
-        ));
-        grid.append(el(
-          "div",
-          { class: "ogt-review__first" },
-          el("small", {}, "First play", el("span", {}, "of ", el("b", { text: span.label }))),
-          el(
-            "div",
-            {},
-            el("strong", { class: "ogt-review__title", text: media?.title || "Untitled" }),
-            first.episode ? el(
-              "span",
-              { class: "ogt-review__episode" },
-              el("b", { text: `${first.episode.season}x${String(first.episode.number).padStart(2, "0")}` }),
-              ` “${first.episode.title || "Untitled episode"}”`
-            ) : null
-          )
-        ));
+          { class: "ogt-review__top" },
+          el("h2", {}, "your ", el("em", { text: span.label.toLocaleLowerCase() }), " in review"),
+          el("div", { class: "ogt-review__nav" }, prevButton, nextButton, hideButton)
+        );
+        const inner = el("div", { class: "ogt-review__inner" });
+        const art = data.plays ? fanart(data.first) : null;
         const image = art ? el("img", { class: "ogt-review__art", src: art, alt: "", referrerpolicy: "no-referrer" }) : null;
         image?.addEventListener("error", () => image.remove(), { once: true });
-        node.append(
-          ...image ? [image] : [],
-          el("button", { type: "button", class: "ogt-review__hide", text: "× Hide", on: { click: hide } }),
-          el(
+        inner.append(...image ? [image] : [], top);
+        if (data.plays) {
+          const first = data.first;
+          const media = first?.show || first?.movie;
+          const grid = el("div", { class: "ogt-review__grid" });
+          for (const key of ["plays", "hours", "ratings", "comments"]) grid.append(el(
             "div",
-            { class: "ogt-review__inner" },
-            el("h2", {}, "your ", el("em", { text: span.label.toLocaleLowerCase() }), " in review"),
-            grid,
-            el("a", { class: "ogt-review__link", text: "Month in Review →", href: `https://app.trakt.tv/users/${encodeURIComponent(data.user)}/mir/${span.year}/${span.month}`, target: "_blank", rel: "noopener noreferrer" })
-          )
-        );
+            { class: "ogt-review__tile" },
+            tileIcon(key),
+            el(
+              "div",
+              { class: "ogt-review__value" },
+              el("strong", { text: (data[key] || 0).toLocaleString() }),
+              el("span", { text: key })
+            )
+          ));
+          grid.append(el(
+            "div",
+            { class: "ogt-review__first" },
+            el("small", {}, "First play", el("span", {}, "of ", el("b", { text: span.label }))),
+            el(
+              "div",
+              {},
+              el("strong", { class: "ogt-review__title", text: media?.title || "Untitled" }),
+              first?.episode ? el(
+                "span",
+                { class: "ogt-review__episode" },
+                el("b", { text: `${first.episode.season}x${String(first.episode.number).padStart(2, "0")}` }),
+                ` “${first.episode.title || "Untitled episode"}”`
+              ) : null
+            )
+          ));
+          inner.append(grid);
+        } else {
+          inner.append(el("p", { class: "ogt-review__empty", text: `No plays in ${span.label} ${span.year}.` }));
+        }
+        inner.append(el("a", { class: "ogt-review__link", text: "Month in Review →", href: `https://app.trakt.tv/users/${encodeURIComponent(data.user)}/mir/${span.year}/${span.month}`, target: "_blank", rel: "noopener noreferrer" }));
+        node.className = "ogt-review";
+        node.setAttribute("aria-label", `${span.label} ${span.year} in review`);
+        node.replaceChildren(inner);
         node.hidden = false;
-      }).catch((error) => {
-        if (destroyed || !isSignedIn()) return;
-        debugError("month review failed", error);
-        node.className = "ogt-review-hint";
-        node.textContent = "Could not load last month’s review; try again later.";
-        node.hidden = false;
-      });
+        updateNav();
+      };
+      const show = async (span, initial = false) => {
+        if (busy) return;
+        busy = true;
+        updateNav();
+        const epoch = ++token;
+        node.setAttribute("aria-busy", "true");
+        try {
+          const data = await loadReview(span, /* @__PURE__ */ new Date(), user);
+          if (destroyed || epoch !== token || !isSignedIn()) return;
+          if (!data) {
+            node.hidden = true;
+            return;
+          }
+          user = data.user;
+          if (!data.plays && initial) {
+            node.hidden = true;
+            return;
+          }
+          render(data);
+        } catch (error) {
+          if (destroyed || epoch !== token || !isSignedIn()) return;
+          debugError("month review failed", error);
+          prevButton = nextButton = hideButton = null;
+          node.className = "ogt-review-hint";
+          node.textContent = "Could not load this month’s review; try again later.";
+          node.hidden = false;
+        } finally {
+          if (epoch === token) {
+            busy = false;
+            node.removeAttribute("aria-busy");
+            updateNav();
+          }
+        }
+      };
+      show(lastMonth(), true);
       return { node, destroy() {
         destroyed = true;
-        node.querySelector("button")?.removeEventListener("click", hide);
+        token++;
         node.remove();
       } };
     }

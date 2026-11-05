@@ -4,7 +4,7 @@ An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds th
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
 **Status:** v0.3.0: custom links with presets and an inline editor, a season ratings chart with your own ratings,
-optional Trakt sign-in with a paused-playback manager, a last-month-in-review dashboard card, manual library additions
+optional Trakt sign-in with a paused-playback manager, a month-in-review dashboard card that browses earlier months, manual library additions
 and one-click watchlist additions, an all-lists view on profile pages, and in-page name pronunciation on person pages.
 
 ## Install
@@ -62,9 +62,12 @@ see are included and rows get og's watched-progress link. The toolkit doesn't li
 ### Last month in review
 
 Sign in through the toolkit to see last month’s plays, hours, ratings and comments under the dashboard’s month
-strip. The fanart card highlights your first play and links to the full Month in Review. Hide dismisses that month
-for your toolkit account. Nothing appears for months with no plays. Month boundaries use your browser’s time zone;
-results are stored in userscript storage per account and month, refreshing at most daily during the first seven days.
+strip. Previous and next arrows step through earlier months; next stops at last month and previous stops at the
+month of your first history entry. The fanart card highlights your first play and links to the full Month in Review.
+Hide dismisses the month you are viewing for your toolkit account. Nothing appears for last month with no plays;
+an earlier month without plays shows an empty card so gaps stay navigable. Month boundaries use your browser’s time
+zone; results are stored in userscript storage per account and month. Earlier months stay cached, while last month
+refreshes at most daily during the first seven days.
 Hours use the API’s reported runtimes, rounded to whole hours; missing runtimes contribute no time.
 
 ### Add to library
@@ -281,7 +284,6 @@ links, poster rating corners. Backlog:
 - set playback progress by hand;
 - list preview posters that link to their titles;
 - **Add all shown credits** to the watchlist with one action from a person's page;
-- browse earlier months in the month review card;
 - custom link presets that open the exact show, season or episode on sites that support it (Stremio first);
 - a review and cleanup of the test suite.
 
