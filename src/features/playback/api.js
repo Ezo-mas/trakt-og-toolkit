@@ -1,10 +1,17 @@
-import { apiAuth, isSignedIn } from '../../core/trakt.js';
-import { mapPlayback, sortPlayback } from './data.js';
+import { apiAuth, apiGet, isSignedIn } from '../../core/trakt.js';
+import { mapPlayback, normalizeProgress, scrobbleBody, sortPlayback } from './data.js';
 
 const TTL = 60000;
+const scrobbleEpisodeIds = new Set(['trakt', 'imdb', 'tmdb', 'tvdb']);
+function pickIdsForEpisode(ids) {
+  return ids && typeof ids === 'object' && [...scrobbleEpisodeIds].some((key) =>
+    key === 'trakt' || key === 'tmdb' || key === 'tvdb'
+      ? Number.isSafeInteger(ids[key]) && ids[key] > 0
+      : typeof ids[key] === 'string' && ids[key].trim() !== '');
+}
 
 /** Injectable transport keeps tests at the authenticated API boundary. */
-export function createPlaybackApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
+export function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isSignedIn, now = Date.now } = {}) {
   const cache = new Map();
   const flights = new Map();
   let revision = 0;
@@ -60,7 +67,48 @@ export function createPlaybackApi({ auth = apiAuth, signedIn = isSignedIn, now =
     } finally { invalidate(); }
     return { cancelled: false, cleared, failed };
   }
-  return { load, loadAll, clearItems, invalidate, resetSession };
+  async function episodeIdsFor(item) {
+    if (pickIdsForEpisode(item.episodeIds)) return item.episodeIds;
+    if (!item.ids || !Number.isInteger(item.season) || !Number.isInteger(item.episode)) {
+      throw new Error('Could not identify this episode.');
+    }
+    const showId = item.ids.slug || item.ids.trakt;
+    if (!showId) throw new Error('Could not identify this episode.');
+    const episode = await get(`/shows/${encodeURIComponent(showId)}/seasons/${item.season}/episodes/${item.episode}`);
+    if (!pickIdsForEpisode(episode?.ids)) throw new Error('Could not identify this episode.');
+    return episode.ids;
+  }
+  /** Scrobble start then pause, never stop: stop can mark the title watched. */
+  async function setProgress(item, progress) {
+    if (!signedIn()) throw new Error('Sign in to Trakt first.');
+    const value = normalizeProgress(progress);
+    if (!item || value == null) throw new Error('Invalid progress.');
+    const epoch = session;
+    const episodeIds = item.kind === 'movie' ? null : await episodeIdsFor(item);
+    if (epoch !== session || !signedIn()) throw new Error('Playback session changed.');
+    const body = scrobbleBody(item, value, episodeIds);
+    await auth('POST', '/scrobble/start', body);
+    if (epoch !== session || !signedIn()) throw new Error('Playback session changed.');
+    await auth('POST', '/scrobble/pause', body);
+    invalidate();
+    return { progress: value, body };
+  }
+  async function setRouteProgress(route, progress) {
+    if (!signedIn()) throw new Error('Sign in to Trakt first.');
+    const value = normalizeProgress(progress);
+    if (value == null) throw new Error('Invalid progress.');
+    if (!route?.id) throw new Error('Unsupported playback page.');
+    if (route.kind === 'movie') {
+      const movie = await get(`/movies/${encodeURIComponent(route.id)}`);
+      return setProgress({ kind: 'movie', ids: movie?.ids, title: movie?.title, year: movie?.year }, value);
+    }
+    if (route.name !== 'episode' || !Number.isInteger(route.season) || !Number.isInteger(route.episode)) {
+      throw new Error('Unsupported playback page.');
+    }
+    const episode = await get(`/shows/${encodeURIComponent(route.id)}/seasons/${route.season}/episodes/${route.episode}`);
+    return setProgress({ kind: 'episode', episodeIds: episode?.ids, season: route.season, episode: route.episode }, value);
+  }
+  return { load, loadAll, clearItems, setProgress, setRouteProgress, invalidate, resetSession };
 }
 
 export const playbackApi = createPlaybackApi();

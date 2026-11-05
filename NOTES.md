@@ -2,6 +2,23 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-05: set playback progress (feature 9)
+
+- Trakt's current scrobble contract (`trakt/trakt-api` `projects/api/src/contracts/scrobble`): a movie request
+  carries `movie.title`, `movie.year` and `movie.ids`; an episode request carries only `episode.ids` (no show).
+  Start then pause at the same percentage saves paused playback; stop is deliberately never sent because it can
+  mark the item watched. The confirm warns that the profile may briefly show it as watching.
+- Movie pages look up the page's movie for title/year/ids. Episode pages look up the episode for its ids. Overview
+  rows use the ids already present in `/sync/playback/episodes`; older entries without `episode.ids` fall back to
+  the show slug/season/episode lookup. The title page's panel is now shown when no saved item exists instead of
+  being hidden, with the save action in it. A cleared title-page panel stays visible with the same action.
+- `normalizeProgress` accepts 0–100 (strings from the prompt included), rounds to one decimal and rejects empty or
+  out-of-range input. The playback cache is invalidated after both writes so the badge/list refreshes immediately.
+- Tests: `test/playback-data.test.js` covers progress normalization and both scrobble bodies;
+  `test/playback-api.test.js` covers start→pause order, episode-id fallback, invalid input and failure handling;
+  `test/playback-integration.test.js` covers the empty title-page action, overview rows, warnings/cancellation and
+  that `/scrobble/stop` is never requested.
+
 ## 2026-11-05: list preview titles (feature 10)
 
 - Live `/users/justin/lists` capture: every list row's fan is `a.fan[aria-hidden]` with five `.slot` spans;
