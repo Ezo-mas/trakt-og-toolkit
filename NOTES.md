@@ -11,13 +11,22 @@ Working notes and known issues. Newest first.
 - Movie pages look up the page's movie for title/year/ids. Episode pages look up the episode for its ids. Overview
   rows use the ids already present in `/sync/playback/episodes`; older entries without `episode.ids` fall back to
   the show slug/season/episode lookup. The title page's panel is now shown when no saved item exists instead of
-  being hidden, with the save action in it. A cleared title-page panel stays visible with the same action.
-- `normalizeProgress` accepts 0–100 (strings from the prompt included), rounds to one decimal and rejects empty or
-  out-of-range input. The playback cache is invalidated after both writes so the badge/list refreshes immediately.
+  being hidden, with the save action in it, and next to **Clear** when one does (prefilled with its value). A
+  cleared title-page panel stays visible with the same action.
+- The contract says start "will remove any playback progress if it exists". So a pause that fails after a
+  successful start has lost the old progress: `setProgress` flags that error `partial` and the panel says so
+  instead of a generic retry message. The session epoch is taken before the movie/episode lookup, so signing out
+  mid-lookup sends nothing.
+- `normalizeProgress` accepts 1–100 after rounding to one decimal (strings from the prompt included) and rejects
+  empty or out-of-range input. 0 is refused because Trakt ignores scrobbles under 1% (422 on stop) and start would
+  already have removed the old progress; **Clear** is the way to remove it. The playback cache is invalidated after
+  each write so the badge/list refreshes immediately.
 - Tests: `test/playback-data.test.js` covers progress normalization and both scrobble bodies;
-  `test/playback-api.test.js` covers start→pause order, episode-id fallback, invalid input and failure handling;
-  `test/playback-integration.test.js` covers the empty title-page action, overview rows, warnings/cancellation and
-  that `/scrobble/stop` is never requested.
+  `test/playback-api.test.js` covers start→pause order, episode-id fallback, invalid input, partial failure and
+  session changes during lookups; `test/playback-integration.test.js` covers the empty and existing title-page
+  actions, overview rows, warnings/cancellation, the failed-pause message and that `/scrobble/stop` is never sent.
+- Not verified against the live API yet: whether pause at the same percentage right after start is accepted for
+  every item, and how long the "watching" status lingers.
 
 ## 2026-11-05: list preview titles (feature 10)
 

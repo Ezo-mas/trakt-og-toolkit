@@ -41,11 +41,13 @@ function createPanel(route) {
         content.append(el('p', { class: 'ogt-hint', text: 'No saved playback.' }), button('Save progress…', 'save'));
         return;
       }
+      const save = button('Save progress…', 'save');
+      save.dataset.id = String(item.id);
       const clear = button('Clear', 'one');
       clear.dataset.id = String(item.id);
       content.append(el('div', { class: 'ogt-playback__tools' },
         el('span', { text: `${percent(item.progress)} paused` }),
-        el('progress', { class: 'ogt-playback__meter', max: 100, value: item.progress, 'aria-label': 'Saved playback progress' }), clear));
+        el('progress', { class: 'ogt-playback__meter', max: 100, value: item.progress, 'aria-label': 'Saved playback progress' }), save, clear));
       return;
     }
     node.querySelector('[data-action="load"]').textContent = loaded ? 'Refresh paused playback' : 'Load paused playback';
@@ -98,17 +100,26 @@ function createPanel(route) {
   }
   async function saveProgress(item) {
     status.textContent = '';
-    const current = item ? Math.round(item.progress) : 0;
-    const value = window.prompt('Progress percentage (0–100)', String(current));
+    const value = window.prompt('Progress percentage (1–100)', item ? String(Number(item.progress.toFixed(1))) : '');
     if (value == null || !alive()) return;
     const progress = normalizeProgress(value);
-    if (progress == null) { status.textContent = 'Enter a percentage from 0 to 100.'; return; }
+    if (progress == null) { status.textContent = 'Enter a percentage from 1 to 100.'; return; }
     const title = item?.title ?? 'this title';
     if (!window.confirm(`Set progress to ${percent(progress)} for ${title}? It may briefly show as watching on your Trakt profile.`)) return;
     if (!alive()) return;
     status.textContent = 'Saving progress…';
-    if (item) await playbackApi.setProgress(item, progress);
-    else await playbackApi.setRouteProgress(route, progress);
+    try {
+      if (item) await playbackApi.setProgress(item, progress);
+      else await playbackApi.setRouteProgress(route, progress);
+    } catch (error) {
+      if (!error.partial) throw error;
+      debugError('playback pause failed after start', error);
+      if (!alive()) return;
+      items = []; render();
+      await read(true).catch(() => {});
+      if (alive()) status.textContent = 'Trakt started playback but did not save the pause, so earlier progress for this title was removed; try again.';
+      return;
+    }
     if (!alive()) return;
     items = [];
     render();
@@ -131,8 +142,8 @@ function createPanel(route) {
         await read(true);
         if (alive()) status.textContent = '';
       } else if (action === 'save') {
-        const item = overview ? items.find((row) => row.id === Number(target.dataset.id)) : null;
-        if (overview && !item) return;
+        const item = target.dataset.id ? items.find((row) => row.id === Number(target.dataset.id)) : null;
+        if (target.dataset.id && !item) return;
         await saveProgress(item);
       } else if (action === 'one') await clear([Number(target.dataset.id)]);
       else if (action === 'selected') await clear([...selected]);
