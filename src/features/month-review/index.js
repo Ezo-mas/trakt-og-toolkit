@@ -22,6 +22,18 @@ function tileIcon(kind) {
   }
   return svg;
 }
+
+/** The month-nav arrow is an SVG chevron so it centers in the chip regardless of font metrics. */
+function chevron(dir) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  for (const [key, value] of Object.entries({ viewBox: '0 0 24 24', width: '16', height: '16', fill: 'none',
+    stroke: 'currentColor', 'stroke-width': '2.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+    'aria-hidden': 'true' })) svg.setAttribute(key, value);
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', dir < 0 ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7');
+  svg.append(path);
+  return svg;
+}
 export const monthReview = {
   id: 'month-review', css: CSS,
   match: (route) => route.name === 'dashboard' && isSignedIn(),
@@ -74,12 +86,13 @@ export const monthReview = {
     const render = (data) => {
       review = data;
       const { span } = data;
-      prevButton = el('button', { type: 'button', class: 'ogt-review__arrow', 'aria-label': 'Previous month', title: 'Previous month', text: '‹', on: { click: () => navigate(-1) } });
-      nextButton = el('button', { type: 'button', class: 'ogt-review__arrow', 'aria-label': 'Next month', title: 'Next month', text: '›', on: { click: () => navigate(1) } });
+      prevButton = el('button', { type: 'button', class: 'ogt-review__arrow', 'aria-label': 'Previous month', title: 'Previous month', on: { click: () => navigate(-1) } }, chevron(-1));
+      nextButton = el('button', { type: 'button', class: 'ogt-review__arrow', 'aria-label': 'Next month', title: 'Next month', on: { click: () => navigate(1) } }, chevron(1));
       hideButton = el('button', { type: 'button', class: 'ogt-review__hide', text: '× Hide', on: { click: hide } });
       const top = el('div', { class: 'ogt-review__top' },
         el('h2', {}, 'your ', el('em', { text: span.label.toLocaleLowerCase() }), ' in review'),
-        el('div', { class: 'ogt-review__nav' }, prevButton, nextButton, hideButton));
+        hideButton);
+      const nav = el('div', { class: 'ogt-review__nav' }, prevButton, nextButton);
       const inner = el('div', { class: 'ogt-review__inner' });
       const art = data.plays ? fanart(data.first) : null;
       // A fanart that fails to load leaves the plain background instead of a broken-image box.
@@ -102,7 +115,9 @@ export const monthReview = {
       } else {
         inner.append(el('p', { class: 'ogt-review__empty', text: `No plays in ${span.label} ${span.year}.` }));
       }
-      inner.append(el('a', { class: 'ogt-review__link', text: 'Month in Review →', href: `https://app.trakt.tv/users/${encodeURIComponent(data.user)}/mir/${span.year}/${span.month}`, target: '_blank', rel: 'noopener noreferrer' }));
+      inner.append(el('div', { class: 'ogt-review__bottom' }, el('a', { class: 'ogt-review__link', text: 'Month in Review →',
+        href: `https://app.trakt.tv/users/${encodeURIComponent(data.user)}/mir/${span.year}/${span.month}`,
+        target: '_blank', rel: 'noopener noreferrer' }), nav));
       node.className = 'ogt-review';
       node.setAttribute('aria-label', `${span.label} ${span.year} in review`);
       node.replaceChildren(inner);

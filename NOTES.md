@@ -16,6 +16,10 @@ Working notes and known issues. Newest first.
   Hide still stores the viewed month's dismissal key and closes the card; the initial zero-play last month stays hidden.
 - Browsing reuses the account from the first load: `loadReview(span, now, user)` only calls `/users/me` for the
   initial month. In-flight loads dedupe by month so quickly clicking the same target shares one request set.
+- The month arrows moved to the card's bottom row, right-aligned with the "Month in Review" link, and draw as SVG
+  chevrons inside flat translucent chips that match the dashboard tiles' radius. No circle shape, no border, and no
+  extra color keeps them on the card the user liked; glyph centering no longer depends on font metrics. Hide stays
+  at the top right.
 - Tests: unit coverage for month shifting/cache freshness and a built-bundle test that browses two months back,
   returns through a cached month, checks the single account lookup and verifies both arrow stops. Build and tests pass.
 

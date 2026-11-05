@@ -3406,11 +3406,16 @@
 .ogt-review em { color:var(--brand-primary,#ed1c24); font-style:normal; }
 .ogt-review__top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:28px; }
 .ogt-review__top h2 { margin:0; }
-.ogt-review__nav { display:flex; align-items:center; gap:4px; flex:none; }
-.ogt-review__arrow { width:36px; height:36px; border:1px solid rgba(255,255,255,.45); border-radius:50%; background:rgba(0,0,0,.25); color:white; font:inherit; font-size:22px; line-height:1; cursor:pointer; padding:0; }
+/* The month nav is a flat transparent chip like the dashboard tiles - no circle, no color of its own. */
+.ogt-review__nav { display:flex; align-items:center; gap:8px; flex:none; }
+.ogt-review__arrow { display:grid; place-items:center; inline-size:36px; block-size:36px; border:0; padding:0;
+  border-radius:var(--radius-dashboard-panel,var(--radius-container,12px));
+  background:rgba(0,0,0,.25); color:white; cursor:pointer; }
+.ogt-review__arrow svg { display:block; }
 .ogt-review__arrow:hover:not(:disabled) { background:rgba(255,255,255,.15); }
 .ogt-review__arrow:disabled { opacity:.35; cursor:default; }
 .ogt-review__arrow:focus-visible { outline:2px solid white; outline-offset:3px; }
+.ogt-review__bottom { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:26px; }
 .ogt-review__empty { font-size:18px; color:#ddd; margin:0 0 26px; }
 .ogt-review__grid { display:grid; /* The first-play box hugs its title, like classic's, up to 480px. */ grid-template-columns:144px 144px fit-content(480px); gap:10px; }
 .ogt-review__tile,.ogt-review__first { background:rgba(120,24,30,.38); border-radius:var(--radius-dashboard-panel,var(--radius-container,12px)); padding:10px 12px; }
@@ -3425,7 +3430,7 @@
 .ogt-review__first { grid-column:3; grid-row:1 / 3; min-width:180px; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; gap:24px; padding:12px; }
 .ogt-review__title { font-family:var(--font-headings, inherit); font-size:30px; font-weight:700; letter-spacing:-.025em; line-height:1.1; display:block; }
 .ogt-review__first b { font-family:inherit; font-size:inherit; font-weight:700; }
-.ogt-review__link { font-size:15px; display:inline-block; margin-top:26px; padding:10px 14px; background:var(--brand-primary,#ed1c24); text-decoration:none; color:white!important; border-radius:var(--radius-action-button,var(--radius-object,8px)); font-weight:bold; }
+.ogt-review__link { font-size:15px; display:inline-block; padding:10px 14px; background:var(--brand-primary,#ed1c24); text-decoration:none; color:white!important; border-radius:var(--radius-action-button,var(--radius-object,8px)); font-weight:bold; }
 .ogt-review__link:hover { background:var(--brand-primary-darken,#c61017); }
 .ogt-review__link:focus-visible,.ogt-review__hide:focus-visible { outline:2px solid white; outline-offset:3px; }
 .ogt-review__hide { border:0; background:transparent; color:white; font:inherit; font-size:14px; cursor:pointer; padding:8px; }
@@ -3459,6 +3464,24 @@
       path.setAttribute("d", d);
       svg3.append(path);
     }
+    return svg3;
+  }
+  function chevron(dir) {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    for (const [key, value] of Object.entries({
+      viewBox: "0 0 24 24",
+      width: "16",
+      height: "16",
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2.5",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+      "aria-hidden": "true"
+    })) svg3.setAttribute(key, value);
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", dir < 0 ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7");
+    svg3.append(path);
     return svg3;
   }
   var monthReview = {
@@ -3522,15 +3545,16 @@
       const render = (data) => {
         review = data;
         const { span } = data;
-        prevButton = el("button", { type: "button", class: "ogt-review__arrow", "aria-label": "Previous month", title: "Previous month", text: "‹", on: { click: () => navigate(-1) } });
-        nextButton = el("button", { type: "button", class: "ogt-review__arrow", "aria-label": "Next month", title: "Next month", text: "›", on: { click: () => navigate(1) } });
+        prevButton = el("button", { type: "button", class: "ogt-review__arrow", "aria-label": "Previous month", title: "Previous month", on: { click: () => navigate(-1) } }, chevron(-1));
+        nextButton = el("button", { type: "button", class: "ogt-review__arrow", "aria-label": "Next month", title: "Next month", on: { click: () => navigate(1) } }, chevron(1));
         hideButton = el("button", { type: "button", class: "ogt-review__hide", text: "× Hide", on: { click: hide } });
         const top = el(
           "div",
           { class: "ogt-review__top" },
           el("h2", {}, "your ", el("em", { text: span.label.toLocaleLowerCase() }), " in review"),
-          el("div", { class: "ogt-review__nav" }, prevButton, nextButton, hideButton)
+          hideButton
         );
+        const nav = el("div", { class: "ogt-review__nav" }, prevButton, nextButton);
         const inner = el("div", { class: "ogt-review__inner" });
         const art = data.plays ? fanart(data.first) : null;
         const image = art ? el("img", { class: "ogt-review__art", src: art, alt: "", referrerpolicy: "no-referrer" }) : null;
@@ -3571,7 +3595,13 @@
         } else {
           inner.append(el("p", { class: "ogt-review__empty", text: `No plays in ${span.label} ${span.year}.` }));
         }
-        inner.append(el("a", { class: "ogt-review__link", text: "Month in Review →", href: `https://app.trakt.tv/users/${encodeURIComponent(data.user)}/mir/${span.year}/${span.month}`, target: "_blank", rel: "noopener noreferrer" }));
+        inner.append(el("div", { class: "ogt-review__bottom" }, el("a", {
+          class: "ogt-review__link",
+          text: "Month in Review →",
+          href: `https://app.trakt.tv/users/${encodeURIComponent(data.user)}/mir/${span.year}/${span.month}`,
+          target: "_blank",
+          rel: "noopener noreferrer"
+        }), nav));
         node.className = "ogt-review";
         node.setAttribute("aria-label", `${span.label} ${span.year} in review`);
         node.replaceChildren(inner);
