@@ -59,6 +59,12 @@ on lists you liked. Liked lists load every page (up to 2,500, like og), and
 each row's posters load as it nears the screen. Needs a client ID; with the toolkit sign-in, private lists you can
 see are included and rows get og's watched-progress link. The toolkit doesn't like, edit or leave lists.
 
+### List preview titles
+
+Each poster in a list card's preview stack opens that title instead of the list; the fan itself still opens the
+list. Titles come from the media URL, so this needs no client ID or extra API calls. Screen readers get a
+hidden list of the same title links.
+
 ### Last month in review
 
 Sign in through the toolkit to see last month’s plays, hours, ratings and comments under the dashboard’s month
