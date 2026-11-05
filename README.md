@@ -4,7 +4,7 @@ An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds th
 — without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
 
 **Status:** v0.3.0: custom links with presets and an inline editor, a season ratings chart with your own ratings,
-optional Trakt sign-in with a paused-playback manager, a last-month-in-review dashboard card, manual library additions
+optional Trakt sign-in with a paused-playback manager, a month-in-review dashboard card that browses earlier months, manual library additions
 and one-click watchlist additions, an all-lists view on profile pages, and in-page name pronunciation on person pages.
 
 ## Install
@@ -28,7 +28,7 @@ reload. Toggles are stored in GM storage, separately from og's settings.
 A compact panel under the summary stats with user-configured links to your own services.
 
 - **Custom links** — manage your `Label | URL` templates in the inline editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{season}`, `{episode}`.
-- **Search presets** — optionally add Metacritic, Stremio, Plex and AniList links (og already links Rotten Tomatoes, Wikipedia, Letterboxd and, on anime, MyAnimeList itself).
+- **Presets** — optionally add Metacritic, Stremio, Plex and AniList links (og already links Rotten Tomatoes, Wikipedia, Letterboxd and, on anime, MyAnimeList itself). Stremio opens the exact movie, show, season or episode when the page has its IMDb id.
 - **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}` on a show page. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
 - **Season and episode pages** — the panel uses the show's title, year and TMDb/IMDb ids, not the season or episode heading, and takes `{season}`/`{episode}` from the URL. The title and TMDb id come from og's show link and external links (and the IMDb id on season pages); the year, and an episode page's IMDb id, come from `GET /shows/:id`. Without a client ID, those links stay hidden rather than point at the season or episode.
 - **Examples**: Plex, Jellyfin, Sonarr, Radarr, or any streaming/library service og doesn't link to.
@@ -62,9 +62,12 @@ see are included and rows get og's watched-progress link. The toolkit doesn't li
 ### Last month in review
 
 Sign in through the toolkit to see last month’s plays, hours, ratings and comments under the dashboard’s month
-strip. The fanart card highlights your first play and links to the full Month in Review. Hide dismisses that month
-for your toolkit account. Nothing appears for months with no plays. Month boundaries use your browser’s time zone;
-results are stored in userscript storage per account and month, refreshing at most daily during the first seven days.
+strip. Previous and next arrows step through earlier months; next stops at last month and previous stops at the
+month of your first history entry. The fanart card highlights your first play and links to the full Month in Review.
+Hide dismisses the card for your toolkit account until next month, whichever month is on screen. Nothing appears for last month with no plays;
+an earlier month without plays shows an empty card so gaps stay navigable. Month boundaries use your browser’s time
+zone; results are stored in userscript storage per account and month. Earlier months stay cached, while last month
+refreshes at most daily during the first seven days.
 Hours use the API’s reported runtimes, rounded to whole hours; missing runtimes contribute no time.
 
 ### Add to library
@@ -174,7 +177,11 @@ saved playback, not watched history. There is no control to set progress manuall
 ## Custom links
 
 Use **Edit links** in the panel to add, rename, reorder or remove links. Choose **Add presets…** to select optional
-service searches; nothing is enabled until you check it and confirm. Presets can be edited like any other link.
+service links; nothing is enabled until you check it and confirm. Presets can be edited like any other link.
+
+Stremio's preset opens the exact movie, show, season or episode when the page has the title's IMDb id (a season page
+links to the series page with `?season=`, which Stremio selects), and falls back to its search otherwise. The other
+presets stay searches because those sites need their own ids or have no episode pages.
 
 The menu commands **add custom link** and **remove custom link** remain available when the panel is not on screen.
 The add command asks for `Label | URL`; the label is what the chip shows and everything after the first `|` is the URL
@@ -281,8 +288,7 @@ links, poster rating corners. Backlog:
 - set playback progress by hand;
 - list preview posters that link to their titles;
 - **Add all shown credits** to the watchlist with one action from a person's page;
-- browse earlier months in the month review card;
-- custom link presets that open the exact show, season or episode on sites that support it (Stremio first);
+- more link presets that open the exact title (candidates: Debrid Media Manager, MDBList, Overseerr/Jellyseerr);
 - a review and cleanup of the test suite.
 
 ## Trakt API compliance

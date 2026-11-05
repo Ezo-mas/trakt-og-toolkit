@@ -32,9 +32,10 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 18 | `npm run drift`: cover features 12–13 and og's native modules | — | done |
 | 19 | Undo on success notices | OAuth | done |
 | 20 | Turn features on and off from the menu | — | done |
-| 21 | Month review: browse earlier months | OAuth | small |
-| 22 | Custom link presets that open the exact show, season or episode | — | small; check each site first |
+| 21 | Month review: browse earlier months | OAuth | done |
+| 22 | Custom link presets that open the exact show, season or episode | — | done |
 | 23 | Test suite review and cleanup | — | last |
+| 24 | More exact-title link presets | — | small; check og and each site first |
 
 **Released:** 0.3.0 on 2026-11-03 (features 6–8, 11–13, 15 and 16). Bump the version again whenever main should
 reach userscript managers; they only offer an update when `@version` changes.
@@ -455,12 +456,24 @@ og.trakt.tv page with its panel's feature disabled and reports drift if the pane
 
 ## 21. Month review: browse earlier months
 
+**Status:** done (2026-11-04). Previous/next arrows step through earlier months. Next stops at last month;
+previous stops at the month holding the oldest history entry. Every month reuses the account/month cache, and
+months with no plays stay navigable with an empty card. The oldest month is looked up lazily on the first
+previous click: read the first history page for `X-Pagination-Page-Count`, then read the last page.
+
 **Goal:** the dashboard card only shows last month. Add previous/next arrows to step through earlier months.
 
 - Same requests as now with a different date range; cache each month.
 - Stop at the account's first history entry; no next arrow past last month.
 
 ## 22. Custom link presets that open the exact show, season or episode
+
+**Status:** done (2026-11-04). Stremio's preset opens the exact movie, show, season or episode through
+`#/detail/:type/:id/:videoId?`, with `?season=` selecting the season when no episode id is given (added 2026-11-05),
+and falls back to its existing search URL when the page lacks the IMDb id. Show and episode deep links were clicked
+through on 2026-11-05; the season shape follows `useSeason` in Stremio's source. Metacritic, Plex and AniList stay
+searches: Plex needs its own ids, and Metacritic and AniList have no episode pages. TMDb, IMDb, Letterboxd, Rotten
+Tomatoes, Wikipedia and Trakt itself are already linked by og or are the same site, so no presets were added for them.
 
 **Goal:** the four presets (Metacritic, Stremio, Plex, AniList) all search `{title}`. That's right for sites without
 deep links, but on a season or episode page a site that can open that exact item should go there. Feature 16 already
@@ -473,6 +486,25 @@ fills `{imdb}`, `{tmdb}`, `{season}` and `{episode}` with the show's values.
   subtitle sites); skip sites that need their own ids (Plex, Jellyfin) or have no episode pages (Metacritic, AniList).
 - A preset can be several templates; a link with a placeholder the page lacks already hides itself, so an episode
   template simply doesn't show on show or movie pages. Keep the search preset as the fallback.
+
+## 24. More exact-title link presets
+
+**Goal:** feature 22 gave presets a `deep` list but only Stremio uses it. Look for more services a Trakt user would
+open from a title, that og doesn't already link, and that take an id og's page gives (`{imdb}`, `{tmdb}`) plus
+`{season}`/`{episode}`. Each candidate is unverified: open its URLs by hand first, and drop it if it needs its own ids.
+
+- **Debrid Media Manager:** `debridmediamanager.com/movie/{imdb}`, `/show/{imdb}` and a season path; popular with the
+  same Stremio/debrid users. Confirm the season route shape.
+- **MDBList:** `mdblist.com/movie/{imdb}` / `/show/{imdb}` (no season pages: show route only).
+- **Overseerr / Jellyseerr:** `/movie/{tmdb}` and `/tv/{tmdb}` on the user's own host, so the preset needs a host the
+  user edits (an example host like the README's Sonarr/Radarr examples), not a working default.
+- **Subtitles (OpenSubtitles, SubDL):** both search by IMDb id, but OpenSubtitles wants it without `tt`; that needs a
+  new placeholder (for example `{imdbnum}`), so only take it if the second site needs it too.
+- **Stremio desktop app:** the same routes under `stremio:///detail/…`. Custom links only accept `http(s)`, so this
+  needs an allow-list for that one scheme; skip unless asked.
+
+Skip anything og links on the same page (check live movie, show, season and episode pages and `git log -S` in
+trakt-og), and keep each preset's search URL as the fallback as feature 22 does.
 
 ## 23. Test suite review and cleanup
 

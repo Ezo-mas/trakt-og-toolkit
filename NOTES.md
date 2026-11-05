@@ -2,6 +2,54 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-04/05: custom link presets that open the exact title (feature 22)
+
+- Stremio's web route is `#/detail/:type/:id/:videoId?` (`src/routes/MetaDetails/MetaDetails.js`, `development`
+  branch): MetaDetails reads `type`, `id` and `videoId` from `useParams()`. The preset's deep routes, most specific
+  first: `detail/series/{imdb}/{imdb}:{season}:{episode}`, `detail/series/{imdb}?season={season}`,
+  `detail/movie/{imdb}`, `detail/series/{imdb}`. Show and episode routes were clicked through in a real browser on
+  2026-11-05.
+- Seasons need `?season=`: the first click-through landed season pages on the plain series view. Stremio's
+  `useSeason.js` reads `?season=` with `useSearchParams` when no video id sets one (its own season select writes
+  that), and `?season=0` selects specials. The episode route still wins whenever `{episode}` has a value.
+- The episode id is the addon stream request id, not a list filter: `useMetaDetails` passes it as `streamPath`
+  (`stream/series/{videoId}.json`), so the episode link opens that episode's streams. Stremio's own links
+  percent-encode its colons, but `useParams()` decodes the segment, so raw colons land on the same value.
+- A preset may carry a `deep` list of exact-item templates. Stored links keep the old `{ label, url }` shape with the
+  search URL, so existing links, custom links and duplicate detection are unchanged; `resolvePresetUrl` swaps in a
+  deep template only when every placeholder it needs has a value, otherwise the search URL stays. The season/episode
+  picker re-resolves the href on change. A user-edited Stremio URL no longer matches the preset and stays as typed.
+- `lookUpShow` also checks the deep templates. A season page gets `{imdb}` from og's IMDb link, so its route fills
+  without a client ID; an episode page's IMDb link is the episode's own, so the exact-episode link needs the
+  client-ID show lookup and otherwise falls back to search.
+- The other presets stay search-only. Plex and Jellyfin need their own ids, Metacritic and AniList have no episode
+  pages, and og already links TMDb, IMDb, Letterboxd, Rotten Tomatoes and Wikipedia (Trakt is the same site).
+- Tests: `test/presets.test.js` covers the four Stremio routes, fallback, page-kind filtering and the template list;
+  built-bundle tests cover movie, show, season, episode fallback, the client-ID lookup and picker updates.
+
+## 2026-11-04: month review browsing (feature 21)
+
+- `monthSpan(year, month)` and `shiftMonth` centralize local calendar months; `lastMonth` is now a thin wrapper.
+  Earlier months are settled and stay cached indefinitely, while the last month keeps the existing daily refresh
+  during the first seven days (`monthCacheFresh`). Keys stay `review.<user>.<YYYY-MM>`.
+- The oldest history month is found lazily on the first previous click, so a dashboard visit without browsing pays
+  no extra request. `/sync/history?page=1&limit=100` supplies `X-Pagination-Page-Count`; the last page's oldest
+  `watched_at` gives the stop month. The answer is cached in memory for the signed-in session and cleared on
+  `ogt:authchange`.
+- The card rerenders per month. Next is disabled on last month; previous is disabled on the first history month.
+  Earlier months with no plays show an empty card, so gaps between plays remain navigable instead of dead-ending.
+  Hide stores last month's dismissal key whichever month is on screen (storing the viewed month's key would bring the
+  card back on the next visit and blank it when browsing to that month), and only last month's load honors it. The
+  initial zero-play last month stays hidden. A failed step while browsing keeps the current month and shows a toast.
+- Browsing reuses the account from the first load: `loadReview(span, now, user)` only calls `/users/me` for the
+  initial month. In-flight loads dedupe by month so quickly clicking the same target shares one request set.
+- Layout: the arrows sit in the card's bottom row, right of the "Month in Review" link, as SVG chevrons in flat
+  translucent 36px chips with the dashboard tiles' radius. Hide is a chip of the same style at the top right, 80px wide
+  so its edges line up with the arrow pair below.
+- Tests: unit coverage for month shifting/cache freshness and a built-bundle test that browses two months back,
+  returns through a cached month, checks the single account lookup and verifies both arrow stops, and one that hides
+  while viewing an earlier month.
+
 ## 2026-11-04: watchlist shortcuts on person credits (feature 17, per-row part)
 
 - Live `/people/bryan-cranston` capture (2026-11-04): 211 `article.credit-row` entries, each with an

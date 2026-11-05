@@ -156,6 +156,124 @@ test('preset checklist marks existing URLs and adds selected presets to storage'
   assert.equal(document.activeElement, open, 'focus returns to the presets chip when closed');
 });
 
+test('Stremio opens the exact movie and show, and falls back to search without an IMDb id', async (t) => {
+  const stremio = { label: 'Stremio', url: 'https://web.stremio.com/#/search?search={title}' };
+  const windows = [];
+  t.after(() => windows.forEach((window) => window.close()));
+
+  const movie = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_HTML,
+    storage: { 'watch.customLinks': [stremio] },
+  });
+  windows.push(movie.window);
+  await wait(50);
+  assert.equal(
+    chip(movie.document, 'Stremio').getAttribute('href'),
+    'https://web.stremio.com/#/detail/movie/tt0465676',
+  );
+
+  const show = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: { 'watch.customLinks': [stremio] },
+  });
+  windows.push(show.window);
+  await wait(50);
+  assert.equal(
+    chip(show.document, 'Stremio').getAttribute('href'),
+    'https://web.stremio.com/#/detail/series/tt0903747',
+  );
+
+  const season = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
+    html: SEASON_PAGE_HTML,
+    storage: { 'watch.customLinks': [stremio] },
+  });
+  windows.push(season.window);
+  await wait(50);
+  assert.equal(
+    chip(season.document, 'Stremio').getAttribute('href'),
+    'https://web.stremio.com/#/detail/series/tt0903747?season=1',
+    'a season page has no episode id, so the series page opens with the season selected',
+  );
+
+  const episode = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1',
+    html: EPISODE_PAGE_HTML,
+    storage: { 'watch.customLinks': [stremio] },
+  });
+  windows.push(episode.window);
+  await wait(50);
+  assert.equal(
+    chip(episode.document, 'Stremio').getAttribute('href'),
+    'https://web.stremio.com/#/search?search=Breaking%20Bad',
+    'the episode page\'s IMDb id is the episode\'s own, so the search URL is used',
+  );
+});
+
+test('Stremio opens the exact episode once the show IMDb id is looked up', async (t) => {
+  const requested = [];
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1',
+    html: EPISODE_PAGE_HTML,
+    storage: {
+      'trakt.clientId': 'client',
+      'watch.customLinks': [{ label: 'Stremio', url: 'https://web.stremio.com/#/search?search={title}' }],
+    },
+    gmRequest(options) {
+      if (new URL(options.url).pathname === '/shows/breaking-bad') requested.push(options.url);
+      setTimeout(() => options.onload({
+        status: 200,
+        responseHeaders: '',
+        responseText: JSON.stringify({
+          title: 'Breaking Bad',
+          year: 2008,
+          ids: { trakt: 1388, slug: 'breaking-bad', tmdb: 1396, imdb: 'tt0903747' },
+        }),
+      }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(80);
+
+  assert.equal(
+    chip(document, 'Stremio').getAttribute('href'),
+    'https://web.stremio.com/#/detail/series/tt0903747/tt0903747:1:1',
+  );
+  assert.equal(requested.length, 1, 'the deep route asks for the show IMDb id the page does not have');
+});
+
+test('the Stremio link follows the season/episode picker on a show page', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: {
+      'watch.customLinks': [
+        { label: 'Stremio', url: 'https://web.stremio.com/#/search?search={title}' },
+        { label: 'Season link', url: 'https://e.test/{season}' },
+      ],
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  assert.equal(
+    chip(document, 'Stremio').getAttribute('href'),
+    'https://web.stremio.com/#/detail/series/tt0903747/tt0903747:1:1',
+  );
+
+  const seasonSelect = document.querySelector('#ogt-custom-links select[aria-label="Season"]');
+  seasonSelect.value = '2';
+  seasonSelect.dispatchEvent(new window.Event('change'));
+
+  assert.equal(
+    chip(document, 'Stremio').getAttribute('href'),
+    'https://web.stremio.com/#/detail/series/tt0903747/tt0903747:2:1',
+  );
+});
+
 test('inline editor renames, reorders, deletes and saves links', async (t) => {
   const { window, document, store } = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad',

@@ -1,10 +1,17 @@
-export function lastMonth(now = new Date()) {
-  const end = new Date(now.getFullYear(), now.getMonth(), 1);
-  const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+export function monthSpan(year, month) {
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 1);
   return { start: start.toISOString(), end: end.toISOString(), year: start.getFullYear(),
     month: start.getMonth() + 1, key: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`,
     // og is English-only; match it whatever the browser language.
     label: start.toLocaleString('en-US', { month: 'long' }) };
+}
+export function lastMonth(now = new Date()) {
+  return monthSpan(now.getFullYear(), now.getMonth());
+}
+export function shiftMonth(span, delta) {
+  const date = new Date(span.year, span.month - 1 + delta, 1);
+  return monthSpan(date.getFullYear(), date.getMonth() + 1);
 }
 export function inMonth(value, span) {
   const time = Date.parse(value);
@@ -34,4 +41,8 @@ export function fanart(first) {
 }
 export function freshCache(entry, now) {
   return entry && (now.getDate() > 7 || now.getTime() - entry.savedAt < 86400000);
+}
+/** Earlier months are settled; the last month can still gain late syncs early in a month. */
+export function monthCacheFresh(entry, span, now = new Date()) {
+  return Boolean(entry) && (span.key < lastMonth(now).key || freshCache(entry, now));
 }

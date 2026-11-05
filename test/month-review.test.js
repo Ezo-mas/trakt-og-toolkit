@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { lastMonth, summarize, freshCache, fanart } from '../src/features/month-review/data.js';
+import { lastMonth, monthSpan, shiftMonth, monthCacheFresh, summarize, freshCache, fanart } from '../src/features/month-review/data.js';
 import { paginate } from '../src/features/month-review/api.js';
 
 test('local calendar boundaries cross January and daylight saving correctly', () => {
@@ -39,6 +39,15 @@ test('early-month cache refresh is daily; settled months remain cached', () => {
   assert.ok(freshCache({ savedAt: +now - 1000 }, now));
   assert.equal(freshCache({ savedAt: +now - 86400000 }, now), false);
   assert.ok(freshCache({ savedAt: 0 }, new Date(2026, 10, 8)));
+});
+test('month spans shift across years and earlier months stay cached', () => {
+  assert.equal(shiftMonth(monthSpan(2026, 1), -1).key, '2025-12');
+  assert.equal(shiftMonth(monthSpan(2025, 12), 1).key, '2026-01');
+  assert.equal(shiftMonth(lastMonth(new Date(2026, 0, 15)), 1).key, '2026-01');
+  const early = new Date(2026, 0, 2);
+  assert.equal(monthCacheFresh({ savedAt: 0 }, lastMonth(early), early), false);
+  assert.ok(monthCacheFresh({ savedAt: +early - 1000 }, lastMonth(early), early));
+  assert.ok(monthCacheFresh({ savedAt: 0 }, monthSpan(2025, 10), early));
 });
 
 test('month label is English and fanart uses the full size', () => {
