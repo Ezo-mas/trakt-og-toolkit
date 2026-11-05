@@ -1,6 +1,6 @@
-/** Services og doesn't already link from a title page (it links Rotten Tomatoes, Wikipedia, Letterboxd and, on anime, MyAnimeList). */
 import { missingPlaceholders } from '../../core/text.js';
 
+/** Services og doesn't already link from a title page (it links Rotten Tomatoes, Wikipedia, Letterboxd and, on anime, MyAnimeList). */
 export const PRESETS = [
   {
     label: 'Metacritic',

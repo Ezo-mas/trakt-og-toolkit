@@ -2,43 +2,29 @@
 
 Working notes and known issues. Newest first.
 
-## 2026-11-05: Stremio seasons need the `?season=` query (feature 22)
+## 2026-11-04/05: custom link presets that open the exact title (feature 22)
 
-- Clicking the deep links through in a real browser: the show and episode routes work, but a season page
-  (`og.trakt.tv/shows/<slug>/seasons/6`) landed on the plain series page. So the preset gained a fourth deep route,
-  `detail/series/{imdb}?season={season}`, ordered between the episode route and the plain series route. A route's
-  query string doesn't reach `useParams()`, but Stremio's own season control writes the season as a query param
-  (`src/routes/MetaDetails/useSeason.js`, `development` on 2026-11-05): it reads `?season=` with `useSearchParams`
-  when no video id sets one, and `?season=0` selects specials. The episode route still wins whenever `{episode}`
-  also has a value, so pickers and episode pages keep opening one episode.
-- The shape is source-verified, not clicked through: Stremio itself navigates to `pathname?season=N` when the
-  season select changes, so this is its own format.
-- A season page gets `{imdb}` from og's `…/episodes` IMDb link, so the season route fills without a client ID. An
-  episode page's missing show IMDb id still needs the client-ID show lookup, or the search fallback as before.
-- The episode id `{show imdb}:{season}:{episode}` is not a UI filter: `useMetaDetails` passes it straight into the
-  addon request as `streamPath` (`stream/series/{videoId}.json`) and MetaDetails then shows the streams list instead
-  of the episode list. `?season=` is the filter: `VideosList` only uses it to pick a season's rows. Stremio's own
-  links percent-encode the id's colons (`{show imdb}%3A{season}%3A{episode}`, built in its episode search), but
-  `useParams()` decodes the path segment, so the raw-colon deep links were clicked through and land on the identical
-  value.
-
-## 2026-11-04: custom link presets that open the exact title (feature 22)
-
-- Stremio's web route is `#/detail/:type/:id/:videoId?` (`src/routes/MetaDetails/MetaDetails.js`, `development` on
-  2026-11-04): MetaDetails reads `type`, `id` and `videoId` from `useParams()`, and its episode search builds the video
-  id as `${id}:${season}:${episode}`. The preset's deep routes are `detail/movie/{imdb}`, `detail/series/{imdb}` and
-  `detail/series/{imdb}/{imdb}:{season}:{episode}`. No URL fragment was opened in a browser here, so the click-through
-  is still the live check.
-- A preset may now carry a `deep` list of exact-item templates, most specific first. Stored links keep the old
-  `{ label, url }` shape with the search URL, so existing links, custom links and duplicate detection are unchanged;
-  `resolvePresetUrl` swaps in a deep template only when every placeholder it needs has a value, otherwise the search
-  URL stays. The season/episode picker re-resolves the href on change, so the same Stremio chip moves from the show
-  to the selected episode.
-- `lookUpShow` now checks the deep templates too. An episode page's IMDb link is the episode's own, so without the
-  preset the page has no show IMDb id; with a client ID, the deep episode route triggers the one show lookup.
+- Stremio's web route is `#/detail/:type/:id/:videoId?` (`src/routes/MetaDetails/MetaDetails.js`, `development`
+  branch): MetaDetails reads `type`, `id` and `videoId` from `useParams()`. The preset's deep routes, most specific
+  first: `detail/series/{imdb}/{imdb}:{season}:{episode}`, `detail/series/{imdb}?season={season}`,
+  `detail/movie/{imdb}`, `detail/series/{imdb}`. Show and episode routes were clicked through in a real browser on
+  2026-11-05.
+- Seasons need `?season=`: the first click-through landed season pages on the plain series view. Stremio's
+  `useSeason.js` reads `?season=` with `useSearchParams` when no video id sets one (its own season select writes
+  that), and `?season=0` selects specials. The episode route still wins whenever `{episode}` has a value.
+- The episode id is the addon stream request id, not a list filter: `useMetaDetails` passes it as `streamPath`
+  (`stream/series/{videoId}.json`), so the episode link opens that episode's streams. Stremio's own links
+  percent-encode its colons, but `useParams()` decodes the segment, so raw colons land on the same value.
+- A preset may carry a `deep` list of exact-item templates. Stored links keep the old `{ label, url }` shape with the
+  search URL, so existing links, custom links and duplicate detection are unchanged; `resolvePresetUrl` swaps in a
+  deep template only when every placeholder it needs has a value, otherwise the search URL stays. The season/episode
+  picker re-resolves the href on change. A user-edited Stremio URL no longer matches the preset and stays as typed.
+- `lookUpShow` also checks the deep templates. A season page gets `{imdb}` from og's IMDb link, so its route fills
+  without a client ID; an episode page's IMDb link is the episode's own, so the exact-episode link needs the
+  client-ID show lookup and otherwise falls back to search.
 - The other presets stay search-only. Plex and Jellyfin need their own ids, Metacritic and AniList have no episode
   pages, and og already links TMDb, IMDb, Letterboxd, Rotten Tomatoes and Wikipedia (Trakt is the same site).
-- Tests: `test/presets.test.js` covers the three Stremio routes, fallback, page-kind filtering and the template list;
+- Tests: `test/presets.test.js` covers the four Stremio routes, fallback, page-kind filtering and the template list;
   built-bundle tests cover movie, show, season, episode fallback, the client-ID lookup and picker updates.
 
 ## 2026-11-04: month review browsing (feature 21)
