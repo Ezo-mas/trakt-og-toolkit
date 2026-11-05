@@ -3404,7 +3404,7 @@
 @media(min-width:1200px) { .ogt-review__inner { inline-size:var(--container-lg,1160px); } }
 .ogt-review h2 { font-size:clamp(32px,4vw,48px); font-family:var(--font-headings, inherit); font-weight:700; letter-spacing:-.025em; line-height:1.1; margin:0 0 28px; color:white; }
 .ogt-review em { color:var(--brand-primary,#ed1c24); font-style:normal; }
-.ogt-review__top { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:28px; }
+.ogt-review__top { display:flex; flex-direction:column; align-items:stretch; gap:14px; margin-bottom:28px; }
 .ogt-review__top h2 { margin:0; }
 /* The month nav is a flat transparent chip like the dashboard tiles - no circle, no color of its own. */
 .ogt-review__nav { display:flex; align-items:center; gap:8px; flex:none; }
@@ -3433,10 +3433,12 @@
 .ogt-review__link { font-size:15px; display:inline-block; padding:10px 14px; background:var(--brand-primary,#ed1c24); text-decoration:none; color:white!important; border-radius:var(--radius-action-button,var(--radius-object,8px)); font-weight:bold; }
 .ogt-review__link:hover { background:var(--brand-primary-darken,#c61017); }
 .ogt-review__link:focus-visible,.ogt-review__hide:focus-visible { outline:2px solid white; outline-offset:3px; }
-.ogt-review__hide { border:0; background:transparent; color:white; font:inherit; font-size:14px; cursor:pointer; padding:8px; }
+.ogt-review__hide { display:block; border:0; background:rgba(0,0,0,.25); color:white; font:inherit; font-size:14px; cursor:pointer;
+  padding:8px 14px; width:100%; box-sizing:border-box; text-align:right; border-radius:var(--radius-dashboard-panel,var(--radius-container,12px)); }
+.ogt-review__hide:hover:not(:disabled) { background:rgba(255,255,255,.15); }
 .ogt-review__hide:disabled { opacity:.35; cursor:default; }
 .ogt-review-hint { padding:12px 24px; color:light-dark(#555,#bbb); }
-@media(max-width:600px) { .ogt-review__top { flex-wrap:wrap; } .ogt-review__grid { grid-template-columns:1fr 1fr; } .ogt-review__first { grid-column:1 / 3; grid-row:3; } }
+@media(max-width:600px) { .ogt-review__grid { grid-template-columns:1fr 1fr; } .ogt-review__first { grid-column:1 / 3; grid-row:3; } }
 `;
 
   // src/features/month-review/index.js
@@ -3551,8 +3553,8 @@
         const top = el(
           "div",
           { class: "ogt-review__top" },
-          el("h2", {}, "your ", el("em", { text: span.label.toLocaleLowerCase() }), " in review"),
-          hideButton
+          hideButton,
+          el("h2", {}, "your ", el("em", { text: span.label.toLocaleLowerCase() }), " in review")
         );
         const nav = el("div", { class: "ogt-review__nav" }, prevButton, nextButton);
         const inner = el("div", { class: "ogt-review__inner" });

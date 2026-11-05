@@ -17,9 +17,10 @@ Working notes and known issues. Newest first.
 - Browsing reuses the account from the first load: `loadReview(span, now, user)` only calls `/users/me` for the
   initial month. In-flight loads dedupe by month so quickly clicking the same target shares one request set.
 - The month arrows moved to the card's bottom row, right-aligned with the "Month in Review" link, and draw as SVG
-  chevrons inside flat translucent chips that match the dashboard tiles' radius. No circle shape, no border, and no
-  extra color keeps them on the card the user liked; glyph centering no longer depends on font metrics. Hide stays
-  at the top right.
+  chevrons inside flat translucent chips that match the dashboard tiles' radius. Hide keeps its top slot but follows
+  the user's sizing rule: a full-width translucent strip above the heading that starts on the link chip's edge and
+  reaches exactly across to the chips' edge (both combined), with the "× Hide" label right-aligned at its right end.
+  Heading stays below; chips stay untouched; glyph centering no longer depends on font metrics.
 - Tests: unit coverage for month shifting/cache freshness and a built-bundle test that browses two months back,
   returns through a cached month, checks the single account lookup and verifies both arrow stops. Build and tests pass.
 
