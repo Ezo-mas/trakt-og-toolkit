@@ -169,6 +169,43 @@ export const PERSON_HTML = `
 <h1>Watch Trakt on your phone</h1>
 <div class="summary"><div><div class="summary-title"><h1>Bryan Cranston <!----></h1></div></div></div>`;
 
+/** One credit row trimmed from the live `/people/bryan-cranston` capture, 2026-11-04: the row's poster
+ * link identifies the whole movie/show, and `.quick-icons.small.row` holds og's card-sized ListControl. */
+export function personCreditRowHtml({ id = 'credit-movie', href = '/movies/jackpot-1115926', title = 'Jackpot',
+  role = 'Actor', type = 'Movie', extraTag = '' } = {}) {
+  return `<article class="credit-row" id="${id}">
+    <a class="poster" href="${href}" tabindex="-1" aria-hidden="true"><img src="fixture.jpg" alt="" loading="lazy" decoding="async"></a>
+    <div class="text">
+      <div class="names"><h3><a href="${href}">${title}</a></h3><p class="role">${role}</p></div>
+      <span class="tag-pills"><span class="pill primary">${type}</span>${extraTag ? `<span class="pill">${extraTag}</span>` : ''}</span>
+    </div>
+    <div class="icons"><div class="quick-icons small row">
+      <div class="actions"><div class="tools">
+        <div class="watch-control card small"><button type="button" class="watch-trigger" aria-label="Add to watched history"></button></div>
+        <div class="list-control card small">
+          <button type="button" class="trigger" aria-label="Add to list" aria-haspopup="dialog" aria-expanded="false" aria-controls="${id}-list" aria-keyshortcuts="ArrowDown" aria-describedby="${id}-tip"></button>
+          <span id="${id}-tip" class="tooltip bottom" popover="hint" role="tooltip"><span class="tooltip-box bottom"><span class="text">Add to list</span></span></span>
+        </div>
+        <div id="${id}-list" class="picker card" popover="auto" role="dialog" aria-label="Lists for ${title}"></div>
+        <button type="button" class="action watch-now" aria-label="Watch now"></button>
+      </div></div>
+      <button type="button" class="rating-trigger card" aria-label="Rate ${title}"><span class="percentage"><span class="value">74%</span></span></button>
+    </div></div>
+  </article>`;
+}
+
+export const PERSON_CREDITS_HTML = `
+<main id="content">
+  <section class="credits" id="credits" aria-labelledby="credits-heading">
+    <h2 id="credits-heading"><strong>Credits</strong></h2>
+    <section class="year list" aria-label="2026">
+      ${personCreditRowHtml()}
+      ${personCreditRowHtml({ id: 'credit-show', href: '/shows/after-hours-with-james-corden',
+        title: 'After Hours with James Corden', role: 'Self', type: 'Show', extraTag: '1 episode' })}
+    </section>
+  </section>
+</main>`;
+
 /** Trimmed Forvo search result with the current base64 Play(...) markup and audio host. */
 export const FORVO_HTML = `
 <div id="displayer"><div class="mainpage fullpage page_search">

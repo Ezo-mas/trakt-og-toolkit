@@ -22,6 +22,8 @@ export const SELECTORS = [
   { feature: 'watchlist list control', pages: ['movie', 'show', 'season', 'episode'], selector: '.summary-frame #overview .top .actions .list-control.summary' },
   { feature: 'watchlist picker trigger', pages: ['movie', 'show', 'season', 'episode'], selector: '.list-control.summary button[aria-controls][aria-keyshortcuts~="ArrowDown"]' },
   { feature: 'watchlist card list controls', pages: ['listing'], selector: '.quick-icons .list-control.card, .quick-icons button.action.list' },
+  { feature: 'watchlist credit rows', pages: ['person'], selector: 'article.credit-row a.poster[href^="/movies/"], article.credit-row a.poster[href^="/shows/"]' },
+  { feature: 'watchlist credit list controls', pages: ['person'], selector: 'article.credit-row .quick-icons .list-control.card, article.credit-row .quick-icons button.action.list' },
 ];
 
 /** Return each applicable check and whether it matched. */

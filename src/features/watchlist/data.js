@@ -43,6 +43,16 @@ export function readCardRoute(card) {
   } catch { return null; }
 }
 
+/** Person credit rows identify the whole movie/show through their poster link, like cards. */
+export function readCreditRoute(row) {
+  return row?.matches?.('article.credit-row') ? readCardRoute(row) : null;
+}
+
+/** Person credit rows reuse og's card-sized list control in their own action strip. */
+export function readCreditControl(row) {
+  return row?.querySelector?.('.quick-icons .list-control.card, .quick-icons button.action.list') ?? null;
+}
+
 /** The rich tooltip is rendered even while closed. A custom list called Watchlist has a /lists/:id URL. */
 export function readCardWatchlisted(control) {
   const trigger = control.matches('button') ? control : control.querySelector('button.trigger');
