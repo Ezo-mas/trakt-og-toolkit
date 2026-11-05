@@ -11,8 +11,9 @@ Working notes and known issues. Newest first.
   the row: only watched, lists, play and rating.
 - The row action strip sets `--quick-icons-row-cell: 32px` for `--bar` and `--action-width`, so the shortcut uses
   the card button markup, icon and styling with those variables and no poster-zoom hiding. It inserts directly
-  after the `.list-control`, inside `.tools`, and reuses `readCardRoute`, `readCardWatchlisted`, `watchlistApi`,
-  `notifyWatchlistAdded` and the native picker refresh unchanged. The picker trigger and popover have the same
+  after the `.list-control`, inside `.tools`. Cards and credit rows share one factory
+  (`src/features/watchlist/shortcuts.js`: state per route, add/undo, native-membership hiding, the picker refresh);
+  each feature only supplies its targets, route reader, class and CSS. The picker trigger and popover have the same
   shape as cards, so movie/show additions refresh og's own membership without opening the popup.
 - The page rendered all credits server-side in this capture; no load-more button or lazy rows were found. The
   feature still observes the document and handles rows swapped or added later, and it is keyed by route so a
