@@ -1117,7 +1117,17 @@
     {
       label: "Stremio",
       url: "https://web.stremio.com/#/search?search={title}",
-      kinds: ["movie", "show"]
+      kinds: ["movie", "show"],
+      /**
+       * Exact-item routes, most specific first: `#/detail/:type/:id/:videoId?`. Stremio's
+       * MetaDetails reads those params, and its episode search builds the video id as
+       * `<id>:<season>:<episode>`, so the same shape opens one episode directly.
+       */
+      deep: [
+        { url: "https://web.stremio.com/#/detail/series/{imdb}/{imdb}:{season}:{episode}", kinds: ["show"] },
+        { url: "https://web.stremio.com/#/detail/movie/{imdb}", kinds: ["movie"] },
+        { url: "https://web.stremio.com/#/detail/series/{imdb}", kinds: ["show"] }
+      ]
     },
     {
       label: "Plex",
@@ -1130,6 +1140,19 @@
       kinds: ["movie", "show"]
     }
   ];
+  function presetTemplateUrls(url, kind) {
+    const preset = PRESETS.find((entry) => entry.url === url);
+    if (!preset?.deep) return [url];
+    return [url, ...preset.deep.filter((entry) => entry.kinds.includes(kind)).map((entry) => entry.url)];
+  }
+  function resolvePresetUrl(url, vars, kind) {
+    const preset = PRESETS.find((entry) => entry.url === url);
+    if (!preset?.deep) return url;
+    const deep = preset.deep.find(
+      (entry) => entry.kinds.includes(kind) && missingPlaceholders(entry.url, vars).length === 0
+    );
+    return deep ? deep.url : url;
+  }
 
   // src/core/http.js
   var HttpError = class extends Error {
@@ -1605,7 +1628,7 @@
     function updateLinkHrefs() {
       const values = vars();
       for (const link of linksRow.querySelectorAll("[data-ogt-template]")) {
-        const template = link.dataset.ogtTemplate;
+        const template = resolvePresetUrl(link.dataset.ogtTemplate, values, meta.kind);
         if (missingPlaceholders(template, values).length) continue;
         link.setAttribute("href", fillTemplate(template, values));
       }
@@ -1621,16 +1644,18 @@
       }
       for (const entry of links) {
         if (!/^https?:\/\//i.test(entry.url)) continue;
-        if (missingPlaceholders(entry.url, values).length) continue;
-        linksRow.append(chip({ label: entry.label, href: fillTemplate(entry.url, values), template: entry.url }));
+        const template = resolvePresetUrl(entry.url, values, meta.kind);
+        if (missingPlaceholders(template, values).length) continue;
+        linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values), template: entry.url }));
       }
-      lookUpShow();
+      lookUpShow(values);
     }
     let showRequested = false;
-    function lookUpShow() {
+    function lookUpShow(values) {
       if (!fixedSelection || showRequested || !getClientId()) return;
       const missing = ["year", "tmdb", "imdb"].filter((key) => meta[key] == null);
-      if (!getCustomLinks().some((entry) => missing.some((key) => entry.url.includes(`{${key}}`)))) return;
+      if (!missing.length) return;
+      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => missing.some((key) => template.includes(`{${key}}`))))) return;
       showRequested = true;
       getShowDetails(route.id).then((show) => setMeta(showTemplateData(show))).catch((error) => {
         if (!cancelled) debugError("show lookup failed", error);

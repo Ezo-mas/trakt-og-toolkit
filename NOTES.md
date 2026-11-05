@@ -2,6 +2,25 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-04: custom link presets that open the exact title (feature 22)
+
+- Stremio's web route is `#/detail/:type/:id/:videoId?` (`src/routes/MetaDetails/MetaDetails.js`, `development` on
+  2026-11-04): MetaDetails reads `type`, `id` and `videoId` from `useParams()`, and its episode search builds the video
+  id as `${id}:${season}:${episode}`. The preset's deep routes are `detail/movie/{imdb}`, `detail/series/{imdb}` and
+  `detail/series/{imdb}/{imdb}:{season}:{episode}`. No URL fragment was opened in a browser here, so the click-through
+  is still the live check.
+- A preset may now carry a `deep` list of exact-item templates, most specific first. Stored links keep the old
+  `{ label, url }` shape with the search URL, so existing links, custom links and duplicate detection are unchanged;
+  `resolvePresetUrl` swaps in a deep template only when every placeholder it needs has a value, otherwise the search
+  URL stays. The season/episode picker re-resolves the href on change, so the same Stremio chip moves from the show
+  to the selected episode.
+- `lookUpShow` now checks the deep templates too. An episode page's IMDb link is the episode's own, so without the
+  preset the page has no show IMDb id; with a client ID, the deep episode route triggers the one show lookup.
+- The other presets stay search-only. Plex and Jellyfin need their own ids, Metacritic and AniList have no episode
+  pages, and og already links TMDb, IMDb, Letterboxd, Rotten Tomatoes and Wikipedia (Trakt is the same site).
+- Tests: `test/presets.test.js` covers the three Stremio routes, fallback, page-kind filtering and the template list;
+  built-bundle tests cover movie, show, season, episode fallback, the client-ID lookup and picker updates.
+
 ## 2026-11-04: month review browsing (feature 21)
 
 - `monthSpan(year, month)` and `shiftMonth` centralize local calendar months; `lastMonth` is now a thin wrapper.

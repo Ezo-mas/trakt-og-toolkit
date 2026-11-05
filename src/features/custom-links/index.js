@@ -22,7 +22,7 @@ import {
   templateVars,
   validateCustomLinks,
 } from './data.js';
-import { PRESETS } from './presets.js';
+import { PRESETS, presetTemplateUrls, resolvePresetUrl } from './presets.js';
 import { getSeasons } from '../../core/trakt.js';
 import { getShowDetails } from './api.js';
 
@@ -98,7 +98,7 @@ function createPanel(meta, route) {
   function updateLinkHrefs() {
     const values = vars();
     for (const link of linksRow.querySelectorAll('[data-ogt-template]')) {
-      const template = link.dataset.ogtTemplate;
+      const template = resolvePresetUrl(link.dataset.ogtTemplate, values, meta.kind);
       if (missingPlaceholders(template, values).length) continue;
       link.setAttribute('href', fillTemplate(template, values));
     }
@@ -117,20 +117,26 @@ function createPanel(meta, route) {
 
     for (const entry of links) {
       if (!/^https?:\/\//i.test(entry.url)) continue;
-      if (missingPlaceholders(entry.url, values).length) continue;
-      linksRow.append(chip({ label: entry.label, href: fillTemplate(entry.url, values), template: entry.url }));
+      const template = resolvePresetUrl(entry.url, values, meta.kind);
+      if (missingPlaceholders(template, values).length) continue;
+      linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values), template: entry.url }));
     }
-    lookUpShow();
+    lookUpShow(values);
   }
 
   let showRequested = false;
   /** Season/episode pages: fetch the show once a link needs what og's page doesn't give (the show's year, an episode
    *  page's IMDb id). This runs on every render, so a link added in the editor triggers it too. Without a client ID
    *  those links stay hidden rather than point at the season or episode. */
-  function lookUpShow() {
+  function lookUpShow(values) {
     if (!fixedSelection || showRequested || !getClientId()) return;
     const missing = ['year', 'tmdb', 'imdb'].filter((key) => meta[key] == null);
-    if (!getCustomLinks().some((entry) => missing.some((key) => entry.url.includes(`{${key}}`)))) return;
+    if (!missing.length) return;
+    // Deep preset routes may need the show's IMDb id even though the stored search URL doesn't.
+    if (!getCustomLinks().some((entry) =>
+      presetTemplateUrls(entry.url, meta.kind).some((template) =>
+        missing.some((key) => template.includes(`{${key}}`))))
+    ) return;
     showRequested = true;
     getShowDetails(route.id)
       .then((show) => setMeta(showTemplateData(show)))

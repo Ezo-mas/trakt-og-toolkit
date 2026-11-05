@@ -33,7 +33,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 19 | Undo on success notices | OAuth | done |
 | 20 | Turn features on and off from the menu | — | done |
 | 21 | Month review: browse earlier months | OAuth | done |
-| 22 | Custom link presets that open the exact show, season or episode | — | small; check each site first |
+| 22 | Custom link presets that open the exact show, season or episode | — | done |
 | 23 | Test suite review and cleanup | — | last |
 
 **Released:** 0.3.0 on 2026-11-03 (features 6–8, 11–13, 15 and 16). Bump the version again whenever main should
@@ -466,6 +466,11 @@ previous click: read the first history page for `X-Pagination-Page-Count`, then 
 - Stop at the account's first history entry; no next arrow past last month.
 
 ## 22. Custom link presets that open the exact show, season or episode
+
+**Status:** done (2026-11-04). Stremio's preset opens the exact movie, show or episode through `#/detail/:type/:id/:videoId?`
+and falls back to its existing search URL when the page lacks the IMDb id. Metacritic, Plex and AniList stay searches:
+Plex needs its own ids, and Metacritic and AniList have no episode pages. TMDb, IMDb, Letterboxd, Rotten Tomatoes,
+Wikipedia and Trakt itself are already linked by og or are the same site, so no presets were added for them.
 
 **Goal:** the four presets (Metacritic, Stremio, Plex, AniList) all search `{title}`. That's right for sites without
 deep links, but on a season or episode page a site that can open that exact item should go there. Feature 16 already
