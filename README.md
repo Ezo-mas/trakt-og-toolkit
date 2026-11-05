@@ -172,7 +172,9 @@ The list shows posters (when available), titles, progress and paused dates, newe
 several and **Clear selected**, or enter an age and **Clear older items** (strictly older than that many elapsed days).
 Every deletion asks for confirmation with the item count. Bulk actions report partial failures and refresh the list.
 **Refresh paused playback** checks for changes made elsewhere; cached data lasts about a minute. Clearing removes
-saved playback, not watched history. There is no control to set progress manually.
+saved playback, not watched history. On a movie or episode page with no saved playback, **Save progress…** asks for
+a percentage and confirms first; each overview row has the same action. It sends Trakt's scrobble start and pause,
+so your profile may briefly show the title as watching, and it never sends stop (which can mark the title watched).
 
 ## Custom links
 

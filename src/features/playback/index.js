@@ -3,7 +3,7 @@ import { debugError } from '../../core/log.js';
 import { isSignedIn } from '../../core/trakt.js';
 import { toast } from '../../ui/shell.js';
 import { playbackApi } from './api.js';
-import { matchesRoute, olderThan } from './data.js';
+import { matchesRoute, normalizeProgress, olderThan } from './data.js';
 import { CSS } from './styles.js';
 
 const ID = 'ogt-playback';
@@ -12,7 +12,7 @@ const button = (label, action) => el('button', { class: 'ogt-chip', type: 'butto
 
 function createPanel(route) {
   const overview = route.name === 'progress';
-  const kind = route.name === 'episode' ? 'episode' : 'movie';
+  const kind = route.kind === 'movie' ? 'movie' : 'episode';
   let destroyed = false;
   let busy = false;
   let items = [];
@@ -36,8 +36,11 @@ function createPanel(route) {
     content.replaceChildren();
     if (!overview) {
       const item = items.find((row) => matchesRoute(row, route));
-      node.hidden = !item;
-      if (!item) return;
+      node.hidden = false;
+      if (!item) {
+        content.append(el('p', { class: 'ogt-hint', text: 'No saved playback.' }), button('Save progress…', 'save'));
+        return;
+      }
       const clear = button('Clear', 'one');
       clear.dataset.id = String(item.id);
       content.append(el('div', { class: 'ogt-playback__tools' },
@@ -56,6 +59,7 @@ function createPanel(route) {
       button('Clear older items', 'age'));
     const list = el('ul', { class: 'ogt-playback__list' });
     for (const item of items) {
+      const save = button('Save progress…', 'save'); save.dataset.id = String(item.id);
       const clear = button('Clear', 'one'); clear.dataset.id = String(item.id);
       const poster = item.poster ? el('img', { class: 'ogt-playback__poster', src: item.poster, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) :
         el('span', { class: 'ogt-playback__poster', 'aria-hidden': true });
@@ -63,7 +67,7 @@ function createPanel(route) {
         el('input', { type: 'checkbox', dataset: { id: item.id, action: 'select' }, checked: selected.has(item.id), 'aria-label': `Select ${item.title}` }), poster,
         el('div', { class: 'ogt-playback__details' }, el('a', { href: item.href, text: item.title }),
           el('span', { text: ` · ${percent(item.progress)}` }),
-          el('time', { class: 'ogt-playback__date', datetime: item.pausedAt, text: `Paused ${new Date(item.pausedMs).toLocaleString()}` })), clear));
+          el('time', { class: 'ogt-playback__date', datetime: item.pausedAt, text: `Paused ${new Date(item.pausedMs).toLocaleString()}` })), save, clear));
     }
     content.append(tools, list);
   }
@@ -92,6 +96,30 @@ function createPanel(route) {
     if (!overview && node.hidden) toast(`Paused playback: ${message}`);
     else status.textContent = message;
   }
+  async function saveProgress(item) {
+    status.textContent = '';
+    const current = item ? Math.round(item.progress) : 0;
+    const value = window.prompt('Progress percentage (0–100)', String(current));
+    if (value == null || !alive()) return;
+    const progress = normalizeProgress(value);
+    if (progress == null) { status.textContent = 'Enter a percentage from 0 to 100.'; return; }
+    const title = item?.title ?? 'this title';
+    if (!window.confirm(`Set progress to ${percent(progress)} for ${title}? It may briefly show as watching on your Trakt profile.`)) return;
+    if (!alive()) return;
+    status.textContent = 'Saving progress…';
+    if (item) await playbackApi.setProgress(item, progress);
+    else await playbackApi.setRouteProgress(route, progress);
+    if (!alive()) return;
+    items = [];
+    render();
+    try { await read(true); }
+    catch (error) {
+      debugError('playback refresh failed', error);
+      status.textContent = 'Progress saved, but playback could not be refreshed.';
+      return;
+    }
+    if (alive()) status.textContent = 'Progress saved.';
+  }
   async function onClick(event) {
     const target = event.target.closest('button[data-action]');
     if (!target || !node.contains(target) || busy || !alive()) return;
@@ -102,6 +130,10 @@ function createPanel(route) {
         status.textContent = 'Loading paused playback…';
         await read(true);
         if (alive()) status.textContent = '';
+      } else if (action === 'save') {
+        const item = overview ? items.find((row) => row.id === Number(target.dataset.id)) : null;
+        if (overview && !item) return;
+        await saveProgress(item);
       } else if (action === 'one') await clear([Number(target.dataset.id)]);
       else if (action === 'selected') await clear([...selected]);
       else if (action === 'age') {
@@ -112,7 +144,8 @@ function createPanel(route) {
       }
     } catch (error) {
       debugError('playback request failed', error);
-      if (alive()) status.textContent = 'Could not load paused playback; try again.';
+      if (alive()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.'
+        : action === 'save' ? 'Could not save progress; try again.' : 'Could not load paused playback; try again.';
     } finally { if (alive()) lock(false); }
   }
   function onChange(event) {
