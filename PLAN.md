@@ -35,6 +35,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 21 | Month review: browse earlier months | OAuth | done |
 | 22 | Custom link presets that open the exact show, season or episode | — | done |
 | 23 | Test suite review and cleanup | — | last |
+| 24 | More exact-title link presets | — | small; check og and each site first |
 
 **Released:** 0.3.0 on 2026-11-03 (features 6–8, 11–13, 15 and 16). Bump the version again whenever main should
 reach userscript managers; they only offer an update when `@version` changes.
@@ -485,6 +486,25 @@ fills `{imdb}`, `{tmdb}`, `{season}` and `{episode}` with the show's values.
   subtitle sites); skip sites that need their own ids (Plex, Jellyfin) or have no episode pages (Metacritic, AniList).
 - A preset can be several templates; a link with a placeholder the page lacks already hides itself, so an episode
   template simply doesn't show on show or movie pages. Keep the search preset as the fallback.
+
+## 24. More exact-title link presets
+
+**Goal:** feature 22 gave presets a `deep` list but only Stremio uses it. Look for more services a Trakt user would
+open from a title, that og doesn't already link, and that take an id og's page gives (`{imdb}`, `{tmdb}`) plus
+`{season}`/`{episode}`. Each candidate is unverified: open its URLs by hand first, and drop it if it needs its own ids.
+
+- **Debrid Media Manager:** `debridmediamanager.com/movie/{imdb}`, `/show/{imdb}` and a season path; popular with the
+  same Stremio/debrid users. Confirm the season route shape.
+- **MDBList:** `mdblist.com/movie/{imdb}` / `/show/{imdb}` (no season pages: show route only).
+- **Overseerr / Jellyseerr:** `/movie/{tmdb}` and `/tv/{tmdb}` on the user's own host, so the preset needs a host the
+  user edits (an example host like the README's Sonarr/Radarr examples), not a working default.
+- **Subtitles (OpenSubtitles, SubDL):** both search by IMDb id, but OpenSubtitles wants it without `tt`; that needs a
+  new placeholder (for example `{imdbnum}`), so only take it if the second site needs it too.
+- **Stremio desktop app:** the same routes under `stremio:///detail/…`. Custom links only accept `http(s)`, so this
+  needs an allow-list for that one scheme; skip unless asked.
+
+Skip anything og links on the same page (check live movie, show, season and episode pages and `git log -S` in
+trakt-og), and keep each preset's search URL as the fallback as feature 22 does.
 
 ## 23. Test suite review and cleanup
 

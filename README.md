@@ -288,6 +288,7 @@ links, poster rating corners. Backlog:
 - set playback progress by hand;
 - list preview posters that link to their titles;
 - **Add all shown credits** to the watchlist with one action from a person's page;
+- more link presets that open the exact title (candidates: Debrid Media Manager, MDBList, Overseerr/Jellyseerr);
 - a review and cleanup of the test suite.
 
 ## Trakt API compliance
