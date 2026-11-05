@@ -2,6 +2,21 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-05: list preview titles (feature 10)
+
+- Live `/users/justin/lists` capture: every list row's fan is `a.fan[aria-hidden]` with five `.slot` spans;
+  the only title metadata is the tooltip text and the poster URL. The media path carries the type and Trakt id
+  (`images/shows/000/199/343/posters/thumb/...` -> show 199343), so no list-items API reads are needed.
+- `ListRow.css` already gives `.slot` `position: relative`, but the fan is an anchor, so a nested title anchor
+  would be invalid. Clicks on a slot are delegated to the derived title URL and stop the fan's list navigation;
+  a visually hidden `nav` after the fan carries real title links for keyboard and screen-reader use.
+- The feature runs only on list pages and scans page-wide like the card shortcuts, so rows added or replaced
+  later, including the All lists fallback, get previews too. It adds no wrapper around og's poster stack and
+  does not change its layout.
+- Tests: `test/list-preview.test.js` covers URL parsing and tooltip titles;
+  `test/list-preview-integration.test.js` covers the built bundle, pointer activation, later and removed rows,
+  nav links and route teardown.
+
 ## 2026-11-04/05: custom link presets that open the exact title (feature 22)
 
 - Stremio's web route is `#/detail/:type/:id/:videoId?` (`src/routes/MetaDetails/MetaDetails.js`, `development`

@@ -278,6 +278,11 @@ directly, so there is no season-ratings fetch.
 
 ## 10. List preview posters link to their titles
 
+**Status:** done (2026-11-05). Media URLs in the fan (`/images/shows/000/199/343/posters/...`) carry the
+media type and Trakt id, so each slot gets a pointer shortcut to `/shows/:id` or `/movies/:id` without any
+API reads; a visually hidden list after the stack exposes the same links to screen readers. og's fan link to
+the list stays unchanged.
+
 **Goal:** on og, the poster stack of a list card (`ListRow`, the `a.fan` element) links to the list itself and is
 hidden from screen readers. Classic made each poster link to its own title and added your rating corners.
 
