@@ -2704,18 +2704,14 @@
     }
     return [...items.values()];
   }
-  function mapAllRatings(rows) {
-    const ofType = (type) => {
-      const items = /* @__PURE__ */ new Map();
-      for (const row of rows) {
-        if (row.type !== type || !Number.isInteger(row.rating) || row.rating < 1 || row.rating > 10) continue;
-        const id = row[type]?.ids?.trakt;
-        if (!Number.isSafeInteger(id) || id <= 0) continue;
-        items.set(id, row.rating);
-      }
-      return items;
-    };
-    return { movie: ofType("movie"), show: ofType("show"), season: ofType("season"), episode: ofType("episode") };
+  function mapTitleRatings(rows, type) {
+    const items = /* @__PURE__ */ new Map();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      if (!Number.isInteger(row?.rating) || row.rating < 1 || row.rating > 10) continue;
+      const id = row[type]?.ids?.trakt;
+      if (Number.isSafeInteger(id) && id > 0) items.set(id, row.rating);
+    }
+    return items;
   }
   function forShow(items, id) {
     const show = /^\d+$/.test(String(id)) ? Number(id) : items.find((item) => item.slug === id)?.show;
@@ -2738,14 +2734,20 @@
   }
 
   // src/features/your-ratings/api.js
+  var TTL2 = 10 * 6e4;
+  var emptyTitles = () => ({ movie: /* @__PURE__ */ new Map(), show: /* @__PURE__ */ new Map() });
   function createRatingsApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
     let cache3 = null;
     let flight = null;
+    let titleCache = null;
+    let titleFlight = null;
     let generation3 = 0;
     function resetSession() {
       generation3++;
       cache3 = null;
       flight = null;
+      titleCache = null;
+      titleFlight = null;
     }
     async function load() {
       if (!signedIn()) {
@@ -2760,7 +2762,7 @@
         if (epoch !== generation3 || !signedIn()) throw new Error("Ratings session changed.");
         if (!Array.isArray(rows)) throw new Error("Invalid ratings response.");
         const items = mapRatings(rows);
-        cache3 = { items, until: now() + 10 * 6e4 };
+        cache3 = { items, until: now() + TTL2 };
         return items;
       })();
       flight = pending;
@@ -2770,34 +2772,30 @@
         if (flight === pending) flight = null;
       }
     }
-    async function loadAll() {
+    async function loadTitles() {
       if (!signedIn()) {
         resetSession();
-        return { movie: /* @__PURE__ */ new Map(), show: /* @__PURE__ */ new Map(), season: /* @__PURE__ */ new Map(), episode: /* @__PURE__ */ new Map() };
+        return emptyTitles();
       }
-      if (cache3 && cache3.until > now() && cache3.all) return cache3.all;
-      if (flight) {
-        await flight;
-        if (cache3?.all) return cache3.all;
-      }
+      if (titleCache && titleCache.until > now()) return titleCache.titles;
+      if (titleFlight) return titleFlight;
       const epoch = generation3;
       const pending = (async () => {
-        const rows = await auth("GET", "/sync/ratings");
+        const [movies, shows] = await Promise.all([auth("GET", "/sync/ratings/movies"), auth("GET", "/sync/ratings/shows")]);
         if (epoch !== generation3 || !signedIn()) throw new Error("Ratings session changed.");
-        if (!Array.isArray(rows)) throw new Error("Invalid ratings response.");
-        const all = mapAllRatings(rows);
-        const items = mapRatings(rows.filter((r) => r.type === "episode"));
-        cache3 = { items, all, until: now() + 10 * 6e4 };
-        return all;
+        if (!Array.isArray(movies) || !Array.isArray(shows)) throw new Error("Invalid ratings response.");
+        const titles = { movie: mapTitleRatings(movies, "movie"), show: mapTitleRatings(shows, "show") };
+        titleCache = { titles, until: now() + TTL2 };
+        return titles;
       })();
-      flight = pending;
+      titleFlight = pending;
       try {
         return await pending;
       } finally {
-        if (flight === pending) flight = null;
+        if (titleFlight === pending) titleFlight = null;
       }
     }
-    return { load, loadAll, resetSession };
+    return { load, loadTitles, resetSession };
   }
   var ratingsApi = createRatingsApi();
   if (typeof document !== "undefined") document.addEventListener("ogt:authchange", ratingsApi.resetSession);
@@ -4682,51 +4680,36 @@
   // src/features/list-preview/corner-rating.js
   function cornerRating(rating, label = `Your rating: ${rating}`) {
     if (!Number.isInteger(rating) || rating < 1 || rating > 10) return null;
-    const corner = el("div", {
-      class: "ogt-corner-rating",
-      role: "img",
-      "aria-label": label,
-      style: `--rating-color: var(--rating-${rating})`
-    });
-    const text2 = el("span", { class: "ogt-corner-rating-text", "aria-hidden": "true" }, String(rating));
-    corner.appendChild(text2);
-    return corner;
+    return el(
+      "div",
+      { class: "ogt-corner-rating", role: "img", "aria-label": label, style: `--ogt-rating-color: var(--rating-${rating})` },
+      el("span", { class: "ogt-corner-rating-text", "aria-hidden": "true" }, String(rating))
+    );
   }
   var cornerRatingStyles = `
-:root {
-  --rating-1: #616161;
-  --rating-2: #675b5b;
-  --rating-3: #705252;
-  --rating-4: #7a4747;
-  --rating-5: #863c3c;
-  --rating-6: #922f30;
-  --rating-7: #9e2424;
-  --rating-8: #a81918;
-  --rating-9: #b11010;
-  --rating-10: #b70a0a;
-}
-
 .ogt-corner-rating {
   position: absolute;
-  top: 0;
-  right: 0;
+  inset-block-start: 0;
+  inset-inline-start: calc(var(--poster-width, 100%) - 30px);
   z-index: 10;
-  width: 30px;
-  height: 30px;
-  background-color: var(--rating-color);
+  inline-size: 30px;
+  block-size: 30px;
+  background-color: var(--ogt-rating-color);
   clip-path: polygon(0 0, 100% 0, 100% 100%);
   pointer-events: none;
 }
-
-/* OG's geometry: a 15 by 30 box, 7px in, text on its top 12px, turned 45 degrees. */
+@container (width < 520px) {
+  .list-row .ogt-corner-rating { inset-inline-start: auto; inset-inline-end: 0; }
+}
+/* og's geometry: a 15 by 30 box, 7px in, text on its top 12px, turned 45 degrees. */
 .ogt-corner-rating-text {
   position: absolute;
-  top: 0;
-  left: 7px;
-  width: 15px;
-  height: 30px;
+  inset-block-start: 0;
+  inset-inline-start: 7px;
+  inline-size: 15px;
+  block-size: 30px;
   color: var(--color-card-text, #fff);
-  font-family: var(--font-headings, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
+  font-family: var(--font-headings, sans-serif);
   font-weight: var(--font-weight-headings-heavy, 700);
   font-size: var(--font-size-card-subtitle, 11px);
   line-height: 12px;
@@ -4753,16 +4736,38 @@
       const navs = /* @__PURE__ */ new Map();
       const corners = /* @__PURE__ */ new Map();
       let ratings = null;
+      let ratingsRun = 0;
       let destroyed = false;
       let scheduled = false;
       async function loadRatings() {
-        try {
-          ratings = await ratingsApi.loadAll();
-        } catch (err) {
-          console.warn("[ogt] Could not load ratings for list previews:", err);
-          ratings = { movie: /* @__PURE__ */ new Map(), show: /* @__PURE__ */ new Map(), season: /* @__PURE__ */ new Map(), episode: /* @__PURE__ */ new Map() };
-        }
+        const run = ++ratingsRun;
+        ratings = null;
         schedule();
+        if (!isSignedIn()) return;
+        let next = null;
+        try {
+          next = await ratingsApi.loadTitles();
+        } catch (error) {
+          debugError("list preview ratings failed", error);
+        }
+        if (destroyed || run !== ratingsRun) return;
+        ratings = next;
+        schedule();
+      }
+      function removeCorner(slot) {
+        corners.get(slot)?.node.remove();
+        corners.delete(slot);
+      }
+      function syncCorner(slot, info2) {
+        const rating = info2 && ratings?.[info2.kind]?.get(info2.id);
+        const key = rating ? `${info2.kind}:${info2.id}:${rating}` : null;
+        const current = corners.get(slot);
+        if (current?.key === key && (!key || current.node.parentNode === slot)) return;
+        removeCorner(slot);
+        const node = key && cornerRating(rating, `Your rating: ${rating} of 10`);
+        if (!node) return;
+        slot.append(node);
+        corners.set(slot, { key, node });
       }
       function scan() {
         if (destroyed) return;
@@ -4770,40 +4775,22 @@
         for (const slot of document.querySelectorAll(SLOT)) {
           seenSlots.add(slot);
           const info2 = readListPoster(slot);
-          if (!info2) {
-            slots.delete(slot);
-            slot.classList.remove("ogt-list-preview-slot");
-            corners.get(slot)?.remove();
-            corners.delete(slot);
-            continue;
-          }
-          slot.classList.add("ogt-list-preview-slot");
-          slots.set(slot, info2);
-          if (ratings && !corners.has(slot)) {
-            const ratingMap = info2.kind === "movie" ? ratings.movie : ratings.show;
-            const rating = ratingMap.get(info2.id);
-            if (rating) {
-              const corner = cornerRating(rating, `Your rating: ${rating} of 10`);
-              if (corner) {
-                slot.style.position = "relative";
-                slot.appendChild(corner);
-                corners.set(slot, corner);
-              }
-            }
-          }
+          slot.classList.toggle("ogt-list-preview-slot", Boolean(info2));
+          if (info2) slots.set(slot, info2);
+          else slots.delete(slot);
+          syncCorner(slot, info2);
         }
-        for (const slot of slots.keys()) {
+        for (const slot of /* @__PURE__ */ new Set([...slots.keys(), ...corners.keys()])) {
           if (seenSlots.has(slot) && slot.isConnected) continue;
           slot.classList.remove("ogt-list-preview-slot");
-          corners.get(slot)?.remove();
-          corners.delete(slot);
+          removeCorner(slot);
           slots.delete(slot);
         }
         const seenFans = /* @__PURE__ */ new Set();
         for (const fan of document.querySelectorAll(FAN)) {
-          seenFans.add(fan);
           const items = [...fan.querySelectorAll(".slot")].map((slot) => slots.get(slot)).filter(Boolean);
           if (!items.length) continue;
+          seenFans.add(fan);
           const signature = items.map((item) => `${item.kind}:${item.id}:${item.title}`).join("|");
           const entry = navs.get(fan);
           if (entry?.nav.isConnected && entry.signature === signature) continue;
@@ -4820,13 +4807,20 @@
         }
       }
       function navigate(event) {
-        if (event.type === "click" ? event.button !== 0 : event.type !== "auxclick" || event.button !== 1) return;
+        const middle = event.type === "auxclick" && event.button === 1;
+        if (!middle && (event.type !== "click" || event.button !== 0)) return;
         const slot = event.target?.closest?.(SLOT);
         const info2 = slot && slots.get(slot);
         if (!info2) return;
         event.preventDefault();
         event.stopPropagation();
-        window.open(info2.href, "_self");
+        if (middle || event.ctrlKey || event.metaKey || event.shiftKey) {
+          window.open(info2.href, "_blank", "noopener");
+          return;
+        }
+        const link = [...navs.get(slot.closest(".fan"))?.nav.querySelectorAll("a") ?? []].find((anchor) => anchor.getAttribute("href") === info2.href);
+        if (link) link.click();
+        else window.location.assign(info2.href);
       }
       function schedule() {
         if (scheduled || destroyed) return;
@@ -4858,7 +4852,7 @@
           document.removeEventListener("auxclick", navigate, true);
           document.removeEventListener("ogt:authchange", loadRatings);
           for (const slot of slots.keys()) slot.classList.remove("ogt-list-preview-slot");
-          for (const corner of corners.values()) corner.remove();
+          for (const { node } of corners.values()) node.remove();
           for (const { nav } of navs.values()) nav.remove();
           slots.clear();
           corners.clear();

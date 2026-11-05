@@ -1,57 +1,44 @@
 import { el } from '../../core/dom.js';
 
 /**
- * A rating badge in the top-left corner of a poster, matching OG's CornerRating geometry.
- * Returns a div with position: absolute that overlays its container.
+ * Your rating as a coloured triangle in a poster's top-right corner, matching og's `CornerRating`.
+ * Colours are og's own `--rating-N` tokens.
  */
 export function cornerRating(rating, label = `Your rating: ${rating}`) {
   if (!Number.isInteger(rating) || rating < 1 || rating > 10) return null;
-  const corner = el('div', {
-    class: 'ogt-corner-rating',
-    role: 'img',
-    'aria-label': label,
-    style: `--rating-color: var(--rating-${rating})`,
-  });
-  const text = el('span', { class: 'ogt-corner-rating-text', 'aria-hidden': 'true' }, String(rating));
-  corner.appendChild(text);
-  return corner;
+  return el('div', { class: 'ogt-corner-rating', role: 'img', 'aria-label': label, style: `--ogt-rating-color: var(--rating-${rating})` },
+    el('span', { class: 'ogt-corner-rating-text', 'aria-hidden': 'true' }, String(rating)));
 }
 
+/*
+ * A fan slot is a sliver showing the left edge of a full-width poster, so the corner sits at the poster's own
+ * right edge (og's `--poster-width`) and shows when that poster opens up. In og's narrow layout the slots hold
+ * whole posters side by side, so it sits at the slot's edge.
+ */
 export const cornerRatingStyles = `
-:root {
-  --rating-1: #616161;
-  --rating-2: #675b5b;
-  --rating-3: #705252;
-  --rating-4: #7a4747;
-  --rating-5: #863c3c;
-  --rating-6: #922f30;
-  --rating-7: #9e2424;
-  --rating-8: #a81918;
-  --rating-9: #b11010;
-  --rating-10: #b70a0a;
-}
-
 .ogt-corner-rating {
   position: absolute;
-  top: 0;
-  right: 0;
+  inset-block-start: 0;
+  inset-inline-start: calc(var(--poster-width, 100%) - 30px);
   z-index: 10;
-  width: 30px;
-  height: 30px;
-  background-color: var(--rating-color);
+  inline-size: 30px;
+  block-size: 30px;
+  background-color: var(--ogt-rating-color);
   clip-path: polygon(0 0, 100% 0, 100% 100%);
   pointer-events: none;
 }
-
-/* OG's geometry: a 15 by 30 box, 7px in, text on its top 12px, turned 45 degrees. */
+@container (width < 520px) {
+  .list-row .ogt-corner-rating { inset-inline-start: auto; inset-inline-end: 0; }
+}
+/* og's geometry: a 15 by 30 box, 7px in, text on its top 12px, turned 45 degrees. */
 .ogt-corner-rating-text {
   position: absolute;
-  top: 0;
-  left: 7px;
-  width: 15px;
-  height: 30px;
+  inset-block-start: 0;
+  inset-inline-start: 7px;
+  inline-size: 15px;
+  block-size: 30px;
   color: var(--color-card-text, #fff);
-  font-family: var(--font-headings, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
+  font-family: var(--font-headings, sans-serif);
   font-weight: var(--font-weight-headings-heavy, 700);
   font-size: var(--font-size-card-subtitle, 11px);
   line-height: 12px;

@@ -16,11 +16,21 @@ Working notes and known issues. Newest first.
 - Tests: `test/list-preview.test.js` covers URL parsing and tooltip titles;
   `test/list-preview-integration.test.js` covers the built bundle, pointer activation, later and removed rows,
   nav links and route teardown.
-- Rating corners: `corner-rating.js` creates OG's colored triangle badges (top-right, 30×30px, `clip-path` polygon,
-  rating text rotated 45°). `ratingsApi.loadAll()` fetches `/sync/ratings` (all types) once per page with 10-minute
-  cache; `mapAllRatings()` splits by type into Maps keyed by Trakt ID. Badges overlay slots when `ratings.movie` or
-  `ratings.show` has that poster's ID. Ratings reload on `ogt:authchange`. Test: `test/list-preview-ratings.test.js`
-  covers badge creation and validation.
+- Plain clicks call `.click()` on the matching hidden link, so SvelteKit's router handles them like any other
+  link (no full reload); middle and Ctrl/Cmd/Shift clicks open the title with `window.open(href, '_blank')`.
+- Rating corners: og's `ListRow.svelte` (trakt-og `fea92af`) renders no `CornerRating` on the fan, so this adds one.
+  `corner-rating.js` copies `CornerRating.svelte`'s geometry and uses og's own `--rating-N` tokens (`tokens.css`);
+  the first draft redefined them on `:root`, which would override og's theme. A slot is a sliver showing the left
+  edge of a full poster, so the badge sits at `calc(var(--poster-width) - 30px)`, the poster's own corner, and shows
+  when that poster opens on hover; in og's narrow layout (`@container (width < 520px)`, whole posters side by side)
+  it sits at the slot's right edge. Checked on live `/users/justin/lists` at desktop and 420px widths.
+- `ratingsApi.loadTitles()` reads `/sync/ratings/movies` and `/sync/ratings/shows` (not the full `/sync/ratings`,
+  which includes every episode rating) with its own 10-minute cache and in-flight promise; sharing the episode
+  loader's flight would have handed `load()` the wrong shape. Each corner is keyed by `kind:id:rating`, so a
+  replaced poster or a sign-out (`ogt:authchange`) replaces or removes it. Signed out, nothing is requested.
+- Tests: `test/list-preview-integration.test.js` also covers plain/middle/modified clicks, corners on the right
+  posters, poster changes and sign-out; `test/list-preview-ratings.test.js` the badge; `test/your-ratings.test.js`
+  the separate title cache.
 
 ## 2026-11-04/05: custom link presets that open the exact title (feature 22)
 
