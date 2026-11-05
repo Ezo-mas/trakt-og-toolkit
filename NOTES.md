@@ -13,16 +13,17 @@ Working notes and known issues. Newest first.
   `ogt:authchange`.
 - The card rerenders per month. Next is disabled on last month; previous is disabled on the first history month.
   Earlier months with no plays show an empty card, so gaps between plays remain navigable instead of dead-ending.
-  Hide still stores the viewed month's dismissal key and closes the card; the initial zero-play last month stays hidden.
+  Hide stores last month's dismissal key whichever month is on screen (storing the viewed month's key would bring the
+  card back on the next visit and blank it when browsing to that month), and only last month's load honors it. The
+  initial zero-play last month stays hidden. A failed step while browsing keeps the current month and shows a toast.
 - Browsing reuses the account from the first load: `loadReview(span, now, user)` only calls `/users/me` for the
   initial month. In-flight loads dedupe by month so quickly clicking the same target shares one request set.
-- The month arrows moved to the card's bottom row, right-aligned with the "Month in Review" link, and draw as SVG
-  chevrons inside flat translucent chips that match the dashboard tiles' radius. Hide keeps its top-right slot exactly
-  aligned to them: 80px wide (the two chevron chips' combined length) and 36px tall, so it starts on the left chip's
-  edge and ends at the right chips' edge, stacked above the pair. No full-width strip, no circle shape, no border, no
-  extra color; glyph centering no longer depends on font metrics.
+- Layout: the arrows sit in the card's bottom row, right of the "Month in Review" link, as SVG chevrons in flat
+  translucent 36px chips with the dashboard tiles' radius. Hide is a chip of the same style at the top right, 80px wide
+  so its edges line up with the arrow pair below.
 - Tests: unit coverage for month shifting/cache freshness and a built-bundle test that browses two months back,
-  returns through a cached month, checks the single account lookup and verifies both arrow stops. Build and tests pass.
+  returns through a cached month, checks the single account lookup and verifies both arrow stops, and one that hides
+  while viewing an earlier month.
 
 ## 2026-11-04: watchlist shortcuts on person credits (feature 17, per-row part)
 

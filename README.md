@@ -64,7 +64,7 @@ see are included and rows get og's watched-progress link. The toolkit doesn't li
 Sign in through the toolkit to see last month’s plays, hours, ratings and comments under the dashboard’s month
 strip. Previous and next arrows step through earlier months; next stops at last month and previous stops at the
 month of your first history entry. The fanart card highlights your first play and links to the full Month in Review.
-Hide dismisses the month you are viewing for your toolkit account. Nothing appears for last month with no plays;
+Hide dismisses the card for your toolkit account until next month, whichever month is on screen. Nothing appears for last month with no plays;
 an earlier month without plays shows an empty card so gaps stay navigable. Month boundaries use your browser’s time
 zone; results are stored in userscript storage per account and month. Earlier months stay cached, while last month
 refreshes at most daily during the first seven days.

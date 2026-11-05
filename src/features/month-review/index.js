@@ -1,6 +1,7 @@
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
 import { isSignedIn } from '../../core/trakt.js';
+import { toast } from '../../ui/shell.js';
 import { STORAGE, setPrivateValue } from '../../core/store.js';
 import { loadFirstMonth, loadReview } from './api.js';
 import { fanart, lastMonth, shiftMonth } from './data.js';
@@ -52,8 +53,9 @@ export const monthReview = {
     let hideButton = null;
     const node = el('section', { class: 'ogt-review', id: 'ogt-month-review', hidden: true, 'aria-label': 'Month in review' });
     anchor.after(node);
+    // Hide closes the whole card until next month, whichever month is on screen.
     const hide = () => {
-      if (review) setPrivateValue(STORAGE.dismissedReview(review.user), review.span.key);
+      if (review) setPrivateValue(STORAGE.dismissedReview(review.user), lastMonth().key);
       node.hidden = true;
     };
     const updateNav = () => {
@@ -141,6 +143,8 @@ export const monthReview = {
       } catch (error) {
         if (destroyed || epoch !== token || !isSignedIn()) return;
         debugError('month review failed', error);
+        // A failed step while browsing keeps the month on screen and its arrows usable.
+        if (!initial && review) { toast('Could not load that month’s review; try again later.'); return; }
         prevButton = nextButton = hideButton = null;
         node.className = 'ogt-review-hint';
         node.textContent = 'Could not load this month’s review; try again later.';

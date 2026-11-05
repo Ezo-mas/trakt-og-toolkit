@@ -3291,6 +3291,9 @@
   function freshCache(entry, now) {
     return entry && (now.getDate() > 7 || now.getTime() - entry.savedAt < 864e5);
   }
+  function monthCacheFresh(entry, span, now = /* @__PURE__ */ new Date()) {
+    return Boolean(entry) && (span.key < lastMonth(now).key || freshCache(entry, now));
+  }
 
   // src/features/month-review/api.js
   async function paginate(pageRequest, path, options = {}) {
@@ -3328,12 +3331,10 @@
       }
       if (!username) throw new Error("Missing review user.");
       alive(epoch);
-      if (getPrivateValue(STORAGE.dismissedReview(username)) === span.key) return null;
+      if (span.key === lastMonth(now).key && getPrivateValue(STORAGE.dismissedReview(username)) === span.key) return null;
       const key = STORAGE.monthReview(username, span.key);
       const cached = getPrivateValue(key);
-      if (cached && (span.key < lastMonth(now).key || freshCache(cached, now))) {
-        return { ...cached.summary, user: username, span };
-      }
+      if (monthCacheFresh(cached, span, now)) return { ...cached.summary, user: username, span };
       const history2 = await paginate(apiAuthPage, "/sync/history", { start_at: span.start, end_at: span.end, extended: "full,images" });
       alive(epoch);
       let summary2 = { plays: 0, hours: 0, ratings: 0, comments: 0, first: null };
@@ -3506,7 +3507,7 @@
       const node = el("section", { class: "ogt-review", id: "ogt-month-review", hidden: true, "aria-label": "Month in review" });
       anchor.after(node);
       const hide = () => {
-        if (review) setPrivateValue(STORAGE.dismissedReview(review.user), review.span.key);
+        if (review) setPrivateValue(STORAGE.dismissedReview(review.user), lastMonth().key);
         node.hidden = true;
       };
       const updateNav = () => {
@@ -3632,6 +3633,10 @@
         } catch (error) {
           if (destroyed || epoch !== token || !isSignedIn()) return;
           debugError("month review failed", error);
+          if (!initial && review) {
+            toast("Could not load that month’s review; try again later.");
+            return;
+          }
           prevButton = nextButton = hideButton = null;
           node.className = "ogt-review-hint";
           node.textContent = "Could not load this month’s review; try again later.";

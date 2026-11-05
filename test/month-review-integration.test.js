@@ -112,3 +112,12 @@ test('arrows browse earlier months, reuse cached months, and stop at the first h
   assert.match(title(), new RegExp(lastMonth().label, 'i'));
   assert.equal(arrow('Next').disabled, true);
 });
+test('Hide on an earlier month still dismisses the card until next month', async (t) => {
+  const b = boot(t, { earliest: shiftMonth(lastMonth(), -3), firstPages: 2 }); await wait();
+  const node = b.doc.querySelector('#ogt-month-review');
+  node.querySelector('[aria-label="Previous month"]').click(); await wait(); await wait();
+  assert.match(node.querySelector('h2').textContent, new RegExp(shiftMonth(lastMonth(), -1).label, 'i'));
+  node.querySelector('.ogt-review__hide').click();
+  assert.equal(node.hidden, true);
+  assert.equal(b.store.get('review.dismissed.tester'), lastMonth().key, 'the dismissal is for the card, not the month on screen');
+});

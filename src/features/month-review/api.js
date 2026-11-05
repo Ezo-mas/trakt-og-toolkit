@@ -1,6 +1,6 @@
 import { apiAuth, apiAuthPage, isSignedIn } from '../../core/trakt.js';
 import { getPrivateValue, setPrivateValue, STORAGE } from '../../core/store.js';
-import { lastMonth, monthSpan, summarize, freshCache } from './data.js';
+import { lastMonth, monthCacheFresh, monthSpan, summarize } from './data.js';
 
 export async function paginate(pageRequest, path, options = {}) {
   const rows = [];
@@ -34,12 +34,11 @@ export function loadReview(span = lastMonth(), now = new Date(), user = null) {
     }
     if (!username) throw new Error('Missing review user.');
     alive(epoch);
-    if (getPrivateValue(STORAGE.dismissedReview(username)) === span.key) return null;
+    // Hide dismisses the card until the next month, so only last month's load honors it.
+    if (span.key === lastMonth(now).key && getPrivateValue(STORAGE.dismissedReview(username)) === span.key) return null;
     const key = STORAGE.monthReview(username, span.key);
     const cached = getPrivateValue(key);
-    if (cached && (span.key < lastMonth(now).key || freshCache(cached, now))) {
-      return { ...cached.summary, user: username, span };
-    }
+    if (monthCacheFresh(cached, span, now)) return { ...cached.summary, user: username, span };
     const history = await paginate(apiAuthPage, '/sync/history', { start_at: span.start, end_at: span.end, extended: 'full,images' });
     alive(epoch);
     let summary = { plays: 0, hours: 0, ratings: 0, comments: 0, first: null };
