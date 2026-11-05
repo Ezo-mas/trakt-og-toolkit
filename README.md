@@ -110,7 +110,10 @@ it cannot distinguish browser zoom from display scaling. Card width alone does n
 On a person’s page, every credit row also has the same bookmark shortcut next to its blue lists icon. Movie
 rows add the movie; show rows, including a guest credit for a single episode, add the whole show. It uses the
 row’s own link and toolkit account, hides when the row’s native list tooltip includes Watchlist, and appears
-for rows rendered as you browse. The watchlist-all action for a whole credits page is not built yet.
+for rows rendered as you browse. A **Watchlist all (N)** button beside the credits toolbar’s sort controls adds every
+currently shown row that is not already on the watchlist. It confirms once with the count, sends the rows’ slugs in
+batches, and reports how many were added, already there or not found. Added rows lose their shortcut. OG’s own controls
+are not refreshed for a whole credits page, so a reload is the fallback there.
 
 Success shows **You added Spider-Man: Brand New Day to your watchlist.** (using the added title) in the matching
 toolkit notice, with an **Undo** button for newly added titles. It appears below the header on the right, with a green
@@ -287,7 +290,6 @@ links, poster rating corners. Backlog:
 
 - set playback progress by hand;
 - list preview posters that link to their titles;
-- **Add all shown credits** to the watchlist with one action from a person's page;
 - more link presets that open the exact title (candidates: Debrid Media Manager, MDBList, Overseerr/Jellyseerr);
 - a review and cleanup of the test suite.
 

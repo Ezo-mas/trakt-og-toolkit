@@ -10,6 +10,10 @@ export const watchlistCredits = createWatchlistShortcuts({
   match: route => route?.name === 'person',
   targets: () => [...document.querySelectorAll('article.credit-row')].map(host => ({ host, control: readCreditControl(host) })),
   readRoute: readCreditRoute,
+  bulk: {
+    label: 'Watchlist all',
+    target: () => document.querySelector('#credits .toolbar .controls'),
+  },
   css: `
     .ogt-watchlist-credit { display: grid; place-items: center; flex: 0 0 auto;
       inline-size: var(--action-width, 32px); block-size: var(--bar, 32px); min-block-size: 0;
@@ -21,5 +25,29 @@ export const watchlistCredits = createWatchlistShortcuts({
       background: var(--brand-fifth, #2b678f); color: var(--color-card-text, white); }
     .ogt-watchlist-credit:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
     .ogt-watchlist-credit:disabled { opacity: .6; cursor: default; }
+    .ogt-watchlist-bulk {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      margin-inline-start: 8px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--brand-first, #ed1c24);
+      color: var(--color-card-text, white);
+      font-family: var(--font-headings, -apple-system, system-ui, sans-serif);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .ogt-watchlist-bulk:hover:not(:disabled) {
+      background: var(--brand-second, #c41920);
+    }
+    .ogt-watchlist-bulk:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
   `,
 });

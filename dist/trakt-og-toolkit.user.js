@@ -1041,10 +1041,10 @@
       const match = link?.getAttribute("href")?.match(SEASON_HREF_RE);
       if (!match) continue;
       const number = Number(match[1]);
-      const count2 = Number(text(subtitle).match(/(\d+)/)?.[1]) || null;
+      const count3 = Number(text(subtitle).match(/(\d+)/)?.[1]) || null;
       const existing = found.get(number);
-      if (!existing || count2 && (!existing.episodes || count2 > existing.episodes)) {
-        found.set(number, { number, episodes: count2 });
+      if (!existing || count3 && (!existing.episodes || count3 > existing.episodes)) {
+        found.set(number, { number, episodes: count3 });
       }
     }
     return [...found.values()].sort((a, b) => a.number - b.number);
@@ -1887,25 +1887,25 @@
     }
     function renderEpisodeField() {
       const season = seasons.find((entry) => entry.number === selection.season);
-      const count2 = season?.episodes || null;
-      if (!count2 || count2 < 1) {
+      const count3 = season?.episodes || null;
+      if (!count3 || count3 < 1) {
         episodeSlot.replaceChildren(el("span", { text: "—" }));
         selection.episode = null;
         return;
       }
-      if (selection.episode == null || selection.episode > count2) selection.episode = 1;
-      if (count2 > 8) {
+      if (selection.episode == null || selection.episode > count3) selection.episode = 1;
+      if (count3 > 8) {
         const input = el("input", {
           class: "ogt-input",
           type: "number",
           min: "1",
-          max: String(count2),
+          max: String(count3),
           value: String(selection.episode),
           "aria-label": "Episode"
         });
         input.addEventListener("change", () => {
           const value = Number(input.value);
-          if (Number.isInteger(value) && value >= 1 && value <= count2) {
+          if (Number.isInteger(value) && value >= 1 && value <= count3) {
             selection.episode = value;
             persistSelection();
             updateLinkHrefs();
@@ -1917,7 +1917,7 @@
         return;
       }
       const select = el("select", { class: "ogt-select", "aria-label": "Episode" });
-      for (let i = 1; i <= count2; i++) {
+      for (let i = 1; i <= count3; i++) {
         select.append(el("option", { value: String(i), text: `Episode ${i}` }));
       }
       select.value = String(selection.episode);
@@ -4016,8 +4016,8 @@
     if (isSignedIn()) {
       const page = (n) => apiAuthPage(path, { extended: "images", page: n, limit: LIMIT });
       const first = await page(1);
-      const count2 = Math.min(first.pages ?? 1, MAX_PAGES);
-      const rest = await Promise.all(Array.from({ length: count2 - 1 }, (_, i) => page(i + 2)));
+      const count3 = Math.min(first.pages ?? 1, MAX_PAGES);
+      const rest = await Promise.all(Array.from({ length: count3 - 1 }, (_, i) => page(i + 2)));
       return [first, ...rest].flatMap((result) => Array.isArray(result.data) ? result.data : []);
     }
     const rows = [];
@@ -4197,8 +4197,8 @@
       row: scoped(row),
       icon: scoped(lists.querySelector(".list-row svg.icon")),
       likes: lists.querySelector(".list-row .counts > .glass-action"),
-      items: counts.find((count2) => !count2.getAttribute("href")?.endsWith("/comments")),
-      comments: counts.find((count2) => count2.getAttribute("href")?.endsWith("/comments")),
+      items: counts.find((count3) => !count3.getAttribute("href")?.endsWith("/comments")),
+      comments: counts.find((count3) => count3.getAttribute("href")?.endsWith("/comments")),
       tag: lists.querySelector(".list-row .chips .tag.tint"),
       text: scoped(lists.querySelector(".list-row .comment-text")),
       share: lists.querySelector(".list-row .tools > span.share"),
@@ -4209,7 +4209,7 @@
   function createRows(native) {
     const part = (tag2, name, props = {}, ...children) => el(tag2, { ...props, class: [name, native?.row].filter(Boolean).join(" ") }, ...children);
     const ownIcon = (path) => icon2(path, ["icon", native?.icon].filter(Boolean).join(" "));
-    function count2(kind, value, href, word, liked = false) {
+    function count3(kind, value, href, word, liked = false) {
       if (value == null) return null;
       const words = value === 1 ? word : `${word}s`;
       const template = native?.[kind];
@@ -4394,9 +4394,9 @@
                 "div",
                 "counts",
                 {},
-                count2("likes", entry.likes, href, "like", liked),
-                count2("items", entry.itemCount, href, "item"),
-                entry.allowComments ? count2("comments", entry.commentCount, `${href}/comments`, "comment") : null
+                count3("likes", entry.likes, href, "like", liked),
+                count3("items", entry.itemCount, href, "item"),
+                entry.allowComments ? count3("comments", entry.commentCount, `${href}/comments`, "comment") : null
               ),
               part(
                 "div",
@@ -4646,7 +4646,7 @@
           throw new Error("Trakt could not find some items; the addition may be incomplete.");
         }
         const counts = [result?.added?.movies, result?.added?.episodes, result?.updated?.movies, result?.updated?.episodes];
-        if (!counts.some((count2) => Number.isInteger(count2) && count2 > 0)) throw new Error("Trakt did not confirm a library addition.");
+        if (!counts.some((count3) => Number.isInteger(count3) && count3 > 0)) throw new Error("Trakt did not confirm a library addition.");
         const total = (counts2) => (Number(counts2?.movies) || 0) + (Number(counts2?.episodes) || 0);
         const undoable = total(result?.added) > 0 && total(result?.updated) === 0 && total(result?.existing) === 0;
         return { cancelled: false, body, undoable };
@@ -4951,6 +4951,29 @@
     if (!lookup || !Number.isSafeInteger(id) || id <= 0) throw new Error("Could not identify this title.");
     return { [lookup.type]: [{ ids: { trakt: id } }] };
   }
+  function watchlistBulkItems(routes) {
+    const items = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const route of Array.isArray(routes) ? routes : []) {
+      const lookup = watchlistLookup(route);
+      if (!lookup || lookup.type !== "movies" && lookup.type !== "shows") continue;
+      if (typeof route.id !== "string" || route.id.trim() === "") continue;
+      const slug = route.id.trim();
+      const key = typeof route.key === "string" && route.key ? route.key : `${lookup.type}:${slug}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({ key, type: lookup.type, slug });
+    }
+    return items;
+  }
+  function watchlistBulkBody(items) {
+    const body = {};
+    for (const item of Array.isArray(items) ? items : []) {
+      if (!item || item.type !== "movies" && item.type !== "shows" || typeof item.slug !== "string" || !item.slug) continue;
+      (body[item.type] ??= []).push({ ids: { slug: item.slug } });
+    }
+    return body;
+  }
   function readWatchlisted(anchor) {
     return [...anchor.querySelectorAll(".summary-action")].some((action) => /^listed on$/i.test(action.querySelector(".title")?.textContent.trim() ?? "") && /^watchlist(?:\s*\+|$)/i.test(action.querySelector(".detail")?.textContent.trim() ?? ""));
   }
@@ -4986,6 +5009,8 @@
   }
 
   // src/features/watchlist/api.js
+  var BULK_BATCH = 100;
+  var count2 = (value) => Number.isSafeInteger(value) && value > 0 ? value : 0;
   function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn } = {}) {
     return {
       async add(route, { active: active2 = () => true } = {}) {
@@ -5003,10 +5028,46 @@
           throw new Error("Trakt could not find this title.");
         }
         const counts = [result?.added?.[lookup.type], result?.existing?.[lookup.type]];
-        if (!counts.some((count2) => Number.isSafeInteger(count2) && count2 > 0)) {
+        if (!counts.some((count3) => Number.isSafeInteger(count3) && count3 > 0)) {
           throw new Error("Trakt did not confirm a watchlist addition.");
         }
         return { cancelled: false, title, body, undoable: Number.isSafeInteger(result?.added?.[lookup.type]) && result.added[lookup.type] > 0 };
+      },
+      /** Add every whole movie/show in one confirmed batch, using each route's slug. */
+      async addMany(routes, { active: active2 = () => true } = {}) {
+        if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
+        if (!active2()) return { cancelled: true };
+        const items = watchlistBulkItems(routes);
+        if (!items.length) return { cancelled: false, sent: 0, added: 0, existing: 0, notFound: 0, succeededKeys: [] };
+        let added = 0, existing = 0, notFound = 0;
+        const missing = /* @__PURE__ */ new Set();
+        for (let start2 = 0; start2 < items.length; start2 += BULK_BATCH) {
+          const batch = items.slice(start2, start2 + BULK_BATCH);
+          if (!active2() || !signedIn()) return { cancelled: true };
+          const result = await auth("POST", "/sync/watchlist", watchlistBulkBody(batch));
+          if (!result || typeof result !== "object") throw new Error("Trakt did not confirm watchlist additions.");
+          let confirmed = 0;
+          for (const type of ["movies", "shows"]) {
+            const addedCount = count2(result.added?.[type]);
+            const existingCount = count2(result.existing?.[type]);
+            const missingItems = result.not_found?.[type];
+            let missingCount = 0;
+            if (Array.isArray(missingItems)) {
+              missingCount = missingItems.length;
+              for (const item of missingItems) {
+                const slug = item?.ids?.slug;
+                if (typeof slug === "string" && slug) missing.add(`${type}:${slug}`);
+              }
+            } else missingCount = count2(missingItems);
+            added += addedCount;
+            existing += existingCount;
+            notFound += missingCount;
+            confirmed += addedCount + existingCount + missingCount;
+          }
+          if (!confirmed) throw new Error("Trakt did not confirm watchlist additions.");
+        }
+        const succeededKeys = notFound === 0 ? items.map((item) => item.key) : missing.size === notFound ? items.filter((item) => !missing.has(`${item.type}:${item.slug}`)).map((item) => item.key) : [];
+        return { cancelled: false, sent: items.length, added, existing, notFound, succeededKeys };
       },
       /** Undo an addition with the exact body that was sent. */
       async remove(body, { active: active2 = () => true } = {}) {
@@ -5242,7 +5303,7 @@
   };
 
   // src/features/watchlist/shortcuts.js
-  function createWatchlistShortcuts({ id, markerId, className, css: css2, match, logLabel, targets, readRoute }) {
+  function createWatchlistShortcuts({ id, markerId, className, css: css2, match, logLabel, targets, readRoute, bulk = null }) {
     return {
       id,
       match,
@@ -5254,7 +5315,8 @@
         const entries = /* @__PURE__ */ new Map();
         const states = /* @__PURE__ */ new Map();
         const nativeRefresh = createNativeWatchlistRefresh();
-        let destroyed = false, session = 0, scheduled = false;
+        let destroyed = false, session = 0, scheduled = false, bulkBusy = false;
+        const bulkButton = bulk ? el("button", { type: "button", class: "ogt-chip ogt-watchlist-bulk", text: bulk.label }) : null;
         function stateFor(key) {
           if (!states.has(key)) states.set(key, {
             busy: false,
@@ -5275,6 +5337,76 @@
           entry.button.disabled = state.busy || state.undoing;
           const busy = String(state.busy || state.undoing);
           if (entry.button.getAttribute("aria-busy") !== busy) entry.button.setAttribute("aria-busy", busy);
+        }
+        function bulkEntries() {
+          const unique = /* @__PURE__ */ new Map();
+          for (const entry of entries.values()) {
+            const state = stateFor(entry.key);
+            if (state.busy || state.undoing || state.added || state.wasWatchlisted) continue;
+            if (!entry.control.isConnected || !entry.button.isConnected) continue;
+            if (!unique.has(entry.key)) unique.set(entry.key, entry);
+          }
+          return [...unique.values()];
+        }
+        function syncBulk() {
+          if (!bulkButton) return;
+          const control = bulk.target?.();
+          if (control && !bulkButton.isConnected) control.append(bulkButton);
+          const total = bulkEntries().length;
+          const label = total ? `${bulk.label} (${total})` : bulk.label;
+          if (bulkButton.textContent !== label) bulkButton.textContent = label;
+          bulkButton.disabled = bulkBusy || total === 0;
+          bulkButton.setAttribute("aria-busy", String(bulkBusy));
+          bulkButton.title = total ? `Add ${total} title${total === 1 ? "" : "s"} to your watchlist` : "All credits shown are already on your watchlist";
+        }
+        async function addAll() {
+          if (bulkBusy) return;
+          if (!isSignedIn()) {
+            toast("Sign in to Trakt through the toolkit menu first.");
+            return;
+          }
+          const list = bulkEntries();
+          if (!list.length) {
+            toast("All credits shown are already on your watchlist.");
+            return;
+          }
+          if (!window.confirm(`Add ${list.length} title${list.length === 1 ? "" : "s"} to your watchlist?`)) return;
+          const epoch = session;
+          const pagePath = location.pathname;
+          const active2 = () => !destroyed && session === epoch && location.pathname === pagePath;
+          bulkBusy = true;
+          syncBulk();
+          try {
+            const result = await watchlistApi.addMany(list.map((entry) => entry.route), { active: active2 });
+            if (!active2() || result.cancelled) return;
+            if (!result.sent) {
+              toast("No titles to add.");
+              return;
+            }
+            const succeeded = new Set(result.succeededKeys ?? []);
+            for (const entry of entries.values()) if (succeeded.has(entry.key)) stateFor(entry.key).added = true;
+            scan();
+            const parts = [];
+            if (result.added) parts.push(`${result.added} added`);
+            if (result.existing) parts.push(`${result.existing} already there`);
+            if (result.notFound) parts.push(`${result.notFound} not found`);
+            const summary2 = parts.length ? parts.join(", ") : "nothing changed";
+            void notifyWatchlistAdded({
+              title: `Watchlist: ${summary2}`,
+              active: active2
+            });
+            for (const entry of list) {
+              if (succeeded.has(entry.key) && entry.control?.isConnected) {
+                await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
+              }
+            }
+          } catch (error) {
+            debugError(`${logLabel} bulk watchlist addition failed`, error);
+            if (active2()) toast(error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not add these titles to your watchlist. Check your toolkit sign-in and try again." : error.message);
+          } finally {
+            bulkBusy = false;
+            if (!destroyed) scan();
+          }
         }
         function activeFor(entry) {
           const epoch = session;
@@ -5381,6 +5513,7 @@
             state.wasWatchlisted = watchlisted;
           }
           for (const entry of entries.values()) updateButton(entry, stateFor(entry.key));
+          syncBulk();
         }
         function schedule() {
           if (scheduled || destroyed) return;
@@ -5392,10 +5525,12 @@
         }
         function authChanged() {
           session++;
+          bulkBusy = false;
           nativeRefresh.destroy();
           states.clear();
           scan();
         }
+        if (bulkButton) bulkButton.addEventListener("click", addAll);
         const observer = new MutationObserver(schedule);
         observer.observe(document.body, {
           childList: true,
@@ -5413,6 +5548,10 @@
           document.removeEventListener("ogt:authchange", authChanged);
           for (const entry of entries.values()) remove(entry);
           states.clear();
+          if (bulkButton) {
+            bulkButton.removeEventListener("click", addAll);
+            bulkButton.remove();
+          }
           node.remove();
         } };
       }
@@ -5460,6 +5599,10 @@
     match: (route) => route?.name === "person",
     targets: () => [...document.querySelectorAll("article.credit-row")].map((host) => ({ host, control: readCreditControl(host) })),
     readRoute: readCreditRoute,
+    bulk: {
+      label: "Watchlist all",
+      target: () => document.querySelector("#credits .toolbar .controls")
+    },
     css: `
     .ogt-watchlist-credit { display: grid; place-items: center; flex: 0 0 auto;
       inline-size: var(--action-width, 32px); block-size: var(--bar, 32px); min-block-size: 0;
@@ -5471,6 +5614,30 @@
       background: var(--brand-fifth, #2b678f); color: var(--color-card-text, white); }
     .ogt-watchlist-credit:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
     .ogt-watchlist-credit:disabled { opacity: .6; cursor: default; }
+    .ogt-watchlist-bulk {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      margin-inline-start: 8px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--brand-first, #ed1c24);
+      color: var(--color-card-text, white);
+      font-family: var(--font-headings, -apple-system, system-ui, sans-serif);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .ogt-watchlist-bulk:hover:not(:disabled) {
+      background: var(--brand-second, #c41920);
+    }
+    .ogt-watchlist-bulk:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
   `
   });
 

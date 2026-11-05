@@ -2,6 +2,23 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-05: Watchlist all on person credits (feature 17, bulk part)
+
+- The bulk action extends the existing shortcut factory instead of adding a parallel subsystem: it shares the
+  entries/states map, per-route busy/undo state, native-watchlist hiding and row observers. It only adds one
+  `Watchlist all (N)` button in `#credits .toolbar .controls`; N is the deduplicated count of currently shown rows
+  that are neither native-watchlisted nor already added by the toolkit.
+- `watchlistBulkItems` uses each credit row's route slug and drops seasons/episodes; `watchlistBulkBody` sends
+  `{ movies: [{ ids: { slug } }], shows: [...] }`. No per-title `GET` lookups are made. `watchlistApi.addMany` chunks
+  at 100 items per `POST /sync/watchlist`, so a 211-credit page makes three writes rather than 211.
+- The response aggregation supplies `added`, `existing`, `notFound` and the keys that succeeded. Added and existing
+  rows hide their shortcuts; `not_found` rows stay visible. The notice says `Watchlist: N added, N already there,
+  N not found.`, and cancelling the single confirm sends nothing. Native picker refresh is skipped for the whole
+  page because the per-control picker path is not appropriate for 200 simultaneous rows; reload remains the fallback.
+- Tests: `test/watchlist.test.js` covers slug-only items, deduplication, season exclusion, batching, partial
+  not-found mapping and signed-out/cancelled paths. `test/watchlist-credits-integration.test.js` covers the toolbar
+  button/count, one slug POST, native/individual skipping, partial counts, cancellation, lazy rows and teardown.
+
 ## 2026-11-04/05: custom link presets that open the exact title (feature 22)
 
 - Stremio's web route is `#/detail/:type/:id/:videoId?` (`src/routes/MetaDetails/MetaDetails.js`, `development`
@@ -66,8 +83,7 @@ Working notes and known issues. Newest first.
 - The page rendered all credits server-side in this capture; no load-more button or lazy rows were found. The
   feature still observes the document and handles rows swapped or added later, and it is keyed by route so a
   title listed twice shares one in-flight add.
-- Bulk **Watchlist all** from the feature plan was deliberately not built (the request covered the row button).
-  README's roadmap still lists adding all shown credits at once.
+- Bulk **Watchlist all** was added the next day; see the 2026-11-05 entry above.
 - Tests: `test/watchlist.test.js` covers credit-row route/control reading;
   `test/watchlist-credits-integration.test.js` covers built-bundle mounting, movie/show adds, native membership,
   custom-list names, lazy/removed rows, signed-out guidance and route teardown. `npm run drift` now checks the

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { parseRoute } from '../src/core/router.js';
-import { watchlistLookup, watchlistBody, readWatchlisted, readCardRoute, readCreditRoute, readCreditControl, readCardWatchlisted } from '../src/features/watchlist/data.js';
+import { watchlistLookup, watchlistBody, watchlistBulkItems, watchlistBulkBody, readWatchlisted, readCardRoute, readCreditRoute, readCreditControl, readCardWatchlisted } from '../src/features/watchlist/data.js';
 import { createWatchlistApi } from '../src/features/watchlist/api.js';
 import { WATCHLIST_HTML, PERSON_CREDITS_HTML, watchlistCardHtml } from './fixtures.js';
 
@@ -119,6 +119,55 @@ test('person credit rows resolve whole movies/shows from their poster link and r
   const stray = window.document.createElement('div');
   stray.innerHTML = '<a class="poster" href="/movies/test"></a>';
   assert.equal(readCreditRoute(stray), null, 'only og credit rows are eligible');
+});
+
+test('bulk credit items use whole-title slugs, deduplicate routes and ignore seasons', () => {
+  const routes = [parseRoute('/movies/jackpot-1115926'), parseRoute('/shows/after-hours-with-james-corden'),
+    parseRoute('/movies/jackpot-1115926'), parseRoute('/shows/breaking-bad/seasons/1/episodes/1')];
+  const items = watchlistBulkItems(routes);
+  assert.deepEqual(items.map(({ type, slug }) => [type, slug]), [['movies', 'jackpot-1115926'],
+    ['shows', 'after-hours-with-james-corden']]);
+  assert.deepEqual(watchlistBulkBody(items), { movies: [{ ids: { slug: 'jackpot-1115926' } }],
+    shows: [{ ids: { slug: 'after-hours-with-james-corden' } }] });
+  assert.deepEqual(watchlistBulkBody([]), {});
+  assert.deepEqual(watchlistBulkItems([null, {}, { name: 'title', kind: 'show', id: '' }]), []);
+});
+
+test('bulk watchlist sends slug bodies and maps partial not-found results', async () => {
+  const writes = [];
+  const routes = [parseRoute('/movies/jackpot-1115926'), parseRoute('/shows/after-hours-with-james-corden')];
+  const api = createWatchlistApi({ signedIn: () => true, get: async () => { throw new Error('unexpected lookup'); },
+    auth: async (...args) => { writes.push(args); return { added: { movies: 1 },
+      not_found: { shows: [{ ids: { slug: 'after-hours-with-james-corden' } }] } }; } });
+  const result = await api.addMany(routes);
+  assert.deepEqual(writes, [['POST', '/sync/watchlist', { movies: [{ ids: { slug: 'jackpot-1115926' } }],
+    shows: [{ ids: { slug: 'after-hours-with-james-corden' } }] }]]);
+  assert.equal(result.sent, 2); assert.equal(result.added, 1); assert.equal(result.existing, 0); assert.equal(result.notFound, 1);
+  assert.deepEqual(result.succeededKeys, [routes[0].key]);
+});
+
+test('bulk watchlist batches large credits pages without per-title lookups', async () => {
+  const writes = [];
+  const routes = Array.from({ length: 205 }, (_, index) => ({ name: 'title', kind: index % 2 ? 'movie' : 'show',
+    id: `title-${index}`, key: `/${index % 2 ? 'movies' : 'shows'}/title-${index}` }));
+  const api = createWatchlistApi({ signedIn: () => true, get: async () => { throw new Error('unexpected lookup'); },
+    auth: async (method, path, body) => { writes.push(body);
+      return { added: { movies: body.movies?.length ?? 0, shows: body.shows?.length ?? 0 } }; } });
+  const result = await api.addMany(routes);
+  assert.equal(writes.length, 3);
+  assert.deepEqual(writes.map(body => (body.movies?.length ?? 0) + (body.shows?.length ?? 0)), [100, 100, 5]);
+  assert.equal(result.sent, 205); assert.equal(result.added, 205); assert.equal(result.succeededKeys.length, 205);
+});
+
+test('bulk watchlist stays local when signed out, cancelled or empty', async () => {
+  let writes = 0;
+  const routes = [parseRoute('/movies/test')];
+  const signedOut = createWatchlistApi({ signedIn: () => false, auth: async () => { writes++; } });
+  await assert.rejects(signedOut.addMany(routes), /Sign in/);
+  const api = createWatchlistApi({ signedIn: () => true, auth: async () => { writes++; } });
+  assert.deepEqual(await api.addMany(routes, { active: () => false }), { cancelled: true });
+  assert.deepEqual(await api.addMany([]), { cancelled: false, sent: 0, added: 0, existing: 0, notFound: 0, succeededKeys: [] });
+  assert.equal(writes, 0);
 });
 
 test('card membership reader follows only its native list tooltip and canonical watchlist link', t => {

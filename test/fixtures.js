@@ -198,6 +198,10 @@ export const PERSON_CREDITS_HTML = `
 <main id="content">
   <section class="credits" id="credits" aria-labelledby="credits-heading">
     <h2 id="credits-heading"><strong>Credits</strong></h2>
+    <div class="toolbar">
+      <div class="department"><button type="button" class="trigger">Department: Acting</button></div>
+      <div class="controls"><span class="sort">Sort: Newest</span><button type="button" class="trigger">Newest</button></div>
+    </div>
     <section class="year list" aria-label="2026">
       ${personCreditRowHtml()}
       ${personCreditRowHtml({ id: 'credit-show', href: '/shows/after-hours-with-james-corden',
