@@ -62,10 +62,10 @@ see are included and rows get og's watched-progress link. The toolkit doesn't li
 ### List preview titles
 
 Each poster in a list card's preview stack opens that title instead of the list; the fan itself still opens the
-list. Titles come from the media URL, so this needs no client ID or extra API calls. Screen readers get a
-hidden list of the same title links. Your ratings appear as colored corner triangles (top-right) on each poster,
-with the rating number rotated 45° diagonally (sign in through the toolkit menu first). Ratings load once per 
-page and cache for 10 minutes.
+list. Middle-click or Ctrl/Cmd-click opens the title in a new tab. Titles come from the media URL, so the links need
+no client ID or extra API calls. Screen readers get a hidden list of the same title links. With the toolkit sign-in,
+your movie and show ratings appear in og's coloured corner triangle on each poster (og shows none on the fan); they
+load once per page and are cached for 10 minutes.
 
 ### Last month in review
 

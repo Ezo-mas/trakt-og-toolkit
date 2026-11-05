@@ -11,19 +11,15 @@ export function mapRatings(rows) {
   return [...items.values()];
 }
 
-/** All ratings split by type, keyed by Trakt ID. */
-export function mapAllRatings(rows) {
-  const ofType = (type) => {
-    const items = new Map();
-    for (const row of rows) {
-      if (row.type !== type || !Number.isInteger(row.rating) || row.rating < 1 || row.rating > 10) continue;
-      const id = row[type]?.ids?.trakt;
-      if (!Number.isSafeInteger(id) || id <= 0) continue;
-      items.set(id, row.rating);
-    }
-    return items;
-  };
-  return { movie: ofType('movie'), show: ofType('show'), season: ofType('season'), episode: ofType('episode') };
+/** One type's ratings (`movie` or `show`) as a Map from Trakt id to 1–10. */
+export function mapTitleRatings(rows, type) {
+  const items = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (!Number.isInteger(row?.rating) || row.rating < 1 || row.rating > 10) continue;
+    const id = row[type]?.ids?.trakt;
+    if (Number.isSafeInteger(id) && id > 0) items.set(id, row.rating);
+  }
+  return items;
 }
 export function forShow(items, id) {
   // Resolve slugs once, then filter by numeric identity (never by episode number alone).

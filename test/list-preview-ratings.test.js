@@ -14,7 +14,7 @@ test('cornerRating creates a badge with correct styling', (t) => {
   assert.equal(badge.className, 'ogt-corner-rating');
   assert.equal(badge.getAttribute('role'), 'img');
   assert.equal(badge.getAttribute('aria-label'), 'Your rating: 8');
-  assert.match(badge.style.cssText, /--rating-color:\s*var\(--rating-8\)/);
+  assert.match(badge.getAttribute('style'), /--ogt-rating-color:\s*var\(--rating-8\)/);
   
   const text = badge.querySelector('.ogt-corner-rating-text');
   assert.equal(text.textContent, '8');
@@ -55,6 +55,6 @@ test('cornerRating creates badges for all valid ratings 1-10', (t) => {
     const badge = cornerRating(i);
     assert.ok(badge, `badge should be created for rating ${i}`);
     assert.equal(badge.querySelector('.ogt-corner-rating-text').textContent, String(i));
-    assert.match(badge.style.cssText, new RegExp(`--rating-color:\\s*var\\(--rating-${i}\\)`));
+    assert.match(badge.getAttribute('style'), new RegExp(`--ogt-rating-color:\\s*var\\(--rating-${i}\\)`));
   }
 });
