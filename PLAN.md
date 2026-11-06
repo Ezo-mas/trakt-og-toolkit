@@ -268,6 +268,10 @@ directly, so there is no season-ratings fetch.
 
 ## 9. Playback extras: set progress
 
+**Status:** done (2026-11-05). A **Save progress…** action appears on movie and episode pages (with or without
+saved playback) and on every row in the overview. It asks for a 1–100 percentage, confirms with a watching-status
+warning, then sends `/scrobble/start` and `/scrobble/pause`; it never sends `/scrobble/stop`.
+
 **Goal:** classic's manager could also set progress. Add it as an opt-in action.
 
 - On a movie or episode page with no saved progress (and in the overview), a "Save progress…" action: enter a %,
@@ -277,6 +281,12 @@ directly, so there is no season-ratings fetch.
   playback expiring. Don't build it unless entries are seen to disappear.
 
 ## 10. List preview posters link to their titles
+
+**Status:** done (2026-11-05). Media URLs in the fan (`/images/shows/000/199/343/posters/...`) carry the
+media type and Trakt id, so each slot gets a pointer shortcut to `/shows/:id` or `/movies/:id` without any
+API reads; a visually hidden list after the stack exposes the same links to screen readers. og's fan link to
+the list stays unchanged. og's `ListRow` fan has no `CornerRating`, so with the toolkit sign-in your movie and
+show ratings get og's corner badge on each poster.
 
 **Goal:** on og, the poster stack of a list card (`ListRow`, the `a.fan` element) links to the list itself and is
 hidden from screen readers. Classic made each poster link to its own title and added your rating corners.
