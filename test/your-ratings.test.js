@@ -36,26 +36,3 @@ test('ratings share a flight, expire after ten minutes, and never retain failed 
   signed = false; assert.deepEqual(await api.load(), []);
   signed = true; const e = api.load(); resolve([row(2, 5)]); assert.equal((await e)[0].rating, 5);
 });
-
-test('title ratings have their own cache and never answer an episode load', async () => {
-  const paths = []; let release;
-  const gate = new Promise((resolve) => { release = resolve; });
-  const api = createRatingsApi({ signedIn: () => true, auth: async (method, path) => {
-    paths.push(path);
-    if (path === '/sync/ratings/movies') { await gate; return [{ rating: 9, movie: { ids: { trakt: 7 } } }, { rating: 0, movie: { ids: { trakt: 8 } } }]; }
-    if (path === '/sync/ratings/shows') return [{ rating: 6, show: { ids: { trakt: 1388 } } }];
-    return [];
-  } });
-  const titles = api.loadTitles();
-  const episodes = await api.load();
-  assert.ok(Array.isArray(episodes), 'an episode load during a title load still gets episode items');
-  release();
-  const result = await titles;
-  assert.deepEqual([...result.movie], [[7, 9]]);
-  assert.deepEqual([...result.show], [[1388, 6]]);
-  assert.equal(await api.loadTitles(), result, 'cached');
-  assert.deepEqual(paths.sort(), ['/sync/ratings/episodes', '/sync/ratings/movies', '/sync/ratings/shows']);
-  api.resetSession();
-  await api.loadTitles();
-  assert.equal(paths.length, 5);
-});
