@@ -4,6 +4,7 @@ import { text } from '../../core/dom.js';
 
 const TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
 const IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
+const TVDB_RE = /thetvdb\.com\/(?:dereferrer\/)?series\/(\d+)/;
 const SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
 const SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
 const SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
@@ -28,6 +29,10 @@ export function readTitleData(doc, route) {
       year: null,
       tmdb: firstMatch(doc, 'a[href*="themoviedb.org/tv/"]', TMDB_RE, (match) => Number(match[2])),
       imdb: route.name === 'season' ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null,
+      episodeImdb: route.name === 'episode'
+        ? firstMatch(doc, 'a[href*="imdb.com/title/"]', IMDB_RE, (match) => match[1])
+        : null,
+      tvdb: null,
     };
   }
 
@@ -55,6 +60,15 @@ export function readTitleData(doc, route) {
     }
   }
 
+  let tvdb = null;
+  for (const link of doc.querySelectorAll('a[href*="thetvdb.com/"]')) {
+    const match = link.getAttribute('href')?.match(TVDB_RE);
+    if (match) {
+      tvdb = Number(match[1]);
+      break;
+    }
+  }
+
   const kind = route.kind === 'show' ? 'show' : 'movie';
   const fallbackTitle = text(doc.querySelector('title'))
     .replace(/\s*[-–|]\s*Trakt.*$/i, '')
@@ -70,6 +84,8 @@ export function readTitleData(doc, route) {
     year,
     tmdb,
     imdb,
+    episodeImdb: null,
+    tvdb,
   };
 }
 
@@ -130,6 +146,7 @@ export function showTemplateData(show) {
     year: Number.isInteger(show.year) && show.year > 0 ? show.year : null,
     tmdb: Number.isSafeInteger(show.ids?.tmdb) && show.ids.tmdb > 0 ? show.ids.tmdb : null,
     imdb: typeof show.ids?.imdb === 'string' && /^tt\d+$/.test(show.ids.imdb) ? show.ids.imdb : null,
+    tvdb: Number.isSafeInteger(show.ids?.tvdb) && show.ids.tvdb > 0 ? show.ids.tvdb : null,
   };
 }
 
@@ -156,6 +173,12 @@ export function readSeasons(doc) {
   return [...found.values()].sort((a, b) => a.number - b.number);
 }
 
+/** IMDb search URLs (OpenSubtitles) take the number without `tt` or leading zeroes. */
+export function imdbNumber(imdb) {
+  const match = String(imdb || '').match(/^tt0*(\d+)$/);
+  return match ? match[1] : null;
+}
+
 /** Variables available to link templates. */
 export function templateVars(meta, selection = {}) {
   return {
@@ -166,6 +189,9 @@ export function templateVars(meta, selection = {}) {
     year: meta.year,
     tmdb: meta.tmdb,
     imdb: meta.imdb,
+    imdbnum: imdbNumber(meta.imdb),
+    episodeimdbnum: imdbNumber(meta.episodeImdb),
+    tvdb: meta.tvdb,
     season: selection.season,
     episode: selection.episode,
   };

@@ -2,16 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { parseRoute } from '../src/core/router.js';
-import { EPISODE_PAGE_HTML, SEASON_PAGE_HTML } from './fixtures.js';
+import { EPISODE_PAGE_HTML, SEASON_PAGE_HTML, SHOW_HTML } from './fixtures.js';
 import {
   addPresets,
   filterPresetsByKind,
+  imdbNumber,
   mergeSeasons,
   moveLink,
   presetAlreadyAdded,
   readTitleData,
   selectionForRoute,
   showTemplateData,
+  templateVars,
   validateCustomLinks,
 } from '../src/features/custom-links/data.js';
 
@@ -77,8 +79,8 @@ test('season and episode pages read the show context instead of the page heading
   const season = readTitleData(seasonWindow.document, parseRoute('/shows/breaking-bad/seasons/1'));
   seasonWindow.close();
   assert.deepEqual(
-    { title: season.title, year: season.year, id: season.id, tmdb: season.tmdb, imdb: season.imdb },
-    { title: 'Breaking Bad', year: null, id: 'breaking-bad', tmdb: 1396, imdb: 'tt0903747' },
+    { title: season.title, year: season.year, id: season.id, tmdb: season.tmdb, imdb: season.imdb, tvdb: season.tvdb },
+    { title: 'Breaking Bad', year: null, id: 'breaking-bad', tmdb: 1396, imdb: 'tt0903747', tvdb: null },
     'the page year belongs to the season; og\'s TMDb and IMDb season links carry the show ids',
   );
 
@@ -91,6 +93,17 @@ test('season and episode pages read the show context instead of the page heading
   assert.equal(episode.year, null, 'the episode air year is not the show year');
   assert.equal(episode.tmdb, 1396, 'TMDb episode links start with the show id');
   assert.equal(episode.imdb, null, 'the episode page\'s IMDb id is the episode\'s own');
+  assert.equal(episode.episodeImdb, 'tt0959621', 'the episode strip carries the episode IMDb id');
+  assert.equal(episode.tvdb, null, 'season and episode strips do not carry the show TVDB id');
+});
+
+test('show pages read the TVDB id from og\'s external links', () => {
+  const window = new Window();
+  window.document.body.innerHTML = SHOW_HTML;
+  const show = readTitleData(window.document, parseRoute('/shows/breaking-bad'));
+  window.close();
+  assert.equal(show.title, 'Breaking Bad');
+  assert.equal(show.tvdb, 81189);
 });
 
 test('route selection presets season and episode, while title pages keep the stored picker values', () => {
@@ -108,16 +121,30 @@ test('route selection presets season and episode, while title pages keep the sto
 
 test('show lookup data supplies the show title, year and external ids, with validation', () => {
   assert.deepEqual(
-    showTemplateData({ title: ' Breaking Bad ', year: 2008, ids: { trakt: 1388, tmdb: 1396, imdb: 'tt0903747' } }),
-    { title: 'Breaking Bad', year: 2008, tmdb: 1396, imdb: 'tt0903747' },
+    showTemplateData({ title: ' Breaking Bad ', year: 2008, ids: { trakt: 1388, tmdb: 1396, imdb: 'tt0903747', tvdb: 81189 } }),
+    { title: 'Breaking Bad', year: 2008, tmdb: 1396, imdb: 'tt0903747', tvdb: 81189 },
   );
-  assert.deepEqual(showTemplateData({ title: 'Show', ids: { tmdb: 0, imdb: 'nope' } }), {
+  assert.deepEqual(showTemplateData({ title: 'Show', ids: { tmdb: 0, imdb: 'nope', tvdb: 0 } }), {
     title: 'Show',
     year: null,
     tmdb: null,
     imdb: null,
+    tvdb: null,
   });
   for (const bad of [null, [], 'show', { title: '  ' }]) assert.equal(showTemplateData(bad), null);
+});
+
+test('template vars include the TVDB id', () => {
+  assert.equal(templateVars({ id: 'breaking-bad', tvdb: 81189 }, { season: 1 }).tvdb, 81189);
+});
+
+test('template vars include IMDb numbers without tt or leading zeroes', () => {
+  const vars = templateVars({ id: 'breaking-bad', imdb: 'tt0903747', episodeImdb: 'tt0959621' }, { season: 1 });
+  assert.equal(vars.imdbnum, '903747');
+  assert.equal(vars.episodeimdbnum, '959621');
+  assert.equal(imdbNumber('tt0458290'), '458290');
+  assert.equal(imdbNumber('tt2098416'), '2098416');
+  assert.equal(imdbNumber(null), null);
 });
 
 test('custom link validation requires label and URL with an HTTP scheme', () => {

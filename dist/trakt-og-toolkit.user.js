@@ -943,6 +943,7 @@
   // src/features/custom-links/data.js
   var TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
   var IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
+  var TVDB_RE = /thetvdb\.com\/(?:dereferrer\/)?series\/(\d+)/;
   var SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
   var SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
   var SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
@@ -956,7 +957,9 @@
         title: cleanTitle(showLinkTitle(doc)) || showTitleFromPageTitle(doc, route) || null,
         year: null,
         tmdb: firstMatch(doc, 'a[href*="themoviedb.org/tv/"]', TMDB_RE, (match) => Number(match[2])),
-        imdb: route.name === "season" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null
+        imdb: route.name === "season" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null,
+        episodeImdb: route.name === "episode" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', IMDB_RE, (match) => match[1]) : null,
+        tvdb: null
       };
     }
     const heading = doc.querySelector(".summary-title h1") || doc.querySelector("h1");
@@ -979,6 +982,14 @@
         break;
       }
     }
+    let tvdb = null;
+    for (const link of doc.querySelectorAll('a[href*="thetvdb.com/"]')) {
+      const match = link.getAttribute("href")?.match(TVDB_RE);
+      if (match) {
+        tvdb = Number(match[1]);
+        break;
+      }
+    }
     const kind = route.kind === "show" ? "show" : "movie";
     const fallbackTitle = text(doc.querySelector("title")).replace(/\s*[-–|]\s*Trakt.*$/i, "").replace(/\s*\(\d{4}\)\s*$/, "").trim();
     return {
@@ -989,7 +1000,9 @@
       title: cleanTitle(rawHeading) || fallbackTitle || null,
       year,
       tmdb,
-      imdb
+      imdb,
+      episodeImdb: null,
+      tvdb
     };
   }
   function headingText(heading) {
@@ -1031,7 +1044,8 @@
       title,
       year: Number.isInteger(show.year) && show.year > 0 ? show.year : null,
       tmdb: Number.isSafeInteger(show.ids?.tmdb) && show.ids.tmdb > 0 ? show.ids.tmdb : null,
-      imdb: typeof show.ids?.imdb === "string" && /^tt\d+$/.test(show.ids.imdb) ? show.ids.imdb : null
+      imdb: typeof show.ids?.imdb === "string" && /^tt\d+$/.test(show.ids.imdb) ? show.ids.imdb : null,
+      tvdb: Number.isSafeInteger(show.ids?.tvdb) && show.ids.tvdb > 0 ? show.ids.tvdb : null
     };
   }
   function readSeasons(doc) {
@@ -1049,6 +1063,10 @@
     }
     return [...found.values()].sort((a, b) => a.number - b.number);
   }
+  function imdbNumber(imdb) {
+    const match = String(imdb || "").match(/^tt0*(\d+)$/);
+    return match ? match[1] : null;
+  }
   function templateVars(meta, selection = {}) {
     return {
       id: meta.id,
@@ -1058,6 +1076,9 @@
       year: meta.year,
       tmdb: meta.tmdb,
       imdb: meta.imdb,
+      imdbnum: imdbNumber(meta.imdb),
+      episodeimdbnum: imdbNumber(meta.episodeImdb),
+      tvdb: meta.tvdb,
       season: selection.season,
       episode: selection.episode
     };
@@ -1110,6 +1131,63 @@
   // src/features/custom-links/presets.js
   var PRESETS = [
     {
+      label: "IMDb",
+      url: "https://www.imdb.com/find/?q={title}",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://www.imdb.com/title/{imdb}/episodes?season={season}", kinds: ["show"] },
+        { url: "https://www.imdb.com/title/{imdb}/", kinds: ["movie", "show"] }
+      ]
+    },
+    {
+      label: "TMDb",
+      url: "https://www.themoviedb.org/search?query={title}",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://www.themoviedb.org/tv/{tmdb}/season/{season}/episode/{episode}", kinds: ["show"] },
+        { url: "https://www.themoviedb.org/tv/{tmdb}/season/{season}", kinds: ["show"] },
+        { url: "https://www.themoviedb.org/movie/{tmdb}", kinds: ["movie"] },
+        { url: "https://www.themoviedb.org/tv/{tmdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "TVDB",
+      url: "https://thetvdb.com/search?query={title}",
+      kinds: ["show"],
+      deep: [
+        { url: "https://thetvdb.com/dereferrer/series/{tvdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "Letterboxd",
+      url: "https://letterboxd.com/search/{title}/",
+      kinds: ["movie"],
+      deep: [
+        { url: "https://letterboxd.com/imdb/{imdb}/", kinds: ["movie"] },
+        { url: "https://letterboxd.com/tmdb/{tmdb}/", kinds: ["movie"] }
+      ]
+    },
+    {
+      label: "Rotten Tomatoes",
+      url: "https://www.rottentomatoes.com/search?search={title}",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "Wikipedia",
+      url: "https://en.wikipedia.org/w/index.php?search={title}",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "JustWatch",
+      url: "https://www.justwatch.com/us/search?q={title}",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "MyAnimeList",
+      url: "https://myanimelist.net/search/all?q={title}",
+      kinds: ["movie", "show"]
+    },
+    {
       label: "Metacritic",
       url: "https://www.metacritic.com/search/{title}/",
       kinds: ["movie", "show"]
@@ -1130,6 +1208,53 @@
         { url: "https://web.stremio.com/#/detail/series/{imdb}?season={season}", kinds: ["show"] },
         { url: "https://web.stremio.com/#/detail/movie/{imdb}", kinds: ["movie"] },
         { url: "https://web.stremio.com/#/detail/series/{imdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "Debrid Media Manager",
+      url: "https://debridmediamanager.com/search?query={title}",
+      kinds: ["movie", "show"],
+      /**
+       * DMM routes by IMDb id: `movie/:imdbid` and `show/:imdbid/:seasonNum` (from its
+       * `src/pages/movie/[imdbid]/index.tsx` and `src/pages/show/[imdbid]/[seasonNum]/index.tsx`).
+       * It has no episode page, so an episode opens its season instead. Signed-out visits
+       * redirect to `/start`; the deep routes are for a signed-in DMM session.
+       */
+      deep: [
+        { url: "https://debridmediamanager.com/show/{imdb}/{season}", kinds: ["show"] },
+        { url: "https://debridmediamanager.com/movie/{imdb}", kinds: ["movie"] },
+        { url: "https://debridmediamanager.com/show/{imdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "MDBList",
+      /**
+       * MDBList's title URLs carry its own slug prefix (`3tb7f-resident-evil`),
+       * which Trakt does not expose. Its site search does take a title or IMDb id,
+       * but movies and shows use separate forms, so the show entry overrides the
+       * movie search URL for show pages.
+       */
+      url: "https://mdblist.com/movies/?q_title={title}",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://mdblist.com/shows/?q_title={title}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "OpenSubtitles",
+      /**
+       * OpenSubtitles' search takes an IMDb id without `tt` or leading zeroes:
+       * `imdbid` for a movie or episode, and `pimdbid` for a show. The episode
+       * page's own IMDb link supplies the episode id; without it the season route
+       * is the fallback. The stored URL is the movie route, while every show page
+       * resolves to one of the deep routes.
+       */
+      url: "https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{imdbnum}",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{episodeimdbnum}", kinds: ["show"] },
+        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-{imdbnum}/season-{season}", kinds: ["show"] },
+        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-{imdbnum}", kinds: ["show"] }
       ]
     },
     {
@@ -1656,9 +1781,10 @@
     let showRequested = false;
     function lookUpShow(values) {
       if (!fixedSelection || showRequested || !getClientId()) return;
-      const missing = ["year", "tmdb", "imdb"].filter((key) => meta[key] == null);
+      const missing = ["year", "tmdb", "imdb", "tvdb"].filter((key) => meta[key] == null);
       if (!missing.length) return;
-      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => missing.some((key) => template.includes(`{${key}}`))))) return;
+      const needed = missing.flatMap((key) => key === "imdb" ? ["{imdb}", "{imdbnum}"] : [`{${key}}`]);
+      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => needed.some((placeholder) => template.includes(placeholder))))) return;
       showRequested = true;
       getShowDetails(route.id).then((show) => setMeta(showTemplateData(show))).catch((error) => {
         if (!cancelled) debugError("show lookup failed", error);
@@ -5870,7 +5996,7 @@
   });
 
   // src/actions.js
-  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id} {plural}";
+  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}";
   function promptAddCustomLink() {
     const answer = window.prompt(
       `Add a custom link as "Label | URL".

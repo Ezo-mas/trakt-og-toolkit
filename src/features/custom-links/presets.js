@@ -1,7 +1,68 @@
 import { missingPlaceholders } from '../../core/text.js';
 
-/** Services og doesn't already link from a title page (it links Rotten Tomatoes, Wikipedia, Letterboxd and, on anime, MyAnimeList). */
+/**
+ * Services people open from a title, including the external-link targets og itself shows.
+ * Exact routes are tried when the page has the id they need; the stored search URL is the
+ * fallback, so a preset still works when og's external-link strip is missing.
+ */
 export const PRESETS = [
+  {
+    label: 'IMDb',
+    url: 'https://www.imdb.com/find/?q={title}',
+    kinds: ['movie', 'show'],
+    deep: [
+      { url: 'https://www.imdb.com/title/{imdb}/episodes?season={season}', kinds: ['show'] },
+      { url: 'https://www.imdb.com/title/{imdb}/', kinds: ['movie', 'show'] },
+    ],
+  },
+  {
+    label: 'TMDb',
+    url: 'https://www.themoviedb.org/search?query={title}',
+    kinds: ['movie', 'show'],
+    deep: [
+      { url: 'https://www.themoviedb.org/tv/{tmdb}/season/{season}/episode/{episode}', kinds: ['show'] },
+      { url: 'https://www.themoviedb.org/tv/{tmdb}/season/{season}', kinds: ['show'] },
+      { url: 'https://www.themoviedb.org/movie/{tmdb}', kinds: ['movie'] },
+      { url: 'https://www.themoviedb.org/tv/{tmdb}', kinds: ['show'] },
+    ],
+  },
+  {
+    label: 'TVDB',
+    url: 'https://thetvdb.com/search?query={title}',
+    kinds: ['show'],
+    deep: [
+      { url: 'https://thetvdb.com/dereferrer/series/{tvdb}', kinds: ['show'] },
+    ],
+  },
+  {
+    label: 'Letterboxd',
+    url: 'https://letterboxd.com/search/{title}/',
+    kinds: ['movie'],
+    deep: [
+      { url: 'https://letterboxd.com/imdb/{imdb}/', kinds: ['movie'] },
+      { url: 'https://letterboxd.com/tmdb/{tmdb}/', kinds: ['movie'] },
+    ],
+  },
+  {
+    label: 'Rotten Tomatoes',
+    url: 'https://www.rottentomatoes.com/search?search={title}',
+    kinds: ['movie', 'show'],
+  },
+  {
+    label: 'Wikipedia',
+    url: 'https://en.wikipedia.org/w/index.php?search={title}',
+    kinds: ['movie', 'show'],
+  },
+  {
+    label: 'JustWatch',
+    url: 'https://www.justwatch.com/us/search?q={title}',
+    kinds: ['movie', 'show'],
+  },
+  {
+    label: 'MyAnimeList',
+    url: 'https://myanimelist.net/search/all?q={title}',
+    kinds: ['movie', 'show'],
+  },
   {
     label: 'Metacritic',
     url: 'https://www.metacritic.com/search/{title}/',
@@ -23,6 +84,53 @@ export const PRESETS = [
       { url: 'https://web.stremio.com/#/detail/series/{imdb}?season={season}', kinds: ['show'] },
       { url: 'https://web.stremio.com/#/detail/movie/{imdb}', kinds: ['movie'] },
       { url: 'https://web.stremio.com/#/detail/series/{imdb}', kinds: ['show'] },
+    ],
+  },
+  {
+    label: 'Debrid Media Manager',
+    url: 'https://debridmediamanager.com/search?query={title}',
+    kinds: ['movie', 'show'],
+    /**
+     * DMM routes by IMDb id: `movie/:imdbid` and `show/:imdbid/:seasonNum` (from its
+     * `src/pages/movie/[imdbid]/index.tsx` and `src/pages/show/[imdbid]/[seasonNum]/index.tsx`).
+     * It has no episode page, so an episode opens its season instead. Signed-out visits
+     * redirect to `/start`; the deep routes are for a signed-in DMM session.
+     */
+    deep: [
+      { url: 'https://debridmediamanager.com/show/{imdb}/{season}', kinds: ['show'] },
+      { url: 'https://debridmediamanager.com/movie/{imdb}', kinds: ['movie'] },
+      { url: 'https://debridmediamanager.com/show/{imdb}', kinds: ['show'] },
+    ],
+  },
+  {
+    label: 'MDBList',
+    /**
+     * MDBList's title URLs carry its own slug prefix (`3tb7f-resident-evil`),
+     * which Trakt does not expose. Its site search does take a title or IMDb id,
+     * but movies and shows use separate forms, so the show entry overrides the
+     * movie search URL for show pages.
+     */
+    url: 'https://mdblist.com/movies/?q_title={title}',
+    kinds: ['movie', 'show'],
+    deep: [
+      { url: 'https://mdblist.com/shows/?q_title={title}', kinds: ['show'] },
+    ],
+  },
+  {
+    label: 'OpenSubtitles',
+    /**
+     * OpenSubtitles' search takes an IMDb id without `tt` or leading zeroes:
+     * `imdbid` for a movie or episode, and `pimdbid` for a show. The episode
+     * page's own IMDb link supplies the episode id; without it the season route
+     * is the fallback. The stored URL is the movie route, while every show page
+     * resolves to one of the deep routes.
+     */
+    url: 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{imdbnum}',
+    kinds: ['movie', 'show'],
+    deep: [
+      { url: 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{episodeimdbnum}', kinds: ['show'] },
+      { url: 'https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-{imdbnum}/season-{season}', kinds: ['show'] },
+      { url: 'https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-{imdbnum}', kinds: ['show'] },
     ],
   },
   {
@@ -49,9 +157,9 @@ export function presetTemplateUrls(url, kind) {
 }
 
 /**
- * The exact-item URL a stored preset link should open here, or the stored URL when the page
- * lacks an id that the deep route needs. The search URL remains the fallback, and hides itself
- * when even `{title}` is missing.
+ * The exact-item or kind-specific URL a stored preset link should open here, or the stored URL
+ * when the page lacks an id that the deep route needs. The stored URL remains the fallback, and
+ * hides itself when even its placeholders are missing.
  */
 export function resolvePresetUrl(url, vars, kind) {
   const preset = PRESETS.find((entry) => entry.url === url);

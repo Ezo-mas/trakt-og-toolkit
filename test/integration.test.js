@@ -138,10 +138,11 @@ test('preset checklist marks existing URLs and adds selected presets to storage'
   open.click();
   const metacritic = document.querySelector('.ogt-presets input[aria-label="Metacritic"]');
   assert.ok(metacritic.disabled, 'a preset with the same URL is disabled');
-  assert.equal(document.activeElement, document.querySelector('.ogt-presets input[aria-label="Stremio"]'));
-  for (const duplicate of ['Rotten Tomatoes', 'Wikipedia', 'Letterboxd']) {
-    assert.equal(document.querySelector(`.ogt-presets input[aria-label="${duplicate}"]`), null, `og already links ${duplicate}`);
+  assert.equal(document.activeElement, document.querySelector('.ogt-presets input[aria-label="IMDb"]'));
+  for (const label of ['IMDb', 'TMDb', 'TVDB', 'Rotten Tomatoes', 'Wikipedia', 'JustWatch', 'MyAnimeList']) {
+    assert.ok(document.querySelector(`.ogt-presets input[aria-label="${label}"]`), `${label} preset exists`);
   }
+  assert.equal(document.querySelector('.ogt-presets input[aria-label="Letterboxd"]'), null, 'Letterboxd is movie-only');
 
   const stremio = document.querySelector('.ogt-presets input[aria-label="Stremio"]');
   stremio.checked = true;
@@ -154,6 +155,26 @@ test('preset checklist marks existing URLs and adds selected presets to storage'
     { label: 'Stremio', url: 'https://web.stremio.com/#/search?search={title}' },
   ]);
   assert.equal(document.activeElement, open, 'focus returns to the presets chip when closed');
+});
+
+test('og-service presets resolve to exact movie links', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_HTML,
+    storage: {
+      'watch.customLinks': [
+        { label: 'IMDb', url: 'https://www.imdb.com/find/?q={title}' },
+        { label: 'TMDb', url: 'https://www.themoviedb.org/search?query={title}' },
+        { label: 'Letterboxd', url: 'https://letterboxd.com/search/{title}/' },
+      ],
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  assert.equal(chip(document, 'IMDb').getAttribute('href'), 'https://www.imdb.com/title/tt0465676/');
+  assert.equal(chip(document, 'TMDb').getAttribute('href'), 'https://www.themoviedb.org/movie/8967');
+  assert.equal(chip(document, 'Letterboxd').getAttribute('href'), 'https://letterboxd.com/imdb/tt0465676/');
 });
 
 test('Stremio opens the exact movie and show, and falls back to search without an IMDb id', async (t) => {
@@ -649,6 +670,126 @@ test('season pages fill show ids from og\'s links and only look the show up for 
   await wait(80);
   assert.equal(requested.length, 1);
   assert.equal(chip(document, 'Year').getAttribute('href'), 'https://e.test/2008');
+});
+
+test('TVDB preset looks up the show id on a season page', async (t) => {
+  const requested = [];
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
+    html: SEASON_PAGE_HTML,
+    storage: {
+      'trakt.clientId': 'client',
+      'watch.customLinks': [{ label: 'TVDB', url: 'https://thetvdb.com/search?query={title}' }],
+    },
+    gmRequest(options) {
+      if (new URL(options.url).pathname === '/shows/breaking-bad') requested.push(options.url);
+      setTimeout(() => options.onload({
+        status: 200,
+        responseHeaders: '',
+        responseText: JSON.stringify({
+          title: 'Breaking Bad',
+          year: 2008,
+          ids: { trakt: 1388, slug: 'breaking-bad', tmdb: 1396, imdb: 'tt0903747', tvdb: 81189 },
+        }),
+      }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(80);
+
+  assert.equal(chip(document, 'TVDB').getAttribute('href'), 'https://thetvdb.com/dereferrer/series/81189');
+  assert.equal(requested.length, 1, 'the season page asks for the show TVDB id it does not have');
+});
+
+test('MDBList and OpenSubtitles presets follow the page kind and episode ids', async (t) => {
+  const links = [
+    { label: 'MDBList', url: 'https://mdblist.com/movies/?q_title={title}' },
+    { label: 'OpenSubtitles', url: 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{imdbnum}' },
+  ];
+  const windows = [];
+  t.after(() => windows.forEach((window) => window.close()));
+
+  const movie = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_HTML,
+    storage: { 'watch.customLinks': links },
+  });
+  windows.push(movie.window);
+  await wait(50);
+  assert.equal(chip(movie.document, 'MDBList').getAttribute('href'), 'https://mdblist.com/movies/?q_title=The%20Dark');
+  assert.equal(
+    chip(movie.document, 'OpenSubtitles').getAttribute('href'),
+    'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-465676',
+  );
+
+  const show = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: { 'watch.customLinks': links },
+  });
+  windows.push(show.window);
+  await wait(50);
+  assert.equal(chip(show.document, 'MDBList').getAttribute('href'), 'https://mdblist.com/shows/?q_title=Breaking%20Bad');
+  assert.equal(
+    chip(show.document, 'OpenSubtitles').getAttribute('href'),
+    'https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-903747',
+  );
+
+  const season = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
+    html: SEASON_PAGE_HTML,
+    storage: { 'watch.customLinks': links },
+  });
+  windows.push(season.window);
+  await wait(50);
+  assert.equal(
+    chip(season.document, 'OpenSubtitles').getAttribute('href'),
+    'https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-903747/season-1',
+  );
+
+  const episode = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1',
+    html: EPISODE_PAGE_HTML,
+    storage: { 'watch.customLinks': links },
+  });
+  windows.push(episode.window);
+  await wait(50);
+  assert.equal(
+    chip(episode.document, 'OpenSubtitles').getAttribute('href'),
+    'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-959621',
+    'the episode page uses its own IMDb id',
+  );
+});
+
+test('episode pages look up the show for an IMDb-number link', async (t) => {
+  const requested = [];
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1',
+    html: EPISODE_PAGE_HTML,
+    storage: {
+      'trakt.clientId': 'client',
+      'watch.customLinks': [{ label: 'Number', url: 'https://e.test/{imdbnum}' }],
+    },
+    gmRequest(options) {
+      if (new URL(options.url).pathname === '/shows/breaking-bad') requested.push(options.url);
+      setTimeout(() => options.onload({
+        status: 200,
+        responseHeaders: '',
+        responseText: JSON.stringify({
+          title: 'Breaking Bad',
+          year: 2008,
+          ids: { trakt: 1388, slug: 'breaking-bad', tmdb: 1396, imdb: 'tt0903747' },
+        }),
+      }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(80);
+
+  assert.equal(chip(document, 'Number').getAttribute('href'), 'https://e.test/903747');
+  assert.equal(requested.length, 1, 'an episode page looks up the show for its IMDb number');
 });
 
 test('episode pages fill custom links from the show and preset the route season and episode', async (t) => {

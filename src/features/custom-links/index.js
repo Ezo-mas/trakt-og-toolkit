@@ -130,12 +130,13 @@ function createPanel(meta, route) {
    *  those links stay hidden rather than point at the season or episode. */
   function lookUpShow(values) {
     if (!fixedSelection || showRequested || !getClientId()) return;
-    const missing = ['year', 'tmdb', 'imdb'].filter((key) => meta[key] == null);
+    const missing = ['year', 'tmdb', 'imdb', 'tvdb'].filter((key) => meta[key] == null);
     if (!missing.length) return;
     // Deep preset routes may need the show's IMDb id even though the stored search URL doesn't.
+    const needed = missing.flatMap((key) => (key === 'imdb' ? ['{imdb}', '{imdbnum}'] : [`{${key}}`]));
     if (!getCustomLinks().some((entry) =>
       presetTemplateUrls(entry.url, meta.kind).some((template) =>
-        missing.some((key) => template.includes(`{${key}}`))))
+        needed.some((placeholder) => template.includes(placeholder))))
     ) return;
     showRequested = true;
     getShowDetails(route.id)
