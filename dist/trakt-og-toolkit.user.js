@@ -2031,6 +2031,24 @@
 
   // src/features/playback/data.js
   var DAY = 24 * 60 * 60 * 1e3;
+  var MOVIE_IDS = ["trakt", "slug", "imdb", "tmdb"];
+  var EPISODE_IDS = ["trakt", "imdb", "tmdb", "tvdb"];
+  function pickIds(ids, keys) {
+    if (!ids || typeof ids !== "object") return null;
+    for (const key of keys) {
+      const value = ids[key];
+      const valid = key === "trakt" || key === "tmdb" || key === "tvdb" ? Number.isSafeInteger(value) && value > 0 : typeof value === "string" && value.trim() !== "";
+      if (valid) return { [key]: typeof value === "string" ? value.trim() : value };
+    }
+    return null;
+  }
+  function normalizeProgress(value) {
+    if (value == null || typeof value === "string" && value.trim() === "") return null;
+    const progress = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(progress)) return null;
+    const rounded = Math.round(progress * 10) / 10;
+    return rounded >= 1 && rounded <= 100 ? rounded : null;
+  }
   function posterUrl(value) {
     if (typeof value !== "string" || !value) return null;
     try {
@@ -2054,6 +2072,8 @@
         id: row.id,
         kind,
         ids: { ...media.ids },
+        year: Number.isInteger(media.year) ? media.year : null,
+        episodeIds: kind === "episode" && episode.ids && typeof episode.ids === "object" ? { ...episode.ids } : null,
         season: kind === "episode" ? episode.season : null,
         episode: kind === "episode" ? episode.number : null,
         title: kind === "movie" ? media.title || "Untitled movie" : `${media.title || "Untitled show"} · ${episode.season}×${String(episode.number).padStart(2, "0")} · ${episode.title || "Untitled episode"}`,
@@ -2074,6 +2094,21 @@
     const cutoff = now - Number(days) * DAY;
     return items.filter((item) => Number.isFinite(item.pausedMs) && item.pausedMs < cutoff);
   }
+  function scrobbleBody(item, progress, episodeIds = null) {
+    const value = normalizeProgress(progress);
+    if (!item || value == null) throw new Error("Invalid progress.");
+    if (item.kind === "movie") {
+      const ids2 = pickIds(item.ids, MOVIE_IDS);
+      if (!ids2) throw new Error("Could not identify this title.");
+      const movie = { ids: ids2 };
+      if (typeof item.title === "string" && item.title.trim()) movie.title = item.title.trim();
+      if (Number.isInteger(item.year)) movie.year = item.year;
+      return { movie, progress: value };
+    }
+    const ids = pickIds(episodeIds ?? item.episodeIds, EPISODE_IDS);
+    if (!ids) throw new Error("Could not identify this episode.");
+    return { episode: { ids }, progress: value };
+  }
   function matchesRoute(item, route) {
     const kind = route.name === "episode" ? "episode" : route.kind;
     return item.kind === kind && [item.ids.slug, item.ids.trakt].some((id) => id != null && String(id) === route.id) && (kind !== "episode" || item.season === route.season && item.episode === route.episode);
@@ -2081,7 +2116,7 @@
 
   // src/features/playback/api.js
   var TTL = 6e4;
-  function createPlaybackApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
+  function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isSignedIn, now = Date.now } = {}) {
     const cache3 = /* @__PURE__ */ new Map();
     const flights2 = /* @__PURE__ */ new Map();
     let revision = 0;
@@ -2158,7 +2193,54 @@
       }
       return { cancelled: false, cleared, failed };
     }
-    return { load, loadAll, clearItems, invalidate, resetSession };
+    async function episodeIdsFor(item) {
+      if (pickIds(item.episodeIds, EPISODE_IDS)) return item.episodeIds;
+      if (!item.ids || !Number.isInteger(item.season) || !Number.isInteger(item.episode)) {
+        throw new Error("Could not identify this episode.");
+      }
+      const showId = item.ids.slug || item.ids.trakt;
+      if (!showId) throw new Error("Could not identify this episode.");
+      const episode = await get(`/shows/${encodeURIComponent(showId)}/seasons/${item.season}/episodes/${item.episode}`);
+      if (!pickIds(episode?.ids, EPISODE_IDS)) throw new Error("Could not identify this episode.");
+      return episode.ids;
+    }
+    async function setProgress(item, progress, epoch = session) {
+      if (!signedIn()) throw new Error("Sign in to Trakt first.");
+      const value = normalizeProgress(progress);
+      if (!item || value == null) throw new Error("Invalid progress.");
+      const episodeIds = item.kind === "movie" ? null : await episodeIdsFor(item);
+      if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
+      const body = scrobbleBody(item, value, episodeIds);
+      await auth("POST", "/scrobble/start", body);
+      invalidate();
+      try {
+        if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
+        await auth("POST", "/scrobble/pause", body);
+      } catch (error) {
+        error.partial = true;
+        throw error;
+      } finally {
+        invalidate();
+      }
+      return { progress: value, body };
+    }
+    async function setRouteProgress(route, progress) {
+      if (!signedIn()) throw new Error("Sign in to Trakt first.");
+      const value = normalizeProgress(progress);
+      if (value == null) throw new Error("Invalid progress.");
+      if (!route?.id) throw new Error("Unsupported playback page.");
+      const epoch = session;
+      if (route.kind === "movie") {
+        const movie = await get(`/movies/${encodeURIComponent(route.id)}`);
+        return setProgress({ kind: "movie", ids: movie?.ids, title: movie?.title, year: movie?.year }, value, epoch);
+      }
+      if (route.name !== "episode" || !Number.isInteger(route.season) || !Number.isInteger(route.episode)) {
+        throw new Error("Unsupported playback page.");
+      }
+      const episode = await get(`/shows/${encodeURIComponent(route.id)}/seasons/${route.season}/episodes/${route.episode}`);
+      return setProgress({ kind: "episode", episodeIds: episode?.ids, season: route.season, episode: route.episode }, value, epoch);
+    }
+    return { load, loadAll, clearItems, setProgress, setRouteProgress, invalidate, resetSession };
   }
   var playbackApi = createPlaybackApi();
   if (typeof document !== "undefined") document.addEventListener("ogt:authchange", () => playbackApi.resetSession());
@@ -2188,7 +2270,7 @@
   var button = (label, action) => el("button", { class: "ogt-chip", type: "button", text: label, dataset: { action } });
   function createPanel2(route) {
     const overview = route.name === "progress";
-    const kind = route.name === "episode" ? "episode" : "movie";
+    const kind = route.kind === "movie" ? "movie" : "episode";
     let destroyed = false;
     let busy = false;
     let items = [];
@@ -2220,8 +2302,13 @@
       content.replaceChildren();
       if (!overview) {
         const item = items.find((row) => matchesRoute(row, route));
-        node.hidden = !item;
-        if (!item) return;
+        node.hidden = false;
+        if (!item) {
+          content.append(el("p", { class: "ogt-hint", text: "No saved playback." }), button("Save progress…", "save"));
+          return;
+        }
+        const save = button("Save progress…", "save");
+        save.dataset.id = String(item.id);
         const clear2 = button("Clear", "one");
         clear2.dataset.id = String(item.id);
         content.append(el(
@@ -2229,6 +2316,7 @@
           { class: "ogt-playback__tools" },
           el("span", { text: `${percent(item.progress)} paused` }),
           el("progress", { class: "ogt-playback__meter", max: 100, value: item.progress, "aria-label": "Saved playback progress" }),
+          save,
           clear2
         ));
         return;
@@ -2251,6 +2339,8 @@
       );
       const list = el("ul", { class: "ogt-playback__list" });
       for (const item of items) {
+        const save = button("Save progress…", "save");
+        save.dataset.id = String(item.id);
         const clear2 = button("Clear", "one");
         clear2.dataset.id = String(item.id);
         const poster = item.poster ? el("img", { class: "ogt-playback__poster", src: item.poster, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }) : el("span", { class: "ogt-playback__poster", "aria-hidden": true });
@@ -2266,6 +2356,7 @@
             el("span", { text: ` · ${percent(item.progress)}` }),
             el("time", { class: "ogt-playback__date", datetime: item.pausedAt, text: `Paused ${new Date(item.pausedMs).toLocaleString()}` })
           ),
+          save,
           clear2
         ));
       }
@@ -2299,6 +2390,45 @@
       if (!overview && node.hidden) toast(`Paused playback: ${message}`);
       else status.textContent = message;
     }
+    async function saveProgress(item) {
+      status.textContent = "";
+      const value = window.prompt("Progress percentage (1–100)", item ? String(Number(item.progress.toFixed(1))) : "");
+      if (value == null || !alive2()) return;
+      const progress = normalizeProgress(value);
+      if (progress == null) {
+        status.textContent = "Enter a percentage from 1 to 100.";
+        return;
+      }
+      const title = item?.title ?? "this title";
+      if (!window.confirm(`Set progress to ${percent(progress)} for ${title}? It may briefly show as watching on your Trakt profile.`)) return;
+      if (!alive2()) return;
+      status.textContent = "Saving progress…";
+      try {
+        if (item) await playbackApi.setProgress(item, progress);
+        else await playbackApi.setRouteProgress(route, progress);
+      } catch (error) {
+        if (!error.partial) throw error;
+        debugError("playback pause failed after start", error);
+        if (!alive2()) return;
+        items = [];
+        render();
+        await read(true).catch(() => {
+        });
+        if (alive2()) status.textContent = "Trakt started playback but did not save the pause, so earlier progress for this title was removed; try again.";
+        return;
+      }
+      if (!alive2()) return;
+      items = [];
+      render();
+      try {
+        await read(true);
+      } catch (error) {
+        debugError("playback refresh failed", error);
+        status.textContent = "Progress saved, but playback could not be refreshed.";
+        return;
+      }
+      if (alive2()) status.textContent = "Progress saved.";
+    }
     async function onClick(event) {
       const target = event.target.closest("button[data-action]");
       if (!target || !node.contains(target) || busy || !alive2()) return;
@@ -2309,6 +2439,10 @@
           status.textContent = "Loading paused playback…";
           await read(true);
           if (alive2()) status.textContent = "";
+        } else if (action === "save") {
+          const item = target.dataset.id ? items.find((row) => row.id === Number(target.dataset.id)) : null;
+          if (target.dataset.id && !item) return;
+          await saveProgress(item);
         } else if (action === "one") await clear([Number(target.dataset.id)]);
         else if (action === "selected") await clear([...selected]);
         else if (action === "age") {
@@ -2319,7 +2453,7 @@
         }
       } catch (error) {
         debugError("playback request failed", error);
-        if (alive2()) status.textContent = "Could not load paused playback; try again.";
+        if (alive2()) status.textContent = error.status === 429 ? "Trakt rate limited this request; try again later." : action === "save" ? "Could not save progress; try again." : "Could not load paused playback; try again.";
       } finally {
         if (alive2()) lock(false);
       }

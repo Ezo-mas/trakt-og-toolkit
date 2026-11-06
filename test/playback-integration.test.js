@@ -12,12 +12,13 @@ const samples = () => ({
   episodes: [{ id: 102, progress: 73.5, paused_at: new Date(Date.now() - 86400000).toISOString(),
     show: { title: 'Breaking Bad', ids: { slug: 'breaking-bad', trakt: 1388 } }, episode: { season: 1, number: 1, title: 'Pilot' } }],
 });
-function boot(t, { path = '/users/tester/progress', html = PLAYBACK_PROGRESS_HTML, signedIn = true, failed = [], deferred = false } = {}) {
+function boot(t, { path = '/users/tester/progress', html = PLAYBACK_PROGRESS_HTML, signedIn = true, failed = [], deferred = false, empty = false, failPause = false } = {}) {
   const window = new Window({ url: `https://og.trakt.tv${path}` });
   t.after(() => window.close());
   const { document } = window;
-  const store = new Map(); const calls = []; const confirmations = []; const pending = [];
-  const rows = samples(); let allow = true;
+  const store = new Map(); const calls = []; const confirmations = []; const prompts = []; const scrobbles = []; const pending = [];
+  const rows = samples(); let allow = true; let promptValue = null;
+  if (empty) { rows.movies = []; rows.episodes = []; }
   if (signedIn) {
     store.set('trakt.clientId', 'client');
     store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'private-access', refresh_token: 'private-refresh', expires_at: Date.now() + 3600000 });
@@ -28,17 +29,25 @@ function boot(t, { path = '/users/tester/progress', html = PLAYBACK_PROGRESS_HTM
   window.GM_registerMenuCommand = () => {};
   window.GM_addStyle = () => {};
   window.confirm = (text) => { confirmations.push(text); return allow; };
+  window.prompt = (message, initial) => { prompts.push({ message, initial }); return promptValue; };
   window.GM_xmlhttpRequest = (r) => {
     calls.push(r);
     const url = new URL(r.url);
     assert.doesNotMatch(r.url, /private-access|private-refresh/);
     let body = [], status = 200;
-    if (r.method === 'DELETE') {
+    if (r.method === 'POST' && /^\/scrobble\/(start|pause)$/.test(url.pathname)) {
+      const payload = JSON.parse(r.data);
+      scrobbles.push({ path: url.pathname, payload });
+      status = failPause && url.pathname.endsWith('/pause') ? 500 : 201;
+      body = { action: url.pathname.endsWith('/pause') ? 'pause' : 'start', progress: payload.progress };
+    } else if (r.method === 'DELETE') {
       const id = Number(url.pathname.split('/').at(-1));
       status = failed.includes(id) ? 500 : 204;
       if (status === 204) for (const kind of ['movies', 'episodes']) rows[kind] = rows[kind].filter((row) => row.id !== id);
     } else if (url.pathname === '/sync/playback/movies') body = rows.movies;
     else if (url.pathname === '/sync/playback/episodes') body = rows.episodes;
+    else if (/^\/shows\/[^/]+\/seasons\/\d+\/episodes\/\d+$/.test(url.pathname)) body = { ids: { trakt: 4 } };
+    else if (url.pathname.startsWith('/movies/')) body = { ids: { trakt: 1, slug: 'the-dark-2005' }, title: 'The Dark', year: 2005 };
     const respond = () => r.onload({ status, responseText: JSON.stringify(body), responseHeaders: '' });
     if (deferred) pending.push(respond); else queueMicrotask(respond);
     return { abort() { r.onabort(); } };
@@ -46,7 +55,8 @@ function boot(t, { path = '/users/tester/progress', html = PLAYBACK_PROGRESS_HTM
   document.write(`<!doctype html><html><head></head><body>${html}</body></html>`);
   window.eval(bundle);
   document.dispatchEvent(new window.Event('DOMContentLoaded'));
-  return { window, document, store, calls, confirmations, pending, deny: () => { allow = false; } };
+  return { window, document, store, calls, confirmations, prompts, scrobbles, pending,
+    setPrompt: (value) => { promptValue = value; }, deny: () => { allow = false; } };
 }
 const panel = (doc) => doc.getElementById('ogt-playback');
 const click = (doc, action) => panel(doc).querySelector(`[data-action="${action}"]`).click();
@@ -79,8 +89,9 @@ test('movie and episode badges match exact media and clear the playback entry', 
       click(b.document, 'one'); await wait();
       assert.match(b.confirmations[0], /1 item\?/);
       assert.equal(b.calls.filter((r) => r.method === 'DELETE')[0].url, `https://api.trakt.tv/sync/playback/${episode ? 102 : 101}`);
-      assert.equal(panel(b.document).hidden, true);
-      assert.match(b.document.querySelector('.ogt-toast').textContent, /Paused playback: 1 cleared\./);
+      assert.equal(panel(b.document).hidden, false);
+      assert.match(panel(b.document).textContent, /No saved playback/);
+      assert.match(panel(b.document).textContent, /1 cleared/);
     });
   }
 });
@@ -129,4 +140,58 @@ test('navigation destroys the panel and late responses cannot mount it again', a
   assert.equal(panel(b.document), null);
   for (const respond of b.pending) respond(); await wait();
   assert.equal(panel(b.document), null);
+});
+test('a title page with no saved playback saves progress with start then pause', async (t) => {
+  const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML, empty: true }); await wait();
+  assert.equal(panel(b.document).hidden, false);
+  assert.match(panel(b.document).textContent, /No saved playback/);
+  b.setPrompt('35');
+  click(b.document, 'save'); await wait(100);
+  assert.equal(b.prompts.length, 1);
+  assert.equal(b.prompts[0].initial, '');
+  assert.match(b.confirmations[0], /35%/);
+  assert.match(b.confirmations[0], /watching/);
+  assert.deepEqual(b.scrobbles.map((call) => call.path), ['/scrobble/start', '/scrobble/pause']);
+  assert.deepEqual(b.scrobbles[0].payload, { movie: { ids: { trakt: 1 }, title: 'The Dark', year: 2005 }, progress: 35 });
+  assert.deepEqual(b.scrobbles[1].payload, b.scrobbles[0].payload);
+  assert.match(panel(b.document).textContent, /Progress saved/);
+  assert.equal(b.calls.some((call) => call.url.includes('/scrobble/stop')), false);
+});
+test('an overview row saves episode progress after resolving episode ids', async (t) => {
+  const b = boot(t); await wait(); click(b.document, 'load'); await wait();
+  const row = panel(b.document).querySelector('li');
+  assert.match(row.textContent, /Pilot/);
+  b.setPrompt('60');
+  row.querySelector('[data-action="save"]').click(); await wait(120);
+  assert.match(b.confirmations[0], /60% for Breaking Bad/);
+  assert.ok(b.calls.find((call) => call.method === 'GET' && new URL(call.url).pathname === '/shows/breaking-bad/seasons/1/episodes/1'));
+  assert.deepEqual(b.scrobbles.map((call) => call.path), ['/scrobble/start', '/scrobble/pause']);
+  assert.deepEqual(b.scrobbles[0].payload, { episode: { ids: { trakt: 4 } }, progress: 60 });
+});
+test('cancelled or invalid progress sends nothing', async (t) => {
+  const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML, empty: true }); await wait();
+  b.setPrompt(null); click(b.document, 'save'); await wait();
+  assert.equal(b.prompts.length, 1); assert.equal(b.confirmations.length, 0); assert.equal(b.scrobbles.length, 0);
+  b.setPrompt('0'); click(b.document, 'save'); await wait();
+  assert.match(panel(b.document).textContent, /1 to 100/); assert.equal(b.scrobbles.length, 0);
+  b.setPrompt('25'); b.deny(); click(b.document, 'save'); await wait();
+  assert.equal(b.confirmations.length, 1); assert.equal(b.scrobbles.length, 0);
+});
+test('a title page with saved playback can replace it, prefilled with the current value', async (t) => {
+  const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML }); await wait();
+  assert.match(panel(b.document).textContent, /42% paused/);
+  b.setPrompt('70');
+  click(b.document, 'save'); await wait(100);
+  assert.equal(b.prompts[0].initial, '42');
+  assert.equal(b.calls.some((call) => new URL(call.url).pathname.startsWith('/movies/')), false, 'reuses the playback ids');
+  assert.deepEqual(b.scrobbles.map((call) => call.path), ['/scrobble/start', '/scrobble/pause']);
+  assert.equal(b.scrobbles[0].payload.progress, 70);
+  assert.match(panel(b.document).textContent, /Progress saved/);
+});
+test('a pause that fails after start says the earlier progress was removed', async (t) => {
+  const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML, failPause: true }); await wait();
+  b.setPrompt('70');
+  click(b.document, 'save'); await wait(1500);
+  assert.deepEqual(b.scrobbles.map((call) => call.path).slice(0, 2), ['/scrobble/start', '/scrobble/pause']);
+  assert.match(panel(b.document).textContent, /did not save the pause, so earlier progress for this title was removed/);
 });
