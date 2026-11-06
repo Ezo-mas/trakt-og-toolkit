@@ -1,4 +1,5 @@
 import { el } from '../../core/dom.js';
+import { confirmDialog } from '../../ui/dialog.js';
 import { isSignedIn } from '../../core/trakt.js';
 import { libraryApi } from './api.js';
 import { notifySuccess } from '../../ui/success-notification.js';
@@ -60,7 +61,7 @@ export const library = {
       const title = readLibraryTitle(doc);
       void nativeRefresh.prepare(route, { active }).catch(error => debugError('native library preparation unavailable', error));
       try {
-        const result = await libraryApi.add(route, { confirm: message => window.confirm(message), active });
+        const result = await libraryApi.add(route, { confirm: message => confirmDialog(message, { title: 'Add to library', ok: 'Add episodes' }), active });
         if (!active()) return;
         if (!result.cancelled) {
           added = true;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { spawnSync } from 'node:child_process';
+import { answerDialogs } from './dialogs.js';
 
 test('built bundle registers OAuth menus and shows user without exposing tokens', async (t) => {
   const window = new Window({ url: 'https://og.trakt.tv/' });
@@ -58,11 +59,11 @@ test('sign-in accepts registered redirect values and pre-fills the README defaul
       window.GM_setValue = (k, v) => data.set(k, v);
       window.GM_deleteValue = (k) => data.delete(k);
       window.GM_registerMenuCommand = (name, callback) => menus.set(name, callback);
-      window.prompt = (message, initial) => {
+      answerDialogs(window, { prompt: (message, initial) => {
         assert.match(message, /redirect URI/);
         assert.equal(initial, 'http://localhost:5173/callback');
         return value === undefined ? initial : value;
-      };
+      } });
       window.GM_xmlhttpRequest = (r) => {
         requests.push(r);
         r.onload({ status: 404, responseText: '{}', responseHeaders: '' });
@@ -89,10 +90,11 @@ test('sign-in shows the device code in a toast and keeps it there while pending'
   window.GM_setValue = (k, v) => data.set(k, v);
   window.GM_deleteValue = (k) => data.delete(k);
   window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
-  window.prompt = (message, initial) => {
-    assert.match(message, /redirect URI/, 'only the redirect URI may use a native prompt');
+  window.prompt = () => assert.fail('no native prompt');
+  answerDialogs(window, { prompt: (message, initial) => {
+    assert.match(message, /redirect URI/, 'only the redirect URI is asked for');
     return initial;
-  };
+  } });
   window.GM_xmlhttpRequest = (r) => {
     if (r.url.endsWith('/device/code')) {
       r.onload({ status: 200, responseHeaders: '', responseText: JSON.stringify({
@@ -128,7 +130,7 @@ test('sign-in copies the device code, opens the activation page and says so', as
   const opened = [];
   window.GM_openInTab = (url, options) => opened.push([url, options.active]);
   window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
-  window.prompt = (message, initial) => initial;
+  answerDialogs(window);
   window.GM_xmlhttpRequest = (r) => {
     if (r.url.endsWith('/device/code')) {
       r.onload({ status: 200, responseHeaders: '', responseText: JSON.stringify({

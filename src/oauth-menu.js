@@ -4,6 +4,7 @@ import { apiAuth } from './core/trakt.js';
 import { getClientId } from './settings.js';
 import { STORAGE, getPrivateValue, setPrivateValue } from './core/store.js';
 import { toast } from './ui/shell.js';
+import { promptDialog } from './ui/dialog.js';
 
 const CODE_TOAST_MS = 10 * 60 * 1000; // Trakt device codes last 10 minutes
 const QUIET = new Set([DEVICE_MESSAGES[400], DEVICE_MESSAGES[429]]);
@@ -36,8 +37,10 @@ export function registerAuthMenu() {
     if (isSignedIn()) { toast('Already signed in; sign out before changing accounts.'); return; }
     // Refresh's documented payload requires the app's registered redirect URI,
     // even though device authorization itself never redirects the browser.
-    const uri = window.prompt('Enter the redirect URI registered for your Trakt app (used for token refresh).',
-      getPrivateValue(STORAGE.redirectUri) || 'http://localhost:5173/callback');
+    const uri = await promptDialog('Enter the redirect URI registered for your Trakt app. It is used for token refresh.', {
+      title: 'Sign in to Trakt', label: 'Redirect URI', ok: 'Continue',
+      value: getPrivateValue(STORAGE.redirectUri) || 'http://localhost:5173/callback',
+    });
     if (uri === null) return;
     if (!uri.trim()) { toast('Enter the redirect URI registered for your Trakt app.'); return; }
     try {

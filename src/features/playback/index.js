@@ -2,6 +2,7 @@ import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
 import { isSignedIn } from '../../core/trakt.js';
 import { toast } from '../../ui/shell.js';
+import { confirmDialog, promptDialog } from '../../ui/dialog.js';
 import { playbackApi } from './api.js';
 import { matchesRoute, normalizeProgress, olderThan } from './data.js';
 import { CSS } from './styles.js';
@@ -81,7 +82,8 @@ function createPanel(route) {
   }
   async function clear(ids) {
     if (!ids.length) { status.textContent = 'No paused items selected.'; return; }
-    const result = await playbackApi.clearItems(ids, (message) => window.confirm(message));
+    const result = await playbackApi.clearItems(ids, (message) =>
+      confirmDialog(message, { title: 'Clear paused playback', ok: 'Clear' }));
     if (result.cancelled || !alive()) return;
     selected.clear();
     const summary = `${result.cleared.length} cleared${result.failed.length ? `; ${result.failed.length} failed — try again` : ''}.`;
@@ -100,13 +102,17 @@ function createPanel(route) {
   }
   async function saveProgress(item) {
     status.textContent = '';
-    const value = window.prompt('Progress percentage (1–100)', item ? String(Number(item.progress.toFixed(1))) : '');
+    const title = item?.title ?? 'this title';
+    // One dialog asks and warns; the field rejects anything outside 1–100 before it closes.
+    const value = await promptDialog(`Set the saved progress for ${title}. Trakt saves it by starting and pausing ` +
+      'playback, so your profile may briefly show it as watching.', {
+      title: 'Save progress', label: 'Progress (%)', ok: 'Save progress', inputMode: 'decimal', placeholder: '1–100',
+      value: item ? String(Number(item.progress.toFixed(1))) : '',
+      validate: (text) => normalizeProgress(text) == null ? 'Enter a percentage from 1 to 100.' : null,
+    });
     if (value == null || !alive()) return;
     const progress = normalizeProgress(value);
-    if (progress == null) { status.textContent = 'Enter a percentage from 1 to 100.'; return; }
-    const title = item?.title ?? 'this title';
-    if (!window.confirm(`Set progress to ${percent(progress)} for ${title}? It may briefly show as watching on your Trakt profile.`)) return;
-    if (!alive()) return;
+    if (progress == null) return;
     status.textContent = 'Saving progress…';
     try {
       if (item) await playbackApi.setProgress(item, progress);
