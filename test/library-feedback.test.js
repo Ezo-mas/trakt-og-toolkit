@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { MOVIE_HTML, SHOW_HTML } from './fixtures.js';
 import { readLibraryTitle } from '../src/features/library/data.js';
 import { nativeLibraryImports, isNativeLibraryStore } from '../src/features/library/native-refresh.js';
+import { answerDialogs } from './dialogs.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 100) => new Promise(resolve => setTimeout(resolve, ms));
@@ -49,7 +50,7 @@ function boot(t, { show = false, nativeSignedIn = true, differentAccount = false
   window.GM_setValue = (key, value) => store.set(key, value);
   window.GM_deleteValue = key => store.delete(key);
   window.GM_registerMenuCommand = () => {};
-  window.confirm = () => true;
+  answerDialogs(window);
   window.GM_xmlhttpRequest = r => {
     calls.push(r);
     const body = r.method === 'POST' ? result ?? { added: { [show ? 'episodes' : 'movies']: 1 } } :

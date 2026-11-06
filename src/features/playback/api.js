@@ -41,9 +41,10 @@ export function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isS
     if (unique.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new Error('Invalid playback ID.');
     if (!signedIn()) throw new Error('Sign in to Trakt first.');
     const epoch = session;
-    if (!unique.length || !confirm(`Clear paused playback for ${unique.length} item${unique.length === 1 ? '' : 's'}? This cannot be undone.`)) {
+    if (!unique.length || !(await confirm(`Clear paused playback for ${unique.length} item${unique.length === 1 ? '' : 's'}? This cannot be undone.`))) {
       return { cancelled: true, cleared: [], failed: [] };
     }
+    if (session !== epoch || !signedIn()) return { cancelled: true, cleared: [], failed: [] };
     let cursor = 0;
     const cleared = [];
     const failed = [];

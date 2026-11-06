@@ -2,6 +2,25 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-06: og-styled dialogs instead of the browser's
+
+- Every `window.confirm` / `window.prompt` (playback clear and save progress, library add, the custom-link and
+  client-ID menu commands, the sign-in redirect URI) now goes through `src/ui/dialog.js`: `confirmDialog()` and
+  `promptDialog()` return promises. It is a native modal `<dialog>` like og's `Dialog.svelte` (trakt-og
+  `fea92af`), so focus stays inside, Esc cancels and focus goes back to the opener. Its look uses og's own tokens:
+  `--color-dialog-bg`, the uppercase title bar (`--color-dialog-title-*`), and the art dialogs' footer, field and
+  red primary button (`--color-dialog-art-*`, `--color-control-*`, `--brand-primary`), with fallbacks outside og.
+- `promptDialog({ validate })` keeps the dialog open and shows the error under the field, so bad input no longer
+  needs a second round trip. Save progress now asks once: the "may briefly show as watching" warning is in the
+  prompt, not a separate confirm.
+- The API-side confirm callbacks (`playbackApi.clearItems`, `libraryApi.add`) now await their answer, and re-check
+  the session/page afterwards, since the page can change while a dialog is open.
+- Without `showModal` (very old engines) the helpers fall back to the native dialogs.
+- Tests: `test/dialog.test.js` covers labels, focus, buttons, Esc, close and validation. `test/dialogs.js` is a
+  helper that answers dialogs in integration tests the way the old `window.confirm` mocks did. happy-dom shares
+  element classes between windows, so it answers only its own window's dialogs. Checked on live og (a movie page)
+  with the built CSS: title bar, field, inline error and Esc all look and behave like og's modals.
+
 ## 2026-11-05: set playback progress (feature 9)
 
 - Trakt's current scrobble contract (`trakt/trakt-api` `projects/api/src/contracts/scrobble`): a movie request

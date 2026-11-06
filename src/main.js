@@ -9,6 +9,7 @@
 import { VERSION } from './meta.js';
 import { injectStyles } from './ui/shell.js';
 import { successNotificationCss } from './ui/success-notification-styles.js';
+import { DIALOG_CSS } from './ui/dialog.js';
 import { createRouter, parseRoute } from './core/router.js';
 import { createFeatureHost } from './features/host.js';
 import { waitForPageReady, watchModuleResources } from './core/hydration.js';
@@ -67,7 +68,7 @@ function start() {
 
     // Nothing above this point touches og's DOM: styles and the router are
     // created only once the page has finished hydrating.
-    injectStyles([successNotificationCss, ...FEATURES.map((feature) => feature.css).filter(Boolean)]);
+    injectStyles([successNotificationCss, DIALOG_CSS, ...FEATURES.map((feature) => feature.css).filter(Boolean)]);
     host = createFeatureHost(FEATURES, { isEnabled: isFeatureEnabled });
     createRouter({
       onRoute(next) {
