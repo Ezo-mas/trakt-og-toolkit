@@ -21,7 +21,6 @@ export const FEATURE_LABELS = {
   'watchlist-credits': 'Watchlist credit shortcuts',
   'month-review': 'Last month in review',
   'all-lists': 'All lists',
-  'list-preview': 'List preview titles',
 };
 
 /** @param {() => string} getRouteKey */

@@ -367,15 +367,15 @@
   var STYLE_ID = "ogt-styles";
   function injectStyles(extra = []) {
     if (document.getElementById(STYLE_ID)) return;
-    const css3 = [CSS, ...extra].join("\n");
+    const css2 = [CSS, ...extra].join("\n");
     if (typeof GM_addStyle === "function") {
       try {
-        GM_addStyle(css3);
+        GM_addStyle(css2);
         return;
       } catch {
       }
     }
-    const style = el("style", { id: STYLE_ID, text: css3 });
+    const style = el("style", { id: STYLE_ID, text: css2 });
     (document.head || document.documentElement).append(style);
   }
   var toastTimer = null;
@@ -2031,24 +2031,6 @@
 
   // src/features/playback/data.js
   var DAY = 24 * 60 * 60 * 1e3;
-  var MOVIE_IDS = ["trakt", "slug", "imdb", "tmdb"];
-  var EPISODE_IDS = ["trakt", "imdb", "tmdb", "tvdb"];
-  function pickIds(ids, keys) {
-    if (!ids || typeof ids !== "object") return null;
-    for (const key of keys) {
-      const value = ids[key];
-      const valid = key === "trakt" || key === "tmdb" || key === "tvdb" ? Number.isSafeInteger(value) && value > 0 : typeof value === "string" && value.trim() !== "";
-      if (valid) return { [key]: typeof value === "string" ? value.trim() : value };
-    }
-    return null;
-  }
-  function normalizeProgress(value) {
-    if (value == null || typeof value === "string" && value.trim() === "") return null;
-    const progress = typeof value === "number" ? value : Number(value);
-    if (!Number.isFinite(progress)) return null;
-    const rounded = Math.round(progress * 10) / 10;
-    return rounded >= 1 && rounded <= 100 ? rounded : null;
-  }
   function posterUrl(value) {
     if (typeof value !== "string" || !value) return null;
     try {
@@ -2072,8 +2054,6 @@
         id: row.id,
         kind,
         ids: { ...media.ids },
-        year: Number.isInteger(media.year) ? media.year : null,
-        episodeIds: kind === "episode" && episode.ids && typeof episode.ids === "object" ? { ...episode.ids } : null,
         season: kind === "episode" ? episode.season : null,
         episode: kind === "episode" ? episode.number : null,
         title: kind === "movie" ? media.title || "Untitled movie" : `${media.title || "Untitled show"} · ${episode.season}×${String(episode.number).padStart(2, "0")} · ${episode.title || "Untitled episode"}`,
@@ -2094,21 +2074,6 @@
     const cutoff = now - Number(days) * DAY;
     return items.filter((item) => Number.isFinite(item.pausedMs) && item.pausedMs < cutoff);
   }
-  function scrobbleBody(item, progress, episodeIds = null) {
-    const value = normalizeProgress(progress);
-    if (!item || value == null) throw new Error("Invalid progress.");
-    if (item.kind === "movie") {
-      const ids2 = pickIds(item.ids, MOVIE_IDS);
-      if (!ids2) throw new Error("Could not identify this title.");
-      const movie = { ids: ids2 };
-      if (typeof item.title === "string" && item.title.trim()) movie.title = item.title.trim();
-      if (Number.isInteger(item.year)) movie.year = item.year;
-      return { movie, progress: value };
-    }
-    const ids = pickIds(episodeIds ?? item.episodeIds, EPISODE_IDS);
-    if (!ids) throw new Error("Could not identify this episode.");
-    return { episode: { ids }, progress: value };
-  }
   function matchesRoute(item, route) {
     const kind = route.name === "episode" ? "episode" : route.kind;
     return item.kind === kind && [item.ids.slug, item.ids.trakt].some((id) => id != null && String(id) === route.id) && (kind !== "episode" || item.season === route.season && item.episode === route.episode);
@@ -2116,7 +2081,7 @@
 
   // src/features/playback/api.js
   var TTL = 6e4;
-  function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isSignedIn, now = Date.now } = {}) {
+  function createPlaybackApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
     const cache3 = /* @__PURE__ */ new Map();
     const flights2 = /* @__PURE__ */ new Map();
     let revision = 0;
@@ -2193,54 +2158,7 @@
       }
       return { cancelled: false, cleared, failed };
     }
-    async function episodeIdsFor(item) {
-      if (pickIds(item.episodeIds, EPISODE_IDS)) return item.episodeIds;
-      if (!item.ids || !Number.isInteger(item.season) || !Number.isInteger(item.episode)) {
-        throw new Error("Could not identify this episode.");
-      }
-      const showId = item.ids.slug || item.ids.trakt;
-      if (!showId) throw new Error("Could not identify this episode.");
-      const episode = await get(`/shows/${encodeURIComponent(showId)}/seasons/${item.season}/episodes/${item.episode}`);
-      if (!pickIds(episode?.ids, EPISODE_IDS)) throw new Error("Could not identify this episode.");
-      return episode.ids;
-    }
-    async function setProgress(item, progress, epoch = session) {
-      if (!signedIn()) throw new Error("Sign in to Trakt first.");
-      const value = normalizeProgress(progress);
-      if (!item || value == null) throw new Error("Invalid progress.");
-      const episodeIds = item.kind === "movie" ? null : await episodeIdsFor(item);
-      if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
-      const body = scrobbleBody(item, value, episodeIds);
-      await auth("POST", "/scrobble/start", body);
-      invalidate();
-      try {
-        if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
-        await auth("POST", "/scrobble/pause", body);
-      } catch (error) {
-        error.partial = true;
-        throw error;
-      } finally {
-        invalidate();
-      }
-      return { progress: value, body };
-    }
-    async function setRouteProgress(route, progress) {
-      if (!signedIn()) throw new Error("Sign in to Trakt first.");
-      const value = normalizeProgress(progress);
-      if (value == null) throw new Error("Invalid progress.");
-      if (!route?.id) throw new Error("Unsupported playback page.");
-      const epoch = session;
-      if (route.kind === "movie") {
-        const movie = await get(`/movies/${encodeURIComponent(route.id)}`);
-        return setProgress({ kind: "movie", ids: movie?.ids, title: movie?.title, year: movie?.year }, value, epoch);
-      }
-      if (route.name !== "episode" || !Number.isInteger(route.season) || !Number.isInteger(route.episode)) {
-        throw new Error("Unsupported playback page.");
-      }
-      const episode = await get(`/shows/${encodeURIComponent(route.id)}/seasons/${route.season}/episodes/${route.episode}`);
-      return setProgress({ kind: "episode", episodeIds: episode?.ids, season: route.season, episode: route.episode }, value, epoch);
-    }
-    return { load, loadAll, clearItems, setProgress, setRouteProgress, invalidate, resetSession };
+    return { load, loadAll, clearItems, invalidate, resetSession };
   }
   var playbackApi = createPlaybackApi();
   if (typeof document !== "undefined") document.addEventListener("ogt:authchange", () => playbackApi.resetSession());
@@ -2270,7 +2188,7 @@
   var button = (label, action) => el("button", { class: "ogt-chip", type: "button", text: label, dataset: { action } });
   function createPanel2(route) {
     const overview = route.name === "progress";
-    const kind = route.kind === "movie" ? "movie" : "episode";
+    const kind = route.name === "episode" ? "episode" : "movie";
     let destroyed = false;
     let busy = false;
     let items = [];
@@ -2302,13 +2220,8 @@
       content.replaceChildren();
       if (!overview) {
         const item = items.find((row) => matchesRoute(row, route));
-        node.hidden = false;
-        if (!item) {
-          content.append(el("p", { class: "ogt-hint", text: "No saved playback." }), button("Save progress…", "save"));
-          return;
-        }
-        const save = button("Save progress…", "save");
-        save.dataset.id = String(item.id);
+        node.hidden = !item;
+        if (!item) return;
         const clear2 = button("Clear", "one");
         clear2.dataset.id = String(item.id);
         content.append(el(
@@ -2316,7 +2229,6 @@
           { class: "ogt-playback__tools" },
           el("span", { text: `${percent(item.progress)} paused` }),
           el("progress", { class: "ogt-playback__meter", max: 100, value: item.progress, "aria-label": "Saved playback progress" }),
-          save,
           clear2
         ));
         return;
@@ -2339,8 +2251,6 @@
       );
       const list = el("ul", { class: "ogt-playback__list" });
       for (const item of items) {
-        const save = button("Save progress…", "save");
-        save.dataset.id = String(item.id);
         const clear2 = button("Clear", "one");
         clear2.dataset.id = String(item.id);
         const poster = item.poster ? el("img", { class: "ogt-playback__poster", src: item.poster, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }) : el("span", { class: "ogt-playback__poster", "aria-hidden": true });
@@ -2356,7 +2266,6 @@
             el("span", { text: ` · ${percent(item.progress)}` }),
             el("time", { class: "ogt-playback__date", datetime: item.pausedAt, text: `Paused ${new Date(item.pausedMs).toLocaleString()}` })
           ),
-          save,
           clear2
         ));
       }
@@ -2390,45 +2299,6 @@
       if (!overview && node.hidden) toast(`Paused playback: ${message}`);
       else status.textContent = message;
     }
-    async function saveProgress(item) {
-      status.textContent = "";
-      const value = window.prompt("Progress percentage (1–100)", item ? String(Number(item.progress.toFixed(1))) : "");
-      if (value == null || !alive2()) return;
-      const progress = normalizeProgress(value);
-      if (progress == null) {
-        status.textContent = "Enter a percentage from 1 to 100.";
-        return;
-      }
-      const title = item?.title ?? "this title";
-      if (!window.confirm(`Set progress to ${percent(progress)} for ${title}? It may briefly show as watching on your Trakt profile.`)) return;
-      if (!alive2()) return;
-      status.textContent = "Saving progress…";
-      try {
-        if (item) await playbackApi.setProgress(item, progress);
-        else await playbackApi.setRouteProgress(route, progress);
-      } catch (error) {
-        if (!error.partial) throw error;
-        debugError("playback pause failed after start", error);
-        if (!alive2()) return;
-        items = [];
-        render();
-        await read(true).catch(() => {
-        });
-        if (alive2()) status.textContent = "Trakt started playback but did not save the pause, so earlier progress for this title was removed; try again.";
-        return;
-      }
-      if (!alive2()) return;
-      items = [];
-      render();
-      try {
-        await read(true);
-      } catch (error) {
-        debugError("playback refresh failed", error);
-        status.textContent = "Progress saved, but playback could not be refreshed.";
-        return;
-      }
-      if (alive2()) status.textContent = "Progress saved.";
-    }
     async function onClick(event) {
       const target = event.target.closest("button[data-action]");
       if (!target || !node.contains(target) || busy || !alive2()) return;
@@ -2439,10 +2309,6 @@
           status.textContent = "Loading paused playback…";
           await read(true);
           if (alive2()) status.textContent = "";
-        } else if (action === "save") {
-          const item = target.dataset.id ? items.find((row) => row.id === Number(target.dataset.id)) : null;
-          if (target.dataset.id && !item) return;
-          await saveProgress(item);
         } else if (action === "one") await clear([Number(target.dataset.id)]);
         else if (action === "selected") await clear([...selected]);
         else if (action === "age") {
@@ -2453,7 +2319,7 @@
         }
       } catch (error) {
         debugError("playback request failed", error);
-        if (alive2()) status.textContent = error.status === 429 ? "Trakt rate limited this request; try again later." : action === "save" ? "Could not save progress; try again." : "Could not load paused playback; try again.";
+        if (alive2()) status.textContent = "Could not load paused playback; try again.";
       } finally {
         if (alive2()) lock(false);
       }
@@ -2838,15 +2704,6 @@
     }
     return [...items.values()];
   }
-  function mapTitleRatings(rows, type) {
-    const items = /* @__PURE__ */ new Map();
-    for (const row of Array.isArray(rows) ? rows : []) {
-      if (!Number.isInteger(row?.rating) || row.rating < 1 || row.rating > 10) continue;
-      const id = row[type]?.ids?.trakt;
-      if (Number.isSafeInteger(id) && id > 0) items.set(id, row.rating);
-    }
-    return items;
-  }
   function forShow(items, id) {
     const show = /^\d+$/.test(String(id)) ? Number(id) : items.find((item) => item.slug === id)?.show;
     return items.filter((item) => item.show === show);
@@ -2868,20 +2725,14 @@
   }
 
   // src/features/your-ratings/api.js
-  var TTL2 = 10 * 6e4;
-  var emptyTitles = () => ({ movie: /* @__PURE__ */ new Map(), show: /* @__PURE__ */ new Map() });
   function createRatingsApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
     let cache3 = null;
     let flight = null;
-    let titleCache = null;
-    let titleFlight = null;
     let generation3 = 0;
     function resetSession() {
       generation3++;
       cache3 = null;
       flight = null;
-      titleCache = null;
-      titleFlight = null;
     }
     async function load() {
       if (!signedIn()) {
@@ -2896,7 +2747,7 @@
         if (epoch !== generation3 || !signedIn()) throw new Error("Ratings session changed.");
         if (!Array.isArray(rows)) throw new Error("Invalid ratings response.");
         const items = mapRatings(rows);
-        cache3 = { items, until: now() + TTL2 };
+        cache3 = { items, until: now() + 10 * 6e4 };
         return items;
       })();
       flight = pending;
@@ -2906,30 +2757,7 @@
         if (flight === pending) flight = null;
       }
     }
-    async function loadTitles() {
-      if (!signedIn()) {
-        resetSession();
-        return emptyTitles();
-      }
-      if (titleCache && titleCache.until > now()) return titleCache.titles;
-      if (titleFlight) return titleFlight;
-      const epoch = generation3;
-      const pending = (async () => {
-        const [movies, shows] = await Promise.all([auth("GET", "/sync/ratings/movies"), auth("GET", "/sync/ratings/shows")]);
-        if (epoch !== generation3 || !signedIn()) throw new Error("Ratings session changed.");
-        if (!Array.isArray(movies) || !Array.isArray(shows)) throw new Error("Invalid ratings response.");
-        const titles = { movie: mapTitleRatings(movies, "movie"), show: mapTitleRatings(shows, "show") };
-        titleCache = { titles, until: now() + TTL2 };
-        return titles;
-      })();
-      titleFlight = pending;
-      try {
-        return await pending;
-      } finally {
-        if (titleFlight === pending) titleFlight = null;
-      }
-    }
-    return { load, loadTitles, resetSession };
+    return { load, resetSession };
   }
   var ratingsApi = createRatingsApi();
   if (typeof document !== "undefined") document.addEventListener("ogt:authchange", ratingsApi.resetSession);
@@ -4774,229 +4602,6 @@
     }
   };
 
-  // src/features/list-preview/data.js
-  var POSTER_PATH = /^(?:https?:)?\/\/media\.trakt\.tv\/images\/(shows|movies)\/(\d{3})\/(\d{3})\/(\d{3})\/posters\//i;
-  function readPosterRoute(src) {
-    if (typeof src !== "string") return null;
-    const match = src.match(POSTER_PATH);
-    if (!match) return null;
-    const id = Number(`${match[2]}${match[3]}${match[4]}`);
-    if (!Number.isSafeInteger(id) || id <= 0) return null;
-    const kind = match[1].toLowerCase() === "shows" ? "show" : "movie";
-    return { kind, id, href: `/${kind === "show" ? "shows" : "movies"}/${id}` };
-  }
-  function readListPoster(slot) {
-    const poster = slot?.querySelector?.("img.poster[src]");
-    const route = readPosterRoute(poster?.getAttribute("src"));
-    if (!route) return null;
-    const doc = slot.ownerDocument;
-    const describedBy = slot.getAttribute("aria-describedby")?.split(/\s+/).filter(Boolean) ?? [];
-    const title = describedBy.map((id) => doc?.getElementById(id)).flatMap((tooltip) => [...tooltip?.querySelectorAll(".text") ?? []]).map((node) => node.textContent.trim()).find(Boolean);
-    return { ...route, title: title || "this title" };
-  }
-
-  // src/features/list-preview/styles.js
-  var css = String.raw`
-.ogt-list-preview-slot { cursor: pointer; }
-.ogt-list-preview-titles {
-  position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
-`;
-
-  // src/features/list-preview/corner-rating.js
-  function cornerRating(rating, label = `Your rating: ${rating}`) {
-    if (!Number.isInteger(rating) || rating < 1 || rating > 10) return null;
-    return el(
-      "div",
-      { class: "ogt-corner-rating", role: "img", "aria-label": label, style: `--ogt-rating-color: var(--rating-${rating})` },
-      el("span", { class: "ogt-corner-rating-text", "aria-hidden": "true" }, String(rating))
-    );
-  }
-  var cornerRatingStyles = `
-.ogt-corner-rating {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: calc(var(--poster-width, 100%) - 30px);
-  z-index: 10;
-  inline-size: 30px;
-  block-size: 30px;
-  background-color: var(--ogt-rating-color);
-  clip-path: polygon(0 0, 100% 0, 100% 100%);
-  pointer-events: none;
-}
-@container (width < 520px) {
-  .list-row .ogt-corner-rating { inset-inline-start: auto; inset-inline-end: 0; }
-}
-/* og's geometry: a 15 by 30 box, 7px in, text on its top 12px, turned 45 degrees. */
-.ogt-corner-rating-text {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 7px;
-  inline-size: 15px;
-  block-size: 30px;
-  color: var(--color-card-text, #fff);
-  font-family: var(--font-headings, sans-serif);
-  font-weight: var(--font-weight-headings-heavy, 700);
-  font-size: var(--font-size-card-subtitle, 11px);
-  line-height: 12px;
-  text-align: center;
-  rotate: 45deg;
-}
-`;
-
-  // src/features/list-preview/index.js
-  var ID2 = "ogt-list-preview";
-  var SLOT = ".list-row .fan .slot";
-  var FAN = ".list-row .fan";
-  var listPreview = {
-    id: "list-preview",
-    css: css + cornerRatingStyles,
-    match(route) {
-      return ["lists", "lists-collaborations", "liked-lists", "smart-lists"].includes(route.name) || /^\/users\/[^/]+\/(?:lists|smart-lists)(?:\/|$)/.test(route.path) || /^\/lists(?:\/|$)/.test(route.path);
-    },
-    mount() {
-      if (!document.body || document.getElementById(ID2)) return null;
-      const marker = el("span", { id: ID2, hidden: true });
-      document.body.append(marker);
-      const slots = /* @__PURE__ */ new Map();
-      const navs = /* @__PURE__ */ new Map();
-      const corners = /* @__PURE__ */ new Map();
-      let ratings = null;
-      let ratingsRun = 0;
-      let destroyed = false;
-      let scheduled = false;
-      async function loadRatings() {
-        const run = ++ratingsRun;
-        ratings = null;
-        schedule();
-        if (!isSignedIn()) return;
-        let next = null;
-        try {
-          next = await ratingsApi.loadTitles();
-        } catch (error) {
-          debugError("list preview ratings failed", error);
-        }
-        if (destroyed || run !== ratingsRun) return;
-        ratings = next;
-        schedule();
-      }
-      function removeCorner(slot) {
-        corners.get(slot)?.node.remove();
-        corners.delete(slot);
-      }
-      function syncCorner(slot, info2) {
-        const rating = info2 && ratings?.[info2.kind]?.get(info2.id);
-        const key = rating ? `${info2.kind}:${info2.id}:${rating}` : null;
-        const current = corners.get(slot);
-        if (current?.key === key && (!key || current.node.parentNode === slot)) return;
-        removeCorner(slot);
-        const node = key && cornerRating(rating, `Your rating: ${rating} of 10`);
-        if (!node) return;
-        slot.append(node);
-        corners.set(slot, { key, node });
-      }
-      function scan() {
-        if (destroyed) return;
-        const seenSlots = /* @__PURE__ */ new Set();
-        for (const slot of document.querySelectorAll(SLOT)) {
-          seenSlots.add(slot);
-          const info2 = readListPoster(slot);
-          slot.classList.toggle("ogt-list-preview-slot", Boolean(info2));
-          if (info2) slots.set(slot, info2);
-          else slots.delete(slot);
-          syncCorner(slot, info2);
-        }
-        for (const slot of /* @__PURE__ */ new Set([...slots.keys(), ...corners.keys()])) {
-          if (seenSlots.has(slot) && slot.isConnected) continue;
-          slot.classList.remove("ogt-list-preview-slot");
-          removeCorner(slot);
-          slots.delete(slot);
-        }
-        const seenFans = /* @__PURE__ */ new Set();
-        for (const fan of document.querySelectorAll(FAN)) {
-          const items = [...fan.querySelectorAll(".slot")].map((slot) => slots.get(slot)).filter(Boolean);
-          if (!items.length) continue;
-          seenFans.add(fan);
-          const signature = items.map((item) => `${item.kind}:${item.id}:${item.title}`).join("|");
-          const entry = navs.get(fan);
-          if (entry?.nav.isConnected && entry.signature === signature) continue;
-          entry?.nav.remove();
-          const nav = el("nav", { class: "ogt-list-preview-titles", "aria-label": "List preview titles" });
-          for (const item of items) nav.append(el("a", { href: item.href, text: item.title }));
-          fan.after(nav);
-          navs.set(fan, { nav, signature });
-        }
-        for (const [fan, entry] of navs) {
-          if (seenFans.has(fan) && fan.isConnected) continue;
-          entry.nav.remove();
-          navs.delete(fan);
-        }
-      }
-      function navigate(event) {
-        const middle = event.type === "auxclick" && event.button === 1;
-        if (!middle && (event.type !== "click" || event.button !== 0)) return;
-        const slot = event.target?.closest?.(SLOT);
-        const info2 = slot && slots.get(slot);
-        if (!info2) return;
-        event.preventDefault();
-        event.stopPropagation();
-        if (middle || event.ctrlKey || event.metaKey || event.shiftKey) {
-          window.open(info2.href, "_blank", "noopener");
-          return;
-        }
-        const link = [...navs.get(slot.closest(".fan"))?.nav.querySelectorAll("a") ?? []].find((anchor) => anchor.getAttribute("href") === info2.href);
-        if (link) link.click();
-        else window.location.assign(info2.href);
-      }
-      function schedule() {
-        if (scheduled || destroyed) return;
-        scheduled = true;
-        queueMicrotask(() => {
-          scheduled = false;
-          scan();
-        });
-      }
-      const observer = new MutationObserver(schedule);
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-        attributes: true,
-        attributeFilter: ["src", "aria-describedby"]
-      });
-      document.addEventListener("click", navigate, true);
-      document.addEventListener("auxclick", navigate, true);
-      document.addEventListener("ogt:authchange", loadRatings);
-      loadRatings();
-      scan();
-      return {
-        node: marker,
-        destroy() {
-          destroyed = true;
-          observer.disconnect();
-          document.removeEventListener("click", navigate, true);
-          document.removeEventListener("auxclick", navigate, true);
-          document.removeEventListener("ogt:authchange", loadRatings);
-          for (const slot of slots.keys()) slot.classList.remove("ogt-list-preview-slot");
-          for (const { node } of corners.values()) node.remove();
-          for (const { nav } of navs.values()) nav.remove();
-          slots.clear();
-          corners.clear();
-          navs.clear();
-          marker.remove();
-        }
-      };
-    }
-  };
-
   // src/features/library/api.js
   var validId = (id) => Number.isSafeInteger(id) && id > 0;
   function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
@@ -5168,14 +4773,14 @@
   }
 
   // src/features/library/index.js
-  var ID3 = "ogt-library";
+  var ID2 = "ogt-library";
   var library = {
     id: "library",
     css: actionButtonCss("ogt-library", "var(--brand-quaternary, #129982)"),
     match: (route) => route.kind === "movie" && route.name === "title" || route.kind === "show" && ["title", "season", "episode"].includes(route.name),
     mount(route) {
       const anchor = findActionStack();
-      if (!anchor || document.getElementById(ID3)) return null;
+      if (!anchor || document.getElementById(ID2)) return null;
       let destroyed = false;
       let busy = false;
       let undoing = false;
@@ -5202,7 +4807,7 @@
       });
       button2.append(glyph, el("span", { class: "ogt-library__text" }, label));
       const status = el("p", { class: "ogt-library__status", role: "status", "aria-live": "polite" });
-      const node = el("div", { id: ID3, class: "ogt-library" }, button2, status);
+      const node = el("div", { id: ID2, class: "ogt-library" }, button2, status);
       function syncVisibility() {
         const titles = [...anchor.querySelectorAll(".summary-action .title")].filter((title) => !node.contains(title));
         const collected = titles.some((title) => /\bin library\b/i.test(title.textContent));
@@ -5418,7 +5023,7 @@
   var watchlistApi = createWatchlistApi();
 
   // src/features/watchlist/styles.js
-  var css2 = actionButtonCss("ogt-watchlist", "var(--brand-secondary, light-dark(#2474ae, #59a9e2))");
+  var css = actionButtonCss("ogt-watchlist", "var(--brand-secondary, light-dark(#2474ae, #59a9e2))");
 
   // src/features/watchlist/icon.js
   function watchlistIcon() {
@@ -5498,14 +5103,14 @@
   }
 
   // src/features/watchlist/index.js
-  var ID4 = "ogt-watchlist";
+  var ID3 = "ogt-watchlist";
   var watchlist = {
     id: "watchlist",
-    css: css2,
+    css,
     match: (route) => Boolean(watchlistLookup(route)),
     mount(route) {
       const anchor = findActionStack();
-      if (!anchor || document.getElementById(ID4)) return null;
+      if (!anchor || document.getElementById(ID3)) return null;
       let destroyed = false;
       let busy = false;
       let undoing = false;
@@ -5525,7 +5130,7 @@
       });
       button2.append(glyph, el("span", { class: "ogt-watchlist__text" }, label));
       const status = el("p", { class: "ogt-watchlist__status", role: "status", "aria-live": "polite" });
-      const node = el("div", { id: ID4, class: "ogt-watchlist" }, button2, status);
+      const node = el("div", { id: ID3, class: "ogt-watchlist" }, button2, status);
       function syncVisibility() {
         const watchlisted = readWatchlisted(anchor);
         if (wasWatchlisted && !watchlisted) added = false;
@@ -5637,11 +5242,11 @@
   };
 
   // src/features/watchlist/shortcuts.js
-  function createWatchlistShortcuts({ id, markerId, className, css: css3, match, logLabel, targets, readRoute }) {
+  function createWatchlistShortcuts({ id, markerId, className, css: css2, match, logLabel, targets, readRoute }) {
     return {
       id,
       match,
-      css: css3,
+      css: css2,
       mount() {
         if (!document.body || document.getElementById(markerId)) return null;
         const node = el("span", { id: markerId, hidden: true });
@@ -6026,8 +5631,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     "watchlist-cards": "Watchlist card shortcuts",
     "watchlist-credits": "Watchlist credit shortcuts",
     "month-review": "Last month in review",
-    "all-lists": "All lists",
-    "list-preview": "List preview titles"
+    "all-lists": "All lists"
   };
   function registerMenu(getRouteKey = () => location.pathname, features = []) {
     if (typeof GM_registerMenuCommand !== "function") return;
@@ -6082,7 +5686,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, monthReview, allLists, listPreview];
+  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, monthReview, allLists];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))

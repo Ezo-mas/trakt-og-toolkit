@@ -10,17 +10,6 @@ export function mapRatings(rows) {
   }
   return [...items.values()];
 }
-
-/** One type's ratings (`movie` or `show`) as a Map from Trakt id to 1–10. */
-export function mapTitleRatings(rows, type) {
-  const items = new Map();
-  for (const row of Array.isArray(rows) ? rows : []) {
-    if (!Number.isInteger(row?.rating) || row.rating < 1 || row.rating > 10) continue;
-    const id = row[type]?.ids?.trakt;
-    if (Number.isSafeInteger(id) && id > 0) items.set(id, row.rating);
-  }
-  return items;
-}
 export function forShow(items, id) {
   // Resolve slugs once, then filter by numeric identity (never by episode number alone).
   const show = /^\d+$/.test(String(id)) ? Number(id) : items.find((item) => item.slug === id)?.show;
