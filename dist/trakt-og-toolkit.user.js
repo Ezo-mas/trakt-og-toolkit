@@ -185,6 +185,14 @@
   overflow: auto;
 }
 
+.ogt-server-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  max-block-size: 240px;
+  overflow: auto;
+}
+
 .ogt-editor-list {
   display: grid;
   gap: 8px;
@@ -322,6 +330,10 @@
   }
 
   .ogt-editor-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ogt-server-list {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -768,11 +780,12 @@
   }
 
   // src/core/text.js
-  function fillTemplate(template, vars) {
+  function fillTemplate(template, vars, rawKeys = []) {
+    const raw = rawKeys instanceof Set ? rawKeys : new Set(rawKeys);
     return template.replace(/\{(\w+)\}/g, (_, key) => {
       const value = vars[key];
       if (value === void 0 || value === null || value === "") return "";
-      return encodeURIComponent(String(value));
+      return raw.has(key) ? String(value) : encodeURIComponent(String(value));
     });
   }
   function missingPlaceholders(template, vars) {
@@ -854,6 +867,7 @@
     tokens: "trakt.oauth.tokens",
     redirectUri: "trakt.oauth.redirectUri",
     customLinks: "watch.customLinks",
+    servers: "watch.servers",
     features: "features.disabled",
     debug: "debug",
     selection: (kind, id) => `selection.${kind}.${id}`
@@ -879,6 +893,56 @@
     if (clean) setValue(STORAGE.clientId, clean);
     else removeValue(STORAGE.clientId);
     return clean;
+  }
+  var SERVER_KEYS = ["jellyfin", "emby", "radarr", "sonarr", "seerr"];
+  function isServerTemplateUrl(value) {
+    const match = String(value || "").trim().match(/^\{([a-z][a-z0-9_-]*)\}\//);
+    return Boolean(match && SERVER_KEYS.includes(match[1]));
+  }
+  function isCustomLinkUrl(value) {
+    const url = String(value || "").trim();
+    return /^https?:\/\//i.test(url) || isServerTemplateUrl(url);
+  }
+  function normalizeServerUrl(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    const scheme = raw.match(/^([a-z][a-z0-9+.-]*):/i);
+    if (scheme) {
+      const rest = raw.slice(scheme[0].length);
+      const bareHostPort = /^\d+(?:[/?#]|$)/.test(rest);
+      if (!bareHostPort && !/^https?:\/\//i.test(raw)) return null;
+    }
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+    try {
+      const url = new URL(withScheme);
+      if (!/^https?:$/i.test(url.protocol) || !url.hostname) return null;
+      if (url.username || url.password || url.search || url.hash) return null;
+      return `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, "")}`;
+    } catch {
+      return null;
+    }
+  }
+  function getServers() {
+    const stored = getValue(STORAGE.servers, {});
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
+    const servers = {};
+    for (const key of SERVER_KEYS) {
+      const value = normalizeServerUrl(stored[key]);
+      if (value) servers[key] = value;
+    }
+    return servers;
+  }
+  function setServers(values) {
+    const servers = {};
+    if (values && typeof values === "object") {
+      for (const key of SERVER_KEYS) {
+        const value = normalizeServerUrl(values[key]);
+        if (value) servers[key] = value;
+      }
+    }
+    if (Object.keys(servers).length) setValue(STORAGE.servers, servers);
+    else removeValue(STORAGE.servers);
+    return servers;
   }
   function getCustomLinks() {
     const stored = getValue(STORAGE.customLinks, []);
@@ -1067,7 +1131,7 @@
     const match = String(imdb || "").match(/^tt0*(\d+)$/);
     return match ? match[1] : null;
   }
-  function templateVars(meta, selection = {}) {
+  function templateVars(meta, selection = {}, servers = {}) {
     return {
       id: meta.id,
       plural: meta.plural,
@@ -1079,6 +1143,11 @@
       imdbnum: imdbNumber(meta.imdb),
       episodeimdbnum: imdbNumber(meta.episodeImdb),
       tvdb: meta.tvdb,
+      jellyfin: servers.jellyfin || null,
+      emby: servers.emby || null,
+      radarr: servers.radarr || null,
+      sonarr: servers.sonarr || null,
+      seerr: servers.seerr || null,
       season: selection.season,
       episode: selection.episode
     };
@@ -1121,8 +1190,8 @@
         errors.push({ index, field: "url", message: "A URL is required." });
         continue;
       }
-      if (!/^https?:\/\//i.test(String(link.url).trim())) {
-        errors.push({ index, field: "url", message: "URL must start with http:// or https://." });
+      if (!isCustomLinkUrl(link.url)) {
+        errors.push({ index, field: "url", message: "URL must start with http://, https://, or a server placeholder." });
       }
     }
     return errors;
@@ -1266,6 +1335,55 @@
       label: "AniList",
       url: "https://anilist.co/search/anime?search={title}",
       kinds: ["movie", "show"]
+    },
+    {
+      label: "Jellyfin",
+      /**
+       * Current web search route; `jellyfin-web` defines `search` without `.html` and reads
+       * `?query=`. The server base URL comes from the Servers settings.
+       */
+      url: "{jellyfin}/web/#/search?query={title}",
+      kinds: ["movie", "show"],
+      requires: "jellyfin"
+    },
+    {
+      label: "Emby",
+      /**
+       * Current 4.9 web search page; its search field uses `searchtext`. Older Emby versions
+       * used `/web/search.html` directly, so this remains editable in the link editor.
+       */
+      url: "{emby}/web/index.html#!/list/list.html?type=search&searchtext={title}",
+      kinds: ["movie", "show"],
+      requires: "emby"
+    },
+    {
+      label: "Radarr",
+      url: "{radarr}/add/new?term={title}",
+      kinds: ["movie"],
+      requires: "radarr",
+      deep: [
+        { url: "{radarr}/add/new?term=imdb:{imdb}", kinds: ["movie"] },
+        { url: "{radarr}/add/new?term=tmdb:{tmdb}", kinds: ["movie"] }
+      ]
+    },
+    {
+      label: "Sonarr",
+      url: "{sonarr}/add/new?term={title}",
+      kinds: ["show"],
+      requires: "sonarr",
+      deep: [
+        { url: "{sonarr}/add/new?term=tvdb:{tvdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "Seerr",
+      url: "{seerr}/search?query={title}",
+      kinds: ["movie", "show"],
+      requires: "seerr",
+      deep: [
+        { url: "{seerr}/movie/{tmdb}", kinds: ["movie"] },
+        { url: "{seerr}/tv/{tmdb}", kinds: ["show"] }
+      ]
     }
   ];
   function presetTemplateUrls(url, kind) {
@@ -1699,6 +1817,13 @@
   // src/features/custom-links/index.js
   var PANEL_ID = "ogt-custom-links";
   var TITLE_ID = "ogt-custom-links-title";
+  var SERVER_FIELDS = [
+    { key: "jellyfin", label: "Jellyfin", placeholder: "http://192.168.1.20:8096" },
+    { key: "emby", label: "Emby", placeholder: "http://192.168.1.20:8096" },
+    { key: "radarr", label: "Radarr", placeholder: "http://192.168.1.20:7878" },
+    { key: "sonarr", label: "Sonarr", placeholder: "http://192.168.1.20:8989" },
+    { key: "seerr", label: "Seerr", placeholder: "http://192.168.1.20:5055" }
+  ];
   function findMountPoint() {
     const top = document.querySelector(".summary-frame #overview .top") || document.querySelector("#overview .top");
     if (top?.parentElement) return { parent: top.parentElement, before: top.nextSibling };
@@ -1734,10 +1859,12 @@
     const tools = el("div", { class: "ogt-link-tools", hidden: true });
     const editor = el("div", { class: "ogt-editor", hidden: true });
     const presetChecklist = el("div", { class: "ogt-presets", hidden: true });
-    tools.append(editor, presetChecklist);
+    const serversPanel = el("div", { class: "ogt-servers", hidden: true });
+    tools.append(editor, presetChecklist, serversPanel);
     const presetsButton = el("button", { class: "ogt-chip", type: "button", text: "Add presets…" });
+    const serversButton = el("button", { class: "ogt-chip", type: "button", text: "Servers…" });
     const editButton = el("button", { class: "ogt-chip", type: "button", text: "Edit links" });
-    actionsRow.append(presetsButton, editButton);
+    actionsRow.append(presetsButton, serversButton, editButton);
     const node = el(
       "section",
       { class: "ogt-panel", id: PANEL_ID, "aria-labelledby": TITLE_ID },
@@ -1752,13 +1879,13 @@
       actionsRow,
       tools
     );
-    const vars = () => templateVars(meta, selection);
+    const vars = () => templateVars(meta, selection, getServers());
     function updateLinkHrefs() {
       const values = vars();
       for (const link of linksRow.querySelectorAll("[data-ogt-template]")) {
         const template = resolvePresetUrl(link.dataset.ogtTemplate, values, meta.kind);
         if (missingPlaceholders(template, values).length) continue;
-        link.setAttribute("href", fillTemplate(template, values));
+        link.setAttribute("href", fillTemplate(template, values, SERVER_KEYS));
       }
     }
     function renderLinks() {
@@ -1771,10 +1898,10 @@
         );
       }
       for (const entry of links) {
-        if (!/^https?:\/\//i.test(entry.url)) continue;
+        if (!isCustomLinkUrl(entry.url)) continue;
         const template = resolvePresetUrl(entry.url, values, meta.kind);
         if (missingPlaceholders(template, values).length) continue;
-        linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values), template: entry.url }));
+        linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values, SERVER_KEYS), template: entry.url }));
       }
       lookUpShow(values);
     }
@@ -1800,6 +1927,7 @@
       tools.hidden = true;
       editor.hidden = true;
       presetChecklist.hidden = true;
+      serversPanel.hidden = true;
       const target = returnFocus;
       returnFocus = null;
       target?.focus();
@@ -1922,19 +2050,81 @@
       tools.hidden = false;
       editor.hidden = false;
       presetChecklist.hidden = true;
+      serversPanel.hidden = true;
       renderEditor(draft.length ? `${draft[0].id}-label` : "add-link");
+    }
+    function renderServers() {
+      serversPanel.replaceChildren();
+      const servers = getServers();
+      const list = el("div", { class: "ogt-server-list" });
+      const inputs = {};
+      for (const field of SERVER_FIELDS) {
+        const input = el("input", {
+          class: "ogt-editor-input",
+          type: "text",
+          value: servers[field.key] || "",
+          placeholder: field.placeholder,
+          "aria-label": `${field.label} URL`,
+          "data-focus": `${field.key}-url`
+        });
+        inputs[field.key] = input;
+        list.append(el("label", { class: "ogt-editor-field" }, field.label, input));
+      }
+      const error = el("p", { class: "ogt-editor-error", role: "alert", hidden: true });
+      const save = el("button", { class: "ogt-chip", type: "button", text: "Save servers" });
+      save.addEventListener("click", () => {
+        const next = {};
+        for (const field of SERVER_FIELDS) {
+          const raw = inputs[field.key].value.trim();
+          if (!raw) continue;
+          const normalized = normalizeServerUrl(raw);
+          if (!normalized) {
+            error.textContent = `${field.label}: enter a valid host or http(s) URL.`;
+            error.hidden = false;
+            inputs[field.key].focus();
+            return;
+          }
+          next[field.key] = normalized;
+        }
+        setServers(next);
+        renderLinks();
+        closeTools();
+      });
+      const cancel = el("button", { class: "ogt-chip", type: "button", text: "Cancel" });
+      cancel.addEventListener("click", closeTools);
+      serversPanel.append(
+        el("p", {
+          class: "ogt-hint",
+          text: "Enter the base URL of your own server. Bare hosts use http://; HTTPS and base paths are supported. Credentials, query strings and fragments are not."
+        }),
+        list,
+        error,
+        el("div", { class: "ogt-row ogt-editor-footer" }, save, cancel)
+      );
+      serversPanel.querySelector("input")?.focus();
+    }
+    function openServers() {
+      currentView = "servers";
+      returnFocus = serversButton;
+      tools.hidden = false;
+      editor.hidden = true;
+      presetChecklist.hidden = true;
+      serversPanel.hidden = false;
+      renderServers();
     }
     function renderPresetChecklist() {
       const links = getCustomLinks();
+      const servers = getServers();
       const presets = filterPresetsByKind(PRESETS, meta.kind);
       const list = el("div", { class: "ogt-preset-list" });
       selectedPresets = /* @__PURE__ */ new Set();
       for (const [index, preset] of presets.entries()) {
         const added = presetAlreadyAdded(links, preset);
+        const needsServer = Boolean(preset.requires && !servers[preset.requires]);
         const checkbox = el("input", {
           type: "checkbox",
           value: preset.url,
-          disabled: added,
+          disabled: added || needsServer,
           "aria-label": preset.label
         });
         checkbox.addEventListener("change", () => {
@@ -1946,12 +2136,15 @@
           { class: "ogt-preset-item", for: `ogt-preset-${index}` },
           checkbox,
           el("span", { text: preset.label }),
-          added ? el("span", { class: "ogt-preset-added", text: "added" }) : null
+          added ? el("span", { class: "ogt-preset-added", text: "added" }) : needsServer ? el("span", { class: "ogt-preset-added", text: "set server URL" }) : null
         );
         checkbox.id = `ogt-preset-${index}`;
         list.append(label);
       }
-      const error = el("p", { class: "ogt-hint", text: "Choose the services you want to add." });
+      const error = el("p", {
+        class: "ogt-hint",
+        text: "Choose the services you want to add. Server presets need a URL under Servers… first."
+      });
       const confirm = el("button", { class: "ogt-chip", type: "button", text: "Add selected" });
       confirm.addEventListener("click", () => {
         const selected = presets.filter((preset) => selectedPresets.has(preset.url));
@@ -1974,6 +2167,7 @@
       returnFocus = presetsButton;
       tools.hidden = false;
       editor.hidden = true;
+      serversPanel.hidden = true;
       presetChecklist.hidden = false;
       renderPresetChecklist();
       const firstChoice = presetChecklist.querySelector('input[type="checkbox"]:not(:disabled)');
@@ -1986,6 +2180,7 @@
       }
     }
     presetsButton.addEventListener("click", openPresets);
+    serversButton.addEventListener("click", openServers);
     editButton.addEventListener("click", openEditor);
     node.addEventListener("keydown", onKeyDown);
     function needsSelection() {
@@ -5996,7 +6191,7 @@
   });
 
   // src/actions.js
-  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}";
+  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}\nServer hosts: {jellyfin} {emby} {radarr} {sonarr} {seerr}";
   function promptAddCustomLink() {
     const answer = window.prompt(
       `Add a custom link as "Label | URL".
@@ -6016,8 +6211,8 @@ ${PLACEHOLDER_HELP}`,
       toast("Both a label and a URL are required.");
       return null;
     }
-    if (!/^https?:\/\//i.test(url)) {
-      toast("The URL must start with http:// or https://.");
+    if (!isCustomLinkUrl(url)) {
+      toast("The URL must start with http://, https://, or a server placeholder.");
       return null;
     }
     addCustomLink({ label, url });

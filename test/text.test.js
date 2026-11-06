@@ -10,6 +10,18 @@ test('fillTemplate encodes values and drops empty ones', () => {
   assert.equal(fillTemplate('{title}', { title: 'Breaking Bad' }), 'Breaking%20Bad');
 });
 
+test('fillTemplate fills server base URLs raw and still encodes the title', () => {
+  const vars = { jellyfin: 'http://media.test:8096/jellyfin', title: 'Breaking Bad' };
+  assert.equal(
+    fillTemplate('{jellyfin}/web/#/search?query={title}', vars, ['jellyfin']),
+    'http://media.test:8096/jellyfin/web/#/search?query=Breaking%20Bad',
+  );
+  assert.equal(
+    fillTemplate('{jellyfin}/search?q={title}', vars, new Set(['jellyfin'])),
+    'http://media.test:8096/jellyfin/search?q=Breaking%20Bad',
+  );
+});
+
 test('missingPlaceholders reports only unfilled names', () => {
   assert.deepEqual(missingPlaceholders('{tmdb}/{nope}', { tmdb: 1, nope: '' }), ['nope']);
   assert.deepEqual(missingPlaceholders('{tmdb}', { tmdb: 0 }), []);

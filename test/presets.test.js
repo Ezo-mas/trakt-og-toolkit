@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fillTemplate } from '../src/core/text.js';
+import { SERVER_KEYS } from '../src/settings.js';
 import { imdbNumber } from '../src/features/custom-links/data.js';
 import { PRESETS, presetTemplateUrls, resolvePresetUrl } from '../src/features/custom-links/presets.js';
 
@@ -12,7 +13,7 @@ const withNumbers = (vars) => ({
 });
 const filled = (label, vars, kind) => {
   const values = withNumbers(vars);
-  return fillTemplate(resolvePresetUrl(preset(label).url, values, kind), values);
+  return fillTemplate(resolvePresetUrl(preset(label).url, values, kind), values, SERVER_KEYS);
 };
 const stremio = preset('Stremio');
 
@@ -65,20 +66,6 @@ test('deep links only apply to their own page kind and presets stay unchanged ot
   const metacritic = preset('Metacritic');
   assert.equal(resolvePresetUrl(metacritic.url, { imdb: 'tt0903747' }, 'show'), metacritic.url);
   assert.equal(resolvePresetUrl('https://custom.test/{imdb}', { imdb: 'tt0903747' }, 'show'), 'https://custom.test/{imdb}');
-});
-
-test('presetTemplateUrls lists the search fallback and every deep route for the page kind', () => {
-  assert.deepEqual(presetTemplateUrls(stremio.url, 'show'), [
-    stremio.url,
-    'https://web.stremio.com/#/detail/series/{imdb}/{imdb}:{season}:{episode}',
-    'https://web.stremio.com/#/detail/series/{imdb}?season={season}',
-    'https://web.stremio.com/#/detail/series/{imdb}',
-  ]);
-  assert.deepEqual(presetTemplateUrls(stremio.url, 'movie'), [
-    stremio.url,
-    'https://web.stremio.com/#/detail/movie/{imdb}',
-  ]);
-  assert.deepEqual(presetTemplateUrls('https://custom.test/{imdb}', 'show'), ['https://custom.test/{imdb}']);
 });
 
 test('IMDb opens the title or season and otherwise searches', () => {
@@ -208,6 +195,52 @@ test('OpenSubtitles opens movie, show, season and episode searches by IMDb numbe
   );
 });
 
+test('server presets use the configured host and the best id they have', () => {
+  const servers = {
+    jellyfin: 'http://media.test:8096/jellyfin',
+    emby: 'https://media.test/emby',
+    radarr: 'http://apps.test:7878',
+    sonarr: 'http://apps.test:8989',
+    seerr: 'https://requests.test/seerr',
+  };
+  assert.equal(
+    filled('Jellyfin', { title: 'Breaking Bad', ...servers }, 'show'),
+    'http://media.test:8096/jellyfin/web/#/search?query=Breaking%20Bad',
+  );
+  assert.equal(
+    filled('Emby', { title: 'Breaking Bad', ...servers }, 'show'),
+    'https://media.test/emby/web/index.html#!/list/list.html?type=search&searchtext=Breaking%20Bad',
+  );
+  assert.equal(
+    filled('Radarr', { title: 'The Dark', imdb: 'tt0465676', tmdb: 8967, ...servers }, 'movie'),
+    'http://apps.test:7878/add/new?term=imdb:tt0465676',
+  );
+  assert.equal(
+    filled('Radarr', { title: 'The Dark', tmdb: 8967, ...servers }, 'movie'),
+    'http://apps.test:7878/add/new?term=tmdb:8967',
+  );
+  assert.equal(
+    filled('Radarr', { title: 'The Dark', ...servers }, 'movie'),
+    'http://apps.test:7878/add/new?term=The%20Dark',
+  );
+  assert.equal(
+    filled('Sonarr', { title: 'Breaking Bad', tvdb: 81189, ...servers }, 'show'),
+    'http://apps.test:8989/add/new?term=tvdb:81189',
+  );
+  assert.equal(
+    filled('Sonarr', { title: 'Breaking Bad', ...servers }, 'show'),
+    'http://apps.test:8989/add/new?term=Breaking%20Bad',
+  );
+  assert.equal(
+    filled('Seerr', { title: 'The Dark', tmdb: 8967, ...servers }, 'movie'),
+    'https://requests.test/seerr/movie/8967',
+  );
+  assert.equal(
+    filled('Seerr', { title: 'Breaking Bad', tmdb: 1396, ...servers }, 'show'),
+    'https://requests.test/seerr/tv/1396',
+  );
+});
+
 test('the og external-link services have search presets', () => {
   assert.equal(filled('Rotten Tomatoes', { title: 'The Dark' }, 'movie'), 'https://www.rottentomatoes.com/search?search=The%20Dark');
   assert.equal(filled('Wikipedia', { title: 'The Dark' }, 'movie'), 'https://en.wikipedia.org/w/index.php?search=The%20Dark');
@@ -217,6 +250,23 @@ test('the og external-link services have search presets', () => {
   assert.equal(filled('OpenSubtitles', { imdb: 'tt0465676' }, 'movie'), 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-465676');
 });
 
-test('every preset has a unique search URL', () => {
+test('presetTemplateUrls lists the search fallback and every deep route for the page kind', () => {
+  assert.deepEqual(presetTemplateUrls(stremio.url, 'show'), [
+    stremio.url,
+    'https://web.stremio.com/#/detail/series/{imdb}/{imdb}:{season}:{episode}',
+    'https://web.stremio.com/#/detail/series/{imdb}?season={season}',
+    'https://web.stremio.com/#/detail/series/{imdb}',
+  ]);
+  assert.deepEqual(presetTemplateUrls(stremio.url, 'movie'), [
+    stremio.url,
+    'https://web.stremio.com/#/detail/movie/{imdb}',
+  ]);
+  assert.deepEqual(presetTemplateUrls('https://custom.test/{imdb}', 'show'), ['https://custom.test/{imdb}']);
+});
+
+test('every preset has a unique search URL and server presets name their host', () => {
   assert.equal(new Set(PRESETS.map((entry) => entry.url)).size, PRESETS.length);
+  for (const label of ['Jellyfin', 'Emby', 'Radarr', 'Sonarr', 'Seerr']) {
+    assert.ok(SERVER_KEYS.includes(preset(label).requires), `${label} declares its server`);
+  }
 });

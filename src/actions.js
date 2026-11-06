@@ -1,9 +1,17 @@
 /** Prompts shared by the panel and the userscript menu. */
-import { addCustomLink, removeCustomLink, getCustomLinks, setClientId, getClientId } from './settings.js';
+import {
+  addCustomLink,
+  removeCustomLink,
+  getCustomLinks,
+  setClientId,
+  getClientId,
+  isCustomLinkUrl,
+} from './settings.js';
 import { toast } from './ui/shell.js';
 
 const PLACEHOLDER_HELP =
-  'Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}';
+  'Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}\n' +
+  'Server hosts: {jellyfin} {emby} {radarr} {sonarr} {seerr}';
 
 /** Ask for a "Label | URL template" pair and store it. */
 export function promptAddCustomLink() {
@@ -25,8 +33,8 @@ export function promptAddCustomLink() {
     toast('Both a label and a URL are required.');
     return null;
   }
-  if (!/^https?:\/\//i.test(url)) {
-    toast('The URL must start with http:// or https://.');
+  if (!isCustomLinkUrl(url)) {
+    toast('The URL must start with http://, https://, or a server placeholder.');
     return null;
   }
 

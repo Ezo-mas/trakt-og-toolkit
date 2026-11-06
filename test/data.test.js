@@ -138,6 +138,16 @@ test('template vars include the TVDB id', () => {
   assert.equal(templateVars({ id: 'breaking-bad', tvdb: 81189 }, { season: 1 }).tvdb, 81189);
 });
 
+test('template vars expose configured server hosts', () => {
+  const vars = templateVars({ id: 'breaking-bad' }, {}, {
+    jellyfin: 'http://media.test:8096',
+    seerr: 'https://requests.test/seerr',
+  });
+  assert.equal(vars.jellyfin, 'http://media.test:8096');
+  assert.equal(vars.seerr, 'https://requests.test/seerr');
+  assert.equal(vars.radarr, null);
+});
+
 test('template vars include IMDb numbers without tt or leading zeroes', () => {
   const vars = templateVars({ id: 'breaking-bad', imdb: 'tt0903747', episodeImdb: 'tt0959621' }, { season: 1 });
   assert.equal(vars.imdbnum, '903747');
@@ -147,17 +157,28 @@ test('template vars include IMDb numbers without tt or leading zeroes', () => {
   assert.equal(imdbNumber(null), null);
 });
 
-test('custom link validation requires label and URL with an HTTP scheme', () => {
+test('custom link validation accepts HTTP and configured server-placeholder URLs', () => {
   assert.deepEqual(
     validateCustomLinks([
       { label: '  ', url: '' },
       { label: 'Bad URL', url: 'javascript:alert(1)' },
       { label: 'Good', url: 'https://example.test/{title}' },
+      { label: 'Jellyfin', url: '{jellyfin}/web/#/search?query={title}' },
     ]),
     [
       { index: 0, field: 'label', message: 'A label is required.' },
       { index: 0, field: 'url', message: 'A URL is required.' },
-      { index: 1, field: 'url', message: 'URL must start with http:// or https://.' },
+      { index: 1, field: 'url', message: 'URL must start with http://, https://, or a server placeholder.' },
     ],
   );
+});
+
+test('custom link validation rejects arbitrary placeholder templates', () => {
+  const message = 'URL must start with http://, https://, or a server placeholder.';
+  for (const url of ['{title}/evil', '{plex}/search', '{Jellyfin}/web']) {
+    assert.deepEqual(validateCustomLinks([{ label: 'Bad', url }]), [
+      { index: 0, field: 'url', message },
+    ]);
+  }
+  assert.deepEqual(validateCustomLinks([{ label: 'Emby', url: '{emby}/web/index.html' }]), []);
 });

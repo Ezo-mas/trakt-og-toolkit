@@ -99,3 +99,26 @@ test('stored disabled features load off and malformed storage keeps features on'
   await wait();
   assert.ok(malformed.panel(), 'a non-array value is ignored');
 });
+
+test('menu add-link accepts server placeholders and rejects arbitrary templates', async t => {
+  const b = boot(t);
+  await wait();
+
+  let answer = 'Jellyfin | {jellyfin}/web/#/search?query={title}';
+  let promptMessage = '';
+  b.window.prompt = (message) => {
+    promptMessage = message;
+    return answer;
+  };
+
+  b.menus.get('add custom link')();
+  assert.match(promptMessage, /Server hosts:/);
+  assert.match(promptMessage, /\{jellyfin\}/);
+  assert.deepEqual(JSON.parse(JSON.stringify(b.data.get('watch.customLinks'))), [
+    { label: 'Jellyfin', url: '{jellyfin}/web/#/search?query={title}' },
+  ]);
+
+  answer = 'Bad | {title}/evil';
+  b.menus.get('add custom link')();
+  assert.equal(b.data.get('watch.customLinks').length, 1, 'an arbitrary placeholder is rejected');
+});

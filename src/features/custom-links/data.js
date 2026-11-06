@@ -1,6 +1,7 @@
 /** Pure-ish readers for a title page. They take a Document so they can be tested. */
 import { cleanTitle, parseYear } from '../../core/text.js';
 import { text } from '../../core/dom.js';
+import { isCustomLinkUrl } from '../../settings.js';
 
 const TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
 const IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
@@ -10,7 +11,7 @@ const SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
 const SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
 
 /**
- * Read what the page already knows: title, year, TMDb and IMDb ids.
+ * Read what the page already knows: title, year, TMDb, IMDb and TVDB ids.
  * og renders these in the summary's stats strip, so no API call is needed.
  */
 export function readTitleData(doc, route) {
@@ -180,7 +181,7 @@ export function imdbNumber(imdb) {
 }
 
 /** Variables available to link templates. */
-export function templateVars(meta, selection = {}) {
+export function templateVars(meta, selection = {}, servers = {}) {
   return {
     id: meta.id,
     plural: meta.plural,
@@ -192,6 +193,11 @@ export function templateVars(meta, selection = {}) {
     imdbnum: imdbNumber(meta.imdb),
     episodeimdbnum: imdbNumber(meta.episodeImdb),
     tvdb: meta.tvdb,
+    jellyfin: servers.jellyfin || null,
+    emby: servers.emby || null,
+    radarr: servers.radarr || null,
+    sonarr: servers.sonarr || null,
+    seerr: servers.seerr || null,
     season: selection.season,
     episode: selection.episode,
   };
@@ -248,8 +254,8 @@ export function validateCustomLinks(links) {
       continue;
     }
 
-    if (!/^https?:\/\//i.test(String(link.url).trim())) {
-      errors.push({ index, field: 'url', message: 'URL must start with http:// or https://.' });
+    if (!isCustomLinkUrl(link.url)) {
+      errors.push({ index, field: 'url', message: 'URL must start with http://, https://, or a server placeholder.' });
     }
   }
   return errors;

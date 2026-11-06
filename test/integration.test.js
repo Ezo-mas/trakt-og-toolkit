@@ -124,6 +124,26 @@ test('old-format stored links still load and render unchanged', async (t) => {
   assert.deepEqual(store.get('watch.customLinks'), oldLinks);
 });
 
+test('stored links with arbitrary placeholders are not rendered as relative URLs', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: {
+      'watch.customLinks': [
+        { label: 'Relative', url: '{title}/evil' },
+        { label: 'Unconfigured server', url: '{jellyfin}/web/#/search?query={title}' },
+        { label: 'Valid', url: 'https://valid.test/{title}' },
+      ],
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  assert.equal(Boolean(chip(document, 'Relative')), false, 'an arbitrary placeholder is not a server template');
+  assert.equal(Boolean(chip(document, 'Unconfigured server')), false, 'a server link waits for its host');
+  assert.equal(chip(document, 'Valid').getAttribute('href'), 'https://valid.test/Breaking%20Bad');
+});
+
 test('preset checklist marks existing URLs and adds selected presets to storage', async (t) => {
   const oldLinks = [{ label: 'Metacritic', url: 'https://www.metacritic.com/search/{title}/' }];
   const { window, document, store } = boot({
@@ -155,6 +175,71 @@ test('preset checklist marks existing URLs and adds selected presets to storage'
     { label: 'Stremio', url: 'https://web.stremio.com/#/search?search={title}' },
   ]);
   assert.equal(document.activeElement, open, 'focus returns to the presets chip when closed');
+});
+
+test('server presets wait for their host and use it in the rendered link', async (t) => {
+  const { window, document, store } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  const servers = chip(document, 'Servers…');
+  servers.click();
+  const jellyfin = document.querySelector('.ogt-servers input[aria-label="Jellyfin URL"]');
+  assert.equal(document.activeElement, jellyfin, 'the first server field gets focus');
+
+  jellyfin.value = 'ftp://media.test';
+  [...document.querySelectorAll('.ogt-servers button')].find((button) => button.textContent === 'Save servers').click();
+  assert.equal(document.querySelector('.ogt-servers [role="alert"]').hidden, false, 'invalid hosts are rejected');
+  assert.equal(store.has('watch.servers'), false);
+
+  jellyfin.value = 'media.test:8096/jellyfin/';
+  document.querySelector('.ogt-servers input[aria-label="Emby URL"]').value = 'https://media.test/emby/';
+  document.querySelector('.ogt-servers input[aria-label="Seerr URL"]').value = 'https://requests.test/seerr/';
+  [...document.querySelectorAll('.ogt-servers button')].find((button) => button.textContent === 'Save servers').click();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(store.get('watch.servers'))), {
+    jellyfin: 'http://media.test:8096/jellyfin',
+    emby: 'https://media.test/emby',
+    seerr: 'https://requests.test/seerr',
+  });
+  assert.equal(document.activeElement, servers, 'focus returns to the Servers chip');
+
+  chip(document, 'Add presets…').click();
+  const jellyfinPreset = document.querySelector('.ogt-presets input[aria-label="Jellyfin"]');
+  const embyPreset = document.querySelector('.ogt-presets input[aria-label="Emby"]');
+  const sonarrPreset = document.querySelector('.ogt-presets input[aria-label="Sonarr"]');
+  assert.equal(jellyfinPreset.disabled, false, 'a configured server preset can be added');
+  assert.equal(embyPreset.disabled, false, 'a second configured server preset can be added');
+  assert.equal(sonarrPreset.disabled, true, 'an unconfigured server preset cannot be added');
+  assert.match(sonarrPreset.closest('label').textContent, /set server URL/);
+
+  jellyfinPreset.checked = true;
+  jellyfinPreset.dispatchEvent(new window.Event('change', { bubbles: true }));
+  embyPreset.checked = true;
+  embyPreset.dispatchEvent(new window.Event('change', { bubbles: true }));
+  const seerrPreset = document.querySelector('.ogt-presets input[aria-label="Seerr"]');
+  seerrPreset.checked = true;
+  seerrPreset.dispatchEvent(new window.Event('change', { bubbles: true }));
+  document.querySelector('.ogt-presets button').click();
+
+  assert.equal(
+    chip(document, 'Jellyfin').getAttribute('href'),
+    'http://media.test:8096/jellyfin/web/#/search?query=Breaking%20Bad',
+    'the base path, HTTP scheme and current search route survive filling',
+  );
+  assert.equal(
+    chip(document, 'Emby').getAttribute('href'),
+    'https://media.test/emby/web/index.html#!/list/list.html?type=search&searchtext=Breaking%20Bad',
+    'the Emby route carries the title through searchtext',
+  );
+  assert.equal(
+    chip(document, 'Seerr').getAttribute('href'),
+    'https://requests.test/seerr/tv/1396',
+    'Seerr opens the show by TMDb id',
+  );
 });
 
 test('og-service presets resolve to exact movie links', async (t) => {

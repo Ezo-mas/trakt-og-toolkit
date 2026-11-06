@@ -143,6 +143,55 @@ export const PRESETS = [
     url: 'https://anilist.co/search/anime?search={title}',
     kinds: ['movie', 'show'],
   },
+  {
+    label: 'Jellyfin',
+    /**
+     * Current web search route; `jellyfin-web` defines `search` without `.html` and reads
+     * `?query=`. The server base URL comes from the Servers settings.
+     */
+    url: '{jellyfin}/web/#/search?query={title}',
+    kinds: ['movie', 'show'],
+    requires: 'jellyfin',
+  },
+  {
+    label: 'Emby',
+    /**
+     * Current 4.9 web search page; its search field uses `searchtext`. Older Emby versions
+     * used `/web/search.html` directly, so this remains editable in the link editor.
+     */
+    url: '{emby}/web/index.html#!/list/list.html?type=search&searchtext={title}',
+    kinds: ['movie', 'show'],
+    requires: 'emby',
+  },
+  {
+    label: 'Radarr',
+    url: '{radarr}/add/new?term={title}',
+    kinds: ['movie'],
+    requires: 'radarr',
+    deep: [
+      { url: '{radarr}/add/new?term=imdb:{imdb}', kinds: ['movie'] },
+      { url: '{radarr}/add/new?term=tmdb:{tmdb}', kinds: ['movie'] },
+    ],
+  },
+  {
+    label: 'Sonarr',
+    url: '{sonarr}/add/new?term={title}',
+    kinds: ['show'],
+    requires: 'sonarr',
+    deep: [
+      { url: '{sonarr}/add/new?term=tvdb:{tvdb}', kinds: ['show'] },
+    ],
+  },
+  {
+    label: 'Seerr',
+    url: '{seerr}/search?query={title}',
+    kinds: ['movie', 'show'],
+    requires: 'seerr',
+    deep: [
+      { url: '{seerr}/movie/{tmdb}', kinds: ['movie'] },
+      { url: '{seerr}/tv/{tmdb}', kinds: ['show'] },
+    ],
+  },
 ];
 
 /**
