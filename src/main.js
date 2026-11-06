@@ -19,6 +19,7 @@ import { yourRatings } from './features/your-ratings/index.js';
 import { seasonChart } from './features/season-chart/index.js';
 import { monthReview } from './features/month-review/index.js';
 import { allLists } from './features/all-lists/index.js';
+import { listPreview } from './features/list-preview/index.js';
 import { library } from './features/library/index.js';
 import { watchlist } from './features/watchlist/index.js';
 import { watchlistCards } from './features/watchlist/cards.js';
@@ -29,7 +30,7 @@ import { applyDebugSetting, isFeatureEnabled } from './settings.js';
 import { info, warn } from './core/log.js';
 import { cacheSize } from './core/http.js';
 
-const FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, monthReview, allLists];
+const FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, monthReview, allLists, listPreview];
 
 function isSvelteKit() {
   return Boolean(

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mapPlayback, sortPlayback, olderThan, matchesRoute } from '../src/features/playback/data.js';
+import { mapPlayback, sortPlayback, olderThan, matchesRoute, normalizeProgress, scrobbleBody } from '../src/features/playback/data.js';
 
 const movie = { id: 99, progress: 42.5, paused_at: '2026-10-01T12:00:00Z', type: 'movie',
   movie: { title: 'Movie', ids: { trakt: 1, slug: 'movie' }, images: { poster: ['media.trakt.tv/images/poster.jpg'] } } };
@@ -35,6 +35,31 @@ test('age filter uses strict elapsed days and excludes invalid inputs', () => {
   assert.deepEqual(olderThan(items, 1, now).map((v) => v.id), [99]);
   assert.equal(olderThan(items, 0, now).length, 2);
   for (const days of ['', ' ', 'invalid', -1, Infinity]) assert.deepEqual(olderThan(items, days, now), []);
+});
+test('normalizes percentages to one decimal and rejects empty or out-of-range values', () => {
+  assert.equal(normalizeProgress('42.55'), 42.6);
+  assert.equal(normalizeProgress(1), 1);
+  assert.equal(normalizeProgress(0.95), 1);
+  assert.equal(normalizeProgress(100), 100);
+  for (const value of [null, undefined, '', ' ', 0, 0.94, -1, 100.1, 101, 'abc', Infinity]) assert.equal(normalizeProgress(value), null);
+});
+test('scrobble bodies carry movie title/year or an episode id', () => {
+  assert.deepEqual(scrobbleBody({ kind: 'movie', ids: { slug: 'the-dark-2005', trakt: 1 }, title: 'The Dark', year: 2005 }, 42.55),
+    { movie: { ids: { trakt: 1 }, title: 'The Dark', year: 2005 }, progress: 42.6 });
+  assert.deepEqual(scrobbleBody({ kind: 'episode', ids: { trakt: 2 }, episodeIds: { imdb: 'tt1234567' } }, 10),
+    { episode: { ids: { imdb: 'tt1234567' } }, progress: 10 });
+  assert.throws(() => scrobbleBody({ kind: 'movie', ids: {} }, 10), /identify this title/);
+  assert.throws(() => scrobbleBody({ kind: 'episode', ids: { trakt: 2 } }, 10), /identify this episode/);
+  assert.throws(() => scrobbleBody({ kind: 'movie', ids: { trakt: 1 } }, 101), /Invalid progress/);
+});
+test('mapped playback keeps movie year and episode ids for saving', () => {
+  const [m] = mapPlayback([{ ...movie, movie: { ...movie.movie, year: 2005 } }], 'movie');
+  const [e] = mapPlayback([{ ...episode, show: { ...episode.show, year: 2008 },
+    episode: { ...episode.episode, ids: { trakt: 4, imdb: 'tt0959621' } } }], 'episode');
+  assert.equal(m.year, 2005);
+  assert.equal(e.year, 2008);
+  assert.deepEqual(e.episodeIds, { trakt: 4, imdb: 'tt0959621' });
+  assert.equal(mapPlayback([episode], 'episode')[0].episodeIds, null);
 });
 test('badge matching uses slug or Trakt ID and exact season/episode', () => {
   const m = mapPlayback([movie], 'movie')[0], e = mapPlayback([episode], 'episode')[0];
