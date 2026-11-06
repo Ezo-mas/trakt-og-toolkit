@@ -35,7 +35,8 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 21 | Month review: browse earlier months | OAuth | done |
 | 22 | Custom link presets that open the exact show, season or episode | — | done |
 | 23 | Test suite review and cleanup | — | last |
-| 24 | More exact-title link presets | — | small; check og and each site first |
+| 24 | More exact-title link presets | — | done |
+| 25 | Per-user server presets | — | done |
 
 **Released:** 0.3.0 on 2026-11-03 (features 6–8, 11–13, 15 and 16). Bump the version again whenever main should
 reach userscript managers; they only offer an update when `@version` changes.
@@ -483,7 +484,8 @@ previous click: read the first history page for `X-Pagination-Page-Count`, then 
 and falls back to its existing search URL when the page lacks the IMDb id. Show and episode deep links were clicked
 through on 2026-11-05; the season shape follows `useSeason` in Stremio's source. Metacritic, Plex and AniList stay
 searches: Plex needs its own ids, and Metacritic and AniList have no episode pages. TMDb, IMDb, Letterboxd, Rotten
-Tomatoes, Wikipedia and Trakt itself are already linked by og or are the same site, so no presets were added for them.
+Tomatoes, Wikipedia and Trakt itself are already linked by og or are the same site, so feature 22 added no presets for
+them; feature 24 later added them as presets so they survive a missing external-link strip.
 
 **Goal:** the four presets (Metacritic, Stremio, Plex, AniList) all search `{title}`. That's right for sites without
 deep links, but on a season or episode page a site that can open that exact item should go there. Feature 16 already
@@ -499,22 +501,45 @@ fills `{imdb}`, `{tmdb}`, `{season}` and `{episode}` with the show's values.
 
 ## 24. More exact-title link presets
 
-**Goal:** feature 22 gave presets a `deep` list but only Stremio uses it. Look for more services a Trakt user would
-open from a title, that og doesn't already link, and that take an id og's page gives (`{imdb}`, `{tmdb}`) plus
-`{season}`/`{episode}`. Each candidate is unverified: open its URLs by hand first, and drop it if it needs its own ids.
+**Status:** done (2026-11-06). Added presets for og's external-link services (IMDb, TMDb, TVDB, Letterboxd,
+Rotten Tomatoes, Wikipedia, JustWatch and MyAnimeList), plus Debrid Media Manager, MDBList and OpenSubtitles.
+IMDb, TMDb, TVDB, Letterboxd, Stremio and DMM try exact routes first; every preset keeps a fallback where one
+exists. TVDB added a `{tvdb}` placeholder, read from og's show strip and filled through `GET /shows/:id` on season
+and episode pages. MDBList uses its movie and show search forms because exact title URLs need MDBList's own slug
+prefix. OpenSubtitles uses IMDb numbers through `{imdbnum}`, with `{episodeimdbnum}` read from an episode page's
+strip. Fanart.tv stays out. Seerr/Jellyseerr needs each user's own host; official/social links are title-specific
+and cannot be templated.
 
-- **Debrid Media Manager:** `debridmediamanager.com/movie/{imdb}`, `/show/{imdb}` and a season path; popular with the
-  same Stremio/debrid users. Confirm the season route shape.
-- **MDBList:** `mdblist.com/movie/{imdb}` / `/show/{imdb}` (no season pages: show route only).
-- **Overseerr / Jellyseerr:** `/movie/{tmdb}` and `/tv/{tmdb}` on the user's own host, so the preset needs a host the
-  user edits (an example host like the README's Sonarr/Radarr examples), not a working default.
-- **Subtitles (OpenSubtitles, SubDL):** both search by IMDb id, but OpenSubtitles wants it without `tt`; that needs a
-  new placeholder (for example `{imdbnum}`), so only take it if the second site needs it too.
-- **Stremio desktop app:** the same routes under `stremio:///detail/…`. Custom links only accept `http(s)`, so this
-  needs an allow-list for that one scheme; skip unless asked.
+**Goal:** feature 22 gave presets a `deep` list but only Stremio used it. Add exact routes where the page has an id
+(`{imdb}`, `{tmdb}`, `{tvdb}`) plus `{season}`/`{episode}`, and keep a search fallback. Check each route live first.
 
-Skip anything og links on the same page (check live movie, show, season and episode pages and `git log -S` in
-trakt-og), and keep each preset's search URL as the fallback as feature 22 does.
+- **IMDb:** title, season and search fallback.
+- **TMDb:** movie, show, season, episode and search fallback.
+- **TVDB:** show via `dereferrer/series/{tvdb}` and search fallback.
+- **Letterboxd:** movie via IMDb or TMDb and search fallback.
+- **Rotten Tomatoes, Wikipedia, JustWatch, MyAnimeList:** search-only presets.
+- **Debrid Media Manager:** movie, show and season routes by IMDb id; signed-out visits redirect to `/start`.
+- **MDBList:** movie and show search through `/movies/?q_title=` and `/shows/?q_title=`; exact title URLs need its
+  own slug prefix, so they cannot be built from Trakt ids.
+- **OpenSubtitles:** movie/episode `imdbid-{imdbnum}`, show `pimdbid-{imdbnum}`, season
+  `pimdbid-{imdbnum}/season-{season}`; `{episodeimdbnum}` comes from the episode strip, with the season as fallback.
+- **Fanart.tv:** skipped; it remains out of scope.
+- **Overseerr / Jellyseerr:** `/movie/{tmdb}` and `/tv/{tmdb}` on the user's own host, so there is no global host;
+  feature 25 adds the preset with a per-user server URL.
+
+## 25. Per-user server presets
+
+**Status:** done (2026-11-06). Added a **Servers…** view to the custom-links panel for Jellyfin, Emby, Radarr,
+Sonarr and Seerr base URLs, stored in `watch.servers`. The five presets use `{jellyfin}`, `{emby}`, `{radarr}`,
+`{sonarr}` and `{seerr}` placeholders, and stay disabled in the preset checklist until their host is configured.
+Server URLs are normalized with a scheme (bare hosts get `http://`) and can include a base path. They are filled
+raw, unlike the URL-encoded title and id placeholders.
+
+**Presets:** Radarr uses `/add/new?term=imdb:{imdb}` or `tmdb:{tmdb}` (title search fallback), Sonarr uses
+`tvdb:{tvdb}` (title fallback), and Seerr opens `/movie/{tmdb}` or `/tv/{tmdb}` (title search fallback).
+Jellyfin and Emby cannot deep-link a Trakt title without their own item ids, so they open the web search route;
+those paths vary by server version and the preset can be edited. Fanart.tv remains out of scope, and no public
+server hosts are shipped.
 
 ## 23. Test suite review and cleanup
 

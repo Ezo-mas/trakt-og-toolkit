@@ -27,11 +27,12 @@ reload. Toggles are stored in GM storage, separately from og's settings.
 
 A compact panel under the summary stats with user-configured links to your own services.
 
-- **Custom links** — manage your `Label | URL` templates in the inline editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{season}`, `{episode}`.
-- **Presets** — optionally add Metacritic, Stremio, Plex and AniList links (og already links Rotten Tomatoes, Wikipedia, Letterboxd and, on anime, MyAnimeList itself). Stremio opens the exact movie, show, season or episode when the page has its IMDb id.
+- **Custom links** — manage your `Label | URL` templates in the inline editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{tvdb}`, `{season}`, `{episode}`.
+- **Presets** — add IMDb, TMDb, TVDB, Letterboxd, Rotten Tomatoes, Wikipedia, JustWatch, MyAnimeList, Metacritic, Stremio, Debrid Media Manager, MDBList, OpenSubtitles, Plex, AniList, Jellyfin, Emby, Radarr, Sonarr or Seerr links. The og-service presets mirror the links og itself shows, so they remain available when a title's external-link strip is missing. IMDb, TMDb, TVDB, Letterboxd, Stremio, Debrid Media Manager, OpenSubtitles, Radarr, Sonarr and Seerr open the exact title (or an add-media search) when the page has the id they need, and fall back where possible; the rest search.
+- **Servers** — set the base URL for your own Jellyfin, Emby, Radarr, Sonarr or Seerr under **Servers…**. Server presets stay disabled until their host is configured. A bare host gets `http://`; HTTPS and base paths such as `/jellyfin` are supported. Credentials, query strings and fragments are rejected.
 - **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}` on a show page. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
-- **Season and episode pages** — the panel uses the show's title, year and TMDb/IMDb ids, not the season or episode heading, and takes `{season}`/`{episode}` from the URL. The title and TMDb id come from og's show link and external links (and the IMDb id on season pages); the year, and an episode page's IMDb id, come from `GET /shows/:id`. Without a client ID, those links stay hidden rather than point at the season or episode.
-- **Examples**: Plex, Jellyfin, Sonarr, Radarr, or any streaming/library service og doesn't link to.
+- **Season and episode pages** — the panel uses the show's title, year and TMDb/IMDb/TVDB ids, not the season or episode heading, and takes `{season}`/`{episode}` from the URL. The title and TMDb id come from og's show link and external links (and the IMDb id on season pages); an episode page's own IMDb id comes from its external-link strip, while the year, the show's IMDb id on episode pages, and the TVDB id on season and episode pages come from `GET /shows/:id`. Without a client ID, those links stay hidden rather than point at the season or episode.
+- **Examples**: Plex, your own Jellyfin/Emby/Radarr/Sonarr/Seerr server, or any streaming/library service og doesn't link to.
 
 ### Season chart
 
@@ -191,8 +192,23 @@ Use **Edit links** in the panel to add, rename, reorder or remove links. Choose 
 service links; nothing is enabled until you check it and confirm. Presets can be edited like any other link.
 
 Stremio's preset opens the exact movie, show, season or episode when the page has the title's IMDb id (a season page
-links to the series page with `?season=`, which Stremio selects), and falls back to its search otherwise. The other
-presets stay searches because those sites need their own ids or have no episode pages.
+links to the series page with `?season=`, which Stremio selects), and falls back to its search otherwise. IMDb, TMDb,
+TVDB, Letterboxd, Debrid Media Manager, OpenSubtitles, Radarr, Sonarr and Seerr do the same with the ids they use;
+Rotten Tomatoes, Wikipedia, JustWatch, MyAnimeList, Metacritic, MDBList, Plex and AniList use search. The presets
+include the external-link services og itself shows, because og's strip is not present on every title. Official-site
+and social links are not presets: their URLs are title-specific and cannot be built from the page's ids.
+
+Jellyfin, Emby, Radarr, Sonarr and Seerr are self-hosted, so their presets use the base URL you set under
+**Servers…** instead of a shared public host. Radarr searches its add-movie form by IMDb or TMDb id, Sonarr uses its
+add-series form by TVDB id, and Seerr opens `/movie/{tmdb}` or `/tv/{tmdb}`. Jellyfin and Emby have no deep link from
+Trakt ids, so their presets open the server's web search: Jellyfin uses `/web/#/search?query=` and Emby uses
+`/web/index.html#!/list/list.html?type=search&searchtext=`. Those search paths differ between web-client versions;
+edit the preset URL if yours uses another path.
+
+OpenSubtitles uses the IMDb number without `tt` or leading zeroes: `imdbid-{imdbnum}` for a movie or episode and
+`pimdbid-{imdbnum}` for a show, with `/season-{season}` for a season. An episode page's own IMDb link supplies
+`{episodeimdbnum}`. MDBList's title URLs carry an MDBList-only slug prefix that Trakt does not expose, so its preset
+uses MDBList's separate movie and show searches instead. Both sites may show a bot challenge before the results page.
 
 The menu commands **add custom link** and **remove custom link** remain available when the panel is not on screen.
 The add command asks for `Label | URL`; the label is what the chip shows and everything after the first `|` is the URL
@@ -210,20 +226,31 @@ Placeholders are filled from the page and the season/episode picker:
 | `{year}` | Release year | `2008` |
 | `{tmdb}` | TMDb id | `1396` |
 | `{imdb}` | IMDb id | `tt0903747` |
+| `{imdbnum}` | IMDb id without `tt` or leading zeroes | `903747` |
+| `{episodeimdbnum}` | Episode IMDb id without `tt` or leading zeroes (episode pages) | `959621` |
+| `{tvdb}` | TVDB id | `81189` |
 | `{type}` | `tv` for shows, `movie` for films | `tv` |
 | `{season}` | Selected season (shows only) | `1` |
 | `{episode}` | Selected episode (shows only) | `1` |
 | `{id}` | Trakt slug or id from the URL | `breaking-bad` |
 | `{plural}` | `shows` or `movies` | `shows` |
+| `{jellyfin}` | Jellyfin base URL from **Servers…** | `http://192.168.1.20:8096` |
+| `{emby}` | Emby base URL from **Servers…** | `https://media.example/emby` |
+| `{radarr}` | Radarr base URL from **Servers…** | `http://192.168.1.20:7878` |
+| `{sonarr}` | Sonarr base URL from **Servers…** | `http://192.168.1.20:8989` |
+| `{seerr}` | Seerr base URL from **Servers…** | `http://192.168.1.20:5055` |
 
 Notes:
 
 - Names are lowercase and case-sensitive: `{tmdb}`, not `{TMDb}`.
-- Values are URL-encoded for you, so `{title}` becomes `Breaking%20Bad`. Don't encode them yourself.
+- Values are URL-encoded for you, so `{title}` becomes `Breaking%20Bad`. Don't encode them yourself. Server base
+  URLs are the exception: they are inserted as-is so their scheme, port and base path survive.
 - A link is hidden on pages where one of its placeholders has no value — a `{season}` link won't appear on a movie, and
   `{episode}` has no value on a season page. This is intentional, so one template works across shows and films.
-- URL templates must start with `http://` or `https://`.
-- Links are stored per browser, not synced. The inline editor checks that each saved link has a label and an HTTP(S) URL.
+- URL templates must start with `http://`, `https://`, or one of the five server placeholders such as `{jellyfin}/`.
+  Other placeholders at the start, such as `{title}/`, are not server templates and are rejected.
+- Links and server URLs are stored per browser, not synced. The inline editor checks that each saved link has a label
+  and an HTTP(S) or known server-placeholder URL.
 
 ## Development
 
@@ -256,7 +283,7 @@ src/
   main.js              entry point, router wiring
   meta.js              name, version, hosts
   config.js            API base, cache TTL, default client ID
-  settings.js          GM storage (client id, custom links, selections, feature toggles)
+  settings.js          GM storage (client id, custom links, server URLs, selections, feature toggles)
   actions.js           prompts shared by the menu and the panel
   menu.js              userscript menu commands
   core/
@@ -299,7 +326,7 @@ links, poster rating corners. Backlog:
 - set playback progress by hand;
 - list preview posters that link to their titles;
 - **Add all shown credits** to the watchlist with one action from a person's page;
-- more link presets that open the exact title (candidates: Debrid Media Manager, MDBList, Overseerr/Jellyseerr);
+- more link presets that open the exact title (MDBList and Fanart.tv routes are still blocked by Cloudflare checks);
 - a review and cleanup of the test suite.
 
 ## Trakt API compliance
