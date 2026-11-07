@@ -1,34 +1,32 @@
 /** Prompts shared by the panel and the userscript menu. */
 import { addCustomLink, removeCustomLink, getCustomLinks, setClientId, getClientId } from './settings.js';
 import { toast } from './ui/shell.js';
+import { promptDialog } from './ui/dialog.js';
 
 const PLACEHOLDER_HELP =
   'Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id} {plural}';
 
-/** Ask for a "Label | URL template" pair and store it. */
-export function promptAddCustomLink() {
-  const answer = window.prompt(
-    `Add a custom link as "Label | URL".\n\n${PLACEHOLDER_HELP}`,
-    'My service | https://example.com/watch/{tmdb}?s={season}&e={episode}',
-  );
-  if (!answer) return null;
-
+/** Split "Label | URL"; returns an error message or the parts. */
+function parseCustomLink(answer) {
   const separator = answer.indexOf('|');
-  if (separator < 0) {
-    toast('Use "Label | URL" — the | separator is missing.');
-    return null;
-  }
-
+  if (separator < 0) return { error: 'Use "Label | URL": the | separator is missing.' };
   const label = answer.slice(0, separator).trim();
   const url = answer.slice(separator + 1).trim();
-  if (!label || !url) {
-    toast('Both a label and a URL are required.');
-    return null;
-  }
-  if (!/^https?:\/\//i.test(url)) {
-    toast('The URL must start with http:// or https://.');
-    return null;
-  }
+  if (!label || !url) return { error: 'Both a label and a URL are required.' };
+  if (!/^https?:\/\//i.test(url)) return { error: 'The URL must start with http:// or https://.' };
+  return { label, url };
+}
+
+/** Ask for a "Label | URL template" pair and store it. */
+export async function promptAddCustomLink() {
+  const answer = await promptDialog(`Enter it as "Label | URL".\n\n${PLACEHOLDER_HELP}`, {
+    title: 'Add custom link', label: 'Label | URL', ok: 'Add link',
+    value: 'My service | https://example.com/watch/{tmdb}?s={season}&e={episode}',
+    validate: (text) => parseCustomLink(text).error ?? null,
+  });
+  if (!answer) return null;
+  const { label, url, error } = parseCustomLink(answer);
+  if (error) { toast(error); return null; }
 
   addCustomLink({ label, url });
   toast(`Link "${label}" added.`);
@@ -36,17 +34,17 @@ export function promptAddCustomLink() {
   return { label, url };
 }
 
-export function promptRemoveCustomLink() {
+export async function promptRemoveCustomLink() {
   const links = getCustomLinks();
   if (!links.length) {
     toast('No custom links to remove.');
     return;
   }
 
-  const answer = window.prompt(
-    `Type the label of the link to remove:\n\n${links.map((entry) => `• ${entry.label}`).join('\n')}`,
-    links[0].label,
-  );
+  const answer = await promptDialog(`Type the label of the link to remove:\n\n${links.map((entry) => `• ${entry.label}`).join('\n')}`, {
+    title: 'Remove custom link', label: 'Label', ok: 'Remove', value: links[0].label,
+    validate: (text) => links.some((entry) => entry.label === text.trim()) ? null : `No link labelled "${text.trim()}".`,
+  });
   if (!answer) return;
 
   const next = removeCustomLink(answer.trim());
@@ -55,13 +53,11 @@ export function promptRemoveCustomLink() {
   document.dispatchEvent(new CustomEvent('ogt:refresh'));
 }
 
-export function promptClientId() {
-  const answer = window.prompt(
-    'Paste your Trakt API client ID.\n\n' +
-      'Create a free app at https://app.trakt.tv/settings/apps — the redirect URI can be anything, ' +
-      'since this script only calls public endpoints.\n\nCurrent: ' +
-      (getClientId() || '(none)'),
-    getClientId(),
+export async function promptClientId() {
+  const answer = await promptDialog(
+    'Paste your Trakt API client ID. Create a free app at https://app.trakt.tv/settings/apps. The redirect URI ' +
+      'can be anything, since this script only calls public endpoints. Leave it empty to clear it.',
+    { title: 'Trakt API client ID', label: 'Client ID', ok: 'Save', value: getClientId(), placeholder: '(none)' },
   );
   if (answer === null) return;
 

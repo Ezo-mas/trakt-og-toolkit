@@ -2,6 +2,81 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-06: og-styled dialogs instead of the browser's
+
+- Every `window.confirm` / `window.prompt` (playback clear and save progress, library add, the custom-link and
+  client-ID menu commands, the sign-in redirect URI) now goes through `src/ui/dialog.js`: `confirmDialog()` and
+  `promptDialog()` return promises. It is a native modal `<dialog>` like og's `Dialog.svelte` (trakt-og
+  `fea92af`), so focus stays inside, Esc cancels and focus goes back to the opener. Its look uses og's own tokens:
+  `--color-dialog-bg`, the uppercase title bar (`--color-dialog-title-*`), and the art dialogs' footer, field and
+  red primary button (`--color-dialog-art-*`, `--color-control-*`, `--brand-primary`), with fallbacks outside og.
+- `promptDialog({ validate })` keeps the dialog open and shows the error under the field, so bad input no longer
+  needs a second round trip. Save progress now asks once: the "may briefly show as watching" warning is in the
+  prompt, not a separate confirm.
+- The API-side confirm callbacks (`playbackApi.clearItems`, `libraryApi.add`) now await their answer, and re-check
+  the session/page afterwards, since the page can change while a dialog is open.
+- Without `showModal` (very old engines) the helpers fall back to the native dialogs.
+- Tests: `test/dialog.test.js` covers labels, focus, buttons, Esc, close and validation. `test/dialogs.js` is a
+  helper that answers dialogs in integration tests the way the old `window.confirm` mocks did. happy-dom shares
+  element classes between windows, so it answers only its own window's dialogs. Checked on live og (a movie page)
+  with the built CSS: title bar, field, inline error and Esc all look and behave like og's modals.
+
+## 2026-11-05: set playback progress (feature 9)
+
+- Trakt's current scrobble contract (`trakt/trakt-api` `projects/api/src/contracts/scrobble`): a movie request
+  carries `movie.title`, `movie.year` and `movie.ids`; an episode request carries only `episode.ids` (no show).
+  Start then pause at the same percentage saves paused playback; stop is deliberately never sent because it can
+  mark the item watched. The confirm warns that the profile may briefly show it as watching.
+- Movie pages look up the page's movie for title/year/ids. Episode pages look up the episode for its ids. Overview
+  rows use the ids already present in `/sync/playback/episodes`; older entries without `episode.ids` fall back to
+  the show slug/season/episode lookup. The title page's panel is now shown when no saved item exists instead of
+  being hidden, with the save action in it, and next to **Clear** when one does (prefilled with its value). A
+  cleared title-page panel stays visible with the same action.
+- The contract says start "will remove any playback progress if it exists". So a pause that fails after a
+  successful start has lost the old progress: `setProgress` flags that error `partial` and the panel says so
+  instead of a generic retry message. The session epoch is taken before the movie/episode lookup, so signing out
+  mid-lookup sends nothing.
+- `normalizeProgress` accepts 1–100 after rounding to one decimal (strings from the prompt included) and rejects
+  empty or out-of-range input. 0 is refused because Trakt ignores scrobbles under 1% (422 on stop) and start would
+  already have removed the old progress; **Clear** is the way to remove it. The playback cache is invalidated after
+  each write so the badge/list refreshes immediately.
+- Tests: `test/playback-data.test.js` covers progress normalization and both scrobble bodies;
+  `test/playback-api.test.js` covers start→pause order, episode-id fallback, invalid input, partial failure and
+  session changes during lookups; `test/playback-integration.test.js` covers the empty and existing title-page
+  actions, overview rows, warnings/cancellation, the failed-pause message and that `/scrobble/stop` is never sent.
+- Not verified against the live API yet: whether pause at the same percentage right after start is accepted for
+  every item, and how long the "watching" status lingers.
+
+## 2026-11-05: list preview titles (feature 10)
+
+- Live `/users/justin/lists` capture: every list row's fan is `a.fan[aria-hidden]` with five `.slot` spans;
+  the only title metadata is the tooltip text and the poster URL. The media path carries the type and Trakt id
+  (`images/shows/000/199/343/posters/thumb/...` -> show 199343), so no list-items API reads are needed.
+- `ListRow.css` already gives `.slot` `position: relative`, but the fan is an anchor, so a nested title anchor
+  would be invalid. Clicks on a slot are delegated to the derived title URL and stop the fan's list navigation;
+  a visually hidden `nav` after the fan carries real title links for keyboard and screen-reader use.
+- The feature runs only on list pages and scans page-wide like the card shortcuts, so rows added or replaced
+  later, including the All lists fallback, get previews too. It adds no wrapper around og's poster stack and
+  does not change its layout.
+- Tests: `test/list-preview.test.js` covers URL parsing and tooltip titles;
+  `test/list-preview-integration.test.js` covers the built bundle, pointer activation, later and removed rows,
+  nav links and route teardown.
+- Plain clicks call `.click()` on the matching hidden link, so SvelteKit's router handles them like any other
+  link (no full reload); middle and Ctrl/Cmd/Shift clicks open the title with `window.open(href, '_blank')`.
+- Rating corners: og's `ListRow.svelte` (trakt-og `fea92af`) renders no `CornerRating` on the fan, so this adds one.
+  `corner-rating.js` copies `CornerRating.svelte`'s geometry and uses og's own `--rating-N` tokens (`tokens.css`);
+  the first draft redefined them on `:root`, which would override og's theme. A slot is a sliver showing the left
+  edge of a full poster, so the badge sits at `calc(var(--poster-width) - 30px)`, the poster's own corner, and shows
+  when that poster opens on hover; in og's narrow layout (`@container (width < 520px)`, whole posters side by side)
+  it sits at the slot's right edge. Checked on live `/users/justin/lists` at desktop and 420px widths.
+- `ratingsApi.loadTitles()` reads `/sync/ratings/movies` and `/sync/ratings/shows` (not the full `/sync/ratings`,
+  which includes every episode rating) with its own 10-minute cache and in-flight promise; sharing the episode
+  loader's flight would have handed `load()` the wrong shape. Each corner is keyed by `kind:id:rating`, so a
+  replaced poster or a sign-out (`ogt:authchange`) replaces or removes it. Signed out, nothing is requested.
+- Tests: `test/list-preview-integration.test.js` also covers plain/middle/modified clicks, corners on the right
+  posters, poster changes and sign-out; `test/list-preview-ratings.test.js` the badge; `test/your-ratings.test.js`
+  the separate title cache.
+
 ## 2026-11-05: Watchlist all on person credits (feature 17, bulk part)
 
 - The bulk action extends the existing shortcut factory instead of adding a parallel subsystem: it shares the

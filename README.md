@@ -59,6 +59,14 @@ on lists you liked. Liked lists load every page (up to 2,500, like og), and
 each row's posters load as it nears the screen. Needs a client ID; with the toolkit sign-in, private lists you can
 see are included and rows get og's watched-progress link. The toolkit doesn't like, edit or leave lists.
 
+### List preview titles
+
+Each poster in a list card's preview stack opens that title instead of the list; the fan itself still opens the
+list. Middle-click or Ctrl/Cmd-click opens the title in a new tab. Titles come from the media URL, so the links need
+no client ID or extra API calls. Screen readers get a hidden list of the same title links. With the toolkit sign-in,
+your movie and show ratings appear in og's coloured corner triangle on each poster (og shows none on the fan); they
+load once per page and are cached for 10 minutes.
+
 ### Last month in review
 
 Sign in through the toolkit to see last month’s plays, hours, ratings and comments under the dashboard’s month
@@ -175,7 +183,10 @@ The list shows posters (when available), titles, progress and paused dates, newe
 several and **Clear selected**, or enter an age and **Clear older items** (strictly older than that many elapsed days).
 Every deletion asks for confirmation with the item count. Bulk actions report partial failures and refresh the list.
 **Refresh paused playback** checks for changes made elsewhere; cached data lasts about a minute. Clearing removes
-saved playback, not watched history. There is no control to set progress manually.
+saved playback, not watched history. **Save progress…** on a movie or episode page (with or without saved playback)
+and on each overview row asks for a percentage from 1 to 100, with the warning in the same dialog. It sends Trakt's
+scrobble start and pause, so your profile may briefly show the title as watching, and it never sends stop (which can mark the title
+watched). Start replaces any earlier progress for the title; if the pause then fails, the panel says so.
 
 ## Custom links
 
@@ -263,7 +274,7 @@ src/
     host.js            mounts/unmounts features per route
     custom-links/      the panel (index.js) and its DOM readers (data.js)
     season-chart/      episode ratings chart and API/data helpers
-  ui/                  injected CSS and toasts
+  ui/                  injected CSS, toasts and og-styled confirm/prompt dialogs (dialog.js)
 ```
 
 ### Design notes

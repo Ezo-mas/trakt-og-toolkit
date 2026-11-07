@@ -367,15 +367,15 @@
   var STYLE_ID = "ogt-styles";
   function injectStyles(extra = []) {
     if (document.getElementById(STYLE_ID)) return;
-    const css2 = [CSS, ...extra].join("\n");
+    const css3 = [CSS, ...extra].join("\n");
     if (typeof GM_addStyle === "function") {
       try {
-        GM_addStyle(css2);
+        GM_addStyle(css3);
         return;
       } catch {
       }
     }
-    const style = el("style", { id: STYLE_ID, text: css2 });
+    const style = el("style", { id: STYLE_ID, text: css3 });
     (document.head || document.documentElement).append(style);
   }
   var toastTimer = null;
@@ -437,6 +437,268 @@
   .ogt-watchlist-toast__timer { position: absolute; inset: auto 0 0; block-size: var(--toast-timer-height, 2px);
     background: var(--color-toast-success, #6cc96c); transform-origin: left; }
   @media (prefers-reduced-motion: reduce) { .ogt-watchlist-toast__timer { display: none; } }
+`;
+
+  // src/ui/dialog.js
+  var counter = 0;
+  var CLOSE_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  function supported() {
+    return Boolean(document.body) && typeof document.createElement("dialog").showModal === "function";
+  }
+  function open(options) {
+    const id = `ogt-dialog-${++counter}`;
+    const prompt = options.kind === "prompt";
+    const message = el("p", { class: "ogt-dialog__message", id: `${id}-message`, text: options.message });
+    const error = el("p", { class: "ogt-dialog__error", id: `${id}-error`, role: "alert", hidden: true });
+    const input = prompt ? el("input", {
+      class: "ogt-dialog__input",
+      type: "text",
+      id: `${id}-input`,
+      autocomplete: "off",
+      spellcheck: "false",
+      placeholder: options.placeholder,
+      inputmode: options.inputMode,
+      "aria-describedby": `${id}-message ${id}-error`
+    }) : null;
+    if (input) input.value = options.value ?? "";
+    const ok = el("button", { type: "submit", class: "ogt-dialog__ok", text: options.ok });
+    const cancel = el("button", { type: "button", class: "ogt-dialog__cancel", text: options.cancel });
+    const close = el("button", { type: "button", class: "ogt-dialog__close", "aria-label": "Close" });
+    close.innerHTML = CLOSE_ICON;
+    const form = el(
+      "form",
+      { class: "ogt-dialog__form", novalidate: true },
+      el(
+        "div",
+        { class: "ogt-dialog__body" },
+        message,
+        input && el("label", { class: "ogt-dialog__label", for: input.id, text: options.label ?? "Value" }),
+        input,
+        error
+      ),
+      el("footer", { class: "ogt-dialog__footer" }, cancel, ok)
+    );
+    const dialog = el(
+      "dialog",
+      {
+        class: "ogt-dialog",
+        "aria-labelledby": `${id}-title`,
+        "aria-describedby": `${id}-message`,
+        dataset: { kind: options.kind }
+      },
+      el(
+        "div",
+        { class: "ogt-dialog__panel" },
+        el("h2", { class: "ogt-dialog__title", id: `${id}-title`, text: options.title }),
+        form,
+        close
+      )
+    );
+    return new Promise((resolve) => {
+      let result = prompt ? null : false;
+      const finish = (value) => {
+        result = value;
+        if (dialog.open) dialog.close();
+        else done();
+      };
+      const done = () => {
+        dialog.remove();
+        resolve(result);
+      };
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (!prompt) {
+          finish(true);
+          return;
+        }
+        const problem = options.validate?.(input.value) ?? null;
+        if (problem) {
+          error.textContent = problem;
+          error.hidden = false;
+          input.setAttribute("aria-invalid", "true");
+          input.focus();
+          return;
+        }
+        finish(input.value);
+      });
+      input?.addEventListener("input", () => {
+        error.hidden = true;
+        input.removeAttribute("aria-invalid");
+      });
+      cancel.addEventListener("click", () => finish(prompt ? null : false));
+      close.addEventListener("click", () => finish(prompt ? null : false));
+      dialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        finish(prompt ? null : false);
+      });
+      dialog.addEventListener("close", done, { once: true });
+      document.body.append(dialog);
+      dialog.showModal();
+      if (input) {
+        input.focus();
+        input.select?.();
+      } else ok.focus();
+    });
+  }
+  function confirmDialog(message, { title = "Are you sure?", ok = "OK", cancel = "Cancel" } = {}) {
+    if (!supported()) return Promise.resolve(window.confirm(message));
+    return open({ kind: "confirm", title, message, ok, cancel });
+  }
+  function promptDialog(message, {
+    title = "Enter a value",
+    value = "",
+    ok = "Save",
+    cancel = "Cancel",
+    label,
+    placeholder,
+    inputMode,
+    validate
+  } = {}) {
+    if (!supported()) {
+      for (; ; ) {
+        const answer = window.prompt(message, value);
+        if (answer === null) return Promise.resolve(null);
+        const problem = validate?.(answer) ?? null;
+        if (!problem) return Promise.resolve(answer);
+        window.alert(problem);
+        value = answer;
+      }
+    }
+    return open({ kind: "prompt", title, message, ok, cancel, value, label, placeholder, inputMode, validate });
+  }
+  var DIALOG_CSS = String.raw`
+.ogt-dialog {
+  box-sizing: border-box;
+  inline-size: var(--dialog-width-notes, 440px);
+  max-inline-size: 90%;
+  max-block-size: calc(100dvh - 40px);
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: none;
+  color: var(--color-text, light-dark(#333, #e6e6e6));
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.ogt-dialog *, .ogt-dialog *::before, .ogt-dialog *::after { box-sizing: inherit; }
+.ogt-dialog [hidden] { display: none !important; }
+.ogt-dialog[open] { display: flex; flex-direction: column; }
+.ogt-dialog::backdrop { background-color: var(--color-backdrop, rgb(0 0 0 / 0.7)); }
+.ogt-dialog__panel {
+  position: relative;
+  min-block-size: 0;
+  overflow-y: auto;
+  border: 1px solid var(--color-dialog-art-border, transparent);
+  border-radius: var(--radius-dialog, 6px);
+  background-color: var(--color-dialog-bg, light-dark(#f5f5f7, #1d1d1d));
+  box-shadow: var(--shadow-dialog, 0 0 20px #000);
+}
+.ogt-dialog__title {
+  margin: 0;
+  padding: var(--space-panel, 15px) calc(var(--space-dialog-inline, 25px) + 24px) var(--space-panel, 15px) var(--space-dialog-inline, 25px);
+  border-block-end: 1px solid var(--color-dialog-title-border, light-dark(#ddd, #444));
+  background-color: var(--color-dialog-title-bg, light-dark(#eee, #161616));
+  color: var(--color-dialog-title-text, light-dark(#444, #999));
+  font-family: var(--font-headings, inherit);
+  font-size: var(--font-size-dialog-title, 13px);
+  font-weight: var(--font-weight-headings, 600);
+  text-transform: uppercase;
+}
+.ogt-dialog__close {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  display: grid;
+  place-items: center;
+  inline-size: 46px;
+  block-size: 46px;
+  min-block-size: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-dialog-close, #ccc);
+  cursor: pointer;
+}
+.ogt-dialog__close:hover { color: var(--color-dialog-title-text, light-dark(#444, #fff)); }
+.ogt-dialog__body {
+  display: grid;
+  gap: 10px;
+  padding: var(--dialog-art-body-top, 20px) var(--dialog-art-inline, 22px);
+}
+.ogt-dialog__message { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.ogt-dialog__label {
+  margin-block-start: 4px;
+  color: var(--color-dialog-art-label, light-dark(#666, #aaa));
+  font-size: 12px;
+  font-weight: 600;
+}
+.ogt-dialog__input {
+  display: block;
+  inline-size: 100%;
+  padding: var(--dialog-art-field-padding, 9px 12px);
+  border: 1px solid var(--color-control-border, light-dark(#d6d6d6, #3b3b3b));
+  border-radius: var(--radius-control, 4px);
+  background-color: var(--color-control-bg, light-dark(#fff, #232323));
+  color: var(--color-control-text, light-dark(#111, #fff));
+  font: inherit;
+  font-size: var(--font-size-dialog-art-field, 14px);
+}
+.ogt-dialog__input:hover { border-color: var(--color-control-border-hover, light-dark(#9a9a9a, #5c5c5c)); }
+.ogt-dialog__input:focus {
+  border-color: var(--color-input-border-focus, #66afe9);
+  outline: none;
+  box-shadow: var(--shadow-dialog-art-field-focus, 0 0 0 3px rgb(102 175 233 / 0.2));
+}
+.ogt-dialog__input[aria-invalid='true'] { border-color: var(--brand-danger, var(--brand-primary, #ed1c24)); }
+.ogt-dialog__error { margin: 0; color: var(--color-dialog-art-danger-text, light-dark(#a94442, #ffb3b5)); font-size: 12px; }
+.ogt-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--dialog-art-footer-gap, 10px);
+  padding: var(--dialog-art-footer-padding, 14px 22px);
+  border-block-start: 1px solid var(--color-dialog-art-border, light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.08)));
+  background-color: var(--color-dialog-art-footer-bg, light-dark(#ececef, #181818));
+  border-end-start-radius: inherit;
+  border-end-end-radius: inherit;
+}
+.ogt-dialog__footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--dialog-art-button-height, 40px);
+  padding: var(--dialog-art-button-padding, 0 18px);
+  border: 1px solid var(--color-control-border, light-dark(#d6d6d6, #3b3b3b));
+  border-radius: var(--radius-control, 4px);
+  background: none;
+  color: var(--color-control-text, light-dark(#111, #fff));
+  font-family: var(--font-headings, inherit);
+  font-size: var(--font-size-dialog-art-button, 13px);
+  font-weight: var(--font-weight-headings-heavy, 700);
+  line-height: 1;
+  cursor: pointer;
+}
+.ogt-dialog__footer .ogt-dialog__cancel:hover {
+  border-color: var(--color-control-border-hover, light-dark(#9a9a9a, #5c5c5c));
+  background-color: var(--color-dialog-art-button-hover, light-dark(rgb(0 0 0 / 0.04), rgb(255 255 255 / 0.04)));
+}
+.ogt-dialog__footer .ogt-dialog__ok {
+  border-color: var(--brand-primary, #ed1c24);
+  background-color: var(--brand-primary, #ed1c24);
+  color: var(--color-text-inverse, #fff);
+}
+.ogt-dialog__footer .ogt-dialog__ok:hover {
+  border-color: var(--brand-primary-darken, #c61017);
+  background-color: var(--brand-primary-darken, #c61017);
+}
+.ogt-dialog__panel :focus-visible { outline: 2px solid var(--color-input-border-focus, #66afe9); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) {
+  .ogt-dialog[open], .ogt-dialog[open]::backdrop {
+    transition: opacity 0.3s linear;
+    @starting-style { opacity: 0; }
+  }
+}
 `;
 
   // src/core/router.js
@@ -2031,6 +2293,24 @@
 
   // src/features/playback/data.js
   var DAY = 24 * 60 * 60 * 1e3;
+  var MOVIE_IDS = ["trakt", "slug", "imdb", "tmdb"];
+  var EPISODE_IDS = ["trakt", "imdb", "tmdb", "tvdb"];
+  function pickIds(ids, keys) {
+    if (!ids || typeof ids !== "object") return null;
+    for (const key of keys) {
+      const value = ids[key];
+      const valid = key === "trakt" || key === "tmdb" || key === "tvdb" ? Number.isSafeInteger(value) && value > 0 : typeof value === "string" && value.trim() !== "";
+      if (valid) return { [key]: typeof value === "string" ? value.trim() : value };
+    }
+    return null;
+  }
+  function normalizeProgress(value) {
+    if (value == null || typeof value === "string" && value.trim() === "") return null;
+    const progress = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(progress)) return null;
+    const rounded = Math.round(progress * 10) / 10;
+    return rounded >= 1 && rounded <= 100 ? rounded : null;
+  }
   function posterUrl(value) {
     if (typeof value !== "string" || !value) return null;
     try {
@@ -2054,6 +2334,8 @@
         id: row.id,
         kind,
         ids: { ...media.ids },
+        year: Number.isInteger(media.year) ? media.year : null,
+        episodeIds: kind === "episode" && episode.ids && typeof episode.ids === "object" ? { ...episode.ids } : null,
         season: kind === "episode" ? episode.season : null,
         episode: kind === "episode" ? episode.number : null,
         title: kind === "movie" ? media.title || "Untitled movie" : `${media.title || "Untitled show"} · ${episode.season}×${String(episode.number).padStart(2, "0")} · ${episode.title || "Untitled episode"}`,
@@ -2074,6 +2356,21 @@
     const cutoff = now - Number(days) * DAY;
     return items.filter((item) => Number.isFinite(item.pausedMs) && item.pausedMs < cutoff);
   }
+  function scrobbleBody(item, progress, episodeIds = null) {
+    const value = normalizeProgress(progress);
+    if (!item || value == null) throw new Error("Invalid progress.");
+    if (item.kind === "movie") {
+      const ids2 = pickIds(item.ids, MOVIE_IDS);
+      if (!ids2) throw new Error("Could not identify this title.");
+      const movie = { ids: ids2 };
+      if (typeof item.title === "string" && item.title.trim()) movie.title = item.title.trim();
+      if (Number.isInteger(item.year)) movie.year = item.year;
+      return { movie, progress: value };
+    }
+    const ids = pickIds(episodeIds ?? item.episodeIds, EPISODE_IDS);
+    if (!ids) throw new Error("Could not identify this episode.");
+    return { episode: { ids }, progress: value };
+  }
   function matchesRoute(item, route) {
     const kind = route.name === "episode" ? "episode" : route.kind;
     return item.kind === kind && [item.ids.slug, item.ids.trakt].some((id) => id != null && String(id) === route.id) && (kind !== "episode" || item.season === route.season && item.episode === route.episode);
@@ -2081,7 +2378,7 @@
 
   // src/features/playback/api.js
   var TTL = 6e4;
-  function createPlaybackApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
+  function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isSignedIn, now = Date.now } = {}) {
     const cache3 = /* @__PURE__ */ new Map();
     const flights2 = /* @__PURE__ */ new Map();
     let revision = 0;
@@ -2131,9 +2428,10 @@
       if (unique.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new Error("Invalid playback ID.");
       if (!signedIn()) throw new Error("Sign in to Trakt first.");
       const epoch = session;
-      if (!unique.length || !confirm(`Clear paused playback for ${unique.length} item${unique.length === 1 ? "" : "s"}? This cannot be undone.`)) {
+      if (!unique.length || !await confirm(`Clear paused playback for ${unique.length} item${unique.length === 1 ? "" : "s"}? This cannot be undone.`)) {
         return { cancelled: true, cleared: [], failed: [] };
       }
+      if (session !== epoch || !signedIn()) return { cancelled: true, cleared: [], failed: [] };
       let cursor = 0;
       const cleared = [];
       const failed = [];
@@ -2158,7 +2456,54 @@
       }
       return { cancelled: false, cleared, failed };
     }
-    return { load, loadAll, clearItems, invalidate, resetSession };
+    async function episodeIdsFor(item) {
+      if (pickIds(item.episodeIds, EPISODE_IDS)) return item.episodeIds;
+      if (!item.ids || !Number.isInteger(item.season) || !Number.isInteger(item.episode)) {
+        throw new Error("Could not identify this episode.");
+      }
+      const showId = item.ids.slug || item.ids.trakt;
+      if (!showId) throw new Error("Could not identify this episode.");
+      const episode = await get(`/shows/${encodeURIComponent(showId)}/seasons/${item.season}/episodes/${item.episode}`);
+      if (!pickIds(episode?.ids, EPISODE_IDS)) throw new Error("Could not identify this episode.");
+      return episode.ids;
+    }
+    async function setProgress(item, progress, epoch = session) {
+      if (!signedIn()) throw new Error("Sign in to Trakt first.");
+      const value = normalizeProgress(progress);
+      if (!item || value == null) throw new Error("Invalid progress.");
+      const episodeIds = item.kind === "movie" ? null : await episodeIdsFor(item);
+      if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
+      const body = scrobbleBody(item, value, episodeIds);
+      await auth("POST", "/scrobble/start", body);
+      invalidate();
+      try {
+        if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
+        await auth("POST", "/scrobble/pause", body);
+      } catch (error) {
+        error.partial = true;
+        throw error;
+      } finally {
+        invalidate();
+      }
+      return { progress: value, body };
+    }
+    async function setRouteProgress(route, progress) {
+      if (!signedIn()) throw new Error("Sign in to Trakt first.");
+      const value = normalizeProgress(progress);
+      if (value == null) throw new Error("Invalid progress.");
+      if (!route?.id) throw new Error("Unsupported playback page.");
+      const epoch = session;
+      if (route.kind === "movie") {
+        const movie = await get(`/movies/${encodeURIComponent(route.id)}`);
+        return setProgress({ kind: "movie", ids: movie?.ids, title: movie?.title, year: movie?.year }, value, epoch);
+      }
+      if (route.name !== "episode" || !Number.isInteger(route.season) || !Number.isInteger(route.episode)) {
+        throw new Error("Unsupported playback page.");
+      }
+      const episode = await get(`/shows/${encodeURIComponent(route.id)}/seasons/${route.season}/episodes/${route.episode}`);
+      return setProgress({ kind: "episode", episodeIds: episode?.ids, season: route.season, episode: route.episode }, value, epoch);
+    }
+    return { load, loadAll, clearItems, setProgress, setRouteProgress, invalidate, resetSession };
   }
   var playbackApi = createPlaybackApi();
   if (typeof document !== "undefined") document.addEventListener("ogt:authchange", () => playbackApi.resetSession());
@@ -2188,7 +2533,7 @@
   var button = (label, action) => el("button", { class: "ogt-chip", type: "button", text: label, dataset: { action } });
   function createPanel2(route) {
     const overview = route.name === "progress";
-    const kind = route.name === "episode" ? "episode" : "movie";
+    const kind = route.kind === "movie" ? "movie" : "episode";
     let destroyed = false;
     let busy = false;
     let items = [];
@@ -2220,8 +2565,13 @@
       content.replaceChildren();
       if (!overview) {
         const item = items.find((row) => matchesRoute(row, route));
-        node.hidden = !item;
-        if (!item) return;
+        node.hidden = false;
+        if (!item) {
+          content.append(el("p", { class: "ogt-hint", text: "No saved playback." }), button("Save progress…", "save"));
+          return;
+        }
+        const save = button("Save progress…", "save");
+        save.dataset.id = String(item.id);
         const clear2 = button("Clear", "one");
         clear2.dataset.id = String(item.id);
         content.append(el(
@@ -2229,6 +2579,7 @@
           { class: "ogt-playback__tools" },
           el("span", { text: `${percent(item.progress)} paused` }),
           el("progress", { class: "ogt-playback__meter", max: 100, value: item.progress, "aria-label": "Saved playback progress" }),
+          save,
           clear2
         ));
         return;
@@ -2251,6 +2602,8 @@
       );
       const list = el("ul", { class: "ogt-playback__list" });
       for (const item of items) {
+        const save = button("Save progress…", "save");
+        save.dataset.id = String(item.id);
         const clear2 = button("Clear", "one");
         clear2.dataset.id = String(item.id);
         const poster = item.poster ? el("img", { class: "ogt-playback__poster", src: item.poster, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }) : el("span", { class: "ogt-playback__poster", "aria-hidden": true });
@@ -2266,6 +2619,7 @@
             el("span", { text: ` · ${percent(item.progress)}` }),
             el("time", { class: "ogt-playback__date", datetime: item.pausedAt, text: `Paused ${new Date(item.pausedMs).toLocaleString()}` })
           ),
+          save,
           clear2
         ));
       }
@@ -2282,7 +2636,7 @@
         status.textContent = "No paused items selected.";
         return;
       }
-      const result = await playbackApi.clearItems(ids, (message2) => window.confirm(message2));
+      const result = await playbackApi.clearItems(ids, (message2) => confirmDialog(message2, { title: "Clear paused playback", ok: "Clear" }));
       if (result.cancelled || !alive2()) return;
       selected.clear();
       const summary2 = `${result.cleared.length} cleared${result.failed.length ? `; ${result.failed.length} failed — try again` : ""}.`;
@@ -2299,6 +2653,48 @@
       if (!overview && node.hidden) toast(`Paused playback: ${message}`);
       else status.textContent = message;
     }
+    async function saveProgress(item) {
+      status.textContent = "";
+      const title = item?.title ?? "this title";
+      const value = await promptDialog(`Set the saved progress for ${title}. Trakt saves it by starting and pausing playback, so your profile may briefly show it as watching.`, {
+        title: "Save progress",
+        label: "Progress (%)",
+        ok: "Save progress",
+        inputMode: "decimal",
+        placeholder: "1–100",
+        value: item ? String(Number(item.progress.toFixed(1))) : "",
+        validate: (text2) => normalizeProgress(text2) == null ? "Enter a percentage from 1 to 100." : null
+      });
+      if (value == null || !alive2()) return;
+      const progress = normalizeProgress(value);
+      if (progress == null) return;
+      status.textContent = "Saving progress…";
+      try {
+        if (item) await playbackApi.setProgress(item, progress);
+        else await playbackApi.setRouteProgress(route, progress);
+      } catch (error) {
+        if (!error.partial) throw error;
+        debugError("playback pause failed after start", error);
+        if (!alive2()) return;
+        items = [];
+        render();
+        await read(true).catch(() => {
+        });
+        if (alive2()) status.textContent = "Trakt started playback but did not save the pause, so earlier progress for this title was removed; try again.";
+        return;
+      }
+      if (!alive2()) return;
+      items = [];
+      render();
+      try {
+        await read(true);
+      } catch (error) {
+        debugError("playback refresh failed", error);
+        status.textContent = "Progress saved, but playback could not be refreshed.";
+        return;
+      }
+      if (alive2()) status.textContent = "Progress saved.";
+    }
     async function onClick(event) {
       const target = event.target.closest("button[data-action]");
       if (!target || !node.contains(target) || busy || !alive2()) return;
@@ -2309,6 +2705,10 @@
           status.textContent = "Loading paused playback…";
           await read(true);
           if (alive2()) status.textContent = "";
+        } else if (action === "save") {
+          const item = target.dataset.id ? items.find((row) => row.id === Number(target.dataset.id)) : null;
+          if (target.dataset.id && !item) return;
+          await saveProgress(item);
         } else if (action === "one") await clear([Number(target.dataset.id)]);
         else if (action === "selected") await clear([...selected]);
         else if (action === "age") {
@@ -2319,7 +2719,7 @@
         }
       } catch (error) {
         debugError("playback request failed", error);
-        if (alive2()) status.textContent = "Could not load paused playback; try again.";
+        if (alive2()) status.textContent = error.status === 429 ? "Trakt rate limited this request; try again later." : action === "save" ? "Could not save progress; try again." : "Could not load paused playback; try again.";
       } finally {
         if (alive2()) lock(false);
       }
@@ -2704,6 +3104,15 @@
     }
     return [...items.values()];
   }
+  function mapTitleRatings(rows, type) {
+    const items = /* @__PURE__ */ new Map();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      if (!Number.isInteger(row?.rating) || row.rating < 1 || row.rating > 10) continue;
+      const id = row[type]?.ids?.trakt;
+      if (Number.isSafeInteger(id) && id > 0) items.set(id, row.rating);
+    }
+    return items;
+  }
   function forShow(items, id) {
     const show = /^\d+$/.test(String(id)) ? Number(id) : items.find((item) => item.slug === id)?.show;
     return items.filter((item) => item.show === show);
@@ -2725,14 +3134,20 @@
   }
 
   // src/features/your-ratings/api.js
+  var TTL2 = 10 * 6e4;
+  var emptyTitles = () => ({ movie: /* @__PURE__ */ new Map(), show: /* @__PURE__ */ new Map() });
   function createRatingsApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
     let cache3 = null;
     let flight = null;
+    let titleCache = null;
+    let titleFlight = null;
     let generation3 = 0;
     function resetSession() {
       generation3++;
       cache3 = null;
       flight = null;
+      titleCache = null;
+      titleFlight = null;
     }
     async function load() {
       if (!signedIn()) {
@@ -2747,7 +3162,7 @@
         if (epoch !== generation3 || !signedIn()) throw new Error("Ratings session changed.");
         if (!Array.isArray(rows)) throw new Error("Invalid ratings response.");
         const items = mapRatings(rows);
-        cache3 = { items, until: now() + 10 * 6e4 };
+        cache3 = { items, until: now() + TTL2 };
         return items;
       })();
       flight = pending;
@@ -2757,7 +3172,30 @@
         if (flight === pending) flight = null;
       }
     }
-    return { load, resetSession };
+    async function loadTitles() {
+      if (!signedIn()) {
+        resetSession();
+        return emptyTitles();
+      }
+      if (titleCache && titleCache.until > now()) return titleCache.titles;
+      if (titleFlight) return titleFlight;
+      const epoch = generation3;
+      const pending = (async () => {
+        const [movies, shows] = await Promise.all([auth("GET", "/sync/ratings/movies"), auth("GET", "/sync/ratings/shows")]);
+        if (epoch !== generation3 || !signedIn()) throw new Error("Ratings session changed.");
+        if (!Array.isArray(movies) || !Array.isArray(shows)) throw new Error("Invalid ratings response.");
+        const titles = { movie: mapTitleRatings(movies, "movie"), show: mapTitleRatings(shows, "show") };
+        titleCache = { titles, until: now() + TTL2 };
+        return titles;
+      })();
+      titleFlight = pending;
+      try {
+        return await pending;
+      } finally {
+        if (titleFlight === pending) titleFlight = null;
+      }
+    }
+    return { load, loadTitles, resetSession };
   }
   var ratingsApi = createRatingsApi();
   if (typeof document !== "undefined") document.addEventListener("ogt:authchange", ratingsApi.resetSession);
@@ -4602,6 +5040,229 @@
     }
   };
 
+  // src/features/list-preview/data.js
+  var POSTER_PATH = /^(?:https?:)?\/\/media\.trakt\.tv\/images\/(shows|movies)\/(\d{3})\/(\d{3})\/(\d{3})\/posters\//i;
+  function readPosterRoute(src) {
+    if (typeof src !== "string") return null;
+    const match = src.match(POSTER_PATH);
+    if (!match) return null;
+    const id = Number(`${match[2]}${match[3]}${match[4]}`);
+    if (!Number.isSafeInteger(id) || id <= 0) return null;
+    const kind = match[1].toLowerCase() === "shows" ? "show" : "movie";
+    return { kind, id, href: `/${kind === "show" ? "shows" : "movies"}/${id}` };
+  }
+  function readListPoster(slot) {
+    const poster = slot?.querySelector?.("img.poster[src]");
+    const route = readPosterRoute(poster?.getAttribute("src"));
+    if (!route) return null;
+    const doc = slot.ownerDocument;
+    const describedBy = slot.getAttribute("aria-describedby")?.split(/\s+/).filter(Boolean) ?? [];
+    const title = describedBy.map((id) => doc?.getElementById(id)).flatMap((tooltip) => [...tooltip?.querySelectorAll(".text") ?? []]).map((node) => node.textContent.trim()).find(Boolean);
+    return { ...route, title: title || "this title" };
+  }
+
+  // src/features/list-preview/styles.js
+  var css = String.raw`
+.ogt-list-preview-slot { cursor: pointer; }
+.ogt-list-preview-titles {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+`;
+
+  // src/features/list-preview/corner-rating.js
+  function cornerRating(rating, label = `Your rating: ${rating}`) {
+    if (!Number.isInteger(rating) || rating < 1 || rating > 10) return null;
+    return el(
+      "div",
+      { class: "ogt-corner-rating", role: "img", "aria-label": label, style: `--ogt-rating-color: var(--rating-${rating})` },
+      el("span", { class: "ogt-corner-rating-text", "aria-hidden": "true" }, String(rating))
+    );
+  }
+  var cornerRatingStyles = `
+.ogt-corner-rating {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: calc(var(--poster-width, 100%) - 30px);
+  z-index: 10;
+  inline-size: 30px;
+  block-size: 30px;
+  background-color: var(--ogt-rating-color);
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  pointer-events: none;
+}
+@container (width < 520px) {
+  .list-row .ogt-corner-rating { inset-inline-start: auto; inset-inline-end: 0; }
+}
+/* og's geometry: a 15 by 30 box, 7px in, text on its top 12px, turned 45 degrees. */
+.ogt-corner-rating-text {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 7px;
+  inline-size: 15px;
+  block-size: 30px;
+  color: var(--color-card-text, #fff);
+  font-family: var(--font-headings, sans-serif);
+  font-weight: var(--font-weight-headings-heavy, 700);
+  font-size: var(--font-size-card-subtitle, 11px);
+  line-height: 12px;
+  text-align: center;
+  rotate: 45deg;
+}
+`;
+
+  // src/features/list-preview/index.js
+  var ID2 = "ogt-list-preview";
+  var SLOT = ".list-row .fan .slot";
+  var FAN = ".list-row .fan";
+  var listPreview = {
+    id: "list-preview",
+    css: css + cornerRatingStyles,
+    match(route) {
+      return ["lists", "lists-collaborations", "liked-lists", "smart-lists"].includes(route.name) || /^\/users\/[^/]+\/(?:lists|smart-lists)(?:\/|$)/.test(route.path) || /^\/lists(?:\/|$)/.test(route.path);
+    },
+    mount() {
+      if (!document.body || document.getElementById(ID2)) return null;
+      const marker = el("span", { id: ID2, hidden: true });
+      document.body.append(marker);
+      const slots = /* @__PURE__ */ new Map();
+      const navs = /* @__PURE__ */ new Map();
+      const corners = /* @__PURE__ */ new Map();
+      let ratings = null;
+      let ratingsRun = 0;
+      let destroyed = false;
+      let scheduled = false;
+      async function loadRatings() {
+        const run = ++ratingsRun;
+        ratings = null;
+        schedule();
+        if (!isSignedIn()) return;
+        let next = null;
+        try {
+          next = await ratingsApi.loadTitles();
+        } catch (error) {
+          debugError("list preview ratings failed", error);
+        }
+        if (destroyed || run !== ratingsRun) return;
+        ratings = next;
+        schedule();
+      }
+      function removeCorner(slot) {
+        corners.get(slot)?.node.remove();
+        corners.delete(slot);
+      }
+      function syncCorner(slot, info2) {
+        const rating = info2 && ratings?.[info2.kind]?.get(info2.id);
+        const key = rating ? `${info2.kind}:${info2.id}:${rating}` : null;
+        const current = corners.get(slot);
+        if (current?.key === key && (!key || current.node.parentNode === slot)) return;
+        removeCorner(slot);
+        const node = key && cornerRating(rating, `Your rating: ${rating} of 10`);
+        if (!node) return;
+        slot.append(node);
+        corners.set(slot, { key, node });
+      }
+      function scan() {
+        if (destroyed) return;
+        const seenSlots = /* @__PURE__ */ new Set();
+        for (const slot of document.querySelectorAll(SLOT)) {
+          seenSlots.add(slot);
+          const info2 = readListPoster(slot);
+          slot.classList.toggle("ogt-list-preview-slot", Boolean(info2));
+          if (info2) slots.set(slot, info2);
+          else slots.delete(slot);
+          syncCorner(slot, info2);
+        }
+        for (const slot of /* @__PURE__ */ new Set([...slots.keys(), ...corners.keys()])) {
+          if (seenSlots.has(slot) && slot.isConnected) continue;
+          slot.classList.remove("ogt-list-preview-slot");
+          removeCorner(slot);
+          slots.delete(slot);
+        }
+        const seenFans = /* @__PURE__ */ new Set();
+        for (const fan of document.querySelectorAll(FAN)) {
+          const items = [...fan.querySelectorAll(".slot")].map((slot) => slots.get(slot)).filter(Boolean);
+          if (!items.length) continue;
+          seenFans.add(fan);
+          const signature = items.map((item) => `${item.kind}:${item.id}:${item.title}`).join("|");
+          const entry = navs.get(fan);
+          if (entry?.nav.isConnected && entry.signature === signature) continue;
+          entry?.nav.remove();
+          const nav = el("nav", { class: "ogt-list-preview-titles", "aria-label": "List preview titles" });
+          for (const item of items) nav.append(el("a", { href: item.href, text: item.title }));
+          fan.after(nav);
+          navs.set(fan, { nav, signature });
+        }
+        for (const [fan, entry] of navs) {
+          if (seenFans.has(fan) && fan.isConnected) continue;
+          entry.nav.remove();
+          navs.delete(fan);
+        }
+      }
+      function navigate(event) {
+        const middle = event.type === "auxclick" && event.button === 1;
+        if (!middle && (event.type !== "click" || event.button !== 0)) return;
+        const slot = event.target?.closest?.(SLOT);
+        const info2 = slot && slots.get(slot);
+        if (!info2) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (middle || event.ctrlKey || event.metaKey || event.shiftKey) {
+          window.open(info2.href, "_blank", "noopener");
+          return;
+        }
+        const link = [...navs.get(slot.closest(".fan"))?.nav.querySelectorAll("a") ?? []].find((anchor) => anchor.getAttribute("href") === info2.href);
+        if (link) link.click();
+        else window.location.assign(info2.href);
+      }
+      function schedule() {
+        if (scheduled || destroyed) return;
+        scheduled = true;
+        queueMicrotask(() => {
+          scheduled = false;
+          scan();
+        });
+      }
+      const observer = new MutationObserver(schedule);
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["src", "aria-describedby"]
+      });
+      document.addEventListener("click", navigate, true);
+      document.addEventListener("auxclick", navigate, true);
+      document.addEventListener("ogt:authchange", loadRatings);
+      loadRatings();
+      scan();
+      return {
+        node: marker,
+        destroy() {
+          destroyed = true;
+          observer.disconnect();
+          document.removeEventListener("click", navigate, true);
+          document.removeEventListener("auxclick", navigate, true);
+          document.removeEventListener("ogt:authchange", loadRatings);
+          for (const slot of slots.keys()) slot.classList.remove("ogt-list-preview-slot");
+          for (const { node } of corners.values()) node.remove();
+          for (const { nav } of navs.values()) nav.remove();
+          slots.clear();
+          corners.clear();
+          navs.clear();
+          marker.remove();
+        }
+      };
+    }
+  };
+
   // src/features/library/api.js
   var validId = (id) => Number.isSafeInteger(id) && id > 0;
   function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
@@ -4636,9 +5297,10 @@
           body = { episodes: [...new Map(episodes.map((ep) => [ep.ids.trakt, ep])).values()] };
           if (!body.episodes.length) throw new Error("No aired episodes to add.");
           if (!active2() || !signedIn()) return { cancelled: true };
-          if (route.name !== "episode" && !confirm(`Add ${body.episodes.length} aired episode${body.episodes.length === 1 ? "" : "s"} to your toolkit Trakt account’s library?${route.name === "title" ? " Specials are excluded." : ""}`)) {
+          if (route.name !== "episode" && !await confirm(`Add ${body.episodes.length} aired episode${body.episodes.length === 1 ? "" : "s"} to your toolkit Trakt account’s library?${route.name === "title" ? " Specials are excluded." : ""}`)) {
             return { cancelled: true };
           }
+          if (!active2() || !signedIn()) return { cancelled: true };
         } else throw new Error("Unsupported library page.");
         if (!active2() || !signedIn()) return { cancelled: true };
         const result = await auth("POST", "/sync/collection", body);
@@ -4773,14 +5435,14 @@
   }
 
   // src/features/library/index.js
-  var ID2 = "ogt-library";
+  var ID3 = "ogt-library";
   var library = {
     id: "library",
     css: actionButtonCss("ogt-library", "var(--brand-quaternary, #129982)"),
     match: (route) => route.kind === "movie" && route.name === "title" || route.kind === "show" && ["title", "season", "episode"].includes(route.name),
     mount(route) {
       const anchor = findActionStack();
-      if (!anchor || document.getElementById(ID2)) return null;
+      if (!anchor || document.getElementById(ID3)) return null;
       let destroyed = false;
       let busy = false;
       let undoing = false;
@@ -4807,7 +5469,7 @@
       });
       button2.append(glyph, el("span", { class: "ogt-library__text" }, label));
       const status = el("p", { class: "ogt-library__status", role: "status", "aria-live": "polite" });
-      const node = el("div", { id: ID2, class: "ogt-library" }, button2, status);
+      const node = el("div", { id: ID3, class: "ogt-library" }, button2, status);
       function syncVisibility() {
         const titles = [...anchor.querySelectorAll(".summary-action .title")].filter((title) => !node.contains(title));
         const collected = titles.some((title) => /\bin library\b/i.test(title.textContent));
@@ -4832,7 +5494,7 @@
         const title = readLibraryTitle(doc);
         void nativeRefresh.prepare(route, { active: active2 }).catch((error) => debugError("native library preparation unavailable", error));
         try {
-          const result = await libraryApi.add(route, { confirm: (message) => window.confirm(message), active: active2 });
+          const result = await libraryApi.add(route, { confirm: (message) => confirmDialog(message, { title: "Add to library", ok: "Add episodes" }), active: active2 });
           if (!active2()) return;
           if (!result.cancelled) {
             added = true;
@@ -5084,7 +5746,7 @@
   var watchlistApi = createWatchlistApi();
 
   // src/features/watchlist/styles.js
-  var css = actionButtonCss("ogt-watchlist", "var(--brand-secondary, light-dark(#2474ae, #59a9e2))");
+  var css2 = actionButtonCss("ogt-watchlist", "var(--brand-secondary, light-dark(#2474ae, #59a9e2))");
 
   // src/features/watchlist/icon.js
   function watchlistIcon() {
@@ -5164,14 +5826,14 @@
   }
 
   // src/features/watchlist/index.js
-  var ID3 = "ogt-watchlist";
+  var ID4 = "ogt-watchlist";
   var watchlist = {
     id: "watchlist",
-    css,
+    css: css2,
     match: (route) => Boolean(watchlistLookup(route)),
     mount(route) {
       const anchor = findActionStack();
-      if (!anchor || document.getElementById(ID3)) return null;
+      if (!anchor || document.getElementById(ID4)) return null;
       let destroyed = false;
       let busy = false;
       let undoing = false;
@@ -5191,7 +5853,7 @@
       });
       button2.append(glyph, el("span", { class: "ogt-watchlist__text" }, label));
       const status = el("p", { class: "ogt-watchlist__status", role: "status", "aria-live": "polite" });
-      const node = el("div", { id: ID3, class: "ogt-watchlist" }, button2, status);
+      const node = el("div", { id: ID4, class: "ogt-watchlist" }, button2, status);
       function syncVisibility() {
         const watchlisted = readWatchlisted(anchor);
         if (wasWatchlisted && !watchlisted) added = false;
@@ -5303,11 +5965,11 @@
   };
 
   // src/features/watchlist/shortcuts.js
-  function createWatchlistShortcuts({ id, markerId, className, css: css2, match, logLabel, targets, readRoute, bulk = null }) {
+  function createWatchlistShortcuts({ id, markerId, className, css: css3, match, logLabel, targets, readRoute, bulk = null }) {
     return {
       id,
       match,
-      css: css2,
+      css: css3,
       mount() {
         if (!document.body || document.getElementById(markerId)) return null;
         const node = el("span", { id: markerId, hidden: true });
@@ -5643,27 +6305,29 @@
 
   // src/actions.js
   var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id} {plural}";
-  function promptAddCustomLink() {
-    const answer = window.prompt(
-      `Add a custom link as "Label | URL".
-
-${PLACEHOLDER_HELP}`,
-      "My service | https://example.com/watch/{tmdb}?s={season}&e={episode}"
-    );
-    if (!answer) return null;
+  function parseCustomLink(answer) {
     const separator = answer.indexOf("|");
-    if (separator < 0) {
-      toast('Use "Label | URL" — the | separator is missing.');
-      return null;
-    }
+    if (separator < 0) return { error: 'Use "Label | URL": the | separator is missing.' };
     const label = answer.slice(0, separator).trim();
     const url = answer.slice(separator + 1).trim();
-    if (!label || !url) {
-      toast("Both a label and a URL are required.");
-      return null;
-    }
-    if (!/^https?:\/\//i.test(url)) {
-      toast("The URL must start with http:// or https://.");
+    if (!label || !url) return { error: "Both a label and a URL are required." };
+    if (!/^https?:\/\//i.test(url)) return { error: "The URL must start with http:// or https://." };
+    return { label, url };
+  }
+  async function promptAddCustomLink() {
+    const answer = await promptDialog(`Enter it as "Label | URL".
+
+${PLACEHOLDER_HELP}`, {
+      title: "Add custom link",
+      label: "Label | URL",
+      ok: "Add link",
+      value: "My service | https://example.com/watch/{tmdb}?s={season}&e={episode}",
+      validate: (text2) => parseCustomLink(text2).error ?? null
+    });
+    if (!answer) return null;
+    const { label, url, error } = parseCustomLink(answer);
+    if (error) {
+      toast(error);
       return null;
     }
     addCustomLink({ label, url });
@@ -5671,28 +6335,31 @@ ${PLACEHOLDER_HELP}`,
     document.dispatchEvent(new CustomEvent("ogt:refresh"));
     return { label, url };
   }
-  function promptRemoveCustomLink() {
+  async function promptRemoveCustomLink() {
     const links = getCustomLinks();
     if (!links.length) {
       toast("No custom links to remove.");
       return;
     }
-    const answer = window.prompt(
-      `Type the label of the link to remove:
+    const answer = await promptDialog(`Type the label of the link to remove:
 
-${links.map((entry) => `• ${entry.label}`).join("\n")}`,
-      links[0].label
-    );
+${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
+      title: "Remove custom link",
+      label: "Label",
+      ok: "Remove",
+      value: links[0].label,
+      validate: (text2) => links.some((entry) => entry.label === text2.trim()) ? null : `No link labelled "${text2.trim()}".`
+    });
     if (!answer) return;
     const next = removeCustomLink(answer.trim());
     if (next.length === links.length) toast(`No link labelled "${answer.trim()}".`);
     else toast("Link removed.");
     document.dispatchEvent(new CustomEvent("ogt:refresh"));
   }
-  function promptClientId() {
-    const answer = window.prompt(
-      "Paste your Trakt API client ID.\n\nCreate a free app at https://app.trakt.tv/settings/apps — the redirect URI can be anything, since this script only calls public endpoints.\n\nCurrent: " + (getClientId() || "(none)"),
-      getClientId()
+  async function promptClientId() {
+    const answer = await promptDialog(
+      "Paste your Trakt API client ID. Create a free app at https://app.trakt.tv/settings/apps. The redirect URI can be anything, since this script only calls public endpoints. Leave it empty to clear it.",
+      { title: "Trakt API client ID", label: "Client ID", ok: "Save", value: getClientId(), placeholder: "(none)" }
     );
     if (answer === null) return;
     const clean = setClientId(answer);
@@ -5731,10 +6398,12 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
         toast("Already signed in; sign out before changing accounts.");
         return;
       }
-      const uri = window.prompt(
-        "Enter the redirect URI registered for your Trakt app (used for token refresh).",
-        getPrivateValue(STORAGE.redirectUri) || "http://localhost:5173/callback"
-      );
+      const uri = await promptDialog("Enter the redirect URI registered for your Trakt app. It is used for token refresh.", {
+        title: "Sign in to Trakt",
+        label: "Redirect URI",
+        ok: "Continue",
+        value: getPrivateValue(STORAGE.redirectUri) || "http://localhost:5173/callback"
+      });
       if (uri === null) return;
       if (!uri.trim()) {
         toast("Enter the redirect URI registered for your Trakt app.");
@@ -5798,7 +6467,8 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`,
     "watchlist-cards": "Watchlist card shortcuts",
     "watchlist-credits": "Watchlist credit shortcuts",
     "month-review": "Last month in review",
-    "all-lists": "All lists"
+    "all-lists": "All lists",
+    "list-preview": "List preview titles"
   };
   function registerMenu(getRouteKey = () => location.pathname, features = []) {
     if (typeof GM_registerMenuCommand !== "function") return;
@@ -5853,7 +6523,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, monthReview, allLists];
+  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, monthReview, allLists, listPreview];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))
@@ -5875,7 +6545,7 @@ MIT licensed.`);
       canMount = true;
       rememberNativeResources(moduleWatch.entries.keys());
       moduleWatch.stop();
-      injectStyles([successNotificationCss, ...FEATURES.map((feature) => feature.css).filter(Boolean)]);
+      injectStyles([successNotificationCss, DIALOG_CSS, ...FEATURES.map((feature) => feature.css).filter(Boolean)]);
       host = createFeatureHost(FEATURES, { isEnabled: isFeatureEnabled });
       createRouter({
         onRoute(next) {
