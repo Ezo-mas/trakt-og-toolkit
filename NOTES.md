@@ -2,6 +2,14 @@
 
 Working notes and known issues. Newest first.
 
+
+## 2026-11-07: preset review fix (PR 31)
+
+- Episode pages read `{episodeimdb}` only from an IMDb title link that is not a season list
+  (`/title/ttSHOW/episodes?season=N`). Live og (2026-11-07) links an episode without its own id to an IMDb
+  `find?q=…&s=ep` search, but if it ever fell back to the show's season list, IMDb and OpenSubtitles would have treated
+  the show id as the episode's. Route spot-checks (TVDB dereferrer, Letterboxd IMDb/TMDb, TMDb episode, DMM movie,
+  MyAnimeList/JustWatch/Wikipedia/TVDB searches) all resolved; MDBList and OpenSubtitles are behind bot checks.
 ## 2026-11-07: Rotten Tomatoes native title URLs
 
 - The Rotten Tomatoes preset now reuses the title URL already rendered by OG, falling back to its stored search

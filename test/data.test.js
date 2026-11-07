@@ -97,6 +97,15 @@ test('season and episode pages read the show context instead of the page heading
   assert.equal(episode.tvdb, null, 'season and episode strips do not carry the show TVDB id');
 });
 
+test('an episode without its own IMDb id never borrows the show\'s season-list link', () => {
+  const window = new Window();
+  window.document.body.innerHTML = '<a href="https://www.imdb.com/title/tt0903747/episodes?season=1">IMDb</a>' +
+    '<a href="https://www.imdb.com/find?q=Breaking+Bad+Episode+1&s=ep">IMDb</a>';
+  const episode = readTitleData(window.document, parseRoute('/shows/breaking-bad/seasons/1/episodes/1'));
+  window.close();
+  assert.equal(episode.episodeImdb, null);
+});
+
 test('show pages read the TVDB id from og\'s external links', () => {
   const window = new Window();
   window.document.body.innerHTML = SHOW_HTML;

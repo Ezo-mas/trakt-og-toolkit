@@ -1273,6 +1273,7 @@
   var SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
   var SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
   var SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
+  var EPISODE_IMDB_RE = /imdb\.com\/title\/(tt\d+)(?!\d|\/episodes)/;
   function readTitleData(doc, route) {
     if (route.kind === "show" && (route.name === "season" || route.name === "episode")) {
       return {
@@ -1284,7 +1285,7 @@
         year: null,
         tmdb: firstMatch(doc, 'a[href*="themoviedb.org/tv/"]', TMDB_RE, (match) => Number(match[2])),
         imdb: route.name === "season" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null,
-        episodeImdb: route.name === "episode" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', IMDB_RE, (match) => match[1]) : null,
+        episodeImdb: route.name === "episode" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', EPISODE_IMDB_RE, (match) => match[1]) : null,
         tvdb: null,
         rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind)
       };

@@ -9,6 +9,8 @@ const TVDB_RE = /thetvdb\.com\/(?:dereferrer\/)?series\/(\d+)/;
 const SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
 const SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
 const SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
+/** An episode's own title link; a show's season list (`/title/ttSHOW/episodes`) is not the episode. */
+const EPISODE_IMDB_RE = /imdb\.com\/title\/(tt\d+)(?!\d|\/episodes)/;
 
 /**
  * Read what the page already knows: title, year, TMDb, IMDb and TVDB ids.
@@ -31,7 +33,7 @@ export function readTitleData(doc, route) {
       tmdb: firstMatch(doc, 'a[href*="themoviedb.org/tv/"]', TMDB_RE, (match) => Number(match[2])),
       imdb: route.name === 'season' ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null,
       episodeImdb: route.name === 'episode'
-        ? firstMatch(doc, 'a[href*="imdb.com/title/"]', IMDB_RE, (match) => match[1])
+        ? firstMatch(doc, 'a[href*="imdb.com/title/"]', EPISODE_IMDB_RE, (match) => match[1])
         : null,
       tvdb: null,
       rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind),
