@@ -2,6 +2,20 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-07: keep Watchlist all available in grid view (PR 26)
+
+- The same bulk button remains in `#credits .toolbar .controls` in list and grid views. Grid candidates come from
+  `#credits article.poster-card` and the existing whole-title route reader; Known For posters outside credits are
+  excluded. The shared bulk path deduplicates routes, ignores hidden cards and keeps known membership/add/Undo
+  state when switching views. Empty selections keep a visible disabled button with neutral wording.
+- OG’s grid credits have poster title links; native list controls are present in the live screenshots, though
+  current upstream `PersonPage.svelte` at `14388594` also permits cards without a listTarget/picker. Bulk candidates
+  support both shapes, and native reloads include available grid controls without adding new per-card buttons. Notice timing, refresh queue
+  supersession and toolbar styling from the preceding review fixes are preserved.
+- Built-bundle tests switch list → grid → list, verify toolbar placement and payloads, retain add state, restore
+  counts with Undo, and skip hidden/duplicate/known-added titles plus posters outside the credits section. Grid
+  controls also refresh after add/Undo. Build, full suite and diff checks pass.
+
 ## 2026-11-07: Watchlist all review fixes (PR 26)
 
 - The bulk notice, Undo and the unlocked rows no longer wait for native reloads: on a 200-credit page those are

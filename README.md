@@ -119,7 +119,8 @@ On a person’s page, every credit row also has the same bookmark shortcut next 
 rows add the movie; show rows, including a guest credit for a single episode, add the whole show. It uses the
 row’s own link and toolkit account, hides when the row’s native list tooltip includes Watchlist, and appears
 for rows rendered as you browse. A **Watchlist all (N)** button beside the credits toolbar’s sort controls adds every
-currently shown row that is not already on the watchlist. It confirms once with the count, sends the rows’ slugs in
+currently shown credit in list or grid view that is not already known to be on the watchlist. The button stays
+in the same toolbar position when switching views. It confirms once with the count, sends the rows’ slugs in
 batches, and reports how many were added, already there or not found. Added rows lose their shortcut. OG’s own list controls reload their membership automatically after bulk adds and
 Undo, using the same native refresh as the individual shortcut. Confirmed batches stay marked if a later batch fails. Bulk **Undo** is offered when every successful title was newly added; mixed new/existing results have no
 Undo because Trakt does not identify which titles were already there.

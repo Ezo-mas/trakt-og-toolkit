@@ -5651,9 +5651,6 @@
       return null;
     }
   }
-  function readCreditRoute(row) {
-    return row?.matches?.("article.credit-row") ? readCardRoute(row) : null;
-  }
   function readCreditControl(row) {
     return row?.querySelector?.(".quick-icons .list-control.card, .quick-icons button.action.list") ?? null;
   }
@@ -6009,10 +6006,11 @@
         }
         function bulkEntries() {
           const unique = /* @__PURE__ */ new Map();
-          for (const entry of entries.values()) {
+          for (const entry of [...entries.values(), ...bulk?.targets?.() ?? []]) {
             const state = stateFor(entry.key);
             if (state.busy || state.undoing || state.added || state.wasWatchlisted) continue;
-            if (!entry.control.isConnected || !entry.button.isConnected) continue;
+            if (!entry.host.isConnected || entry.button && !entry.button.isConnected) continue;
+            if (entry.control && readCardWatchlisted(entry.control)) continue;
             if (entry.host.closest("[hidden]") || entry.host.checkVisibility?.() === false) continue;
             if (!unique.has(entry.key)) unique.set(entry.key, entry);
           }
@@ -6022,14 +6020,12 @@
           if (!bulkButton) return;
           const control = bulk.target?.();
           if (control && bulkButton.parentElement !== control) control.append(bulkButton);
-          const empty = !bulkBusy && !entries.size;
-          if (bulkButton.hidden !== empty) bulkButton.hidden = empty;
           const total = bulkEntries().length;
           const label = total ? `${bulk.label} (${total})` : bulk.label;
           if (bulkButton.textContent !== label) bulkButton.textContent = label;
           bulkButton.disabled = bulkBusy || total === 0;
           bulkButton.setAttribute("aria-busy", String(bulkBusy));
-          bulkButton.title = total ? `Add ${total} title${total === 1 ? "" : "s"} to your watchlist` : "All credits shown are already on your watchlist";
+          bulkButton.title = total ? `Add ${total} title${total === 1 ? "" : "s"} to your watchlist` : "No shown credits need adding to your watchlist";
         }
         async function addAll() {
           if (bulkBusy) return;
@@ -6081,7 +6077,7 @@
         async function refreshEntries(keys, active2) {
           const run = ++refreshRun;
           const wanted = new Set(keys);
-          const pending = [...entries.values()].filter((entry) => wanted.has(entry.key));
+          const pending = [...entries.values(), ...bulk?.targets?.() ?? []].filter((entry) => wanted.has(entry.key) && entry.control);
           await Promise.all(Array.from({ length: Math.min(4, pending.length) }, async () => {
             while (pending.length && active2() && run === refreshRun) {
               const entry = pending.shift();
@@ -6213,7 +6209,8 @@
             entries.set(control, entry);
           }
           const native = /* @__PURE__ */ new Map();
-          for (const entry of entries.values()) {
+          for (const entry of [...entries.values(), ...bulk?.targets?.() ?? []]) {
+            if (!entry.control) continue;
             native.set(entry.key, Boolean(native.get(entry.key) || readCardWatchlisted(entry.control)));
           }
           for (const [key, watchlisted] of native) {
@@ -6307,10 +6304,14 @@
     logLabel: "credit",
     match: (route) => route?.name === "person",
     targets: () => [...document.querySelectorAll("article.credit-row")].map((host) => ({ host, control: readCreditControl(host) })),
-    readRoute: readCreditRoute,
+    readRoute: readCardRoute,
     bulk: {
       label: "Watchlist all",
-      target: () => document.querySelector("#credits .toolbar .controls")
+      target: () => document.querySelector("#credits .toolbar .controls"),
+      targets: () => [...document.querySelectorAll("#credits article.poster-card")].map((host) => {
+        const route = readCardRoute(host);
+        return { host, control: readCreditControl(host), route, key: route?.key };
+      }).filter((entry) => entry.route)
     },
     css: `
     .ogt-watchlist-credit { display: grid; place-items: center; flex: 0 0 auto;

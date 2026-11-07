@@ -1,4 +1,4 @@
-import { readCreditControl, readCreditRoute } from './data.js';
+import { readCardRoute, readCreditControl } from './data.js';
 import { createWatchlistShortcuts } from './shortcuts.js';
 
 /** Feature 13's card shortcut for person credit rows, which reuse og's card-sized list control. */
@@ -9,10 +9,14 @@ export const watchlistCredits = createWatchlistShortcuts({
   logLabel: 'credit',
   match: route => route?.name === 'person',
   targets: () => [...document.querySelectorAll('article.credit-row')].map(host => ({ host, control: readCreditControl(host) })),
-  readRoute: readCreditRoute,
+  readRoute: readCardRoute,
   bulk: {
     label: 'Watchlist all',
     target: () => document.querySelector('#credits .toolbar .controls'),
+    targets: () => [...document.querySelectorAll('#credits article.poster-card')].map(host => {
+      const route = readCardRoute(host);
+      return { host, control: readCreditControl(host), route, key: route?.key };
+    }).filter(entry => entry.route),
   },
   css: `
     .ogt-watchlist-credit { display: grid; place-items: center; flex: 0 0 auto;

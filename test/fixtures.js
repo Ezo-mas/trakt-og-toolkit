@@ -194,6 +194,15 @@ export function personCreditRowHtml({ id = 'credit-movie', href = '/movies/jackp
   </article>`;
 }
 
+/** Upstream PersonPage can omit listTarget; live grid cards with list controls use watchlistCardHtml below. */
+export function personCreditCardHtml({ id = 'grid-movie', href = '/movies/jackpot-1115926', title = 'Jackpot' } = {}) {
+  return `<article class="poster-card with-icons" id="${id}">
+    <div class="poster-wrapper"><a class="poster" href="${href}" tabindex="-1" aria-hidden="true"></a></div>
+    <div class="quick-icons small"><button class="watch-trigger" aria-label="Add to history"></button></div>
+    <div class="titles"><a class="titles-link" href="${href}"><h3>${title}</h3></a></div>
+  </article>`;
+}
+
 export const PERSON_CREDITS_HTML = `
 <main id="content">
   <section class="credits" id="credits" aria-labelledby="credits-heading">

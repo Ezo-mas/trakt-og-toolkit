@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { readFileSync } from 'node:fs';
 import { answerDialogs } from './dialogs.js';
-import { PERSON_CREDITS_HTML, personCreditRowHtml } from './fixtures.js';
+import { PERSON_CREDITS_HTML, personCreditRowHtml, personCreditCardHtml, watchlistCardHtml } from './fixtures.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 80) => new Promise(resolve => setTimeout(resolve, ms));
@@ -290,15 +290,74 @@ test('bulk add and Undo reload native credit controls without opening or clickin
   assert.equal(popups, 0, 'native picker stays closed');
 });
 
-test('Watchlist all hides when the credits show no rows (OG grid view)', async t => {
+test('Watchlist all stays in its toolbar spot and adds credits in grid view', async t => {
   const b = boot(t); await wait();
   const bulk = b.document.querySelector('.ogt-watchlist-bulk');
-  assert.equal(bulk.hidden, false);
+  const toolbar = bulk.parentElement;
   const rows = [...b.document.querySelectorAll('article.credit-row')];
   for (const row of rows) row.remove();
+  b.document.querySelector('section.year').insertAdjacentHTML('beforeend', personCreditCardHtml() +
+    personCreditCardHtml({ id: 'grid-show', href: '/shows/after-hours-with-james-corden' }));
+  b.document.body.insertAdjacentHTML('beforeend', personCreditCardHtml({ id: 'known-for', href: '/movies/unrelated' }));
   await wait();
-  assert.equal(bulk.hidden, true, 'no disabled button claiming every credit is on the watchlist');
-  b.document.querySelector('section.year').append(...rows); await wait();
+  assert.equal(bulk.parentElement, toolbar);
   assert.equal(bulk.hidden, false);
   assert.equal(bulk.textContent, 'Watchlist all (2)');
+  assert.equal(bulk.disabled, false);
+  bulk.click(); await wait();
+  assert.deepEqual(JSON.parse(b.writes()[0].data), { movies: [{ ids: { slug: 'jackpot-1115926' } }],
+    shows: [{ ids: { slug: 'after-hours-with-james-corden' } }] });
+  assert.equal(bulk.disabled, true);
+  assert.equal(bulk.hidden, false);
+  b.document.querySelector('section.year').replaceChildren(...rows); await wait();
+  assert.equal(bulk.parentElement, toolbar);
+  assert.ok(b.buttons().every(button => button.hidden), 'added grid titles stay added in list view');
+  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait();
+  assert.ok(b.buttons().every(button => !button.hidden));
+  assert.equal(bulk.textContent, 'Watchlist all (2)');
+});
+
+test('grid bulk skips known watchlisted titles, hidden cards and duplicate credits', async t => {
+  const b = boot(t); await wait();
+  b.buttons()[0].click(); await wait();
+  b.document.querySelector('section.year').innerHTML = personCreditCardHtml() +
+    personCreditCardHtml({ id: 'grid-show', href: '/shows/after-hours-with-james-corden' }) +
+    personCreditCardHtml({ id: 'duplicate', href: '/shows/after-hours-with-james-corden' }) +
+    personCreditCardHtml({ id: 'hidden-card', href: '/movies/hidden' });
+  b.document.getElementById('hidden-card').hidden = true;
+  await wait();
+  const bulk = b.document.querySelector('.ogt-watchlist-bulk');
+  assert.equal(bulk.textContent, 'Watchlist all (1)');
+  bulk.click(); await wait();
+  assert.deepEqual(JSON.parse(b.writes()[1].data), { shows: [{ ids: { slug: 'after-hours-with-james-corden' } }] });
+  b.document.querySelector('.ogt-watchlist-toasts .ogt-watchlist-toast__undo').click(); await wait();
+  assert.equal(bulk.textContent, 'Watchlist all (1)', 'Undo restores the grid count without undoing the earlier individual add');
+});
+
+
+test('grid bulk refreshes available native list controls after add and Undo', async t => {
+  const b = boot(t); await wait();
+  b.document.body.insertAdjacentHTML('afterbegin', '<header class="top-nav"><div class="profile"></div></header>');
+  b.document.querySelector('section.year').innerHTML = watchlistCardHtml({ id: 'grid-native', href: '/movies/jackpot-1115926', small: true });
+  await wait();
+  let reads = 0;
+  const trigger = b.document.querySelector('#grid-native .list-control button');
+  trigger.addEventListener('keydown', () => {
+    reads++;
+    const added = !b.writes().at(-1).url.endsWith('/remove');
+    b.document.getElementById('grid-native-tip').innerHTML = added
+      ? '<span class="listed-tip"><a href="/users/test/watchlist">Watchlist</a></span>' : 'Add to list';
+    const event = new b.window.Event('beforetoggle', { cancelable: true });
+    Object.defineProperty(event, 'newState', { value: 'open' });
+    b.document.getElementById('grid-native-picker').dispatchEvent(event);
+    assert.equal(event.defaultPrevented, true);
+  });
+  const bulk = b.document.querySelector('.ogt-watchlist-bulk');
+  bulk.click(); await wait();
+  assert.equal(reads, 1);
+  assert.ok(b.document.querySelector('#grid-native-tip .listed-tip'));
+  b.document.querySelector('.ogt-watchlist-toasts .ogt-watchlist-toast__undo').click(); await wait();
+  assert.equal(reads, 2);
+  assert.equal(b.document.querySelector('#grid-native-tip .listed-tip'), null);
+  assert.equal(bulk.textContent, 'Watchlist all (1)');
 });

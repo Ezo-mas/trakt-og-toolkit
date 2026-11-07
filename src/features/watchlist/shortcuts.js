@@ -54,10 +54,11 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       }
       function bulkEntries() {
         const unique = new Map();
-        for (const entry of entries.values()) {
+        for (const entry of [...entries.values(), ...(bulk?.targets?.() ?? [])]) {
           const state = stateFor(entry.key);
           if (state.busy || state.undoing || state.added || state.wasWatchlisted) continue;
-          if (!entry.control.isConnected || !entry.button.isConnected) continue;
+          if (!entry.host.isConnected || entry.button && !entry.button.isConnected) continue;
+          if (entry.control && readCardWatchlisted(entry.control)) continue;
           if (entry.host.closest('[hidden]') || entry.host.checkVisibility?.() === false) continue;
           if (!unique.has(entry.key)) unique.set(entry.key, entry);
         }
@@ -67,16 +68,13 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         if (!bulkButton) return;
         const control = bulk.target?.();
         if (control && bulkButton.parentElement !== control) control.append(bulkButton);
-        // OG's grid view has no credit rows (and no row shortcuts); a disabled button there would mislead.
-        const empty = !bulkBusy && !entries.size;
-        if (bulkButton.hidden !== empty) bulkButton.hidden = empty;
         const total = bulkEntries().length;
         const label = total ? `${bulk.label} (${total})` : bulk.label;
         if (bulkButton.textContent !== label) bulkButton.textContent = label;
         bulkButton.disabled = bulkBusy || total === 0;
         bulkButton.setAttribute('aria-busy', String(bulkBusy));
         bulkButton.title = total ? `Add ${total} title${total === 1 ? '' : 's'} to your watchlist`
-          : 'All credits shown are already on your watchlist';
+          : 'No shown credits need adding to your watchlist';
       }
       async function addAll() {
         if (bulkBusy) return;
@@ -124,7 +122,8 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       async function refreshEntries(keys, active) {
         const run = ++refreshRun;
         const wanted = new Set(keys);
-        const pending = [...entries.values()].filter(entry => wanted.has(entry.key));
+        const pending = [...entries.values(), ...(bulk?.targets?.() ?? [])]
+          .filter(entry => wanted.has(entry.key) && entry.control);
         // Reuse OG's read-only picker reload, with at most four native loads at once.
         await Promise.all(Array.from({ length: Math.min(4, pending.length) }, async () => {
           while (pending.length && active() && run === refreshRun) {
@@ -249,7 +248,8 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
           entries.set(control, entry);
         }
         const native = new Map();
-        for (const entry of entries.values()) {
+        for (const entry of [...entries.values(), ...(bulk?.targets?.() ?? [])]) {
+          if (!entry.control) continue;
           native.set(entry.key, Boolean(native.get(entry.key) || readCardWatchlisted(entry.control)));
         }
         for (const [key, watchlisted] of native) {
