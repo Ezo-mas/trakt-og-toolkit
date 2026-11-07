@@ -18,7 +18,15 @@ Working notes and known issues. Newest first.
   DMM, OpenSubtitles and Seerr keep word marks. Brand colours prefer og's `--color-site-*` tokens.
 - Trakt's Watch Now logos come from `media.trakt.tv/watchnow/sources/<id>.webp`; of our services only `plex` exists
   there, so they were not used.
-- Watch Now tiles now copy og's provider tile shape: a 2:1 logo card with a note (“Your service”, “Add to library”).
+- Watch Now tiles copy og's provider tiles (measured live): 118px grid columns with 16px/14px gaps, a 118x56 logo card
+  with 8px radius, and a 12px note (“Your service”, “Add to library”).
+- og's sidebar is only ~173px wide, so a watch/library tile takes the whole strip row (logo + name); 2-column tiles
+  truncated names to “St…”. The strip is flat (no panel box), like og's own sidebar groups.
+- Live check (2026-11-08): the built bundle was loaded into og.trakt.tv via jsDelivr (og's CSP allows it and
+  `unsafe-eval`) on `/shows/cyberpunk-edgerunners` at 1280px: strip above `ul.external-links`, og-native IMDb/TMDb/
+  Wikipedia marks, bundled logos for the rest, and three Your services tiles beside og's Netflix tiles. Headless
+  Playwright is blocked by Cloudflare. Under 768px og shows a full-page “made for bigger screens” / “turn your tablet
+  sideways” splash in device emulation, so the phone-tools placement (the panel did move there) was not viewable.
 
 ## 2026-11-08: custom links below the poster and in Watch Now (feature 26)
 
