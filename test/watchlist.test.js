@@ -222,6 +222,16 @@ test('unmatched not-found ids never hide potentially failed shortcuts', async ()
   assert.deepEqual(result.succeededKeys, []);
 });
 
+test('watchlist forwards its operation guard and signal to queued writes', async () => {
+  const controls = [];
+  const api = createWatchlistApi({ signedIn: () => true, get: async () => ({ ids: { trakt: 1 } }),
+    auth: async (...args) => { controls.push(args[4]); return { added: { movies: 1 } }; } });
+  const active = () => true;
+  const signal = new AbortController().signal;
+  await api.add(parseRoute('/movies/test'), { active, signal });
+  assert.deepEqual(controls, [{ active, signal }]);
+});
+
 test('watchlist removal requires a valid matching deletion response', async () => {
   for (const response of [null, {}, { deleted: { movies: '1' } }, { deleted: { movies: 3 } }]) {
     const api = createWatchlistApi({ signedIn: () => true, auth: async () => response });

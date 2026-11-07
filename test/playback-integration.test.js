@@ -7,6 +7,13 @@ import { MOVIE_HTML, PLAYBACK_EPISODE_HTML, PLAYBACK_PROGRESS_HTML } from './fix
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
+async function waitFor(condition, timeout = 3000) {
+  const deadline = Date.now() + timeout;
+  while (!condition()) {
+    if (Date.now() >= deadline) throw new Error('Timed out waiting for playback to settle');
+    await wait(25);
+  }
+}
 const samples = () => ({
   movies: [{ id: 101, progress: 42, paused_at: new Date(Date.now() - 60 * 86400000).toISOString(),
     movie: { title: 'The Dark', ids: { slug: 'the-dark-2005', trakt: 1 }, images: { poster: ['media.trakt.tv/images/poster.jpg'] } } }],
@@ -105,7 +112,7 @@ test('cancelled deletion sends nothing and retains rows', async (t) => {
 test('multi-select clear reports partial failures and refreshes both lists', async (t) => {
   const b = boot(t, { failed: [102] }); await wait(); click(b.document, 'load'); await wait();
   const all = panel(b.document).querySelector('[data-action="all"]'); all.checked = true; all.dispatchEvent(new b.window.Event('change', { bubbles: true }));
-  click(b.document, 'selected'); await wait(100);
+  click(b.document, 'selected'); await wait(1300);
   assert.match(b.confirmations[0], /2 items/);
   assert.match(panel(b.document).textContent, /1 cleared; 1 failed/);
   assert.equal(panel(b.document).querySelectorAll('li').length, 1);
@@ -147,7 +154,7 @@ test('a title page with no saved playback saves progress with start then pause',
   assert.equal(panel(b.document).hidden, false);
   assert.match(panel(b.document).textContent, /No saved playback/);
   b.setPrompt('35');
-  click(b.document, 'save'); await wait(100);
+  click(b.document, 'save'); await wait(1300);
   assert.equal(b.prompts.length, 1, 'one dialog asks and warns');
   assert.equal(b.confirmations.length, 0);
   assert.equal(b.prompts[0].value, '');
@@ -159,12 +166,24 @@ test('a title page with no saved playback saves progress with start then pause',
   assert.match(panel(b.document).textContent, /Progress saved/);
   assert.equal(b.calls.some((call) => call.url.includes('/scrobble/stop')), false);
 });
+test('navigating after start still completes the pause for the same session', async (t) => {
+  const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML, empty: true }); await wait();
+  b.setPrompt('35');
+  click(b.document, 'save');
+  await waitFor(() => b.scrobbles.length === 1);
+  await wait();
+  b.window.history.pushState({}, '', '/');
+  await wait(1200);
+  assert.deepEqual(b.scrobbles.map((call) => call.path), ['/scrobble/start', '/scrobble/pause']);
+  assert.equal(panel(b.document), null);
+});
+
 test('an overview row saves episode progress after resolving episode ids', async (t) => {
   const b = boot(t); await wait(); click(b.document, 'load'); await wait();
   const row = panel(b.document).querySelector('li');
   assert.match(row.textContent, /Pilot/);
   b.setPrompt('60');
-  row.querySelector('[data-action="save"]').click(); await wait(120);
+  row.querySelector('[data-action="save"]').click(); await wait(1300);
   assert.match(b.prompts[0].message, /for Breaking Bad · 1×01 · Pilot/);
   assert.equal(b.prompts[0].value, '73.5');
   assert.ok(b.calls.find((call) => call.method === 'GET' && new URL(call.url).pathname === '/shows/breaking-bad/seasons/1/episodes/1'));
@@ -184,7 +203,7 @@ test('a title page with saved playback can replace it, prefilled with the curren
   const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML }); await wait();
   assert.match(panel(b.document).textContent, /42% paused/);
   b.setPrompt('70');
-  click(b.document, 'save'); await wait(100);
+  click(b.document, 'save'); await wait(1300);
   assert.equal(b.prompts[0].value, '42');
   assert.equal(b.calls.some((call) => new URL(call.url).pathname.startsWith('/movies/')), false, 'reuses the playback ids');
   assert.deepEqual(b.scrobbles.map((call) => call.path), ['/scrobble/start', '/scrobble/pause']);

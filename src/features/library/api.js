@@ -2,10 +2,18 @@ import { apiGet, apiAuth, isSignedIn } from '../../core/trakt.js';
 
 const validId = (id) => Number.isSafeInteger(id) && id > 0;
 
+/** Only pass the queue guard when the caller supplied one, so injected transports keep their old shape. */
+function writeRequest(auth, path, body, active, signal) {
+  return active || signal
+    ? auth('POST', path, body, undefined, { active, signal })
+    : auth('POST', path, body);
+}
+
 export function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
   return {
-    async add(route, { confirm = () => true, active = () => true } = {}) {
+    async add(route, { confirm = () => true, active, signal } = {}) {
       if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
+      const isActive = active ?? (() => true);
       const id = encodeURIComponent(route.id);
       const at = now();
       const collected_at = new Date(at).toISOString();
@@ -22,7 +30,7 @@ export function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSi
         if (!Array.isArray(seasons)) throw new Error('Could not load seasons.');
         const episodes = [];
         for (const season of seasons) {
-          if (!active() || !signedIn()) return { cancelled: true };
+          if (!isActive() || !signedIn()) return { cancelled: true };
           if (!Number.isSafeInteger(season.number) || season.number < 0) continue;
           // Whole-show additions exclude specials; season 0 can be added explicitly.
           if (route.name === 'title' && season.number === 0) continue;
@@ -39,14 +47,14 @@ export function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSi
         }
         body = { episodes: [...new Map(episodes.map(ep => [ep.ids.trakt, ep])).values()] };
         if (!body.episodes.length) throw new Error('No aired episodes to add.');
-        if (!active() || !signedIn()) return { cancelled: true };
+        if (!isActive() || !signedIn()) return { cancelled: true };
         if (route.name !== 'episode' && !(await confirm(`Add ${body.episodes.length} aired episode${body.episodes.length === 1 ? '' : 's'} to your toolkit Trakt account’s library?${route.name === 'title' ? ' Specials are excluded.' : ''}`))) {
           return { cancelled: true };
         }
-        if (!active() || !signedIn()) return { cancelled: true };
+        if (!isActive() || !signedIn()) return { cancelled: true };
       } else throw new Error('Unsupported library page.');
-      if (!active() || !signedIn()) return { cancelled: true };
-      const result = await auth('POST', '/sync/collection', body);
+      if (!isActive() || !signedIn()) return { cancelled: true };
+      const result = await writeRequest(auth, '/sync/collection', body, active, signal);
       if (Object.values(result?.not_found ?? {}).some(items => !Array.isArray(items) || items.length)) {
         throw new Error('Trakt could not find some items; the addition may be incomplete.');
       }
@@ -60,10 +68,11 @@ export function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSi
     },
 
     /** Undo an addition with the exact body that was sent. */
-    async remove(body, { active = () => true } = {}) {
+    async remove(body, { active, signal } = {}) {
       if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
-      if (!body || typeof body !== 'object' || !active()) return { cancelled: true };
-      const result = await auth('POST', '/sync/collection/remove', body);
+      const isActive = active ?? (() => true);
+      if (!body || typeof body !== 'object' || !isActive()) return { cancelled: true };
+      const result = await writeRequest(auth, '/sync/collection/remove', body, active, signal);
       if (Object.values(result?.not_found ?? {}).some(items => !Array.isArray(items) || items.length)) {
         throw new Error('Trakt could not find some items.');
       }

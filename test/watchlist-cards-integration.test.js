@@ -134,7 +134,7 @@ test('signed-out and failed card additions stay available with guidance and retr
   assert.equal(b.buttons()[0].hidden, false);
   assert.equal(b.buttons()[0].disabled, false);
   assert.match(b.document.querySelector('.ogt-toast').textContent, /could not find/);
-  b.buttons()[0].click(); await wait(); assert.equal(b.writes().length, 2);
+  b.buttons()[0].click(); await wait(1200); assert.equal(b.writes().length, 2);
 });
 
 test('account changes, card removal and navigation cancel lookups and ignore late saves', async t => {

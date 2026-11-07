@@ -353,7 +353,15 @@ links, poster rating corners. Backlog:
   OG performs its own signed-in reads. The toolkit does not read OG tokens, copy its session, patch its
   collection data or perform a second collection write.
   Pronunciation fetches Forvo's public search page (with `@connect forvo.com`) to find recordings.
-- Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with `Retry-After` on 429.
+- Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with the full `Retry-After` on 429 (up to a minute; longer waits fail instead).
+- Authenticated writes (`POST`, `PUT`, `DELETE`) share one FIFO queue and are sent at most once per second, Trakt's
+  current standard-app limit. A 429 pauses every queued write for the full `Retry-After` (or uses a bounded jittered
+  backoff when the header is missing); a wait over a minute fails the action instead of leaving it spinning. Ambiguous
+  network or 5xx failures are never replayed automatically.
+  Queued writes are discarded if you sign out, change accounts, or leave the page that queued them before they are
+  sent, except the pause that completes a playback start already sent, so saved progress is not left half-written.
+  Pacing is per open page;
+  other tabs and apps share the same server-side limit. Bulk actions and Undo can take a few seconds longer.
 - Nothing is uploaded, resold or redistributed; the script has no backend.
 - Season data prefers the API when a client ID is present; rendered cards are the fallback.
 
