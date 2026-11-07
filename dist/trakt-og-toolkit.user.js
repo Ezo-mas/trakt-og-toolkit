@@ -2740,13 +2740,6 @@
     { key: "sonarr", label: "Sonarr", placeholder: "http://192.168.1.20:8989" },
     { key: "seerr", label: "Seerr", placeholder: "http://192.168.1.20:5055" }
   ];
-  function isNarrow() {
-    try {
-      return Boolean(window.matchMedia?.("(max-width: 767px)").matches);
-    } catch {
-      return false;
-    }
-  }
   function desktopTarget(aside) {
     const external = aside.querySelector("ul.external-links");
     if (external) return { parent: external.parentElement, before: external };
@@ -2761,11 +2754,8 @@
     return { parent: aside, before: null };
   }
   function findMountTarget() {
-    const phoneTools = document.querySelector(".phone-tools");
-    if (isNarrow() && phoneTools) return { parent: phoneTools, before: null };
     const aside = document.querySelector("aside.sidebar");
     if (aside) return desktopTarget(aside);
-    if (phoneTools) return { parent: phoneTools, before: null };
     const top = document.querySelector("#overview .top") || document.querySelector(".summary-frame .top");
     if (top?.parentElement) return { parent: top.parentElement, before: top.nextSibling };
     return null;
@@ -3384,9 +3374,6 @@
         target.parent.append(node);
       }
     }
-    const mediaQuery = window.matchMedia?.("(max-width: 767px)");
-    const onMediaChange = () => place();
-    mediaQuery?.addEventListener?.("change", onMediaChange);
     let watchTimer = null;
     const observer = new MutationObserver(() => {
       if (cancelled || watchTimer) return;
@@ -3404,7 +3391,6 @@
       const overview = document.querySelector("#overview");
       if (aside) roots.add(aside);
       if (overview) roots.add(overview);
-      for (const tools of document.querySelectorAll(".phone-tools")) roots.add(tools);
       if (!roots.size) roots.add(document.querySelector(".summary-frame") || document.body);
       for (const root2 of roots) observer.observe(root2, { childList: true, subtree: true });
     }
@@ -3424,7 +3410,6 @@
         for (const timer of timers) clearTimeout(timer);
         timers.length = 0;
         observer.disconnect();
-        mediaQuery?.removeEventListener?.("change", onMediaChange);
         document.removeEventListener("ogt:refresh", onRefresh);
         for (const section of document.querySelectorAll(`[${WATCH_ATTR}]`)) section.remove();
         watchFallback.replaceChildren();

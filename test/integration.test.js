@@ -239,20 +239,6 @@ test('reference-only links do not create a Watch Now fallback', async (t) => {
   assert.equal(document.querySelectorAll('[data-ogt-watch-now]').length, 0);
 });
 
-test('the compact panel moves into og\'s phone tools in the narrow layout', async (t) => {
-  const { window, document } = boot({
-    url: 'https://og.trakt.tv/shows/breaking-bad',
-    html: SHOW_HTML,
-    narrow: true,
-  });
-  t.after(() => window.close());
-  await wait(50);
-
-  const node = panel(document);
-  assert.equal(node.parentElement, document.querySelector('.phone-tools'), 'panel uses the visible phone tools');
-  assert.equal(document.querySelectorAll('#ogt-custom-links').length, 1, 'only one panel is mounted');
-});
-
 test('season and episode pages place the compact panel above native external links', async (t) => {
   for (const [url, html] of [
     ['https://og.trakt.tv/shows/breaking-bad/seasons/1', SEASON_PAGE_HTML],
@@ -301,30 +287,6 @@ test('the management dialog reopens without duplicating controls', async (t) => 
   assert.equal(manager().open, true);
   assert.ok(document.querySelector('.ogt-presets input[aria-label="IMDb"]'), 'preset form is rebuilt on reopen');
   assert.equal(document.querySelectorAll('.ogt-manager').length, 1);
-});
-
-test('the open management dialog survives a breakpoint change', async (t) => {
-  const b = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML, narrow: false });
-  t.after(() => b.window.close());
-  await wait(50);
-
-  chip(b.document, 'Add presets…').click();
-  const manager = b.document.getElementById('ogt-custom-links-manager');
-  assert.equal(manager.open, true);
-  assert.equal(manager.parentElement, b.document.body);
-
-  b.setNarrow(true);
-  await wait(100);
-  assert.equal(panel(b.document).parentElement, b.document.querySelector('.phone-tools'));
-  assert.equal(manager.open, true, 'moving the panel does not close the modal');
-  assert.ok(manager.querySelector('.ogt-presets input[aria-label="IMDb"]'));
-
-  b.setNarrow(false);
-  await wait(100);
-  assert.equal(panel(b.document).parentElement, b.document.querySelector('aside.sidebar'));
-  assert.equal(manager.open, true);
-  manager.querySelector('.ogt-manager-close').click();
-  assert.equal(manager.open, false);
 });
 
 test('season and episode pickers come from the season cards when a custom link needs them', async (t) => {

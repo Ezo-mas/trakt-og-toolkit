@@ -25,8 +25,7 @@ reload. Toggles are stored in GM storage, separately from og's settings.
 
 ### Custom links panel (title, season and episode pages)
 
-A compact strip in the summary sidebar, below the poster and directly above og's native external links. On narrow
-screens the same panel moves into og's phone tools. Management forms open in a modal so the sidebar stays compact.
+A compact strip in the summary sidebar, below the poster and directly above og's native external links. Management forms open in a modal so the sidebar stays compact.
 
 - **Custom links** — manage your `Label | URL` templates in the editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{tvdb}`, `{season}`, `{episode}`.
 - **Service logos** — links sit in the same 4-column grid as og's sidebar external links. Reference sites (IMDb, Letterboxd, Rotten Tomatoes…) are square logo tiles that take their brand colour on hover; watch and library services (Stremio, Plex, Jellyfin, Radarr…) are wide tiles with the logo and name. Logos are bundled [Simple Icons](https://simpleicons.org) marks (CC0), and TMDb, TVDB and JustWatch reuse the marks og already draws in its sidebar. Services without a logo (Debrid Media Manager, OpenSubtitles, Seerr) get a short word mark; custom or unknown labels stay readable text tiles. The service name is on the anchor, in a tooltip and on keyboard focus. No favicon or third-party request is made.

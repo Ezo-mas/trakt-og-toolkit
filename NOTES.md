@@ -26,7 +26,10 @@ Working notes and known issues. Newest first.
   `unsafe-eval`) on `/shows/cyberpunk-edgerunners` at 1280px: strip above `ul.external-links`, og-native IMDb/TMDb/
   Wikipedia marks, bundled logos for the rest, and three Your services tiles beside og's Netflix tiles. Headless
   Playwright is blocked by Cloudflare. Under 768px og shows a full-page “made for bigger screens” / “turn your tablet
-  sideways” splash in device emulation, so the phone-tools placement (the panel did move there) was not viewable.
+  sideways” splash in device emulation.
+- og is desktop-only for now (user, 2026-11-08), so the `.phone-tools` placement, its `matchMedia` listener and their
+  tests were removed; the panel always lives in `aside.sidebar`. The phone Watch Now dialog still exists in og's
+  markup, so it keeps the Your services section and its drift check.
 
 ## 2026-11-08: custom links below the poster and in Watch Now (feature 26)
 

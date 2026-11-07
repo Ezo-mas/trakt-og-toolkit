@@ -50,15 +50,6 @@ const SERVER_FIELDS = [
   { key: 'seerr', label: 'Seerr', placeholder: 'http://192.168.1.20:5055' },
 ];
 
-/** OG's summary sidebar disappears under 768px and its tools move into `.phone-tools`. */
-function isNarrow() {
-  try {
-    return Boolean(window.matchMedia?.('(max-width: 767px)').matches);
-  } catch {
-    return false;
-  }
-}
-
 function desktopTarget(aside) {
   // Native external links are the last tools in the sidebar; sit right above them, below the poster/Watch Now.
   const external = aside.querySelector('ul.external-links');
@@ -79,14 +70,10 @@ function desktopTarget(aside) {
   return { parent: aside, before: null };
 }
 
+/** OG is desktop-only (phones and portrait tablets get a splash), so the summary sidebar is the one home. */
 function findMountTarget() {
-  const phoneTools = document.querySelector('.phone-tools');
-  if (isNarrow() && phoneTools) return { parent: phoneTools, before: null };
-
   const aside = document.querySelector('aside.sidebar');
   if (aside) return desktopTarget(aside);
-
-  if (phoneTools) return { parent: phoneTools, before: null };
 
   const top = document.querySelector('#overview .top') || document.querySelector('.summary-frame .top');
   if (top?.parentElement) return { parent: top.parentElement, before: top.nextSibling };
@@ -789,7 +776,7 @@ function createPanel(meta, route) {
     renderLinks();
   }
 
-  /** Keep the one panel in OG's desktop sidebar, or its phone tools where the sidebar is hidden. */
+  /** Keep the one panel above og's sidebar external links when og re-renders around it. */
   function place() {
     const target = findMountTarget();
     if (!target) return;
@@ -802,9 +789,6 @@ function createPanel(meta, route) {
     }
   }
 
-  const mediaQuery = window.matchMedia?.('(max-width: 767px)');
-  const onMediaChange = () => place();
-  mediaQuery?.addEventListener?.('change', onMediaChange);
 
   let watchTimer = null;
   const observer = new MutationObserver(() => {
@@ -825,7 +809,6 @@ function createPanel(meta, route) {
     const overview = document.querySelector('#overview');
     if (aside) roots.add(aside);
     if (overview) roots.add(overview);
-    for (const tools of document.querySelectorAll('.phone-tools')) roots.add(tools);
     if (!roots.size) roots.add(document.querySelector('.summary-frame') || document.body);
     for (const root of roots) observer.observe(root, { childList: true, subtree: true });
   }
@@ -847,7 +830,6 @@ function createPanel(meta, route) {
       for (const timer of timers) clearTimeout(timer);
       timers.length = 0;
       observer.disconnect();
-      mediaQuery?.removeEventListener?.('change', onMediaChange);
       document.removeEventListener('ogt:refresh', onRefresh);
       for (const section of document.querySelectorAll(`[${WATCH_ATTR}]`)) section.remove();
       watchFallback.replaceChildren();
