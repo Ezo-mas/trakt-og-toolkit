@@ -511,29 +511,37 @@ export const CSS = String.raw`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  aspect-ratio: 2;
-  padding: 6px 10px;
+  gap: 6px;
+  min-inline-size: 0;
+  block-size: 56px;
+  padding: 6px 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--ogt-brand-tile, #888) 22%, #151515);
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
+  line-height: 1.15;
   transition: border-color 120ms ease, transform 120ms ease;
 }
 
 .ogt-watch-now-card .ogt-service-icon {
-  inline-size: 26px;
-  block-size: 26px;
+  inline-size: 24px;
+  block-size: 24px;
   font-size: 10px;
+}
+
+.ogt-watch-now-card .ogt-service-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
 }
 
 .ogt-watch-now-note {
   color: var(--ogt-muted, #9a9a9a);
-  font-size: 11px;
-  line-height: 1.2;
-  text-align: center;
+  font-size: 12px;
+  line-height: 15px;
 }
 
 .ogt-watch-now-link:hover,
@@ -584,7 +592,9 @@ export const CSS = String.raw`
 }
 
 .ogt-watch-now-section .ogt-watch-now-tiles {
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  /* OG's provider tiles: 118px columns, 16px/14px gaps, a 118x56 logo card. */
+  grid-template-columns: repeat(auto-fill, 118px);
+  gap: 16px 14px;
 }
 
 /* Management forms live in a modal so the narrow sidebar never squeezes them. */
