@@ -2,6 +2,15 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-07: native watchlist refresh after bulk credit changes
+
+- Bulk add and Undo now reuse `createNativeWatchlistRefresh().refresh`, as the individual watchlist shortcut
+  already does. OG rereads its own membership through ArrowDown; the picker stays closed and no native write is
+  sent. At most four native loads run at once. Confirmed additions also refresh if a later batch fails.
+- Refreshes follow the operation's page/auth guard, skip removed/reused rows and signed-out native sessions, and
+  stop scheduling work after navigation. The success notice/Undo appear after native reloads finish.
+- Built-bundle regression checks cover native membership after add and Undo, bounded loads and no picker clicks/popups.
+
 ## 2026-11-07: finish and review Watchlist all (PR 26)
 
 - Merged main and moved the bulk confirmation to the shared og-styled dialog. The page/auth epoch is captured

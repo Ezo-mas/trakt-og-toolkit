@@ -120,9 +120,8 @@ rows add the movie; show rows, including a guest credit for a single episode, ad
 row’s own link and toolkit account, hides when the row’s native list tooltip includes Watchlist, and appears
 for rows rendered as you browse. A **Watchlist all (N)** button beside the credits toolbar’s sort controls adds every
 currently shown row that is not already on the watchlist. It confirms once with the count, sends the rows’ slugs in
-batches, and reports how many were added, already there or not found. Added rows lose their shortcut. OG’s own controls
-are not refreshed for a whole credits page, so a reload is the fallback there. Confirmed batches stay marked if a later
-batch fails. Bulk **Undo** is offered when every successful title was newly added; mixed new/existing results have no
+batches, and reports how many were added, already there or not found. Added rows lose their shortcut. OG’s own list controls reload their membership automatically after bulk adds and
+Undo, using the same native refresh as the individual shortcut. Confirmed batches stay marked if a later batch fails. Bulk **Undo** is offered when every successful title was newly added; mixed new/existing results have no
 Undo because Trakt does not identify which titles were already there.
 
 Success shows **You added Spider-Man: Brand New Day to your watchlist.** (using the added title) in the matching

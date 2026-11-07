@@ -6055,6 +6055,8 @@
               scan();
             } });
             if (!active2() || result.cancelled) return;
+            await refreshEntries(result.succeededKeys, active2);
+            if (!active2()) return;
             const summary2 = `Watchlist: ${result.added} added, ${result.existing} already there, ${result.notFound} not found.`;
             const undoable = result.added > 0 && result.existing === 0 && result.succeededKeys.length === result.added;
             const succeeded = new Set(result.succeededKeys);
@@ -6063,6 +6065,8 @@
           } catch (error) {
             debugError(`${logLabel} bulk watchlist addition failed`, error);
             if (active2()) {
+              if (progress) await refreshEntries(progress.succeededKeys, active2);
+              if (!active2()) return;
               const completed = progress ? `Watchlist: ${progress.added} added, ${progress.existing} already there, ${progress.notFound} not found. ` : "";
               toast(completed + (error.status === 429 ? "Trakt rate limited this request; try again later." : "Remaining titles could not be confirmed; some may have been added. Try again."));
             }
@@ -6072,6 +6076,17 @@
               scan();
             }
           }
+        }
+        async function refreshEntries(keys, active2) {
+          const wanted = new Set(keys);
+          const pending = [...entries.values()].filter((entry) => wanted.has(entry.key));
+          await Promise.all(Array.from({ length: Math.min(4, pending.length) }, async () => {
+            while (pending.length && active2()) {
+              const entry = pending.shift();
+              if (readRoute(entry.host)?.key !== entry.key) continue;
+              await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
+            }
+          }));
         }
         async function undoAll(routes, active2) {
           if (bulkBusy || !active2()) return false;
@@ -6087,6 +6102,7 @@
               for (const route of batch) stateFor(route.key).added = false;
               routes.splice(0, batch.length);
               scan();
+              await refreshEntries(batch.map((route) => route.key), active2);
             }
             return true;
           } catch (error) {

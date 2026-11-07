@@ -402,8 +402,8 @@ Either way, add tests with season and episode fixtures, and update README.
 native list tooltip includes Watchlist or after an add. **Watchlist all (N)** sits beside the credits toolbar's sort
 controls; it counts the currently shown rows that still need adding, confirms once, and posts their slugs to
 `/sync/watchlist` in batches of 100. The notice reports added/already-there/not-found counts, added rows lose their
-shortcut, and not-found rows stay available. It reuses the shared shortcut state and does not refresh og's picker
-for every credit. Live `article.credit-row` markup was checked: the poster link names the movie/show and the row
+shortcut, and not-found rows stay available. It reuses the shared shortcut state and reloads native membership through the existing read-only picker path
+with at most four loads at once. Live `article.credit-row` markup was checked: the poster link names the movie/show and the row
 reuses the card-sized `ListControl`, with no native watchlist action. The captured page rendered all 211 credits at
 once; the feature still follows rows added later. Bulk Undo is available for wholly new additions; mixed
 new/existing responses have no Undo. Confirmed batches remain marked if a later batch fails.

@@ -247,3 +247,45 @@ test('bulk Undo retries only remaining removal batches after a failure', async t
   const last = JSON.parse(b.writes().at(-1).data);
   assert.equal(last.movies.length, 2, 'retry skips the 100 confirmed removals');
 });
+
+
+test('bulk add and Undo reload native credit controls without opening or clicking their pickers', async t => {
+  const b = boot(t); await wait();
+  b.document.body.insertAdjacentHTML('afterbegin', '<header class="top-nav"><div class="profile"></div></header>');
+  b.document.querySelector('section.year').insertAdjacentHTML('beforeend',
+    Array.from({ length: 5 }, (_, i) => personCreditRowHtml({ id: `native-${i}`, href: `/movies/native-${i}` })).join(''));
+  await wait();
+  let reads = 0, clicks = 0, popups = 0, loading = 0, peak = 0;
+  for (const control of b.document.querySelectorAll('article.credit-row .list-control')) {
+    const trigger = control.querySelector('button');
+    trigger.addEventListener('click', () => clicks++);
+    trigger.addEventListener('keydown', event => {
+      assert.equal(event.key, 'ArrowDown');
+      reads++;
+      peak = Math.max(peak, ++loading);
+      trigger.disabled = true;
+      setTimeout(() => {
+        const watchlisted = !b.writes().at(-1).url.endsWith('/remove');
+        b.document.getElementById(trigger.getAttribute('aria-describedby')).innerHTML = watchlisted
+          ? '<span class="listed-tip"><a href="/users/test/watchlist">Watchlist</a></span>' : 'Add to list';
+        const picker = b.document.getElementById(trigger.getAttribute('aria-controls'));
+        const before = new b.window.Event('beforetoggle', { cancelable: true });
+        Object.defineProperty(before, 'newState', { value: 'open' });
+        picker.dispatchEvent(before);
+        if (!before.defaultPrevented) popups++;
+        trigger.disabled = false;
+        loading--;
+      }, 5);
+    });
+  }
+  b.document.querySelector('.ogt-watchlist-bulk').click(); await wait(160);
+  assert.equal(reads, 7);
+  assert.ok(peak <= 4, 'native loads are bounded');
+  assert.equal(b.document.querySelectorAll('.listed-tip a').length, 7);
+  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait(160);
+  assert.equal(reads, 14);
+  assert.equal(b.document.querySelectorAll('.listed-tip a').length, 0);
+  assert.ok(b.buttons().every(button => !button.hidden));
+  assert.equal(clicks, 0, 'native quick-add clicks are never sent');
+  assert.equal(popups, 0, 'native picker stays closed');
+});

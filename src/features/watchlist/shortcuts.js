@@ -96,16 +96,19 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
             scan();
           } });
           if (!active() || result.cancelled) return;
+          await refreshEntries(result.succeededKeys, active);
+          if (!active()) return;
           const summary = `Watchlist: ${result.added} added, ${result.existing} already there, ${result.notFound} not found.`;
           // Mixed responses do not identify new vs existing items, so only wholly new additions can be undone.
           const undoable = result.added > 0 && result.existing === 0 && result.succeededKeys.length === result.added;
           const succeeded = new Set(result.succeededKeys);
           const routes = list.filter(entry => succeeded.has(entry.key)).map(entry => entry.route);
           void notifySuccess(summary, active, { undo: undoable ? () => undoAll(routes, active) : undefined });
-          // shortcut: bulk picker refresh costs one load per credit, reload until OG exposes a bulk refresh.
         } catch (error) {
           debugError(`${logLabel} bulk watchlist addition failed`, error);
           if (active()) {
+            if (progress) await refreshEntries(progress.succeededKeys, active);
+            if (!active()) return;
             const completed = progress ? `Watchlist: ${progress.added} added, ${progress.existing} already there, ${progress.notFound} not found. ` : '';
             toast(completed + (error.status === 429 ? 'Trakt rate limited this request; try again later.' :
               'Remaining titles could not be confirmed; some may have been added. Try again.'));
@@ -113,6 +116,18 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         } finally {
           if (!destroyed && epoch === session) { bulkBusy = false; scan(); }
         }
+      }
+      async function refreshEntries(keys, active) {
+        const wanted = new Set(keys);
+        const pending = [...entries.values()].filter(entry => wanted.has(entry.key));
+        // Reuse OG's read-only picker reload, with at most four native loads at once.
+        await Promise.all(Array.from({ length: Math.min(4, pending.length) }, async () => {
+          while (pending.length && active()) {
+            const entry = pending.shift();
+            if (readRoute(entry.host)?.key !== entry.key) continue;
+            await nativeRefresh.refresh(entry.control, entry.route, { active });
+          }
+        }));
       }
       async function undoAll(routes, active) {
         if (bulkBusy || !active()) return false;
@@ -129,6 +144,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
             for (const route of batch) stateFor(route.key).added = false;
             routes.splice(0, batch.length);
             scan();
+            await refreshEntries(batch.map(route => route.key), active);
           }
           return true;
         } catch (error) {
