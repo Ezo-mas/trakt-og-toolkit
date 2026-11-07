@@ -5613,6 +5613,29 @@
     if (!lookup || !Number.isSafeInteger(id) || id <= 0) throw new Error("Could not identify this title.");
     return { [lookup.type]: [{ ids: { trakt: id } }] };
   }
+  function watchlistBulkItems(routes) {
+    const items = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const route of Array.isArray(routes) ? routes : []) {
+      const lookup = watchlistLookup(route);
+      if (!lookup || lookup.type !== "movies" && lookup.type !== "shows") continue;
+      if (typeof route.id !== "string" || route.id.trim() === "") continue;
+      const slug = route.id.trim();
+      const key = typeof route.key === "string" && route.key ? route.key : `${lookup.type}:${slug}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({ key, type: lookup.type, slug });
+    }
+    return items;
+  }
+  function watchlistBulkBody(items) {
+    const body = {};
+    for (const item of Array.isArray(items) ? items : []) {
+      if (!item || item.type !== "movies" && item.type !== "shows" || typeof item.slug !== "string" || !item.slug) continue;
+      (body[item.type] ??= []).push({ ids: { slug: item.slug } });
+    }
+    return body;
+  }
   function readWatchlisted(anchor) {
     return [...anchor.querySelectorAll(".summary-action")].some((action) => /^listed on$/i.test(action.querySelector(".title")?.textContent.trim() ?? "") && /^watchlist(?:\s*\+|$)/i.test(action.querySelector(".detail")?.textContent.trim() ?? ""));
   }
@@ -5627,9 +5650,6 @@
     } catch {
       return null;
     }
-  }
-  function readCreditRoute(row) {
-    return row?.matches?.("article.credit-row") ? readCardRoute(row) : null;
   }
   function readCreditControl(row) {
     return row?.querySelector?.(".quick-icons .list-control.card, .quick-icons button.action.list") ?? null;
@@ -5648,6 +5668,7 @@
   }
 
   // src/features/watchlist/api.js
+  var BULK_BATCH = 100;
   function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn } = {}) {
     return {
       async add(route, { active: active2 = () => true } = {}) {
@@ -5670,6 +5691,43 @@
         }
         return { cancelled: false, title, body, undoable: Number.isSafeInteger(result?.added?.[lookup.type]) && result.added[lookup.type] > 0 };
       },
+      /** Report each confirmed batch so a later failure cannot erase completed work. */
+      async addMany(routes, { active: active2 = () => true, onProgress = () => {
+      } } = {}) {
+        if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
+        if (!active2()) return { cancelled: true };
+        const items = watchlistBulkItems(routes);
+        const progress = { cancelled: false, sent: 0, added: 0, existing: 0, notFound: 0, succeededKeys: [] };
+        for (let start2 = 0; start2 < items.length; start2 += BULK_BATCH) {
+          if (!active2() || !signedIn()) return { cancelled: true };
+          const batch = items.slice(start2, start2 + BULK_BATCH);
+          const result = await auth("POST", "/sync/watchlist", watchlistBulkBody(batch));
+          const confirmed = { added: 0, existing: 0, notFound: 0, succeededKeys: [] };
+          for (const type of ["movies", "shows"]) {
+            const sent = batch.filter((item) => item.type === type);
+            const added = result?.added?.[type] ?? 0;
+            const existing = result?.existing?.[type] ?? 0;
+            const missing = result?.not_found?.[type] ?? [];
+            if (!Number.isSafeInteger(added) || added < 0 || !Number.isSafeInteger(existing) || existing < 0 || !Array.isArray(missing) || added + existing + missing.length !== sent.length) {
+              throw new Error("Trakt did not confirm all watchlist additions; some titles may have been added.");
+            }
+            const missingSlugs = new Set(missing.map((item) => item?.ids?.slug));
+            if (missingSlugs.size === missing.length && [...missingSlugs].every((slug) => sent.some((item) => item.slug === slug))) {
+              confirmed.succeededKeys.push(...sent.filter((item) => !missingSlugs.has(item.slug)).map((item) => item.key));
+            }
+            confirmed.added += added;
+            confirmed.existing += existing;
+            confirmed.notFound += missing.length;
+          }
+          progress.sent += batch.length;
+          progress.added += confirmed.added;
+          progress.existing += confirmed.existing;
+          progress.notFound += confirmed.notFound;
+          progress.succeededKeys.push(...confirmed.succeededKeys);
+          onProgress({ ...progress, succeededKeys: [...progress.succeededKeys] });
+        }
+        return progress;
+      },
       /** Undo an addition with the exact body that was sent. */
       async remove(body, { active: active2 = () => true } = {}) {
         if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
@@ -5677,6 +5735,12 @@
         const result = await auth("POST", "/sync/watchlist/remove", body);
         if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
           throw new Error("Trakt could not find this title.");
+        }
+        for (const [type, items] of Object.entries(body)) {
+          const deleted = result?.deleted?.[type];
+          if (!Array.isArray(items) || !Number.isSafeInteger(deleted) || deleted < 0 || deleted > items.length) {
+            throw new Error("Trakt did not confirm a watchlist removal.");
+          }
         }
         return { cancelled: false };
       }
@@ -5904,7 +5968,7 @@
   };
 
   // src/features/watchlist/shortcuts.js
-  function createWatchlistShortcuts({ id, markerId, className, css: css3, match, logLabel, targets, readRoute }) {
+  function createWatchlistShortcuts({ id, markerId, className, css: css3, match, logLabel, targets, readRoute, bulk = null }) {
     return {
       id,
       match,
@@ -5916,7 +5980,8 @@
         const entries = /* @__PURE__ */ new Map();
         const states = /* @__PURE__ */ new Map();
         const nativeRefresh = createNativeWatchlistRefresh();
-        let destroyed = false, session = 0, scheduled = false;
+        let destroyed = false, session = 0, scheduled = false, bulkBusy = false, refreshRun = 0;
+        const bulkButton = bulk ? el("button", { type: "button", class: "ogt-watchlist-bulk", text: bulk.label }) : null;
         function stateFor(key) {
           if (!states.has(key)) states.set(key, {
             busy: false,
@@ -5933,10 +5998,120 @@
           entries.delete(entry.control);
         }
         function updateButton(entry, state) {
-          entry.button.hidden = state.added || state.wasWatchlisted;
-          entry.button.disabled = state.busy || state.undoing;
-          const busy = String(state.busy || state.undoing);
+          const hidden = state.added || state.wasWatchlisted;
+          if (entry.button.hidden !== hidden) entry.button.hidden = hidden;
+          entry.button.disabled = bulkBusy || state.busy || state.undoing;
+          const busy = String(bulkBusy || state.busy || state.undoing);
           if (entry.button.getAttribute("aria-busy") !== busy) entry.button.setAttribute("aria-busy", busy);
+        }
+        function bulkEntries() {
+          const unique = /* @__PURE__ */ new Map();
+          for (const entry of [...entries.values(), ...bulk?.targets?.() ?? []]) {
+            const state = stateFor(entry.key);
+            if (state.busy || state.undoing || state.added || state.wasWatchlisted) continue;
+            if (!entry.host.isConnected || entry.button && !entry.button.isConnected) continue;
+            if (entry.control && readCardWatchlisted(entry.control)) continue;
+            if (entry.host.closest("[hidden]") || entry.host.checkVisibility?.() === false) continue;
+            if (!unique.has(entry.key)) unique.set(entry.key, entry);
+          }
+          return [...unique.values()];
+        }
+        function syncBulk() {
+          if (!bulkButton) return;
+          const control = bulk.target?.();
+          if (control && bulkButton.parentElement !== control) control.append(bulkButton);
+          const total = bulkEntries().length;
+          const label = total ? `${bulk.label} (${total})` : bulk.label;
+          if (bulkButton.textContent !== label) bulkButton.textContent = label;
+          bulkButton.disabled = bulkBusy || total === 0;
+          bulkButton.setAttribute("aria-busy", String(bulkBusy));
+          bulkButton.title = total ? `Add ${total} title${total === 1 ? "" : "s"} to your watchlist` : "No shown credits need adding to your watchlist";
+        }
+        async function addAll() {
+          if (bulkBusy) return;
+          if (!isSignedIn()) {
+            toast("Sign in to Trakt through the toolkit menu first.");
+            return;
+          }
+          const list = bulkEntries();
+          if (!list.length) return;
+          const epoch = session;
+          const pagePath = location.pathname;
+          const active2 = () => !destroyed && session === epoch && location.pathname === pagePath;
+          let progress, refreshKeys = [];
+          bulkBusy = true;
+          scan();
+          try {
+            if (!await confirmDialog(
+              `Add ${list.length} title${list.length === 1 ? "" : "s"} to your watchlist?`,
+              { title: "Watchlist all", ok: "Add" }
+            ) || !active2()) return;
+            const result = await watchlistApi.addMany(list.map((entry) => entry.route), { active: active2, onProgress: (result2) => {
+              if (!active2()) return;
+              progress = result2;
+              for (const key of result2.succeededKeys) stateFor(key).added = true;
+              scan();
+            } });
+            if (!active2() || result.cancelled) return;
+            refreshKeys = result.succeededKeys;
+            const summary2 = `Watchlist: ${result.added} added, ${result.existing} already there, ${result.notFound} not found.`;
+            const undoable = result.added > 0 && result.existing === 0 && result.succeededKeys.length === result.added;
+            const succeeded = new Set(result.succeededKeys);
+            const routes = list.filter((entry) => succeeded.has(entry.key)).map((entry) => entry.route);
+            void notifySuccess(summary2, active2, { undo: undoable ? () => undoAll(routes, active2) : void 0 });
+          } catch (error) {
+            debugError(`${logLabel} bulk watchlist addition failed`, error);
+            if (active2()) {
+              if (progress) refreshKeys = progress.succeededKeys;
+              const completed = progress ? `Watchlist: ${progress.added} added, ${progress.existing} already there, ${progress.notFound} not found. ` : "";
+              toast(completed + (error.status === 429 ? "Trakt rate limited this request; try again later." : "Remaining titles could not be confirmed; some may have been added. Try again."));
+            }
+          } finally {
+            if (!destroyed && epoch === session) {
+              bulkBusy = false;
+              scan();
+            }
+          }
+          if (refreshKeys.length && active2()) await refreshEntries(refreshKeys, active2);
+        }
+        async function refreshEntries(keys, active2) {
+          const run = ++refreshRun;
+          const wanted = new Set(keys);
+          const pending = [...entries.values(), ...bulk?.targets?.() ?? []].filter((entry) => wanted.has(entry.key) && entry.control);
+          await Promise.all(Array.from({ length: Math.min(4, pending.length) }, async () => {
+            while (pending.length && active2() && run === refreshRun) {
+              const entry = pending.shift();
+              if (readRoute(entry.host)?.key !== entry.key) continue;
+              await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
+            }
+          }));
+        }
+        async function undoAll(routes, active2) {
+          if (bulkBusy || !active2()) return false;
+          const epoch = session;
+          bulkBusy = true;
+          scan();
+          try {
+            while (routes.length) {
+              if (!active2()) return false;
+              const batch = routes.slice(0, 100);
+              const result = await watchlistApi.remove(watchlistBulkBody(watchlistBulkItems(batch)), { active: active2 });
+              if (result.cancelled || !active2()) return false;
+              for (const route of batch) stateFor(route.key).added = false;
+              routes.splice(0, batch.length);
+              scan();
+              await refreshEntries(batch.map((route) => route.key), active2);
+            }
+            return true;
+          } catch (error) {
+            failed(error, "undo", active2);
+            return false;
+          } finally {
+            if (!destroyed && epoch === session) {
+              bulkBusy = false;
+              scan();
+            }
+          }
         }
         function activeFor(entry) {
           const epoch = session;
@@ -5951,7 +6126,7 @@
           event.preventDefault();
           event.stopPropagation();
           const state = stateFor(entry.key);
-          if (state.busy || state.undoing || entry.button.hidden) return;
+          if (bulkBusy || state.busy || state.undoing || entry.button.hidden) return;
           if (!isSignedIn()) {
             toast("Sign in to Trakt through the toolkit menu first.");
             return;
@@ -5983,7 +6158,7 @@
         }
         async function undo(entry, body) {
           const state = stateFor(entry.key);
-          if (state.undoing || !body) return false;
+          if (bulkBusy || state.busy || state.undoing || !body) return false;
           if (!isSignedIn()) {
             toast("Sign in to Trakt through the toolkit menu first.");
             return false;
@@ -6034,7 +6209,8 @@
             entries.set(control, entry);
           }
           const native = /* @__PURE__ */ new Map();
-          for (const entry of entries.values()) {
+          for (const entry of [...entries.values(), ...bulk?.targets?.() ?? []]) {
+            if (!entry.control) continue;
             native.set(entry.key, Boolean(native.get(entry.key) || readCardWatchlisted(entry.control)));
           }
           for (const [key, watchlisted] of native) {
@@ -6043,6 +6219,7 @@
             state.wasWatchlisted = watchlisted;
           }
           for (const entry of entries.values()) updateButton(entry, stateFor(entry.key));
+          syncBulk();
         }
         function schedule() {
           if (scheduled || destroyed) return;
@@ -6054,17 +6231,19 @@
         }
         function authChanged() {
           session++;
+          bulkBusy = false;
           nativeRefresh.destroy();
           states.clear();
           scan();
         }
+        if (bulkButton) bulkButton.addEventListener("click", addAll);
         const observer = new MutationObserver(schedule);
         observer.observe(document.body, {
           childList: true,
           subtree: true,
           characterData: true,
           attributes: true,
-          attributeFilter: ["href", "aria-describedby"]
+          attributeFilter: ["href", "aria-describedby", "hidden"]
         });
         document.addEventListener("ogt:authchange", authChanged);
         scan();
@@ -6075,6 +6254,10 @@
           document.removeEventListener("ogt:authchange", authChanged);
           for (const entry of entries.values()) remove(entry);
           states.clear();
+          if (bulkButton) {
+            bulkButton.removeEventListener("click", addAll);
+            bulkButton.remove();
+          }
           node.remove();
         } };
       }
@@ -6121,7 +6304,15 @@
     logLabel: "credit",
     match: (route) => route?.name === "person",
     targets: () => [...document.querySelectorAll("article.credit-row")].map((host) => ({ host, control: readCreditControl(host) })),
-    readRoute: readCreditRoute,
+    readRoute: readCardRoute,
+    bulk: {
+      label: "Watchlist all",
+      target: () => document.querySelector("#credits .toolbar .controls"),
+      targets: () => [...document.querySelectorAll("#credits article.poster-card")].map((host) => {
+        const route = readCardRoute(host);
+        return { host, control: readCreditControl(host), route, key: route?.key };
+      }).filter((entry) => entry.route)
+    },
     css: `
     .ogt-watchlist-credit { display: grid; place-items: center; flex: 0 0 auto;
       inline-size: var(--action-width, 32px); block-size: var(--bar, 32px); min-block-size: 0;
@@ -6133,6 +6324,34 @@
       background: var(--brand-fifth, #2b678f); color: var(--color-card-text, white); }
     .ogt-watchlist-credit:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
     .ogt-watchlist-credit:disabled { opacity: .6; cursor: default; }
+    .ogt-watchlist-bulk {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      block-size: 34px;
+      padding: 0 16px;
+      margin-inline-start: 8px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--brand-first, #ed1c24);
+      color: var(--color-card-text, white);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .ogt-watchlist-bulk:hover:not(:disabled) {
+      background: var(--brand-second, #c41920);
+      color: var(--color-card-text, white);
+    }
+    .ogt-watchlist-bulk:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+    .ogt-watchlist-bulk[hidden] { display: none; }
+    .ogt-watchlist-bulk:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
   `
   });
 

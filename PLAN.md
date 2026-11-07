@@ -28,7 +28,7 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 14 | Add to library on poster cards | OAuth | dropped: cards too tight; watchlist fits cards better |
 | 15 | Season chart: remove the More button | — | done |
 | 16 | Custom links on season and episode pages | client ID optional | done |
-| 17 | Watchlist buttons on a person's credits | OAuth | per-row shortcut done; watchlist-all not built |
+| 17 | Watchlist buttons on a person's credits | OAuth | done; per-row shortcuts and Watchlist all |
 | 18 | `npm run drift`: cover features 12–13 and og's native modules | — | done |
 | 19 | Undo on success notices | OAuth | done |
 | 20 | Turn features on and off from the menu | — | done |
@@ -398,10 +398,15 @@ Either way, add tests with season and episode fixtures, and update README.
 
 ## 17. Watchlist buttons on a person's credits
 
-**Status:** the per-row shortcut is done (2026-11-04) as its own **Watchlist credit shortcuts** toggle. The bulk
-**Watchlist all** action is not built. Live `article.credit-row` markup at the current og commit was checked:
-the poster link names the movie/show and the row reuses the card-sized `ListControl`, with no native watchlist
-action. The captured page rendered all 211 credits at once; the feature still follows rows added later.
+**Status:** done (2026-11-05) as its own **Watchlist credit shortcuts** toggle. Per-row shortcuts hide when the
+native list tooltip includes Watchlist or after an add. **Watchlist all (N)** sits beside the credits toolbar's sort
+controls; it counts the currently shown rows that still need adding, confirms once, and posts their slugs to
+`/sync/watchlist` in batches of 100. The notice reports added/already-there/not-found counts, added rows lose their
+shortcut, and not-found rows stay available. It reuses the shared shortcut state and reloads native membership through the existing read-only picker path
+with at most four loads at once. Live `article.credit-row` markup was checked: the poster link names the movie/show and the row
+reuses the card-sized `ListControl`, with no native watchlist action. The captured page rendered all 211 credits at
+once; the feature still follows rows added later. Bulk Undo is available for wholly new additions; mixed
+new/existing responses have no Undo. Confirmed batches remain marked if a later batch fails.
 
 **Goal:** a person's page (`/people/:id`) lists their credits by year, each row with og's own action strip (watched,
 lists, play, rating). Like cards, the lists icon opens the picker, so adding to the watchlist takes several clicks.
