@@ -517,7 +517,8 @@ and cannot be templated.
 - **TMDb:** movie, show, season, episode and search fallback.
 - **TVDB:** show via `dereferrer/series/{tvdb}` and search fallback.
 - **Letterboxd:** movie via IMDb or TMDb and search fallback.
-- **Rotten Tomatoes, Wikipedia, JustWatch, MyAnimeList:** search-only presets.
+- **Rotten Tomatoes:** reuse OG’s direct title link when available, with search as fallback.
+- **Wikipedia, JustWatch, MyAnimeList:** search-only presets.
 - **Debrid Media Manager:** movie, show and season routes by IMDb id; signed-out visits redirect to `/start`.
 - **MDBList:** exact movies/shows through `/movie/{imdb}` and `/show/{imdb}` (redirects to canonical slugs);
   search fallbacks use `/movies/?q_title=` and `/shows/?q_title=`.

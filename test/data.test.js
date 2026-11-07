@@ -182,3 +182,15 @@ test('custom link validation rejects arbitrary placeholder templates', () => {
   }
   assert.deepEqual(validateCustomLinks([{ label: 'Emby', url: '{emby}/web/index.html' }]), []);
 });
+
+
+test('Rotten Tomatoes reader rejects lookalike domains, searches and the wrong page kind', t => {
+  const window = new Window({ url: 'https://og.trakt.tv/movies/test' });
+  t.after(() => window.close());
+  for (const href of ['https://evilrottentomatoes.com/m/test', 'https://rottentomatoes.com.evil.test/m/test',
+    'https://www.rottentomatoes.com/search?search=test', 'https://www.rottentomatoes.com/tv/test',
+    'https://user:secret@www.rottentomatoes.com/m/test']) {
+    window.document.body.innerHTML = `<a href="${href}">Link</a>`;
+    assert.equal(readTitleData(window.document, parseRoute('/movies/test')).rottenTomatoesUrl, null, href);
+  }
+});

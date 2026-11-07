@@ -212,6 +212,7 @@ export function presetTemplateUrls(url, kind) {
 export function resolvePresetUrl(url, vars, kind) {
   const preset = PRESETS.find((entry) => entry.url === url);
   if (preset && !preset.kinds.includes(kind)) return null;
+  if (preset?.label === 'Rotten Tomatoes' && vars.rottenTomatoesUrl) return vars.rottenTomatoesUrl;
   if (!preset?.deep) return url;
   const deep = preset.deep.find(
     (entry) => entry.kinds.includes(kind) && missingPlaceholders(entry.url, vars).length === 0,

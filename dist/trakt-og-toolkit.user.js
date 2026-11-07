@@ -1285,7 +1285,8 @@
         tmdb: firstMatch(doc, 'a[href*="themoviedb.org/tv/"]', TMDB_RE, (match) => Number(match[2])),
         imdb: route.name === "season" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null,
         episodeImdb: route.name === "episode" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', IMDB_RE, (match) => match[1]) : null,
-        tvdb: null
+        tvdb: null,
+        rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind)
       };
     }
     const heading = doc.querySelector(".summary-title h1") || doc.querySelector("h1");
@@ -1328,8 +1329,20 @@
       tmdb,
       imdb,
       episodeImdb: null,
+      rottenTomatoesUrl: readRottenTomatoesUrl(doc, kind),
       tvdb
     };
+  }
+  function readRottenTomatoesUrl(doc, kind) {
+    const path = kind === "movie" ? /^\/m\/[a-z0-9_-]+\/?$/i : /^\/tv\/[a-z0-9_-]+(?:\/s\d+(?:\/e\d+)?)?\/?$/i;
+    for (const link of doc.querySelectorAll('a[href*="rottentomatoes.com/"]')) {
+      try {
+        const url = new URL(link.getAttribute("href"));
+        if (url.protocol === "https:" && ["www.rottentomatoes.com", "rottentomatoes.com"].includes(url.hostname) && !url.username && !url.password && !url.port && path.test(url.pathname)) return url.origin + url.pathname;
+      } catch {
+      }
+    }
+    return null;
   }
   function headingText(heading) {
     if (!heading) return "";
@@ -1406,6 +1419,7 @@
       episodeimdb: meta.episodeImdb,
       episodeimdbnum: imdbNumber(meta.episodeImdb),
       tvdb: meta.tvdb,
+      rottenTomatoesUrl: meta.rottenTomatoesUrl,
       jellyfin: servers.jellyfin || null,
       emby: servers.emby || null,
       radarr: servers.radarr || null,
@@ -1656,6 +1670,7 @@
   function resolvePresetUrl(url, vars, kind) {
     const preset = PRESETS.find((entry) => entry.url === url);
     if (preset && !preset.kinds.includes(kind)) return null;
+    if (preset?.label === "Rotten Tomatoes" && vars.rottenTomatoesUrl) return vars.rottenTomatoesUrl;
     if (!preset?.deep) return url;
     const deep = preset.deep.find(
       (entry) => entry.kinds.includes(kind) && missingPlaceholders(entry.url, vars).length === 0

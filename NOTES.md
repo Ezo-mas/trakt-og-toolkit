@@ -2,6 +2,17 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-07: Rotten Tomatoes native title URLs
+
+- The Rotten Tomatoes preset now reuses the title URL already rendered by OG, falling back to its stored search
+  template when missing. Only HTTPS links on the exact Rotten Tomatoes host and the current movie/show path type
+  are accepted; search links, unrelated domains, credentials and nonstandard ports are ignored. No slug guessing or
+  extra lookup is involved, and user-edited URLs remain untouched.
+- Metacritic's supplied movie, season and episode URLs resolve to direct pages. Its preset remains a search:
+  the site uses its own title/episode slugs, which cannot reliably be reconstructed from the ids currently available.
+- Built-bundle tests cover direct movie/show/season URLs, search fallbacks and refreshes; reader checks cover
+  lookalike domains, search URLs, wrong kinds and credentials.
+
 ## 2026-11-07: PR 31 review fixes and direct links
 
 - Preset kind restrictions now apply when resolving saved links, not just in the add checklist. Radarr/Letterboxd

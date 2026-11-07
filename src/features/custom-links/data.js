@@ -34,6 +34,7 @@ export function readTitleData(doc, route) {
         ? firstMatch(doc, 'a[href*="imdb.com/title/"]', IMDB_RE, (match) => match[1])
         : null,
       tvdb: null,
+      rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind),
     };
   }
 
@@ -86,8 +87,22 @@ export function readTitleData(doc, route) {
     tmdb,
     imdb,
     episodeImdb: null,
+    rottenTomatoesUrl: readRottenTomatoesUrl(doc, kind),
     tvdb,
   };
+}
+
+/** Use OG's title link; Rotten Tomatoes slugs cannot be derived from Trakt/IMDb ids. */
+function readRottenTomatoesUrl(doc, kind) {
+  const path = kind === 'movie' ? /^\/m\/[a-z0-9_-]+\/?$/i : /^\/tv\/[a-z0-9_-]+(?:\/s\d+(?:\/e\d+)?)?\/?$/i;
+  for (const link of doc.querySelectorAll('a[href*="rottentomatoes.com/"]')) {
+    try {
+      const url = new URL(link.getAttribute('href'));
+      if (url.protocol === 'https:' && ['www.rottentomatoes.com', 'rottentomatoes.com'].includes(url.hostname) &&
+        !url.username && !url.password && !url.port && path.test(url.pathname)) return url.origin + url.pathname;
+    } catch { /* Ignore malformed external links. */ }
+  }
+  return null;
 }
 
 /**
@@ -194,6 +209,7 @@ export function templateVars(meta, selection = {}, servers = {}) {
     episodeimdb: meta.episodeImdb,
     episodeimdbnum: imdbNumber(meta.episodeImdb),
     tvdb: meta.tvdb,
+    rottenTomatoesUrl: meta.rottenTomatoesUrl,
     jellyfin: servers.jellyfin || null,
     emby: servers.emby || null,
     radarr: servers.radarr || null,

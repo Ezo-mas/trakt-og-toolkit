@@ -991,3 +991,26 @@ test('IMDb episode preset uses the episode id without waiting for a show lookup'
   await wait(50);
   assert.equal(chip(b.document, 'IMDb').getAttribute('href'), 'https://www.imdb.com/title/tt0959621/');
 });
+
+
+test('Rotten Tomatoes uses OG’s exact title URL and keeps search when it is missing', async t => {
+  const preset = { label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' };
+  for (const [kind, html, route, href] of [
+    ['movie', MOVIE_HTML, '/movies/the-dark-2005', 'https://www.rottentomatoes.com/m/the_dark'],
+    ['show', SHOW_HTML, '/shows/breaking-bad', 'https://www.rottentomatoes.com/tv/breaking_bad'],
+    ['show', SEASON_PAGE_HTML, '/shows/breaking-bad/seasons/1', 'https://www.rottentomatoes.com/tv/breaking_bad/s01'],
+  ]) {
+    for (const available of [true, false]) {
+      const native = available ? `<a href="${href}?tracking=og">Rotten Tomatoes</a>` : '';
+      const b = boot({ url: `https://og.trakt.tv${route}`, html: html + native,
+        storage: { 'watch.customLinks': [preset] } });
+      t.after(() => b.window.close());
+      await wait(50);
+      const link = chip(b.document, 'Rotten Tomatoes');
+      assert.equal(link.getAttribute('href'), available ? href :
+        `https://www.rottentomatoes.com/search?search=${kind === 'movie' ? 'The%20Dark' : 'Breaking%20Bad'}`);
+      b.document.dispatchEvent(new b.window.CustomEvent('ogt:refresh'));
+      assert.equal(chip(b.document, 'Rotten Tomatoes').getAttribute('href'), link.getAttribute('href'));
+    }
+  }
+});
