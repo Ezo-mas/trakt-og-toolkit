@@ -5983,8 +5983,8 @@
         const entries = /* @__PURE__ */ new Map();
         const states = /* @__PURE__ */ new Map();
         const nativeRefresh = createNativeWatchlistRefresh();
-        let destroyed = false, session = 0, scheduled = false, bulkBusy = false;
-        const bulkButton = bulk ? el("button", { type: "button", class: "ogt-chip ogt-watchlist-bulk", text: bulk.label }) : null;
+        let destroyed = false, session = 0, scheduled = false, bulkBusy = false, refreshRun = 0;
+        const bulkButton = bulk ? el("button", { type: "button", class: "ogt-watchlist-bulk", text: bulk.label }) : null;
         function stateFor(key) {
           if (!states.has(key)) states.set(key, {
             busy: false,
@@ -6022,6 +6022,8 @@
           if (!bulkButton) return;
           const control = bulk.target?.();
           if (control && bulkButton.parentElement !== control) control.append(bulkButton);
+          const empty = !bulkBusy && !entries.size;
+          if (bulkButton.hidden !== empty) bulkButton.hidden = empty;
           const total = bulkEntries().length;
           const label = total ? `${bulk.label} (${total})` : bulk.label;
           if (bulkButton.textContent !== label) bulkButton.textContent = label;
@@ -6040,7 +6042,7 @@
           const epoch = session;
           const pagePath = location.pathname;
           const active2 = () => !destroyed && session === epoch && location.pathname === pagePath;
-          let progress;
+          let progress, refreshKeys = [];
           bulkBusy = true;
           scan();
           try {
@@ -6055,8 +6057,7 @@
               scan();
             } });
             if (!active2() || result.cancelled) return;
-            await refreshEntries(result.succeededKeys, active2);
-            if (!active2()) return;
+            refreshKeys = result.succeededKeys;
             const summary2 = `Watchlist: ${result.added} added, ${result.existing} already there, ${result.notFound} not found.`;
             const undoable = result.added > 0 && result.existing === 0 && result.succeededKeys.length === result.added;
             const succeeded = new Set(result.succeededKeys);
@@ -6065,8 +6066,7 @@
           } catch (error) {
             debugError(`${logLabel} bulk watchlist addition failed`, error);
             if (active2()) {
-              if (progress) await refreshEntries(progress.succeededKeys, active2);
-              if (!active2()) return;
+              if (progress) refreshKeys = progress.succeededKeys;
               const completed = progress ? `Watchlist: ${progress.added} added, ${progress.existing} already there, ${progress.notFound} not found. ` : "";
               toast(completed + (error.status === 429 ? "Trakt rate limited this request; try again later." : "Remaining titles could not be confirmed; some may have been added. Try again."));
             }
@@ -6076,12 +6076,14 @@
               scan();
             }
           }
+          if (refreshKeys.length && active2()) await refreshEntries(refreshKeys, active2);
         }
         async function refreshEntries(keys, active2) {
+          const run = ++refreshRun;
           const wanted = new Set(keys);
           const pending = [...entries.values()].filter((entry) => wanted.has(entry.key));
           await Promise.all(Array.from({ length: Math.min(4, pending.length) }, async () => {
-            while (pending.length && active2()) {
+            while (pending.length && active2() && run === refreshRun) {
               const entry = pending.shift();
               if (readRoute(entry.host)?.key !== entry.key) continue;
               await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
@@ -6325,14 +6327,15 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 16px;
+      block-size: 34px;
+      padding: 0 16px;
       margin-inline-start: 8px;
       border: 0;
       border-radius: 8px;
       background: var(--brand-first, #ed1c24);
       color: var(--color-card-text, white);
-      font-family: var(--font-headings, -apple-system, system-ui, sans-serif);
-      font-size: 13px;
+      font-family: inherit;
+      font-size: 14px;
       font-weight: 600;
       line-height: 1;
       cursor: pointer;
@@ -6340,7 +6343,10 @@
     }
     .ogt-watchlist-bulk:hover:not(:disabled) {
       background: var(--brand-second, #c41920);
+      color: var(--color-card-text, white);
     }
+    .ogt-watchlist-bulk:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+    .ogt-watchlist-bulk[hidden] { display: none; }
     .ogt-watchlist-bulk:disabled {
       opacity: 0.6;
       cursor: not-allowed;

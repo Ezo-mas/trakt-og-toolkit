@@ -31,8 +31,8 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       const entries = new Map();
       const states = new Map();
       const nativeRefresh = createNativeWatchlistRefresh();
-      let destroyed = false, session = 0, scheduled = false, bulkBusy = false;
-      const bulkButton = bulk ? el('button', { type: 'button', class: 'ogt-chip ogt-watchlist-bulk', text: bulk.label }) : null;
+      let destroyed = false, session = 0, scheduled = false, bulkBusy = false, refreshRun = 0;
+      const bulkButton = bulk ? el('button', { type: 'button', class: 'ogt-watchlist-bulk', text: bulk.label }) : null;
 
       function stateFor(key) {
         if (!states.has(key)) states.set(key, {
@@ -67,6 +67,9 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         if (!bulkButton) return;
         const control = bulk.target?.();
         if (control && bulkButton.parentElement !== control) control.append(bulkButton);
+        // OG's grid view has no credit rows (and no row shortcuts); a disabled button there would mislead.
+        const empty = !bulkBusy && !entries.size;
+        if (bulkButton.hidden !== empty) bulkButton.hidden = empty;
         const total = bulkEntries().length;
         const label = total ? `${bulk.label} (${total})` : bulk.label;
         if (bulkButton.textContent !== label) bulkButton.textContent = label;
@@ -83,7 +86,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         const epoch = session;
         const pagePath = location.pathname;
         const active = () => !destroyed && session === epoch && location.pathname === pagePath;
-        let progress;
+        let progress, refreshKeys = [];
         bulkBusy = true;
         scan();
         try {
@@ -96,8 +99,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
             scan();
           } });
           if (!active() || result.cancelled) return;
-          await refreshEntries(result.succeededKeys, active);
-          if (!active()) return;
+          refreshKeys = result.succeededKeys;
           const summary = `Watchlist: ${result.added} added, ${result.existing} already there, ${result.notFound} not found.`;
           // Mixed responses do not identify new vs existing items, so only wholly new additions can be undone.
           const undoable = result.added > 0 && result.existing === 0 && result.succeededKeys.length === result.added;
@@ -107,8 +109,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         } catch (error) {
           debugError(`${logLabel} bulk watchlist addition failed`, error);
           if (active()) {
-            if (progress) await refreshEntries(progress.succeededKeys, active);
-            if (!active()) return;
+            if (progress) refreshKeys = progress.succeededKeys;
             const completed = progress ? `Watchlist: ${progress.added} added, ${progress.existing} already there, ${progress.notFound} not found. ` : '';
             toast(completed + (error.status === 429 ? 'Trakt rate limited this request; try again later.' :
               'Remaining titles could not be confirmed; some may have been added. Try again.'));
@@ -116,13 +117,17 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         } finally {
           if (!destroyed && epoch === session) { bulkBusy = false; scan(); }
         }
+        // Native reloads can take a while on a large page; the notice and Undo must not wait for them.
+        if (refreshKeys.length && active()) await refreshEntries(refreshKeys, active);
       }
+      /** A newer refresh (e.g. Undo's) supersedes the queue of an older one. */
       async function refreshEntries(keys, active) {
+        const run = ++refreshRun;
         const wanted = new Set(keys);
         const pending = [...entries.values()].filter(entry => wanted.has(entry.key));
         // Reuse OG's read-only picker reload, with at most four native loads at once.
         await Promise.all(Array.from({ length: Math.min(4, pending.length) }, async () => {
-          while (pending.length && active()) {
+          while (pending.length && active() && run === refreshRun) {
             const entry = pending.shift();
             if (readRoute(entry.host)?.key !== entry.key) continue;
             await nativeRefresh.refresh(entry.control, entry.route, { active });

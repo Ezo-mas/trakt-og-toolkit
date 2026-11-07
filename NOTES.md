@@ -2,13 +2,24 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-07: Watchlist all review fixes (PR 26)
+
+- The bulk notice, Undo and the unlocked rows no longer wait for native reloads: on a 200-credit page those are
+  ~200 sequential-ish OG picker loads. Refreshes now run after the operation finishes, and a newer refresh (Undo's)
+  stops an older queue so the two do not interleave.
+- OG's grid view (`.view-toggle`) renders poster cards, not `article.credit-row`, so the row shortcuts don't appear
+  there and the bulk button now hides instead of showing a disabled "already on your watchlist" state.
+  The Department filter re-renders rows (checked live on `/people/bryan-cranston`), so the count follows it.
+- The button drops `.ogt-chip` (its hover recoloured the text with a panel-only variable) and matches the
+  34px height and font of OG's toolbar triggers.
+
 ## 2026-11-07: native watchlist refresh after bulk credit changes
 
 - Bulk add and Undo now reuse `createNativeWatchlistRefresh().refresh`, as the individual watchlist shortcut
   already does. OG rereads its own membership through ArrowDown; the picker stays closed and no native write is
   sent. At most four native loads run at once. Confirmed additions also refresh if a later batch fails.
 - Refreshes follow the operation's page/auth guard, skip removed/reused rows and signed-out native sessions, and
-  stop scheduling work after navigation. The success notice/Undo appear after native reloads finish.
+  stop scheduling work after navigation. The success notice/Undo originally appeared after native reloads finished (changed in the review fixes above).
 - Built-bundle regression checks cover native membership after add and Undo, bounded loads and no picker clicks/popups.
 
 ## 2026-11-07: finish and review Watchlist all (PR 26)

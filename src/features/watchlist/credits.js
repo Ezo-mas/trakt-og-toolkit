@@ -29,14 +29,15 @@ export const watchlistCredits = createWatchlistShortcuts({
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 16px;
+      block-size: 34px;
+      padding: 0 16px;
       margin-inline-start: 8px;
       border: 0;
       border-radius: 8px;
       background: var(--brand-first, #ed1c24);
       color: var(--color-card-text, white);
-      font-family: var(--font-headings, -apple-system, system-ui, sans-serif);
-      font-size: 13px;
+      font-family: inherit;
+      font-size: 14px;
       font-weight: 600;
       line-height: 1;
       cursor: pointer;
@@ -44,7 +45,10 @@ export const watchlistCredits = createWatchlistShortcuts({
     }
     .ogt-watchlist-bulk:hover:not(:disabled) {
       background: var(--brand-second, #c41920);
+      color: var(--color-card-text, white);
     }
+    .ogt-watchlist-bulk:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+    .ogt-watchlist-bulk[hidden] { display: none; }
     .ogt-watchlist-bulk:disabled {
       opacity: 0.6;
       cursor: not-allowed;

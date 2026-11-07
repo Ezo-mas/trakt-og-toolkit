@@ -289,3 +289,16 @@ test('bulk add and Undo reload native credit controls without opening or clickin
   assert.equal(clicks, 0, 'native quick-add clicks are never sent');
   assert.equal(popups, 0, 'native picker stays closed');
 });
+
+test('Watchlist all hides when the credits show no rows (OG grid view)', async t => {
+  const b = boot(t); await wait();
+  const bulk = b.document.querySelector('.ogt-watchlist-bulk');
+  assert.equal(bulk.hidden, false);
+  const rows = [...b.document.querySelectorAll('article.credit-row')];
+  for (const row of rows) row.remove();
+  await wait();
+  assert.equal(bulk.hidden, true, 'no disabled button claiming every credit is on the watchlist');
+  b.document.querySelector('section.year').append(...rows); await wait();
+  assert.equal(bulk.hidden, false);
+  assert.equal(bulk.textContent, 'Watchlist all (2)');
+});
