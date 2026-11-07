@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
+import { answerDialogs } from './dialogs.js';
 import { MOVIE_HTML, PLAYBACK_EPISODE_HTML, PLAYBACK_PROGRESS_HTML } from './fixtures.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
@@ -16,7 +17,7 @@ function boot(t, { path = '/users/tester/progress', html = PLAYBACK_PROGRESS_HTM
   const window = new Window({ url: `https://og.trakt.tv${path}` });
   t.after(() => window.close());
   const { document } = window;
-  const store = new Map(); const calls = []; const confirmations = []; const prompts = []; const scrobbles = []; const pending = [];
+  const store = new Map(); const calls = []; const scrobbles = []; const pending = [];
   const rows = samples(); let allow = true; let promptValue = null;
   if (empty) { rows.movies = []; rows.episodes = []; }
   if (signedIn) {
@@ -28,8 +29,8 @@ function boot(t, { path = '/users/tester/progress', html = PLAYBACK_PROGRESS_HTM
   window.GM_deleteValue = (k) => store.delete(k);
   window.GM_registerMenuCommand = () => {};
   window.GM_addStyle = () => {};
-  window.confirm = (text) => { confirmations.push(text); return allow; };
-  window.prompt = (message, initial) => { prompts.push({ message, initial }); return promptValue; };
+  const dialogs = answerDialogs(window, { confirm: () => allow, prompt: () => promptValue });
+  const { confirms: confirmations, prompts, errors } = dialogs;
   window.GM_xmlhttpRequest = (r) => {
     calls.push(r);
     const url = new URL(r.url);
@@ -55,7 +56,7 @@ function boot(t, { path = '/users/tester/progress', html = PLAYBACK_PROGRESS_HTM
   document.write(`<!doctype html><html><head></head><body>${html}</body></html>`);
   window.eval(bundle);
   document.dispatchEvent(new window.Event('DOMContentLoaded'));
-  return { window, document, store, calls, confirmations, prompts, scrobbles, pending,
+  return { window, document, store, calls, confirmations, prompts, errors, dialogs, scrobbles, pending,
     setPrompt: (value) => { promptValue = value; }, deny: () => { allow = false; } };
 }
 const panel = (doc) => doc.getElementById('ogt-playback');
@@ -147,10 +148,11 @@ test('a title page with no saved playback saves progress with start then pause',
   assert.match(panel(b.document).textContent, /No saved playback/);
   b.setPrompt('35');
   click(b.document, 'save'); await wait(100);
-  assert.equal(b.prompts.length, 1);
-  assert.equal(b.prompts[0].initial, '');
-  assert.match(b.confirmations[0], /35%/);
-  assert.match(b.confirmations[0], /watching/);
+  assert.equal(b.prompts.length, 1, 'one dialog asks and warns');
+  assert.equal(b.confirmations.length, 0);
+  assert.equal(b.prompts[0].value, '');
+  assert.match(b.prompts[0].message, /may briefly show it as watching/);
+  assert.equal(b.dialogs.titles[0], 'Save progress');
   assert.deepEqual(b.scrobbles.map((call) => call.path), ['/scrobble/start', '/scrobble/pause']);
   assert.deepEqual(b.scrobbles[0].payload, { movie: { ids: { trakt: 1 }, title: 'The Dark', year: 2005 }, progress: 35 });
   assert.deepEqual(b.scrobbles[1].payload, b.scrobbles[0].payload);
@@ -163,7 +165,8 @@ test('an overview row saves episode progress after resolving episode ids', async
   assert.match(row.textContent, /Pilot/);
   b.setPrompt('60');
   row.querySelector('[data-action="save"]').click(); await wait(120);
-  assert.match(b.confirmations[0], /60% for Breaking Bad/);
+  assert.match(b.prompts[0].message, /for Breaking Bad · 1×01 · Pilot/);
+  assert.equal(b.prompts[0].value, '73.5');
   assert.ok(b.calls.find((call) => call.method === 'GET' && new URL(call.url).pathname === '/shows/breaking-bad/seasons/1/episodes/1'));
   assert.deepEqual(b.scrobbles.map((call) => call.path), ['/scrobble/start', '/scrobble/pause']);
   assert.deepEqual(b.scrobbles[0].payload, { episode: { ids: { trakt: 4 } }, progress: 60 });
@@ -171,18 +174,18 @@ test('an overview row saves episode progress after resolving episode ids', async
 test('cancelled or invalid progress sends nothing', async (t) => {
   const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML, empty: true }); await wait();
   b.setPrompt(null); click(b.document, 'save'); await wait();
-  assert.equal(b.prompts.length, 1); assert.equal(b.confirmations.length, 0); assert.equal(b.scrobbles.length, 0);
+  assert.equal(b.prompts.length, 1); assert.equal(b.scrobbles.length, 0);
   b.setPrompt('0'); click(b.document, 'save'); await wait();
-  assert.match(panel(b.document).textContent, /1 to 100/); assert.equal(b.scrobbles.length, 0);
-  b.setPrompt('25'); b.deny(); click(b.document, 'save'); await wait();
-  assert.equal(b.confirmations.length, 1); assert.equal(b.scrobbles.length, 0);
+  assert.equal(b.errors[0], 'Enter a percentage from 1 to 100.', 'the dialog keeps itself open with the error');
+  assert.equal(b.scrobbles.length, 0);
+  assert.equal(b.document.querySelector('dialog'), null, 'closed dialogs are removed');
 });
 test('a title page with saved playback can replace it, prefilled with the current value', async (t) => {
   const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML }); await wait();
   assert.match(panel(b.document).textContent, /42% paused/);
   b.setPrompt('70');
   click(b.document, 'save'); await wait(100);
-  assert.equal(b.prompts[0].initial, '42');
+  assert.equal(b.prompts[0].value, '42');
   assert.equal(b.calls.some((call) => new URL(call.url).pathname.startsWith('/movies/')), false, 'reuses the playback ids');
   assert.deepEqual(b.scrobbles.map((call) => call.path), ['/scrobble/start', '/scrobble/pause']);
   assert.equal(b.scrobbles[0].payload.progress, 70);

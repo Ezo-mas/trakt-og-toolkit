@@ -183,8 +183,8 @@ several and **Clear selected**, or enter an age and **Clear older items** (stric
 Every deletion asks for confirmation with the item count. Bulk actions report partial failures and refresh the list.
 **Refresh paused playback** checks for changes made elsewhere; cached data lasts about a minute. Clearing removes
 saved playback, not watched history. **Save progress…** on a movie or episode page (with or without saved playback)
-and on each overview row asks for a percentage from 1 to 100 and confirms first. It sends Trakt's scrobble start and
-pause, so your profile may briefly show the title as watching, and it never sends stop (which can mark the title
+and on each overview row asks for a percentage from 1 to 100, with the warning in the same dialog. It sends Trakt's
+scrobble start and pause, so your profile may briefly show the title as watching, and it never sends stop (which can mark the title
 watched). Start replaces any earlier progress for the title; if the pause then fails, the panel says so.
 
 ## Custom links
@@ -229,7 +229,7 @@ Placeholders are filled from the page and the season/episode picker:
 | `{tmdb}` | TMDb id | `1396` |
 | `{imdb}` | IMDb id | `tt0903747` |
 | `{imdbnum}` | IMDb id without `tt` or leading zeroes | `903747` |
-| `{episodeimdb}` | Episode IMDb id with its `tt` prefix (episode pages only). |
+| `{episodeimdb}` | Episode IMDb id with its `tt` prefix (episode pages only) | `tt0959621` |
 | `{episodeimdbnum}` | Episode IMDb id without `tt` or leading zeroes (episode pages) | `959621` |
 | `{tvdb}` | TVDB id | `81189` |
 | `{type}` | `tv` for shows, `movie` for films | `tv` |
@@ -301,7 +301,7 @@ src/
     host.js            mounts/unmounts features per route
     custom-links/      the panel (index.js) and its DOM readers (data.js)
     season-chart/      episode ratings chart and API/data helpers
-  ui/                  injected CSS and toasts
+  ui/                  injected CSS, toasts and og-styled confirm/prompt dialogs (dialog.js)
 ```
 
 ### Design notes

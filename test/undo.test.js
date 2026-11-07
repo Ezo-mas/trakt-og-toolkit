@@ -7,6 +7,7 @@ import { createWatchlistApi } from '../src/features/watchlist/api.js';
 import { createLibraryApi } from '../src/features/library/api.js';
 import { showSuccessToast } from '../src/ui/success-notification.js';
 import { MOVIE_HTML, WATCHLIST_HTML, watchlistCardHtml } from './fixtures.js';
+import { answerDialogs } from './dialogs.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 100) => new Promise(resolve => setTimeout(resolve, ms));
@@ -109,7 +110,7 @@ function boot(t, { path = '/movies/fight-club-1999', html = WATCHLIST_HTML, libr
   window.GM_setValue = (key, value) => store.set(key, value);
   window.GM_deleteValue = key => store.delete(key);
   window.GM_registerMenuCommand = () => {};
-  window.confirm = () => true;
+  answerDialogs(window);
   window.GM_xmlhttpRequest = r => {
     calls.push(r);
     let body;

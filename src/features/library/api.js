@@ -40,9 +40,10 @@ export function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSi
         body = { episodes: [...new Map(episodes.map(ep => [ep.ids.trakt, ep])).values()] };
         if (!body.episodes.length) throw new Error('No aired episodes to add.');
         if (!active() || !signedIn()) return { cancelled: true };
-        if (route.name !== 'episode' && !confirm(`Add ${body.episodes.length} aired episode${body.episodes.length === 1 ? '' : 's'} to your toolkit Trakt account’s library?${route.name === 'title' ? ' Specials are excluded.' : ''}`)) {
+        if (route.name !== 'episode' && !(await confirm(`Add ${body.episodes.length} aired episode${body.episodes.length === 1 ? '' : 's'} to your toolkit Trakt account’s library?${route.name === 'title' ? ' Specials are excluded.' : ''}`))) {
           return { cancelled: true };
         }
+        if (!active() || !signedIn()) return { cancelled: true };
       } else throw new Error('Unsupported library page.');
       if (!active() || !signedIn()) return { cancelled: true };
       const result = await auth('POST', '/sync/collection', body);
