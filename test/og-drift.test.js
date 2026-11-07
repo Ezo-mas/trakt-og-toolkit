@@ -24,7 +24,7 @@ test('checks each page against its required markup', (t) => {
 
 const SHOW_CONTEXT = (check) => check.feature.startsWith('custom links (show');
 const ACTION_CONTEXT = (check) => ['title actions', 'watchlist list control', 'watchlist picker trigger', 'watchlist card list controls',
-  'watchlist credit rows', 'watchlist credit list controls'].includes(check.feature);
+  'watchlist credit rows', 'watchlist credit list controls', 'watchlist credit toolbar'].includes(check.feature);
 
 test('title action stack and card quick icons still expose the list controls', (t) => {
   const title = documentFor(WATCHLIST_HTML);
@@ -42,7 +42,7 @@ test('person credit rows still expose the poster link and card-sized list contro
   const credits = documentFor(PERSON_CREDITS_HTML);
   t.after(() => credits.close());
   const checks = checkSelectors(credits.document, 'person').filter((check) => check.feature.startsWith('watchlist credit'));
-  assert.equal(checks.length, 2);
+  assert.equal(checks.length, 3);
   assert.deepEqual(checks.filter((check) => !check.ok), []);
   for (const control of credits.document.querySelectorAll('article.credit-row .list-control')) control.classList.remove('card');
   assert.equal(checkSelectors(credits.document, 'person')

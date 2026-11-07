@@ -24,6 +24,32 @@ export function watchlistBody(lookup, data) {
   return { [lookup.type]: [{ ids: { trakt: id } }] };
 }
 
+/** Whole credits, deduplicated by route, as slug-only items; no per-title API lookups. */
+export function watchlistBulkItems(routes) {
+  const items = [];
+  const seen = new Set();
+  for (const route of Array.isArray(routes) ? routes : []) {
+    const lookup = watchlistLookup(route);
+    if (!lookup || lookup.type !== 'movies' && lookup.type !== 'shows') continue;
+    if (typeof route.id !== 'string' || route.id.trim() === '') continue;
+    const slug = route.id.trim();
+    const key = typeof route.key === 'string' && route.key ? route.key : `${lookup.type}:${slug}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({ key, type: lookup.type, slug });
+  }
+  return items;
+}
+
+export function watchlistBulkBody(items) {
+  const body = {};
+  for (const item of Array.isArray(items) ? items : []) {
+    if (!item || item.type !== 'movies' && item.type !== 'shows' || typeof item.slug !== 'string' || !item.slug) continue;
+    (body[item.type] ??= []).push({ ids: { slug: item.slug } });
+  }
+  return body;
+}
+
 /** Selected also means membership in custom lists. Only the summary's Watchlist detail proves membership. */
 export function readWatchlisted(anchor) {
   return [...anchor.querySelectorAll('.summary-action')].some(action =>

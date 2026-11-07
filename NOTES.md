@@ -88,6 +88,57 @@ Working notes and known issues. Newest first.
   MDBList/OpenSubtitles routes, arbitrary-placeholder rejection, the menu add-link prompt, and configuring server
   hosts before adding Jellyfin/Emby/Seerr links.
 
+## 2026-11-07: keep Watchlist all available in grid view (PR 26)
+
+- The same bulk button remains in `#credits .toolbar .controls` in list and grid views. Grid candidates come from
+  `#credits article.poster-card` and the existing whole-title route reader; Known For posters outside credits are
+  excluded. The shared bulk path deduplicates routes, ignores hidden cards and keeps known membership/add/Undo
+  state when switching views. Empty selections keep a visible disabled button with neutral wording.
+- OG’s grid credits have poster title links; native list controls are present in the live screenshots, though
+  current upstream `PersonPage.svelte` at `14388594` also permits cards without a listTarget/picker. Bulk candidates
+  support both shapes, and native reloads include available grid controls without adding new per-card buttons. Notice timing, refresh queue
+  supersession and toolbar styling from the preceding review fixes are preserved.
+- Built-bundle tests switch list → grid → list, verify toolbar placement and payloads, retain add state, restore
+  counts with Undo, and skip hidden/duplicate/known-added titles plus posters outside the credits section. Grid
+  controls also refresh after add/Undo. Build, full suite and diff checks pass.
+
+## 2026-11-07: Watchlist all review fixes (PR 26)
+
+- The bulk notice, Undo and the unlocked rows no longer wait for native reloads: on a 200-credit page those are
+  ~200 sequential-ish OG picker loads. Refreshes now run after the operation finishes, and a newer refresh (Undo's)
+  stops an older queue so the two do not interleave.
+- OG's grid view (`.view-toggle`) renders poster cards, not `article.credit-row`, so the row shortcuts don't appear
+  there and the bulk button now hides instead of showing a disabled "already on your watchlist" state.
+  The Department filter re-renders rows (checked live on `/people/bryan-cranston`), so the count follows it.
+- The button drops `.ogt-chip` (its hover recoloured the text with a panel-only variable) and matches the
+  34px height and font of OG's toolbar triggers.
+
+## 2026-11-07: native watchlist refresh after bulk credit changes
+
+- Bulk add and Undo now reuse `createNativeWatchlistRefresh().refresh`, as the individual watchlist shortcut
+  already does. OG rereads its own membership through ArrowDown; the picker stays closed and no native write is
+  sent. At most four native loads run at once. Confirmed additions also refresh if a later batch fails.
+- Refreshes follow the operation's page/auth guard, skip removed/reused rows and signed-out native sessions, and
+  stop scheduling work after navigation. The success notice/Undo originally appeared after native reloads finished (changed in the review fixes above).
+- Built-bundle regression checks cover native membership after add and Undo, bounded loads and no picker clicks/popups.
+
+## 2026-11-07: finish and review Watchlist all (PR 26)
+
+- Merged main and moved the bulk confirmation to the shared og-styled dialog. The page/auth epoch is captured
+  before opening it; stale confirmations send nothing. Bulk add/undo lock row actions until they finish, and an old
+  operation cannot clear a newer session's busy flag. Hidden rows are excluded and toolbar replacements remount the button.
+- Sync responses must account for every submitted movie/show before their shortcuts hide. Each confirmed batch
+  updates shared state immediately, so a later error keeps completed rows hidden and reports the confirmed counts.
+  Unknown not-found IDs leave affected shortcuts available. Bulk notices use the shared notifier with a count summary.
+- Bulk Undo reuses the existing removal API, bounded to 100 titles per request, and restores shortcuts after each
+  confirmed removal. A failed later removal can be retried without repeating completed batches. Undo is offered only
+  when all successful titles are new and identifiable; mixed new/existing results cannot safely identify new titles.
+  Removal responses now require valid deletion counts. Bulk operations skip per-credit native picker refreshes;
+  reload remains the fallback. Added the credits toolbar selector to drift checks.
+- Regression checks cover partial batches, malformed responses, cancellation, row locking, hidden rows, toolbar
+  replacement, safe Undo and mixed-response protection. Build, full tests, focused Undo retry test, diff check
+  and live drift checks passed (all six pages plus native modules). Live authenticated writes were not exercised.
+
 ## 2026-11-06: og-styled dialogs instead of the browser's
 
 - Every `window.confirm` / `window.prompt` (playback clear and save progress, library add, the custom-link and
@@ -163,6 +214,23 @@ Working notes and known issues. Newest first.
   posters, poster changes and sign-out; `test/list-preview-ratings.test.js` the badge; `test/your-ratings.test.js`
   the separate title cache.
 
+## 2026-11-05: Watchlist all on person credits (feature 17, bulk part)
+
+- The bulk action extends the existing shortcut factory instead of adding a parallel subsystem: it shares the
+  entries/states map, per-route busy/undo state, native-watchlist hiding and row observers. It only adds one
+  `Watchlist all (N)` button in `#credits .toolbar .controls`; N is the deduplicated count of currently shown rows
+  that are neither native-watchlisted nor already added by the toolkit.
+- `watchlistBulkItems` uses each credit row's route slug and drops seasons/episodes; `watchlistBulkBody` sends
+  `{ movies: [{ ids: { slug } }], shows: [...] }`. No per-title `GET` lookups are made. `watchlistApi.addMany` chunks
+  at 100 items per `POST /sync/watchlist`, so a 211-credit page makes three writes rather than 211.
+- The response aggregation supplies `added`, `existing`, `notFound` and the keys that succeeded. Added and existing
+  rows hide their shortcuts; `not_found` rows stay visible. The notice says `Watchlist: N added, N already there,
+  N not found.`, and cancelling the single confirm sends nothing. Native picker refresh is skipped for the whole
+  page because the per-control picker path is not appropriate for 200 simultaneous rows; reload remains the fallback.
+- Tests: `test/watchlist.test.js` covers slug-only items, deduplication, season exclusion, batching, partial
+  not-found mapping and signed-out/cancelled paths. `test/watchlist-credits-integration.test.js` covers the toolbar
+  button/count, one slug POST, native/individual skipping, partial counts, cancellation, lazy rows and teardown.
+
 ## 2026-11-04/05: custom link presets that open the exact title (feature 22)
 
 - Stremio's web route is `#/detail/:type/:id/:videoId?` (`src/routes/MetaDetails/MetaDetails.js`, `development`
@@ -227,8 +295,7 @@ Working notes and known issues. Newest first.
 - The page rendered all credits server-side in this capture; no load-more button or lazy rows were found. The
   feature still observes the document and handles rows swapped or added later, and it is keyed by route so a
   title listed twice shares one in-flight add.
-- Bulk **Watchlist all** from the feature plan was deliberately not built (the request covered the row button).
-  README's roadmap still lists adding all shown credits at once.
+- Bulk **Watchlist all** was added the next day; see the 2026-11-05 entry above.
 - Tests: `test/watchlist.test.js` covers credit-row route/control reading;
   `test/watchlist-credits-integration.test.js` covers built-bundle mounting, movie/show adds, native membership,
   custom-list names, lazy/removed rows, signed-out guidance and route teardown. `npm run drift` now checks the
