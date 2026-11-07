@@ -1,15 +1,19 @@
 /** Pure-ish readers for a title page. They take a Document so they can be tested. */
 import { cleanTitle, parseYear } from '../../core/text.js';
 import { text } from '../../core/dom.js';
+import { isCustomLinkUrl } from '../../settings.js';
 
 const TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
 const IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
+const TVDB_RE = /thetvdb\.com\/(?:dereferrer\/)?series\/(\d+)/;
 const SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
 const SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
 const SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
+/** An episode's own title link; a show's season list (`/title/ttSHOW/episodes`) is not the episode. */
+const EPISODE_IMDB_RE = /imdb\.com\/title\/(tt\d+)(?!\d|\/episodes)/;
 
 /**
- * Read what the page already knows: title, year, TMDb and IMDb ids.
+ * Read what the page already knows: title, year, TMDb, IMDb and TVDB ids.
  * og renders these in the summary's stats strip, so no API call is needed.
  */
 export function readTitleData(doc, route) {
@@ -28,6 +32,11 @@ export function readTitleData(doc, route) {
       year: null,
       tmdb: firstMatch(doc, 'a[href*="themoviedb.org/tv/"]', TMDB_RE, (match) => Number(match[2])),
       imdb: route.name === 'season' ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null,
+      episodeImdb: route.name === 'episode'
+        ? firstMatch(doc, 'a[href*="imdb.com/title/"]', EPISODE_IMDB_RE, (match) => match[1])
+        : null,
+      tvdb: null,
+      rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind),
     };
   }
 
@@ -55,6 +64,15 @@ export function readTitleData(doc, route) {
     }
   }
 
+  let tvdb = null;
+  for (const link of doc.querySelectorAll('a[href*="thetvdb.com/"]')) {
+    const match = link.getAttribute('href')?.match(TVDB_RE);
+    if (match) {
+      tvdb = Number(match[1]);
+      break;
+    }
+  }
+
   const kind = route.kind === 'show' ? 'show' : 'movie';
   const fallbackTitle = text(doc.querySelector('title'))
     .replace(/\s*[-–|]\s*Trakt.*$/i, '')
@@ -70,7 +88,23 @@ export function readTitleData(doc, route) {
     year,
     tmdb,
     imdb,
+    episodeImdb: null,
+    rottenTomatoesUrl: readRottenTomatoesUrl(doc, kind),
+    tvdb,
   };
+}
+
+/** Use OG's title link; Rotten Tomatoes slugs cannot be derived from Trakt/IMDb ids. */
+function readRottenTomatoesUrl(doc, kind) {
+  const path = kind === 'movie' ? /^\/m\/[a-z0-9_-]+\/?$/i : /^\/tv\/[a-z0-9_-]+(?:\/s\d+(?:\/e\d+)?)?\/?$/i;
+  for (const link of doc.querySelectorAll('a[href*="rottentomatoes.com/"]')) {
+    try {
+      const url = new URL(link.getAttribute('href'));
+      if (url.protocol === 'https:' && ['www.rottentomatoes.com', 'rottentomatoes.com'].includes(url.hostname) &&
+        !url.username && !url.password && !url.port && path.test(url.pathname)) return url.origin + url.pathname;
+    } catch { /* Ignore malformed external links. */ }
+  }
+  return null;
 }
 
 /**
@@ -130,6 +164,7 @@ export function showTemplateData(show) {
     year: Number.isInteger(show.year) && show.year > 0 ? show.year : null,
     tmdb: Number.isSafeInteger(show.ids?.tmdb) && show.ids.tmdb > 0 ? show.ids.tmdb : null,
     imdb: typeof show.ids?.imdb === 'string' && /^tt\d+$/.test(show.ids.imdb) ? show.ids.imdb : null,
+    tvdb: Number.isSafeInteger(show.ids?.tvdb) && show.ids.tvdb > 0 ? show.ids.tvdb : null,
   };
 }
 
@@ -156,8 +191,14 @@ export function readSeasons(doc) {
   return [...found.values()].sort((a, b) => a.number - b.number);
 }
 
+/** IMDb search URLs (OpenSubtitles) take the number without `tt` or leading zeroes. */
+export function imdbNumber(imdb) {
+  const match = String(imdb || '').match(/^tt0*(\d+)$/);
+  return match ? match[1] : null;
+}
+
 /** Variables available to link templates. */
-export function templateVars(meta, selection = {}) {
+export function templateVars(meta, selection = {}, servers = {}) {
   return {
     id: meta.id,
     plural: meta.plural,
@@ -166,6 +207,16 @@ export function templateVars(meta, selection = {}) {
     year: meta.year,
     tmdb: meta.tmdb,
     imdb: meta.imdb,
+    imdbnum: imdbNumber(meta.imdb),
+    episodeimdb: meta.episodeImdb,
+    episodeimdbnum: imdbNumber(meta.episodeImdb),
+    tvdb: meta.tvdb,
+    rottenTomatoesUrl: meta.rottenTomatoesUrl,
+    jellyfin: servers.jellyfin || null,
+    emby: servers.emby || null,
+    radarr: servers.radarr || null,
+    sonarr: servers.sonarr || null,
+    seerr: servers.seerr || null,
     season: selection.season,
     episode: selection.episode,
   };
@@ -222,8 +273,8 @@ export function validateCustomLinks(links) {
       continue;
     }
 
-    if (!/^https?:\/\//i.test(String(link.url).trim())) {
-      errors.push({ index, field: 'url', message: 'URL must start with http:// or https://.' });
+    if (!isCustomLinkUrl(link.url)) {
+      errors.push({ index, field: 'url', message: 'URL must start with http://, https://, or a server placeholder.' });
     }
   }
   return errors;

@@ -8,7 +8,18 @@
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
 import { fillTemplate, missingPlaceholders } from '../../core/text.js';
-import { getSelection, setSelection, getCustomLinks, setCustomLinks, getClientId } from '../../settings.js';
+import {
+  getSelection,
+  setSelection,
+  getCustomLinks,
+  setCustomLinks,
+  getClientId,
+  getServers,
+  setServers,
+  normalizeServerUrl,
+  SERVER_KEYS,
+  isCustomLinkUrl,
+} from '../../settings.js';
 import {
   addPresets,
   filterPresetsByKind,
@@ -28,7 +39,13 @@ import { getShowDetails } from './api.js';
 
 const PANEL_ID = 'ogt-custom-links';
 const TITLE_ID = 'ogt-custom-links-title';
-
+const SERVER_FIELDS = [
+  { key: 'jellyfin', label: 'Jellyfin', placeholder: 'http://192.168.1.20:8096' },
+  { key: 'emby', label: 'Emby', placeholder: 'http://192.168.1.20:8096' },
+  { key: 'radarr', label: 'Radarr', placeholder: 'http://192.168.1.20:7878' },
+  { key: 'sonarr', label: 'Sonarr', placeholder: 'http://192.168.1.20:8989' },
+  { key: 'seerr', label: 'Seerr', placeholder: 'http://192.168.1.20:5055' },
+];
 /** Where the panel belongs: under the summary's stats, above its full-width sections. */
 function findMountPoint() {
   const top = document.querySelector('.summary-frame #overview .top') || document.querySelector('#overview .top');
@@ -73,10 +90,12 @@ function createPanel(meta, route) {
   const tools = el('div', { class: 'ogt-link-tools', hidden: true });
   const editor = el('div', { class: 'ogt-editor', hidden: true });
   const presetChecklist = el('div', { class: 'ogt-presets', hidden: true });
-  tools.append(editor, presetChecklist);
+  const serversPanel = el('div', { class: 'ogt-servers', hidden: true });
+  tools.append(editor, presetChecklist, serversPanel);
   const presetsButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Add presets…' });
+  const serversButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Servers…' });
   const editButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Edit links' });
-  actionsRow.append(presetsButton, editButton);
+  actionsRow.append(presetsButton, serversButton, editButton);
 
   const node = el(
     'section',
@@ -93,14 +112,14 @@ function createPanel(meta, route) {
     tools,
   );
 
-  const vars = () => templateVars(meta, selection);
+  const vars = () => templateVars(meta, selection, getServers());
 
   function updateLinkHrefs() {
     const values = vars();
     for (const link of linksRow.querySelectorAll('[data-ogt-template]')) {
       const template = resolvePresetUrl(link.dataset.ogtTemplate, values, meta.kind);
-      if (missingPlaceholders(template, values).length) continue;
-      link.setAttribute('href', fillTemplate(template, values));
+      if (!template || missingPlaceholders(template, values).length) continue;
+      link.setAttribute('href', fillTemplate(template, values, SERVER_KEYS));
     }
   }
 
@@ -116,10 +135,10 @@ function createPanel(meta, route) {
     }
 
     for (const entry of links) {
-      if (!/^https?:\/\//i.test(entry.url)) continue;
+      if (!isCustomLinkUrl(entry.url)) continue;
       const template = resolvePresetUrl(entry.url, values, meta.kind);
-      if (missingPlaceholders(template, values).length) continue;
-      linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values), template: entry.url }));
+      if (!template || missingPlaceholders(template, values).length) continue;
+      linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values, SERVER_KEYS), template: entry.url }));
     }
     lookUpShow(values);
   }
@@ -130,12 +149,13 @@ function createPanel(meta, route) {
    *  those links stay hidden rather than point at the season or episode. */
   function lookUpShow(values) {
     if (!fixedSelection || showRequested || !getClientId()) return;
-    const missing = ['year', 'tmdb', 'imdb'].filter((key) => meta[key] == null);
+    const missing = ['year', 'tmdb', 'imdb', 'tvdb'].filter((key) => meta[key] == null);
     if (!missing.length) return;
     // Deep preset routes may need the show's IMDb id even though the stored search URL doesn't.
+    const needed = missing.flatMap((key) => (key === 'imdb' ? ['{imdb}', '{imdbnum}'] : [`{${key}}`]));
     if (!getCustomLinks().some((entry) =>
       presetTemplateUrls(entry.url, meta.kind).some((template) =>
-        missing.some((key) => template.includes(`{${key}}`))))
+        needed.some((placeholder) => template.includes(placeholder))))
     ) return;
     showRequested = true;
     getShowDetails(route.id)
@@ -154,6 +174,7 @@ function createPanel(meta, route) {
     tools.hidden = true;
     editor.hidden = true;
     presetChecklist.hidden = true;
+    serversPanel.hidden = true;
     const target = returnFocus;
     returnFocus = null;
     target?.focus();
@@ -283,21 +304,89 @@ function createPanel(meta, route) {
     tools.hidden = false;
     editor.hidden = false;
     presetChecklist.hidden = true;
+    serversPanel.hidden = true;
     renderEditor(draft.length ? `${draft[0].id}-label` : 'add-link');
+  }
+
+  function renderServers() {
+    serversPanel.replaceChildren();
+    const servers = getServers();
+    const list = el('div', { class: 'ogt-server-list' });
+    const inputs = {};
+
+    for (const field of SERVER_FIELDS) {
+      const input = el('input', {
+        class: 'ogt-editor-input',
+        type: 'text',
+        value: servers[field.key] || '',
+        placeholder: field.placeholder,
+        'aria-label': `${field.label} URL`,
+        'data-focus': `${field.key}-url`,
+      });
+      inputs[field.key] = input;
+      list.append(el('label', { class: 'ogt-editor-field' }, field.label, input));
+    }
+
+    const error = el('p', { class: 'ogt-editor-error', role: 'alert', hidden: true });
+    const save = el('button', { class: 'ogt-chip', type: 'button', text: 'Save servers' });
+    save.addEventListener('click', () => {
+      const next = {};
+      for (const field of SERVER_FIELDS) {
+        const raw = inputs[field.key].value.trim();
+        if (!raw) continue;
+        const normalized = normalizeServerUrl(raw);
+        if (!normalized) {
+          error.textContent = `${field.label}: enter a valid host or http(s) URL.`;
+          error.hidden = false;
+          inputs[field.key].focus();
+          return;
+        }
+        next[field.key] = normalized;
+      }
+
+      setServers(next);
+      renderLinks();
+      closeTools();
+    });
+    const cancel = el('button', { class: 'ogt-chip', type: 'button', text: 'Cancel' });
+    cancel.addEventListener('click', closeTools);
+
+    serversPanel.append(
+      el('p', {
+        class: 'ogt-hint',
+        text: 'Enter the base URL of your own server. Bare hosts use http://; HTTPS and base paths are supported. Credentials, query strings and fragments are not.',
+      }),
+      list,
+      error,
+      el('div', { class: 'ogt-row ogt-editor-footer' }, save, cancel),
+    );
+    serversPanel.querySelector('input')?.focus();
+  }
+
+  function openServers() {
+    currentView = 'servers';
+    returnFocus = serversButton;
+    tools.hidden = false;
+    editor.hidden = true;
+    presetChecklist.hidden = true;
+    serversPanel.hidden = false;
+    renderServers();
   }
 
   function renderPresetChecklist() {
     const links = getCustomLinks();
+    const servers = getServers();
     const presets = filterPresetsByKind(PRESETS, meta.kind);
     const list = el('div', { class: 'ogt-preset-list' });
     selectedPresets = new Set();
 
     for (const [index, preset] of presets.entries()) {
       const added = presetAlreadyAdded(links, preset);
+      const needsServer = Boolean(preset.requires && !servers[preset.requires]);
       const checkbox = el('input', {
         type: 'checkbox',
         value: preset.url,
-        disabled: added,
+        disabled: added || needsServer,
         'aria-label': preset.label,
       });
       checkbox.addEventListener('change', () => {
@@ -309,19 +398,26 @@ function createPanel(meta, route) {
         { class: 'ogt-preset-item', for: `ogt-preset-${index}` },
         checkbox,
         el('span', { text: preset.label }),
-        added ? el('span', { class: 'ogt-preset-added', text: 'added' }) : null,
+        added
+          ? el('span', { class: 'ogt-preset-added', text: 'added' })
+          : needsServer
+            ? el('span', { class: 'ogt-preset-added', text: 'set server URL' })
+            : null,
       );
       checkbox.id = `ogt-preset-${index}`;
       list.append(label);
     }
 
-    const error = el('p', { class: 'ogt-hint', text: 'Choose the services you want to add.' });
+    const error = el('p', {
+      class: 'ogt-hint',
+      text: 'Choose the services you want to add. Server presets need a URL under Servers… first.',
+    });
     const confirm = el('button', { class: 'ogt-chip', type: 'button', text: 'Add selected' });
     confirm.addEventListener('click', () => {
       const selected = presets.filter((preset) => selectedPresets.has(preset.url));
       if (selected.length) {
         setCustomLinks(addPresets(getCustomLinks(), selected));
-        renderLinks();
+        onRefresh();
       }
       closeTools();
     });
@@ -339,6 +435,7 @@ function createPanel(meta, route) {
     returnFocus = presetsButton;
     tools.hidden = false;
     editor.hidden = true;
+    serversPanel.hidden = true;
     presetChecklist.hidden = false;
     renderPresetChecklist();
     const firstChoice = presetChecklist.querySelector('input[type="checkbox"]:not(:disabled)');
@@ -353,11 +450,13 @@ function createPanel(meta, route) {
   }
 
   presetsButton.addEventListener('click', openPresets);
+  serversButton.addEventListener('click', openServers);
   editButton.addEventListener('click', openEditor);
   node.addEventListener('keydown', onKeyDown);
 
   function needsSelection() {
-    return !fixedSelection && getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
+    return !fixedSelection && getCustomLinks().some((entry) =>
+      presetTemplateUrls(entry.url, meta.kind).some((template) => /\{(?:season|episode)\}/.test(template)));
   }
 
   function persistSelection() {

@@ -68,6 +68,7 @@ export const STORAGE = {
   tokens: 'trakt.oauth.tokens',
   redirectUri: 'trakt.oauth.redirectUri',
   customLinks: 'watch.customLinks',
+  servers: 'watch.servers',
   features: 'features.disabled',
   debug: 'debug',
   selection: (kind, id) => `selection.${kind}.${id}`,

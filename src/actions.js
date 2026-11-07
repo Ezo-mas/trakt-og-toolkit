@@ -1,10 +1,18 @@
 /** Prompts shared by the panel and the userscript menu. */
-import { addCustomLink, removeCustomLink, getCustomLinks, setClientId, getClientId } from './settings.js';
+import {
+  addCustomLink,
+  removeCustomLink,
+  getCustomLinks,
+  setClientId,
+  getClientId,
+  isCustomLinkUrl,
+} from './settings.js';
 import { toast } from './ui/shell.js';
 import { promptDialog } from './ui/dialog.js';
 
 const PLACEHOLDER_HELP =
-  'Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id} {plural}';
+  'Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdb} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}\n' +
+  'Server hosts: {jellyfin} {emby} {radarr} {sonarr} {seerr}';
 
 /** Split "Label | URL"; returns an error message or the parts. */
 function parseCustomLink(answer) {
@@ -13,7 +21,7 @@ function parseCustomLink(answer) {
   const label = answer.slice(0, separator).trim();
   const url = answer.slice(separator + 1).trim();
   if (!label || !url) return { error: 'Both a label and a URL are required.' };
-  if (!/^https?:\/\//i.test(url)) return { error: 'The URL must start with http:// or https://.' };
+  if (!isCustomLinkUrl(url)) return { error: 'The URL must start with http://, https://, or a server placeholder.' };
   return { label, url };
 }
 

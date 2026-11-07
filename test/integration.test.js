@@ -124,6 +124,26 @@ test('old-format stored links still load and render unchanged', async (t) => {
   assert.deepEqual(store.get('watch.customLinks'), oldLinks);
 });
 
+test('stored links with arbitrary placeholders are not rendered as relative URLs', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: {
+      'watch.customLinks': [
+        { label: 'Relative', url: '{title}/evil' },
+        { label: 'Unconfigured server', url: '{jellyfin}/web/#/search?query={title}' },
+        { label: 'Valid', url: 'https://valid.test/{title}' },
+      ],
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  assert.equal(Boolean(chip(document, 'Relative')), false, 'an arbitrary placeholder is not a server template');
+  assert.equal(Boolean(chip(document, 'Unconfigured server')), false, 'a server link waits for its host');
+  assert.equal(chip(document, 'Valid').getAttribute('href'), 'https://valid.test/Breaking%20Bad');
+});
+
 test('preset checklist marks existing URLs and adds selected presets to storage', async (t) => {
   const oldLinks = [{ label: 'Metacritic', url: 'https://www.metacritic.com/search/{title}/' }];
   const { window, document, store } = boot({
@@ -138,10 +158,11 @@ test('preset checklist marks existing URLs and adds selected presets to storage'
   open.click();
   const metacritic = document.querySelector('.ogt-presets input[aria-label="Metacritic"]');
   assert.ok(metacritic.disabled, 'a preset with the same URL is disabled');
-  assert.equal(document.activeElement, document.querySelector('.ogt-presets input[aria-label="Stremio"]'));
-  for (const duplicate of ['Rotten Tomatoes', 'Wikipedia', 'Letterboxd']) {
-    assert.equal(document.querySelector(`.ogt-presets input[aria-label="${duplicate}"]`), null, `og already links ${duplicate}`);
+  assert.equal(document.activeElement, document.querySelector('.ogt-presets input[aria-label="IMDb"]'));
+  for (const label of ['IMDb', 'TMDb', 'TVDB', 'Rotten Tomatoes', 'Wikipedia', 'JustWatch', 'MyAnimeList']) {
+    assert.ok(document.querySelector(`.ogt-presets input[aria-label="${label}"]`), `${label} preset exists`);
   }
+  assert.equal(document.querySelector('.ogt-presets input[aria-label="Letterboxd"]'), null, 'Letterboxd is movie-only');
 
   const stremio = document.querySelector('.ogt-presets input[aria-label="Stremio"]');
   stremio.checked = true;
@@ -156,7 +177,92 @@ test('preset checklist marks existing URLs and adds selected presets to storage'
   assert.equal(document.activeElement, open, 'focus returns to the presets chip when closed');
 });
 
-test('Stremio opens the exact movie and show, and falls back to search without an IMDb id', async (t) => {
+test('server presets wait for their host and use it in the rendered link', async (t) => {
+  const { window, document, store } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  const servers = chip(document, 'Servers…');
+  servers.click();
+  const jellyfin = document.querySelector('.ogt-servers input[aria-label="Jellyfin URL"]');
+  assert.equal(document.activeElement, jellyfin, 'the first server field gets focus');
+
+  jellyfin.value = 'ftp://media.test';
+  [...document.querySelectorAll('.ogt-servers button')].find((button) => button.textContent === 'Save servers').click();
+  assert.equal(document.querySelector('.ogt-servers [role="alert"]').hidden, false, 'invalid hosts are rejected');
+  assert.equal(store.has('watch.servers'), false);
+
+  jellyfin.value = 'media.test:8096/jellyfin/';
+  document.querySelector('.ogt-servers input[aria-label="Emby URL"]').value = 'https://media.test/emby/';
+  document.querySelector('.ogt-servers input[aria-label="Seerr URL"]').value = 'https://requests.test/seerr/';
+  [...document.querySelectorAll('.ogt-servers button')].find((button) => button.textContent === 'Save servers').click();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(store.get('watch.servers'))), {
+    jellyfin: 'http://media.test:8096/jellyfin',
+    emby: 'https://media.test/emby',
+    seerr: 'https://requests.test/seerr',
+  });
+  assert.equal(document.activeElement, servers, 'focus returns to the Servers chip');
+
+  chip(document, 'Add presets…').click();
+  const jellyfinPreset = document.querySelector('.ogt-presets input[aria-label="Jellyfin"]');
+  const embyPreset = document.querySelector('.ogt-presets input[aria-label="Emby"]');
+  const sonarrPreset = document.querySelector('.ogt-presets input[aria-label="Sonarr"]');
+  assert.equal(jellyfinPreset.disabled, false, 'a configured server preset can be added');
+  assert.equal(embyPreset.disabled, false, 'a second configured server preset can be added');
+  assert.equal(sonarrPreset.disabled, true, 'an unconfigured server preset cannot be added');
+  assert.match(sonarrPreset.closest('label').textContent, /set server URL/);
+
+  jellyfinPreset.checked = true;
+  jellyfinPreset.dispatchEvent(new window.Event('change', { bubbles: true }));
+  embyPreset.checked = true;
+  embyPreset.dispatchEvent(new window.Event('change', { bubbles: true }));
+  const seerrPreset = document.querySelector('.ogt-presets input[aria-label="Seerr"]');
+  seerrPreset.checked = true;
+  seerrPreset.dispatchEvent(new window.Event('change', { bubbles: true }));
+  document.querySelector('.ogt-presets button').click();
+
+  assert.equal(
+    chip(document, 'Jellyfin').getAttribute('href'),
+    'http://media.test:8096/jellyfin/web/#/search?query=Breaking%20Bad',
+    'the base path, HTTP scheme and current search route survive filling',
+  );
+  assert.equal(
+    chip(document, 'Emby').getAttribute('href'),
+    'https://media.test/emby/web/index.html#!/list/list.html?type=search&searchtext=Breaking%20Bad',
+    'the Emby route carries the title through searchtext',
+  );
+  assert.equal(
+    chip(document, 'Seerr').getAttribute('href'),
+    'https://requests.test/seerr/tv/1396',
+    'Seerr opens the show by TMDb id',
+  );
+});
+
+test('og-service presets resolve to exact movie links', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_HTML,
+    storage: {
+      'watch.customLinks': [
+        { label: 'IMDb', url: 'https://www.imdb.com/find/?q={title}' },
+        { label: 'TMDb', url: 'https://www.themoviedb.org/search?query={title}' },
+        { label: 'Letterboxd', url: 'https://letterboxd.com/search/{title}/' },
+      ],
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  assert.equal(chip(document, 'IMDb').getAttribute('href'), 'https://www.imdb.com/title/tt0465676/');
+  assert.equal(chip(document, 'TMDb').getAttribute('href'), 'https://www.themoviedb.org/movie/8967');
+  assert.equal(chip(document, 'Letterboxd').getAttribute('href'), 'https://letterboxd.com/imdb/tt0465676/');
+});
+
+test('Stremio opens exact titles and the visible show selection, and falls back without an IMDb id', async (t) => {
   const stremio = { label: 'Stremio', url: 'https://web.stremio.com/#/search?search={title}' };
   const windows = [];
   t.after(() => windows.forEach((window) => window.close()));
@@ -182,8 +288,9 @@ test('Stremio opens the exact movie and show, and falls back to search without a
   await wait(50);
   assert.equal(
     chip(show.document, 'Stremio').getAttribute('href'),
-    'https://web.stremio.com/#/detail/series/tt0903747',
+    'https://web.stremio.com/#/detail/series/tt0903747/tt0903747:1:1',
   );
+  assert.ok(show.document.querySelector('select[aria-label="Season"]'), 'deep-only preset exposes its selection');
 
   const season = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
@@ -651,6 +758,126 @@ test('season pages fill show ids from og\'s links and only look the show up for 
   assert.equal(chip(document, 'Year').getAttribute('href'), 'https://e.test/2008');
 });
 
+test('TVDB preset looks up the show id on a season page', async (t) => {
+  const requested = [];
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
+    html: SEASON_PAGE_HTML,
+    storage: {
+      'trakt.clientId': 'client',
+      'watch.customLinks': [{ label: 'TVDB', url: 'https://thetvdb.com/search?query={title}' }],
+    },
+    gmRequest(options) {
+      if (new URL(options.url).pathname === '/shows/breaking-bad') requested.push(options.url);
+      setTimeout(() => options.onload({
+        status: 200,
+        responseHeaders: '',
+        responseText: JSON.stringify({
+          title: 'Breaking Bad',
+          year: 2008,
+          ids: { trakt: 1388, slug: 'breaking-bad', tmdb: 1396, imdb: 'tt0903747', tvdb: 81189 },
+        }),
+      }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(80);
+
+  assert.equal(chip(document, 'TVDB').getAttribute('href'), 'https://thetvdb.com/dereferrer/series/81189');
+  assert.equal(requested.length, 1, 'the season page asks for the show TVDB id it does not have');
+});
+
+test('MDBList and OpenSubtitles presets follow the page kind and episode ids', async (t) => {
+  const links = [
+    { label: 'MDBList', url: 'https://mdblist.com/movies/?q_title={title}' },
+    { label: 'OpenSubtitles', url: 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{imdbnum}' },
+  ];
+  const windows = [];
+  t.after(() => windows.forEach((window) => window.close()));
+
+  const movie = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_HTML,
+    storage: { 'watch.customLinks': links },
+  });
+  windows.push(movie.window);
+  await wait(50);
+  assert.equal(chip(movie.document, 'MDBList').getAttribute('href'), 'https://mdblist.com/movie/tt0465676');
+  assert.equal(
+    chip(movie.document, 'OpenSubtitles').getAttribute('href'),
+    'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-465676',
+  );
+
+  const show = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: { 'watch.customLinks': links },
+  });
+  windows.push(show.window);
+  await wait(50);
+  assert.equal(chip(show.document, 'MDBList').getAttribute('href'), 'https://mdblist.com/show/tt0903747');
+  assert.equal(
+    chip(show.document, 'OpenSubtitles').getAttribute('href'),
+    'https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-903747/season-1',
+  );
+
+  const season = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
+    html: SEASON_PAGE_HTML,
+    storage: { 'watch.customLinks': links },
+  });
+  windows.push(season.window);
+  await wait(50);
+  assert.equal(
+    chip(season.document, 'OpenSubtitles').getAttribute('href'),
+    'https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-903747/season-1',
+  );
+
+  const episode = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1',
+    html: EPISODE_PAGE_HTML,
+    storage: { 'watch.customLinks': links },
+  });
+  windows.push(episode.window);
+  await wait(50);
+  assert.equal(
+    chip(episode.document, 'OpenSubtitles').getAttribute('href'),
+    'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-959621',
+    'the episode page uses its own IMDb id',
+  );
+});
+
+test('episode pages look up the show for an IMDb-number link', async (t) => {
+  const requested = [];
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1',
+    html: EPISODE_PAGE_HTML,
+    storage: {
+      'trakt.clientId': 'client',
+      'watch.customLinks': [{ label: 'Number', url: 'https://e.test/{imdbnum}' }],
+    },
+    gmRequest(options) {
+      if (new URL(options.url).pathname === '/shows/breaking-bad') requested.push(options.url);
+      setTimeout(() => options.onload({
+        status: 200,
+        responseHeaders: '',
+        responseText: JSON.stringify({
+          title: 'Breaking Bad',
+          year: 2008,
+          ids: { trakt: 1388, slug: 'breaking-bad', tmdb: 1396, imdb: 'tt0903747' },
+        }),
+      }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => window.close());
+  await wait(80);
+
+  assert.equal(chip(document, 'Number').getAttribute('href'), 'https://e.test/903747');
+  assert.equal(requested.length, 1, 'an episode page looks up the show for its IMDb number');
+});
+
 test('episode pages fill custom links from the show and preset the route season and episode', async (t) => {
   const { window, document } = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1',
@@ -704,4 +931,86 @@ test('season pages without a client ID use the show link and og\'s ids, and hide
   assert.equal(chip(document, 'Ids').getAttribute('href'), 'https://e.test/1396', 'og\'s TMDb season link has the show id');
   // Compare a boolean: a failing assertion on a happy-dom element tries to print it and runs out of memory.
   assert.equal(Boolean(chip(document, 'Year')), false, 'the page year is the season\'s, so no year link');
+});
+
+
+test('globally stored presets only render on their supported page kinds', async t => {
+  const links = [
+    { label: 'Radarr', url: '{radarr}/add/new?term={title}' },
+    { label: 'Sonarr', url: '{sonarr}/add/new?term={title}' },
+    { label: 'Letterboxd', url: 'https://letterboxd.com/search/{title}/' },
+    { label: 'Custom', url: 'https://custom.test/{title}' },
+  ];
+  for (const kind of ['movie', 'show']) {
+    const b = boot({ url: kind === 'movie' ? 'https://og.trakt.tv/movies/the-dark-2005' : 'https://og.trakt.tv/shows/breaking-bad',
+      html: kind === 'movie' ? MOVIE_HTML : SHOW_HTML,
+      storage: { 'watch.customLinks': links, 'watch.servers': { radarr: 'http://radarr.test', sonarr: 'http://sonarr.test' } } });
+    t.after(() => b.window.close());
+    await wait(50);
+    assert.equal(Boolean(chip(b.document, 'Radarr')), kind === 'movie');
+    assert.equal(Boolean(chip(b.document, 'Sonarr')), kind === 'show');
+    assert.equal(Boolean(chip(b.document, 'Letterboxd')), kind === 'movie');
+    assert.ok(chip(b.document, 'Custom'), 'user-defined links still work on both kinds');
+  }
+});
+
+test('deep preset routes expose remembered selections and update when the picker changes', async t => {
+  const b = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML,
+    storage: { 'watch.customLinks': [{ label: 'TMDb', url: 'https://www.themoviedb.org/search?query={title}' }],
+      'selection.show.breaking-bad': { season: 2, episode: 3 } } });
+  t.after(() => b.window.close());
+  await wait(50);
+  const season = b.document.querySelector('select[aria-label="Season"]');
+  assert.ok(season && !season.closest('[hidden]'));
+  assert.equal(season.value, '2');
+  assert.equal(chip(b.document, 'TMDb').getAttribute('href'), 'https://www.themoviedb.org/tv/1396/season/2/episode/3');
+  season.value = '1';
+  season.dispatchEvent(new b.window.Event('change'));
+  assert.equal(chip(b.document, 'TMDb').getAttribute('href'), 'https://www.themoviedb.org/tv/1396/season/1/episode/1');
+});
+
+test('adding a deep preset immediately builds its season and episode pickers', async t => {
+  const b = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
+  t.after(() => b.window.close());
+  await wait(50);
+  chip(b.document, 'Add presets…').click();
+  const choice = b.document.querySelector('.ogt-presets input[aria-label="TMDb"]');
+  choice.checked = true;
+  choice.dispatchEvent(new b.window.Event('change'));
+  b.document.querySelector('.ogt-presets button').click();
+  const season = b.document.querySelector('select[aria-label="Season"]');
+  assert.ok(season && !season.closest('[hidden]'));
+  assert.equal(chip(b.document, 'TMDb').getAttribute('href'), 'https://www.themoviedb.org/tv/1396/season/1/episode/1');
+});
+
+
+test('IMDb episode preset uses the episode id without waiting for a show lookup', async t => {
+  const b = boot({ url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1', html: EPISODE_PAGE_HTML,
+    storage: { 'watch.customLinks': [{ label: 'IMDb', url: 'https://www.imdb.com/find/?q={title}' }] } });
+  t.after(() => b.window.close());
+  await wait(50);
+  assert.equal(chip(b.document, 'IMDb').getAttribute('href'), 'https://www.imdb.com/title/tt0959621/');
+});
+
+
+test('Rotten Tomatoes uses OG’s exact title URL and keeps search when it is missing', async t => {
+  const preset = { label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' };
+  for (const [kind, html, route, href] of [
+    ['movie', MOVIE_HTML, '/movies/the-dark-2005', 'https://www.rottentomatoes.com/m/the_dark'],
+    ['show', SHOW_HTML, '/shows/breaking-bad', 'https://www.rottentomatoes.com/tv/breaking_bad'],
+    ['show', SEASON_PAGE_HTML, '/shows/breaking-bad/seasons/1', 'https://www.rottentomatoes.com/tv/breaking_bad/s01'],
+  ]) {
+    for (const available of [true, false]) {
+      const native = available ? `<a href="${href}?tracking=og">Rotten Tomatoes</a>` : '';
+      const b = boot({ url: `https://og.trakt.tv${route}`, html: html + native,
+        storage: { 'watch.customLinks': [preset] } });
+      t.after(() => b.window.close());
+      await wait(50);
+      const link = chip(b.document, 'Rotten Tomatoes');
+      assert.equal(link.getAttribute('href'), available ? href :
+        `https://www.rottentomatoes.com/search?search=${kind === 'movie' ? 'The%20Dark' : 'Breaking%20Bad'}`);
+      b.document.dispatchEvent(new b.window.CustomEvent('ogt:refresh'));
+      assert.equal(chip(b.document, 'Rotten Tomatoes').getAttribute('href'), link.getAttribute('href'));
+    }
+  }
 });

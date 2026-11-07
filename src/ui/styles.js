@@ -155,6 +155,14 @@ export const CSS = String.raw`
   overflow: auto;
 }
 
+.ogt-server-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  max-block-size: 240px;
+  overflow: auto;
+}
+
 .ogt-editor-list {
   display: grid;
   gap: 8px;
@@ -292,6 +300,10 @@ export const CSS = String.raw`
   }
 
   .ogt-editor-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ogt-server-list {
     grid-template-columns: minmax(0, 1fr);
   }
 }

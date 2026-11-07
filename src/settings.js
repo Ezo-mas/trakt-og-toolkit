@@ -19,6 +19,77 @@ export function hasClientId() {
   return getClientId().length > 0;
 }
 
+export const SERVER_KEYS = ['jellyfin', 'emby', 'radarr', 'sonarr', 'seerr'];
+
+/** True only for templates that begin with one of the configured server keys. */
+export function isServerTemplateUrl(value) {
+  const match = String(value || '').trim().match(/^\{([a-z][a-z0-9_-]*)\}\//);
+  return Boolean(match && SERVER_KEYS.includes(match[1]));
+}
+
+/** Custom links may be ordinary HTTP(S) URLs or server-template URLs. */
+export function isCustomLinkUrl(value) {
+  const url = String(value || '').trim();
+  return /^https?:\/\//i.test(url) || isServerTemplateUrl(url);
+}
+
+/**
+ * Server base URLs are stored with a scheme and without a trailing slash. A bare host gets
+ * `http://` because these services usually live on a LAN; users can paste `https://` for a
+ * reverse proxy. Paths are kept so a Jellyfin/Emby base URL such as `/jellyfin` still works.
+ * Unsupported schemes, credentials, query strings and fragments are rejected rather than
+ * silently dropped.
+ */
+export function normalizeServerUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  // A bare host:port also matches the scheme shape, so only treat the leading `name:` as a
+  // scheme when it is not followed by a port number. Other schemes (mailto:, file:, ftp:)
+  // must be rejected, not reinterpreted as an HTTP host.
+  const scheme = raw.match(/^([a-z][a-z0-9+.-]*):/i);
+  if (scheme) {
+    const rest = raw.slice(scheme[0].length);
+    const bareHostPort = /^\d+(?:[/?#]|$)/.test(rest);
+    if (!bareHostPort && !/^https?:\/\//i.test(raw)) return null;
+  }
+
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+  try {
+    const url = new URL(withScheme);
+    if (!/^https?:$/i.test(url.protocol) || !url.hostname) return null;
+    if (url.username || url.password || url.search || url.hash) return null;
+    return `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return null;
+  }
+}
+
+export function getServers() {
+  const stored = getValue(STORAGE.servers, {});
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
+  const servers = {};
+  for (const key of SERVER_KEYS) {
+    const value = normalizeServerUrl(stored[key]);
+    if (value) servers[key] = value;
+  }
+  return servers;
+}
+
+/** Save only recognised, valid server URLs; clear the storage key when none remain. */
+export function setServers(values) {
+  const servers = {};
+  if (values && typeof values === 'object') {
+    for (const key of SERVER_KEYS) {
+      const value = normalizeServerUrl(values[key]);
+      if (value) servers[key] = value;
+    }
+  }
+  if (Object.keys(servers).length) setValue(STORAGE.servers, servers);
+  else removeValue(STORAGE.servers);
+  return servers;
+}
+
 export function getCustomLinks() {
   const stored = getValue(STORAGE.customLinks, []);
   if (!Array.isArray(stored)) return [];

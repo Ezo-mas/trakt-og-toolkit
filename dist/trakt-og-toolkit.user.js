@@ -185,6 +185,14 @@
   overflow: auto;
 }
 
+.ogt-server-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  max-block-size: 240px;
+  overflow: auto;
+}
+
 .ogt-editor-list {
   display: grid;
   gap: 8px;
@@ -322,6 +330,10 @@
   }
 
   .ogt-editor-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ogt-server-list {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -1030,11 +1042,12 @@
   }
 
   // src/core/text.js
-  function fillTemplate(template, vars) {
+  function fillTemplate(template, vars, rawKeys = []) {
+    const raw = rawKeys instanceof Set ? rawKeys : new Set(rawKeys);
     return template.replace(/\{(\w+)\}/g, (_, key) => {
       const value = vars[key];
       if (value === void 0 || value === null || value === "") return "";
-      return encodeURIComponent(String(value));
+      return raw.has(key) ? String(value) : encodeURIComponent(String(value));
     });
   }
   function missingPlaceholders(template, vars) {
@@ -1116,6 +1129,7 @@
     tokens: "trakt.oauth.tokens",
     redirectUri: "trakt.oauth.redirectUri",
     customLinks: "watch.customLinks",
+    servers: "watch.servers",
     features: "features.disabled",
     debug: "debug",
     selection: (kind, id) => `selection.${kind}.${id}`
@@ -1141,6 +1155,56 @@
     if (clean) setValue(STORAGE.clientId, clean);
     else removeValue(STORAGE.clientId);
     return clean;
+  }
+  var SERVER_KEYS = ["jellyfin", "emby", "radarr", "sonarr", "seerr"];
+  function isServerTemplateUrl(value) {
+    const match = String(value || "").trim().match(/^\{([a-z][a-z0-9_-]*)\}\//);
+    return Boolean(match && SERVER_KEYS.includes(match[1]));
+  }
+  function isCustomLinkUrl(value) {
+    const url = String(value || "").trim();
+    return /^https?:\/\//i.test(url) || isServerTemplateUrl(url);
+  }
+  function normalizeServerUrl(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    const scheme = raw.match(/^([a-z][a-z0-9+.-]*):/i);
+    if (scheme) {
+      const rest = raw.slice(scheme[0].length);
+      const bareHostPort = /^\d+(?:[/?#]|$)/.test(rest);
+      if (!bareHostPort && !/^https?:\/\//i.test(raw)) return null;
+    }
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+    try {
+      const url = new URL(withScheme);
+      if (!/^https?:$/i.test(url.protocol) || !url.hostname) return null;
+      if (url.username || url.password || url.search || url.hash) return null;
+      return `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, "")}`;
+    } catch {
+      return null;
+    }
+  }
+  function getServers() {
+    const stored = getValue(STORAGE.servers, {});
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
+    const servers = {};
+    for (const key of SERVER_KEYS) {
+      const value = normalizeServerUrl(stored[key]);
+      if (value) servers[key] = value;
+    }
+    return servers;
+  }
+  function setServers(values) {
+    const servers = {};
+    if (values && typeof values === "object") {
+      for (const key of SERVER_KEYS) {
+        const value = normalizeServerUrl(values[key]);
+        if (value) servers[key] = value;
+      }
+    }
+    if (Object.keys(servers).length) setValue(STORAGE.servers, servers);
+    else removeValue(STORAGE.servers);
+    return servers;
   }
   function getCustomLinks() {
     const stored = getValue(STORAGE.customLinks, []);
@@ -1205,9 +1269,11 @@
   // src/features/custom-links/data.js
   var TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
   var IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
+  var TVDB_RE = /thetvdb\.com\/(?:dereferrer\/)?series\/(\d+)/;
   var SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
   var SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
   var SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
+  var EPISODE_IMDB_RE = /imdb\.com\/title\/(tt\d+)(?!\d|\/episodes)/;
   function readTitleData(doc, route) {
     if (route.kind === "show" && (route.name === "season" || route.name === "episode")) {
       return {
@@ -1218,7 +1284,10 @@
         title: cleanTitle(showLinkTitle(doc)) || showTitleFromPageTitle(doc, route) || null,
         year: null,
         tmdb: firstMatch(doc, 'a[href*="themoviedb.org/tv/"]', TMDB_RE, (match) => Number(match[2])),
-        imdb: route.name === "season" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null
+        imdb: route.name === "season" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null,
+        episodeImdb: route.name === "episode" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', EPISODE_IMDB_RE, (match) => match[1]) : null,
+        tvdb: null,
+        rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind)
       };
     }
     const heading = doc.querySelector(".summary-title h1") || doc.querySelector("h1");
@@ -1241,6 +1310,14 @@
         break;
       }
     }
+    let tvdb = null;
+    for (const link of doc.querySelectorAll('a[href*="thetvdb.com/"]')) {
+      const match = link.getAttribute("href")?.match(TVDB_RE);
+      if (match) {
+        tvdb = Number(match[1]);
+        break;
+      }
+    }
     const kind = route.kind === "show" ? "show" : "movie";
     const fallbackTitle = text(doc.querySelector("title")).replace(/\s*[-–|]\s*Trakt.*$/i, "").replace(/\s*\(\d{4}\)\s*$/, "").trim();
     return {
@@ -1251,8 +1328,22 @@
       title: cleanTitle(rawHeading) || fallbackTitle || null,
       year,
       tmdb,
-      imdb
+      imdb,
+      episodeImdb: null,
+      rottenTomatoesUrl: readRottenTomatoesUrl(doc, kind),
+      tvdb
     };
+  }
+  function readRottenTomatoesUrl(doc, kind) {
+    const path = kind === "movie" ? /^\/m\/[a-z0-9_-]+\/?$/i : /^\/tv\/[a-z0-9_-]+(?:\/s\d+(?:\/e\d+)?)?\/?$/i;
+    for (const link of doc.querySelectorAll('a[href*="rottentomatoes.com/"]')) {
+      try {
+        const url = new URL(link.getAttribute("href"));
+        if (url.protocol === "https:" && ["www.rottentomatoes.com", "rottentomatoes.com"].includes(url.hostname) && !url.username && !url.password && !url.port && path.test(url.pathname)) return url.origin + url.pathname;
+      } catch {
+      }
+    }
+    return null;
   }
   function headingText(heading) {
     if (!heading) return "";
@@ -1293,7 +1384,8 @@
       title,
       year: Number.isInteger(show.year) && show.year > 0 ? show.year : null,
       tmdb: Number.isSafeInteger(show.ids?.tmdb) && show.ids.tmdb > 0 ? show.ids.tmdb : null,
-      imdb: typeof show.ids?.imdb === "string" && /^tt\d+$/.test(show.ids.imdb) ? show.ids.imdb : null
+      imdb: typeof show.ids?.imdb === "string" && /^tt\d+$/.test(show.ids.imdb) ? show.ids.imdb : null,
+      tvdb: Number.isSafeInteger(show.ids?.tvdb) && show.ids.tvdb > 0 ? show.ids.tvdb : null
     };
   }
   function readSeasons(doc) {
@@ -1311,7 +1403,11 @@
     }
     return [...found.values()].sort((a, b) => a.number - b.number);
   }
-  function templateVars(meta, selection = {}) {
+  function imdbNumber(imdb) {
+    const match = String(imdb || "").match(/^tt0*(\d+)$/);
+    return match ? match[1] : null;
+  }
+  function templateVars(meta, selection = {}, servers = {}) {
     return {
       id: meta.id,
       plural: meta.plural,
@@ -1320,6 +1416,16 @@
       year: meta.year,
       tmdb: meta.tmdb,
       imdb: meta.imdb,
+      imdbnum: imdbNumber(meta.imdb),
+      episodeimdb: meta.episodeImdb,
+      episodeimdbnum: imdbNumber(meta.episodeImdb),
+      tvdb: meta.tvdb,
+      rottenTomatoesUrl: meta.rottenTomatoesUrl,
+      jellyfin: servers.jellyfin || null,
+      emby: servers.emby || null,
+      radarr: servers.radarr || null,
+      sonarr: servers.sonarr || null,
+      seerr: servers.seerr || null,
       season: selection.season,
       episode: selection.episode
     };
@@ -1362,8 +1468,8 @@
         errors.push({ index, field: "url", message: "A URL is required." });
         continue;
       }
-      if (!/^https?:\/\//i.test(String(link.url).trim())) {
-        errors.push({ index, field: "url", message: "URL must start with http:// or https://." });
+      if (!isCustomLinkUrl(link.url)) {
+        errors.push({ index, field: "url", message: "URL must start with http://, https://, or a server placeholder." });
       }
     }
     return errors;
@@ -1371,6 +1477,64 @@
 
   // src/features/custom-links/presets.js
   var PRESETS = [
+    {
+      label: "IMDb",
+      url: "https://www.imdb.com/find/?q={title}",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://www.imdb.com/title/{episodeimdb}/", kinds: ["show"] },
+        { url: "https://www.imdb.com/title/{imdb}/episodes?season={season}", kinds: ["show"] },
+        { url: "https://www.imdb.com/title/{imdb}/", kinds: ["movie", "show"] }
+      ]
+    },
+    {
+      label: "TMDb",
+      url: "https://www.themoviedb.org/search?query={title}",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://www.themoviedb.org/tv/{tmdb}/season/{season}/episode/{episode}", kinds: ["show"] },
+        { url: "https://www.themoviedb.org/tv/{tmdb}/season/{season}", kinds: ["show"] },
+        { url: "https://www.themoviedb.org/movie/{tmdb}", kinds: ["movie"] },
+        { url: "https://www.themoviedb.org/tv/{tmdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "TVDB",
+      url: "https://thetvdb.com/search?query={title}",
+      kinds: ["show"],
+      deep: [
+        { url: "https://thetvdb.com/dereferrer/series/{tvdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "Letterboxd",
+      url: "https://letterboxd.com/search/{title}/",
+      kinds: ["movie"],
+      deep: [
+        { url: "https://letterboxd.com/imdb/{imdb}/", kinds: ["movie"] },
+        { url: "https://letterboxd.com/tmdb/{tmdb}/", kinds: ["movie"] }
+      ]
+    },
+    {
+      label: "Rotten Tomatoes",
+      url: "https://www.rottentomatoes.com/search?search={title}",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "Wikipedia",
+      url: "https://en.wikipedia.org/w/index.php?search={title}",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "JustWatch",
+      url: "https://www.justwatch.com/us/search?q={title}",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "MyAnimeList",
+      url: "https://myanimelist.net/search/all?q={title}",
+      kinds: ["movie", "show"]
+    },
     {
       label: "Metacritic",
       url: "https://www.metacritic.com/search/{title}/",
@@ -1395,6 +1559,50 @@
       ]
     },
     {
+      label: "Debrid Media Manager",
+      url: "https://debridmediamanager.com/search?query={title}",
+      kinds: ["movie", "show"],
+      /**
+       * DMM routes by IMDb id: `movie/:imdbid` and `show/:imdbid/:seasonNum` (from its
+       * `src/pages/movie/[imdbid]/index.tsx` and `src/pages/show/[imdbid]/[seasonNum]/index.tsx`).
+       * It has no episode page, so an episode opens its season instead. Signed-out visits
+       * redirect to `/start`; the deep routes are for a signed-in DMM session.
+       */
+      deep: [
+        { url: "https://debridmediamanager.com/show/{imdb}/{season}", kinds: ["show"] },
+        { url: "https://debridmediamanager.com/movie/{imdb}", kinds: ["movie"] },
+        { url: "https://debridmediamanager.com/show/{imdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "MDBList",
+      // IMDb routes redirect to MDBList's canonical title slug; searches cover titles without an IMDb id.
+      url: "https://mdblist.com/movies/?q_title={title}",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://mdblist.com/movie/{imdb}", kinds: ["movie"] },
+        { url: "https://mdblist.com/show/{imdb}", kinds: ["show"] },
+        { url: "https://mdblist.com/shows/?q_title={title}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "OpenSubtitles",
+      /**
+       * OpenSubtitles' search takes an IMDb id without `tt` or leading zeroes:
+       * `imdbid` for a movie or episode, and `pimdbid` for a show. The episode
+       * page's own IMDb link supplies the episode id; without it the season route
+       * is the fallback. The stored URL is the movie route, while every show page
+       * resolves to one of the deep routes.
+       */
+      url: "https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{imdbnum}",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{episodeimdbnum}", kinds: ["show"] },
+        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-{imdbnum}/season-{season}", kinds: ["show"] },
+        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-{imdbnum}", kinds: ["show"] }
+      ]
+    },
+    {
       label: "Plex",
       url: "https://app.plex.tv/desktop/#!/search?query={title}",
       kinds: ["movie", "show"]
@@ -1403,15 +1611,67 @@
       label: "AniList",
       url: "https://anilist.co/search/anime?search={title}",
       kinds: ["movie", "show"]
+    },
+    {
+      label: "Jellyfin",
+      /**
+       * Current web search route; `jellyfin-web` defines `search` without `.html` and reads
+       * `?query=`. The server base URL comes from the Servers settings.
+       */
+      url: "{jellyfin}/web/#/search?query={title}",
+      kinds: ["movie", "show"],
+      requires: "jellyfin"
+    },
+    {
+      label: "Emby",
+      /**
+       * Current 4.9 web search page; its search field uses `searchtext`. Older Emby versions
+       * used `/web/search.html` directly, so this remains editable in the link editor.
+       */
+      url: "{emby}/web/index.html#!/list/list.html?type=search&searchtext={title}",
+      kinds: ["movie", "show"],
+      requires: "emby"
+    },
+    {
+      label: "Radarr",
+      url: "{radarr}/add/new?term={title}",
+      kinds: ["movie"],
+      requires: "radarr",
+      deep: [
+        { url: "{radarr}/add/new?term=imdb:{imdb}", kinds: ["movie"] },
+        { url: "{radarr}/add/new?term=tmdb:{tmdb}", kinds: ["movie"] }
+      ]
+    },
+    {
+      label: "Sonarr",
+      url: "{sonarr}/add/new?term={title}",
+      kinds: ["show"],
+      requires: "sonarr",
+      deep: [
+        { url: "{sonarr}/add/new?term=tvdb:{tvdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "Seerr",
+      url: "{seerr}/search?query={title}",
+      kinds: ["movie", "show"],
+      requires: "seerr",
+      deep: [
+        { url: "{seerr}/movie/{tmdb}", kinds: ["movie"] },
+        { url: "{seerr}/tv/{tmdb}", kinds: ["show"] }
+      ]
     }
   ];
   function presetTemplateUrls(url, kind) {
     const preset = PRESETS.find((entry) => entry.url === url);
+    if (preset && !preset.kinds.includes(kind)) return [];
     if (!preset?.deep) return [url];
     return [url, ...preset.deep.filter((entry) => entry.kinds.includes(kind)).map((entry) => entry.url)];
   }
   function resolvePresetUrl(url, vars, kind) {
     const preset = PRESETS.find((entry) => entry.url === url);
+    if (preset && !preset.kinds.includes(kind)) return null;
+    if (preset?.label === "Rotten Tomatoes" && vars.rottenTomatoesUrl) return vars.rottenTomatoesUrl;
     if (!preset?.deep) return url;
     const deep = preset.deep.find(
       (entry) => entry.kinds.includes(kind) && missingPlaceholders(entry.url, vars).length === 0
@@ -1836,6 +2096,13 @@
   // src/features/custom-links/index.js
   var PANEL_ID = "ogt-custom-links";
   var TITLE_ID = "ogt-custom-links-title";
+  var SERVER_FIELDS = [
+    { key: "jellyfin", label: "Jellyfin", placeholder: "http://192.168.1.20:8096" },
+    { key: "emby", label: "Emby", placeholder: "http://192.168.1.20:8096" },
+    { key: "radarr", label: "Radarr", placeholder: "http://192.168.1.20:7878" },
+    { key: "sonarr", label: "Sonarr", placeholder: "http://192.168.1.20:8989" },
+    { key: "seerr", label: "Seerr", placeholder: "http://192.168.1.20:5055" }
+  ];
   function findMountPoint() {
     const top = document.querySelector(".summary-frame #overview .top") || document.querySelector("#overview .top");
     if (top?.parentElement) return { parent: top.parentElement, before: top.nextSibling };
@@ -1871,10 +2138,12 @@
     const tools = el("div", { class: "ogt-link-tools", hidden: true });
     const editor = el("div", { class: "ogt-editor", hidden: true });
     const presetChecklist = el("div", { class: "ogt-presets", hidden: true });
-    tools.append(editor, presetChecklist);
+    const serversPanel = el("div", { class: "ogt-servers", hidden: true });
+    tools.append(editor, presetChecklist, serversPanel);
     const presetsButton = el("button", { class: "ogt-chip", type: "button", text: "Add presets…" });
+    const serversButton = el("button", { class: "ogt-chip", type: "button", text: "Servers…" });
     const editButton = el("button", { class: "ogt-chip", type: "button", text: "Edit links" });
-    actionsRow.append(presetsButton, editButton);
+    actionsRow.append(presetsButton, serversButton, editButton);
     const node = el(
       "section",
       { class: "ogt-panel", id: PANEL_ID, "aria-labelledby": TITLE_ID },
@@ -1889,13 +2158,13 @@
       actionsRow,
       tools
     );
-    const vars = () => templateVars(meta, selection);
+    const vars = () => templateVars(meta, selection, getServers());
     function updateLinkHrefs() {
       const values = vars();
       for (const link of linksRow.querySelectorAll("[data-ogt-template]")) {
         const template = resolvePresetUrl(link.dataset.ogtTemplate, values, meta.kind);
-        if (missingPlaceholders(template, values).length) continue;
-        link.setAttribute("href", fillTemplate(template, values));
+        if (!template || missingPlaceholders(template, values).length) continue;
+        link.setAttribute("href", fillTemplate(template, values, SERVER_KEYS));
       }
     }
     function renderLinks() {
@@ -1908,19 +2177,20 @@
         );
       }
       for (const entry of links) {
-        if (!/^https?:\/\//i.test(entry.url)) continue;
+        if (!isCustomLinkUrl(entry.url)) continue;
         const template = resolvePresetUrl(entry.url, values, meta.kind);
-        if (missingPlaceholders(template, values).length) continue;
-        linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values), template: entry.url }));
+        if (!template || missingPlaceholders(template, values).length) continue;
+        linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values, SERVER_KEYS), template: entry.url }));
       }
       lookUpShow(values);
     }
     let showRequested = false;
     function lookUpShow(values) {
       if (!fixedSelection || showRequested || !getClientId()) return;
-      const missing = ["year", "tmdb", "imdb"].filter((key) => meta[key] == null);
+      const missing = ["year", "tmdb", "imdb", "tvdb"].filter((key) => meta[key] == null);
       if (!missing.length) return;
-      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => missing.some((key) => template.includes(`{${key}}`))))) return;
+      const needed = missing.flatMap((key) => key === "imdb" ? ["{imdb}", "{imdbnum}"] : [`{${key}}`]);
+      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => needed.some((placeholder) => template.includes(placeholder))))) return;
       showRequested = true;
       getShowDetails(route.id).then((show) => setMeta(showTemplateData(show))).catch((error) => {
         if (!cancelled) debugError("show lookup failed", error);
@@ -1936,6 +2206,7 @@
       tools.hidden = true;
       editor.hidden = true;
       presetChecklist.hidden = true;
+      serversPanel.hidden = true;
       const target = returnFocus;
       returnFocus = null;
       target?.focus();
@@ -2058,19 +2329,81 @@
       tools.hidden = false;
       editor.hidden = false;
       presetChecklist.hidden = true;
+      serversPanel.hidden = true;
       renderEditor(draft.length ? `${draft[0].id}-label` : "add-link");
+    }
+    function renderServers() {
+      serversPanel.replaceChildren();
+      const servers = getServers();
+      const list = el("div", { class: "ogt-server-list" });
+      const inputs = {};
+      for (const field of SERVER_FIELDS) {
+        const input = el("input", {
+          class: "ogt-editor-input",
+          type: "text",
+          value: servers[field.key] || "",
+          placeholder: field.placeholder,
+          "aria-label": `${field.label} URL`,
+          "data-focus": `${field.key}-url`
+        });
+        inputs[field.key] = input;
+        list.append(el("label", { class: "ogt-editor-field" }, field.label, input));
+      }
+      const error = el("p", { class: "ogt-editor-error", role: "alert", hidden: true });
+      const save = el("button", { class: "ogt-chip", type: "button", text: "Save servers" });
+      save.addEventListener("click", () => {
+        const next = {};
+        for (const field of SERVER_FIELDS) {
+          const raw = inputs[field.key].value.trim();
+          if (!raw) continue;
+          const normalized = normalizeServerUrl(raw);
+          if (!normalized) {
+            error.textContent = `${field.label}: enter a valid host or http(s) URL.`;
+            error.hidden = false;
+            inputs[field.key].focus();
+            return;
+          }
+          next[field.key] = normalized;
+        }
+        setServers(next);
+        renderLinks();
+        closeTools();
+      });
+      const cancel = el("button", { class: "ogt-chip", type: "button", text: "Cancel" });
+      cancel.addEventListener("click", closeTools);
+      serversPanel.append(
+        el("p", {
+          class: "ogt-hint",
+          text: "Enter the base URL of your own server. Bare hosts use http://; HTTPS and base paths are supported. Credentials, query strings and fragments are not."
+        }),
+        list,
+        error,
+        el("div", { class: "ogt-row ogt-editor-footer" }, save, cancel)
+      );
+      serversPanel.querySelector("input")?.focus();
+    }
+    function openServers() {
+      currentView = "servers";
+      returnFocus = serversButton;
+      tools.hidden = false;
+      editor.hidden = true;
+      presetChecklist.hidden = true;
+      serversPanel.hidden = false;
+      renderServers();
     }
     function renderPresetChecklist() {
       const links = getCustomLinks();
+      const servers = getServers();
       const presets = filterPresetsByKind(PRESETS, meta.kind);
       const list = el("div", { class: "ogt-preset-list" });
       selectedPresets = /* @__PURE__ */ new Set();
       for (const [index, preset] of presets.entries()) {
         const added = presetAlreadyAdded(links, preset);
+        const needsServer = Boolean(preset.requires && !servers[preset.requires]);
         const checkbox = el("input", {
           type: "checkbox",
           value: preset.url,
-          disabled: added,
+          disabled: added || needsServer,
           "aria-label": preset.label
         });
         checkbox.addEventListener("change", () => {
@@ -2082,18 +2415,21 @@
           { class: "ogt-preset-item", for: `ogt-preset-${index}` },
           checkbox,
           el("span", { text: preset.label }),
-          added ? el("span", { class: "ogt-preset-added", text: "added" }) : null
+          added ? el("span", { class: "ogt-preset-added", text: "added" }) : needsServer ? el("span", { class: "ogt-preset-added", text: "set server URL" }) : null
         );
         checkbox.id = `ogt-preset-${index}`;
         list.append(label);
       }
-      const error = el("p", { class: "ogt-hint", text: "Choose the services you want to add." });
+      const error = el("p", {
+        class: "ogt-hint",
+        text: "Choose the services you want to add. Server presets need a URL under Servers… first."
+      });
       const confirm = el("button", { class: "ogt-chip", type: "button", text: "Add selected" });
       confirm.addEventListener("click", () => {
         const selected = presets.filter((preset) => selectedPresets.has(preset.url));
         if (selected.length) {
           setCustomLinks(addPresets(getCustomLinks(), selected));
-          renderLinks();
+          onRefresh();
         }
         closeTools();
       });
@@ -2110,6 +2446,7 @@
       returnFocus = presetsButton;
       tools.hidden = false;
       editor.hidden = true;
+      serversPanel.hidden = true;
       presetChecklist.hidden = false;
       renderPresetChecklist();
       const firstChoice = presetChecklist.querySelector('input[type="checkbox"]:not(:disabled)');
@@ -2122,10 +2459,11 @@
       }
     }
     presetsButton.addEventListener("click", openPresets);
+    serversButton.addEventListener("click", openServers);
     editButton.addEventListener("click", openEditor);
     node.addEventListener("keydown", onKeyDown);
     function needsSelection() {
-      return !fixedSelection && getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
+      return !fixedSelection && getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => /\{(?:season|episode)\}/.test(template)));
     }
     function persistSelection() {
       if (!fixedSelection && selection.season != null) setSelection(meta.kind, meta.id, selection);
@@ -6356,14 +6694,14 @@
   });
 
   // src/actions.js
-  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {type} {season} {episode} {id} {plural}";
+  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdb} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}\nServer hosts: {jellyfin} {emby} {radarr} {sonarr} {seerr}";
   function parseCustomLink(answer) {
     const separator = answer.indexOf("|");
     if (separator < 0) return { error: 'Use "Label | URL": the | separator is missing.' };
     const label = answer.slice(0, separator).trim();
     const url = answer.slice(separator + 1).trim();
     if (!label || !url) return { error: "Both a label and a URL are required." };
-    if (!/^https?:\/\//i.test(url)) return { error: "The URL must start with http:// or https://." };
+    if (!isCustomLinkUrl(url)) return { error: "The URL must start with http://, https://, or a server placeholder." };
     return { label, url };
   }
   async function promptAddCustomLink() {

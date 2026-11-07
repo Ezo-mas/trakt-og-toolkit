@@ -2,6 +2,92 @@
 
 Working notes and known issues. Newest first.
 
+
+## 2026-11-07: preset review fix (PR 31)
+
+- Episode pages read `{episodeimdb}` only from an IMDb title link that is not a season list
+  (`/title/ttSHOW/episodes?season=N`). Live og (2026-11-07) links an episode without its own id to an IMDb
+  `find?q=…&s=ep` search, but if it ever fell back to the show's season list, IMDb and OpenSubtitles would have treated
+  the show id as the episode's. Route spot-checks (TVDB dereferrer, Letterboxd IMDb/TMDb, TMDb episode, DMM movie,
+  MyAnimeList/JustWatch/Wikipedia/TVDB searches) all resolved; MDBList and OpenSubtitles are behind bot checks.
+## 2026-11-07: Rotten Tomatoes native title URLs
+
+- The Rotten Tomatoes preset now reuses the title URL already rendered by OG, falling back to its stored search
+  template when missing. Only HTTPS links on the exact Rotten Tomatoes host and the current movie/show path type
+  are accepted; search links, unrelated domains, credentials and nonstandard ports are ignored. No slug guessing or
+  extra lookup is involved, and user-edited URLs remain untouched.
+- Metacritic's supplied movie, season and episode URLs resolve to direct pages. Its preset remains a search:
+  the site uses its own title/episode slugs, which cannot reliably be reconstructed from the ids currently available.
+- Built-bundle tests cover direct movie/show/season URLs, search fallbacks and refreshes; reader checks cover
+  lookalike domains, search URLs, wrong kinds and credentials.
+
+## 2026-11-07: PR 31 review fixes and direct links
+
+- Preset kind restrictions now apply when resolving saved links, not just in the add checklist. Radarr/Letterboxd
+  stay off show pages and Sonarr/TVDB stay off movies; arbitrary user-defined links keep their existing behavior.
+- Picker detection inspects all applicable preset routes via `presetTemplateUrls`, and adding presets calls the
+  same refresh path as editing links. A remembered season/episode is visible and editable even when the stored
+  preset URL only contains the search fallback. Deep-only presets now initialize the usual first-season/episode
+  selection when season data is available, just like explicit season/episode templates.
+- MDBList's IMDb redirect routes were confirmed on its own site: `/movie/tt0133093` redirects to
+  `/movie/a2na-the-matrix`, and `/show/tt0944947` to `/show/8pll-game-of-thrones`. Added those exact routes before
+  the existing searches; the earlier assumption that only MDBList slugs could open titles was incorrect.
+- IMDb episode pages now use `{episodeimdb}`, retaining leading zeroes from the episode's own external-link ID.
+  The show/season and search routes remain fallbacks. No new lookup or ID-mapping service was introduced.
+- Regression tests cover globally stored kind-specific presets, remembered selections, adding deep presets,
+  direct MDBList routes/search fallbacks and the IMDb episode route. Build, full tests and diff checks passed
+  after merging main; server-template menu validation is preserved in the shared dialog UI.
+
+## 2026-11-06: more link presets and per-user server presets (features 24–25)
+
+- Live og.trakt.tv checks with Playwright (2026-11-06) show the external-link strip varies by page: a movie has
+  IMDb, Letterboxd, TMDb, Rotten Tomatoes, JustWatch, an official site, Fanart.tv and Wikipedia; a show has IMDb,
+  TMDb, TVDB, Fanart.tv, JustWatch, Wikipedia and socials; season and episode pages have IMDb, TMDb and a Wikipedia
+  search. The new presets cover every templateable one so the links survive when the strip is missing.
+- Verified exact routes in the browser: IMDb `title/{imdb}` and `title/{imdb}/episodes?season={season}`; TMDb
+  `movie/{tmdb}`, `tv/{tmdb}`, `tv/{tmdb}/season/{season}` and `.../episode/{episode}`; TVDB
+  `dereferrer/series/{tvdb}`; Letterboxd `imdb/{imdb}` and `tmdb/{tmdb}`. Rotten Tomatoes, Wikipedia, JustWatch,
+  MyAnimeList and TVDB search URLs all returned 200. The search fallbacks stay in the stored preset.
+- TVDB added a `{tvdb}` placeholder. The show strip carries it (`dereferrer/series/81189`); season and episode strips
+  do not, so `lookUpShow` now requests it through `GET /shows/:id` when a stored preset needs it. `showTemplateData`
+  validates the API's `ids.tvdb` like the other ids.
+- DMM's source confirms `movie/[imdbid]` and `show/[imdbid]/[seasonNum]`; a signed-out browser visit redirects to
+  `/start`, so the deep routes assume the user is signed in to DMM. It has no episode route, hence season links.
+- MDBList: exact title URLs carry an MDBList-only slug prefix (`3tb7f-resident-evil`,
+  `c5do-star-wars-the-clone-wars`) that Trakt does not expose. The site's own forms are `/movies/?q_title=` and
+  `/shows/?q_title=` and accept a title or IMDb id, so MDBList ships as movie and show searches. Automated `q_title`
+  requests returned 403; the browser check remains for the user.
+- OpenSubtitles: an Anubis challenge blocks automated checks. The routes (confirmed by the user and the search
+  documentation) are `imdbid-{number}` for a movie or episode, `pimdbid-{number}` for a show, and
+  `pimdbid-{number}/season-{n}` for a season. Numbers drop `tt` and leading zeroes (`tt0458290` -> `458290`). An
+  episode page's strip carries the episode's own IMDb id (`tt0959621` in the fixture), exposed as
+  `{episodeimdbnum}`; without it the season route is the fallback. The `idmovie-` routes use OpenSubtitles' internal
+  movie id and cannot be built from Trakt ids. Fanart stays out per the user.
+- Server presets (feature 25): Jellyfin, Emby, Radarr, Sonarr and Seerr are self-hosted, so the preset URLs use
+  `{jellyfin}`, `{emby}`, `{radarr}`, `{sonarr}` and `{seerr}`. The base URLs are stored per browser in
+  `watch.servers` by **Servers…** in the custom-links panel. A bare host gets `http://`; HTTPS, a port and a base
+  path are kept, and the trailing slash is removed. Credentials, query strings and fragments are rejected instead of
+  silently dropped, and non-HTTP schemes such as `mailto:`/`file:`/`ftp:` are rejected before the host is parsed. The
+  presets are disabled in the checklist until their host is set. Server placeholders are filled raw because
+  percent-encoding would break `://` and paths; titles and ids stay URL-encoded. Only `{jellyfin}`, `{emby}`,
+  `{radarr}`, `{sonarr}` and `{seerr}` are server templates; the editor, renderer and menu add-link prompt share that
+  check, so `{title}/…` is not accepted as one.
+- Radarr uses `/add/new?term=imdb:{imdb}` then `tmdb:{tmdb}`, with a title search fallback; Sonarr uses
+  `tvdb:{tvdb}` with a title fallback; Seerr uses `/movie/{tmdb}` and `/tv/{tmdb}` with a search fallback.
+  Jellyfin and Emby cannot deep-link from Trakt ids, so they open their web search:
+  `{jellyfin}/web/#/search?query={title}` and
+  `{emby}/web/index.html#!/list/list.html?type=search&searchtext={title}`. Jellyfin's route comes from the current
+  `jellyfin-web` route table (`search`, no `.html`, reading `?query=`). Emby's route comes from the current 4.9 web
+  UI (`/web/index.html#!/list/list.html?type=search`) plus the `searchtext` search field; no live Emby server was
+  available to confirm the full path. These paths vary by web-client version, so the presets are editable and the
+  README says so. No public hosts are shipped.
+- Tests: `test/presets.test.js` covers the exact and search routes, including TVDB, Letterboxd, DMM, MDBList,
+  OpenSubtitles and the five server presets; `test/data.test.js` covers reading `tvdb` and the episode IMDb id from
+  the strip and the API, plus server template vars and validation; `test/text.test.js` covers raw server filling; the
+  built-bundle tests check IMDb, TMDb and Letterboxd on a movie, the TVDB show lookup on a season page, the
+  MDBList/OpenSubtitles routes, arbitrary-placeholder rejection, the menu add-link prompt, and configuring server
+  hosts before adding Jellyfin/Emby/Seerr links.
+
 ## 2026-11-07: keep Watchlist all available in grid view (PR 26)
 
 - The same bulk button remains in `#credits .toolbar .controls` in list and grid views. Grid candidates come from

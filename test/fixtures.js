@@ -58,6 +58,7 @@ export const SHOW_HTML = `
         <li><a class="stat" href="/shows/breaking-bad/stats" aria-label="Trakt Rating 93%"><span class="glyph heart"></span></a></li>
         <li><a class="stat" href="https://www.imdb.com/title/tt0903747/ratings"><img class="logo imdb" alt="IMDb"></a></li>
         <li><a class="stat" href="https://www.themoviedb.org/tv/1396"><img class="logo tmdb" alt="TMDb"></a></li>
+        <li><a class="stat" href="https://www.thetvdb.com/dereferrer/series/81189">TVDB</a></li>
       </ul></div></div></div>
     </div>
   </section>

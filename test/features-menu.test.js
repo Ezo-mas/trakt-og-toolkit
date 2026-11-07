@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { createFeatureHost } from '../src/features/host.js';
 import { FEATURE_LABELS } from '../src/menu.js';
+import { answerDialogs } from './dialogs.js';
 import { SHOW_HTML } from './fixtures.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
@@ -98,4 +99,26 @@ test('stored disabled features load off and malformed storage keeps features on'
   const malformed = boot(t, { storage: { 'features.disabled': 'custom-links' } });
   await wait();
   assert.ok(malformed.panel(), 'a non-array value is ignored');
+});
+
+test('menu add-link accepts server placeholders and rejects arbitrary templates', async t => {
+  const b = boot(t);
+  await wait();
+
+  let answer = 'Jellyfin | {jellyfin}/web/#/search?query={title}';
+  const dialogs = answerDialogs(b.window, { prompt: () => answer });
+
+  b.menus.get('add custom link')();
+  await wait();
+  assert.match(dialogs.prompts[0].message, /Server hosts:/);
+  assert.match(dialogs.prompts[0].message, /\{jellyfin\}/);
+  assert.deepEqual(JSON.parse(JSON.stringify(b.data.get('watch.customLinks'))), [
+    { label: 'Jellyfin', url: '{jellyfin}/web/#/search?query={title}' },
+  ]);
+
+  answer = 'Bad | {title}/evil';
+  b.menus.get('add custom link')();
+  await wait();
+  assert.match(dialogs.errors[0], /server placeholder/);
+  assert.equal(b.data.get('watch.customLinks').length, 1, 'an arbitrary placeholder is rejected');
 });
