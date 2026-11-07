@@ -183,3 +183,48 @@ test('card membership reader follows only its native list tooltip and canonical 
   control.querySelector('button').removeAttribute('aria-describedby');
   assert.equal(readCardWatchlisted(control), false);
 });
+
+
+test('bulk responses must account for each submitted type before hiding shortcuts', async () => {
+  const routes = [parseRoute('/movies/test'), parseRoute('/shows/test')];
+  for (const response of [{}, { added: { movies: 1 } }, { added: { movies: 2 } },
+    { added: { movies: '1', shows: 1 } }, { added: { movies: -1, shows: 1 } },
+    { added: { movies: 1 }, not_found: { shows: 1 } }]) {
+    let progress = 0;
+    const api = createWatchlistApi({ signedIn: () => true, auth: async () => response });
+    await assert.rejects(api.addMany(routes, { onProgress: () => progress++ }), /did not confirm/);
+    assert.equal(progress, 0);
+  }
+});
+
+test('bulk progress retains completed batches when a later write fails or is cancelled', async () => {
+  const routes = Array.from({ length: 101 }, (_, i) => parseRoute(`/movies/test-${i}`));
+  const updates = [];
+  let writes = 0, active = true;
+  const api = createWatchlistApi({ signedIn: () => true, auth: async () => {
+    if (++writes === 2) throw new Error('network');
+    return { added: { movies: 100 } };
+  } });
+  await assert.rejects(api.addMany(routes, { onProgress: result => updates.push(result) }), /network/);
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].added, 100);
+  assert.equal(updates[0].succeededKeys.length, 100);
+  writes = 0;
+  assert.deepEqual(await api.addMany(routes, { active: () => active, onProgress: () => { active = false; } }), { cancelled: true });
+  assert.equal(writes, 1);
+});
+
+test('unmatched not-found ids never hide potentially failed shortcuts', async () => {
+  const api = createWatchlistApi({ signedIn: () => true, auth: async () => ({ added: { movies: 1 },
+    not_found: { movies: [{ ids: { trakt: 99 } }] } }) });
+  const result = await api.addMany([parseRoute('/movies/one'), parseRoute('/movies/two')]);
+  assert.equal(result.notFound, 1);
+  assert.deepEqual(result.succeededKeys, []);
+});
+
+test('watchlist removal requires a valid matching deletion response', async () => {
+  for (const response of [null, {}, { deleted: { movies: '1' } }, { deleted: { movies: 3 } }]) {
+    const api = createWatchlistApi({ signedIn: () => true, auth: async () => response });
+    await assert.rejects(api.remove({ movies: [{ ids: { slug: 'one' } }] }), /did not confirm/);
+  }
+});

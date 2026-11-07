@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { readFileSync } from 'node:fs';
+import { answerDialogs } from './dialogs.js';
 import { PERSON_CREDITS_HTML, personCreditRowHtml } from './fixtures.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
@@ -11,7 +12,7 @@ function boot(t, { signedIn = true } = {}) {
   const window = new Window({ url: 'https://og.trakt.tv/people/bryan-cranston' });
   t.after(() => window.close());
   const { document } = window;
-  const store = new Map(), calls = [], confirmations = [];
+  const store = new Map(), calls = [];
   let allow = true, postResult = null;
   if (signedIn) {
     store.set('trakt.clientId', 'client');
@@ -21,14 +22,15 @@ function boot(t, { signedIn = true } = {}) {
   window.GM_setValue = (k, v) => store.set(k, v);
   window.GM_deleteValue = k => store.delete(k);
   window.GM_registerMenuCommand = () => {};
-  window.confirm = text => { confirmations.push(text); return allow; };
+  const dialogs = answerDialogs(window, { confirm: () => allow });
+  const confirmations = dialogs.confirms;
   window.GM_xmlhttpRequest = r => {
     calls.push(r);
     const path = new URL(r.url).pathname;
     let body;
     if (r.method === 'POST') {
       const sent = JSON.parse(r.data);
-      body = postResult ? postResult(sent) : { added: { movies: sent.movies?.length ?? 0, shows: sent.shows?.length ?? 0 } };
+      body = postResult ? postResult(sent, path) : { [path.endsWith('/remove') ? 'deleted' : 'added']: { movies: sent.movies?.length ?? 0, shows: sent.shows?.length ?? 0 } };
     } else if (path.startsWith('/shows/')) body = { ids: { trakt: 320413 }, title: 'After Hours with James Corden' };
     else body = { ids: { trakt: 1115926 }, title: 'Jackpot' };
     queueMicrotask(() => r.onload({ status: 200, responseText: JSON.stringify(body), responseHeaders: '' }));
@@ -105,7 +107,7 @@ test('built bundle adds every visible credit from one Watchlist all action', asy
   assert.deepEqual(JSON.parse(b.writes()[0].data), { movies: [{ ids: { slug: 'jackpot-1115926' } }],
     shows: [{ ids: { slug: 'after-hours-with-james-corden' } }] });
   assert.ok(b.buttons().every(button => button.hidden));
-  assert.match(b.document.querySelector('.ogt-toast').textContent, /Watchlist: 2 added/);
+  assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, 'Watchlist: 2 added, 0 already there, 0 not found.');
   assert.equal(bulk.textContent, 'Watchlist all');
   assert.equal(bulk.disabled, true);
 });
@@ -128,7 +130,7 @@ test('Watchlist all reports existing and not-found counts and leaves failed rows
     not_found: { shows: (sent.shows ?? []).map(item => ({ ids: { slug: item.ids.slug } })) } }));
   const bulk = b.document.querySelector('.ogt-watchlist-bulk');
   bulk.click(); await wait();
-  assert.match(b.document.querySelector('.ogt-toast').textContent, /Watchlist: 1 added, 1 not found/);
+  assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, 'Watchlist: 1 added, 0 already there, 1 not found.');
   assert.equal(b.buttons()[0].hidden, true, 'the added movie loses its shortcut');
   assert.equal(b.buttons()[1].hidden, false, 'the not-found show keeps its shortcut');
   assert.equal(bulk.textContent, 'Watchlist all (1)');
@@ -156,4 +158,92 @@ test('signed-out clicks guide and leaving the person page removes the shortcuts'
   b.window.history.pushState({}, '', '/dashboard'); await wait(400);
   assert.equal(b.buttons().length, 0);
   assert.equal(b.document.getElementById('ogt-watchlist-credits'), null);
+});
+
+
+test('bulk Undo removes only confirmed new titles and restores shortcuts', async t => {
+  const b = boot(t); await wait();
+  b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
+  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait();
+  assert.equal(b.writes().length, 2);
+  assert.equal(new URL(b.writes()[1].url).pathname, '/sync/watchlist/remove');
+  assert.deepEqual(JSON.parse(b.writes()[1].data), JSON.parse(b.writes()[0].data));
+  assert.ok(b.buttons().every(button => !button.hidden));
+  assert.equal(b.document.querySelector('.ogt-watchlist-bulk').textContent, 'Watchlist all (2)');
+});
+
+test('mixed new and existing bulk additions never offer destructive Undo', async t => {
+  const b = boot(t); await wait();
+  b.setPostResult(() => ({ added: { movies: 1 }, existing: { shows: 1 } }));
+  b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
+  assert.ok(b.buttons().every(button => button.hidden));
+  assert.equal(b.document.querySelector('.ogt-watchlist-toast__undo'), null);
+});
+
+test('bulk confirm locks row actions and leaving before confirming sends nothing', async t => {
+  const b = boot(t); await wait();
+  b.document.querySelector('.ogt-watchlist-bulk').click();
+  assert.ok(b.buttons().every(button => button.disabled));
+  b.buttons()[0].click();
+  b.window.history.pushState({}, '', '/dashboard');
+  await wait(400);
+  assert.equal(b.calls.length, 0);
+});
+
+test('bulk progress survives a later batch failure', async t => {
+  const b = boot(t); await wait();
+  b.document.querySelector('section.year').insertAdjacentHTML('beforeend',
+    Array.from({ length: 100 }, (_, i) => personCreditRowHtml({ id: `extra-${i}`, href: `/movies/extra-${i}` })).join(''));
+  await wait();
+  let batches = 0;
+  b.setPostResult(sent => ++batches === 1 ? { added: { movies: sent.movies?.length ?? 0, shows: sent.shows?.length ?? 0 } } : {});
+  b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
+  assert.equal(b.writes().length, 2);
+  assert.equal(b.buttons().filter(button => button.hidden).length, 100);
+  assert.equal(b.document.querySelector('.ogt-watchlist-bulk').textContent, 'Watchlist all (2)');
+  assert.match(b.document.querySelector('.ogt-toast').textContent, /100 added.*Remaining titles could not be confirmed/);
+});
+
+
+test('bulk skips hidden credit rows and follows toolbar replacements', async t => {
+  const b = boot(t); await wait();
+  b.document.getElementById('credit-movie').hidden = true;
+  b.document.querySelector('#credits .toolbar .controls').outerHTML = '<div class="controls"></div>';
+  await wait();
+  const bulk = b.document.querySelector('.ogt-watchlist-bulk');
+  assert.equal(bulk.textContent, 'Watchlist all (1)');
+  bulk.click(); await wait();
+  assert.deepEqual(JSON.parse(b.writes()[0].data), { shows: [{ ids: { slug: 'after-hours-with-james-corden' } }] });
+});
+
+test('bulk Undo leaves not-found titles untouched', async t => {
+  const b = boot(t); await wait();
+  b.setPostResult((sent, path) => path.endsWith('/remove') ? { deleted: { movies: 1 } } :
+    { added: { movies: 1 }, not_found: { shows: sent.shows } });
+  b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
+  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait();
+  assert.deepEqual(JSON.parse(b.writes()[1].data), { movies: [{ ids: { slug: 'jackpot-1115926' } }] });
+  assert.ok(b.buttons().every(button => !button.hidden));
+});
+
+
+test('bulk Undo retries only remaining removal batches after a failure', async t => {
+  const b = boot(t); await wait();
+  b.document.querySelector('section.year').insertAdjacentHTML('beforeend',
+    Array.from({ length: 100 }, (_, i) => personCreditRowHtml({ id: `undo-${i}`, href: `/movies/undo-${i}` })).join(''));
+  await wait();
+  let removals = 0;
+  b.setPostResult((sent, path) => path.endsWith('/remove') && ++removals === 2 ? {} :
+    { [path.endsWith('/remove') ? 'deleted' : 'added']: { movies: sent.movies?.length ?? 0, shows: sent.shows?.length ?? 0 } });
+  b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
+  const undo = b.document.querySelector('.ogt-watchlist-toast__undo');
+  undo.click(); await wait();
+  assert.equal(removals, 2);
+  assert.equal(b.buttons().filter(button => button.hidden).length, 2);
+  assert.equal(undo.disabled, false);
+  undo.click(); await wait();
+  assert.equal(removals, 3);
+  assert.ok(b.buttons().every(button => !button.hidden));
+  const last = JSON.parse(b.writes().at(-1).data);
+  assert.equal(last.movies.length, 2, 'retry skips the 100 confirmed removals');
 });

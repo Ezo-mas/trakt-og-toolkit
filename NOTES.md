@@ -2,6 +2,23 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-07: finish and review Watchlist all (PR 26)
+
+- Merged main and moved the bulk confirmation to the shared og-styled dialog. The page/auth epoch is captured
+  before opening it; stale confirmations send nothing. Bulk add/undo lock row actions until they finish, and an old
+  operation cannot clear a newer session's busy flag. Hidden rows are excluded and toolbar replacements remount the button.
+- Sync responses must account for every submitted movie/show before their shortcuts hide. Each confirmed batch
+  updates shared state immediately, so a later error keeps completed rows hidden and reports the confirmed counts.
+  Unknown not-found IDs leave affected shortcuts available. Bulk notices use the shared notifier with a count summary.
+- Bulk Undo reuses the existing removal API, bounded to 100 titles per request, and restores shortcuts after each
+  confirmed removal. A failed later removal can be retried without repeating completed batches. Undo is offered only
+  when all successful titles are new and identifiable; mixed new/existing results cannot safely identify new titles.
+  Removal responses now require valid deletion counts. Bulk operations skip per-credit native picker refreshes;
+  reload remains the fallback. Added the credits toolbar selector to drift checks.
+- Regression checks cover partial batches, malformed responses, cancellation, row locking, hidden rows, toolbar
+  replacement, safe Undo and mixed-response protection. Build, full tests, focused Undo retry test, diff check
+  and live drift checks passed (all six pages plus native modules). Live authenticated writes were not exercised.
+
 ## 2026-11-06: og-styled dialogs instead of the browser's
 
 - Every `window.confirm` / `window.prompt` (playback clear and save progress, library add, the custom-link and

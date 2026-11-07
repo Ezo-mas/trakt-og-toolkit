@@ -2,8 +2,10 @@ import { el } from '../../core/dom.js';
 import { isSignedIn } from '../../core/trakt.js';
 import { debugError } from '../../core/log.js';
 import { toast } from '../../ui/shell.js';
+import { confirmDialog } from '../../ui/dialog.js';
+import { notifySuccess } from '../../ui/success-notification.js';
 import { watchlistApi } from './api.js';
-import { readCardWatchlisted } from './data.js';
+import { readCardWatchlisted, watchlistBulkBody, watchlistBulkItems } from './data.js';
 import { watchlistIcon } from './icon.js';
 import { createNativeWatchlistRefresh } from './native-refresh.js';
 import { notifyWatchlistAdded } from './notification.js';
@@ -44,9 +46,10 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         entries.delete(entry.control);
       }
       function updateButton(entry, state) {
-        entry.button.hidden = state.added || state.wasWatchlisted;
-        entry.button.disabled = state.busy || state.undoing;
-        const busy = String(state.busy || state.undoing);
+        const hidden = state.added || state.wasWatchlisted;
+        if (entry.button.hidden !== hidden) entry.button.hidden = hidden;
+        entry.button.disabled = bulkBusy || state.busy || state.undoing;
+        const busy = String(bulkBusy || state.busy || state.undoing);
         if (entry.button.getAttribute('aria-busy') !== busy) entry.button.setAttribute('aria-busy', busy);
       }
       function bulkEntries() {
@@ -55,6 +58,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
           const state = stateFor(entry.key);
           if (state.busy || state.undoing || state.added || state.wasWatchlisted) continue;
           if (!entry.control.isConnected || !entry.button.isConnected) continue;
+          if (entry.host.closest('[hidden]') || entry.host.checkVisibility?.() === false) continue;
           if (!unique.has(entry.key)) unique.set(entry.key, entry);
         }
         return [...unique.values()];
@@ -62,7 +66,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       function syncBulk() {
         if (!bulkButton) return;
         const control = bulk.target?.();
-        if (control && !bulkButton.isConnected) control.append(bulkButton);
+        if (control && bulkButton.parentElement !== control) control.append(bulkButton);
         const total = bulkEntries().length;
         const label = total ? `${bulk.label} (${total})` : bulk.label;
         if (bulkButton.textContent !== label) bulkButton.textContent = label;
@@ -75,45 +79,63 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         if (bulkBusy) return;
         if (!isSignedIn()) { toast('Sign in to Trakt through the toolkit menu first.'); return; }
         const list = bulkEntries();
-        if (!list.length) { toast('All credits shown are already on your watchlist.'); return; }
-        if (!window.confirm(`Add ${list.length} title${list.length === 1 ? '' : 's'} to your watchlist?`)) return;
+        if (!list.length) return;
         const epoch = session;
         const pagePath = location.pathname;
         const active = () => !destroyed && session === epoch && location.pathname === pagePath;
+        let progress;
         bulkBusy = true;
-        syncBulk();
+        scan();
         try {
-          const result = await watchlistApi.addMany(list.map(entry => entry.route), { active });
+          if (!(await confirmDialog(`Add ${list.length} title${list.length === 1 ? '' : 's'} to your watchlist?`,
+            { title: 'Watchlist all', ok: 'Add' })) || !active()) return;
+          const result = await watchlistApi.addMany(list.map(entry => entry.route), { active, onProgress: result => {
+            if (!active()) return;
+            progress = result;
+            for (const key of result.succeededKeys) stateFor(key).added = true;
+            scan();
+          } });
           if (!active() || result.cancelled) return;
-          if (!result.sent) { toast('No titles to add.'); return; }
-          const succeeded = new Set(result.succeededKeys ?? []);
-          for (const entry of entries.values()) if (succeeded.has(entry.key)) stateFor(entry.key).added = true;
-          scan();
-          const parts = [];
-          if (result.added) parts.push(`${result.added} added`);
-          if (result.existing) parts.push(`${result.existing} already there`);
-          if (result.notFound) parts.push(`${result.notFound} not found`);
-          
-          // Notification (no undo for bulk operations)
-          const summary = parts.length ? parts.join(', ') : 'nothing changed';
-          void notifyWatchlistAdded({
-            title: `Watchlist: ${summary}`,
-            active,
-          });
-          
-          // Native refresh for updated controls
-          for (const entry of list) {
-            if (succeeded.has(entry.key) && entry.control?.isConnected) {
-              await nativeRefresh.refresh(entry.control, entry.route, { active });
-            }
-          }
+          const summary = `Watchlist: ${result.added} added, ${result.existing} already there, ${result.notFound} not found.`;
+          // Mixed responses do not identify new vs existing items, so only wholly new additions can be undone.
+          const undoable = result.added > 0 && result.existing === 0 && result.succeededKeys.length === result.added;
+          const succeeded = new Set(result.succeededKeys);
+          const routes = list.filter(entry => succeeded.has(entry.key)).map(entry => entry.route);
+          void notifySuccess(summary, active, { undo: undoable ? () => undoAll(routes, active) : undefined });
+          // shortcut: bulk picker refresh costs one load per credit, reload until OG exposes a bulk refresh.
         } catch (error) {
           debugError(`${logLabel} bulk watchlist addition failed`, error);
-          if (active()) toast(error.status === 429 ? 'Trakt rate limited this request; try again later.' :
-            error.status ? 'Could not add these titles to your watchlist. Check your toolkit sign-in and try again.' : error.message);
+          if (active()) {
+            const completed = progress ? `Watchlist: ${progress.added} added, ${progress.existing} already there, ${progress.notFound} not found. ` : '';
+            toast(completed + (error.status === 429 ? 'Trakt rate limited this request; try again later.' :
+              'Remaining titles could not be confirmed; some may have been added. Try again.'));
+          }
         } finally {
-          bulkBusy = false;
-          if (!destroyed) scan();
+          if (!destroyed && epoch === session) { bulkBusy = false; scan(); }
+        }
+      }
+      async function undoAll(routes, active) {
+        if (bulkBusy || !active()) return false;
+        const epoch = session;
+        bulkBusy = true;
+        scan();
+        try {
+          // Keep the same batch bound for removal, retaining progress if a later batch fails.
+          while (routes.length) {
+            if (!active()) return false;
+            const batch = routes.slice(0, 100);
+            const result = await watchlistApi.remove(watchlistBulkBody(watchlistBulkItems(batch)), { active });
+            if (result.cancelled || !active()) return false;
+            for (const route of batch) stateFor(route.key).added = false;
+            routes.splice(0, batch.length);
+            scan();
+          }
+          return true;
+        } catch (error) {
+          failed(error, 'undo', active);
+          return false;
+        } finally {
+          if (!destroyed && epoch === session) { bulkBusy = false; scan(); }
         }
       }
       /** True while this page, session and at least one live button for the title remain. */
@@ -133,7 +155,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         event.preventDefault();
         event.stopPropagation();
         const state = stateFor(entry.key);
-        if (state.busy || state.undoing || entry.button.hidden) return;
+        if (bulkBusy || state.busy || state.undoing || entry.button.hidden) return;
         if (!isSignedIn()) { toast('Sign in to Trakt through the toolkit menu first.'); return; }
         const epoch = session;
         const operation = ++state.operation;
@@ -162,7 +184,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       }
       async function undo(entry, body) {
         const state = stateFor(entry.key);
-        if (state.undoing || !body) return false;
+        if (bulkBusy || state.busy || state.undoing || !body) return false;
         if (!isSignedIn()) { toast('Sign in to Trakt through the toolkit menu first.'); return false; }
         const epoch = session;
         const operation = ++state.operation;
@@ -232,7 +254,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       if (bulkButton) bulkButton.addEventListener('click', addAll);
       const observer = new MutationObserver(schedule);
       observer.observe(document.body, { childList: true, subtree: true, characterData: true,
-        attributes: true, attributeFilter: ['href', 'aria-describedby'] });
+        attributes: true, attributeFilter: ['href', 'aria-describedby', 'hidden'] });
       document.addEventListener('ogt:authchange', authChanged);
       scan();
       return { node, destroy() {

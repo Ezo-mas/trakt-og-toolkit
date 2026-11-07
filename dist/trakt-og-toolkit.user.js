@@ -1303,10 +1303,10 @@
       const match = link?.getAttribute("href")?.match(SEASON_HREF_RE);
       if (!match) continue;
       const number = Number(match[1]);
-      const count3 = Number(text(subtitle).match(/(\d+)/)?.[1]) || null;
+      const count2 = Number(text(subtitle).match(/(\d+)/)?.[1]) || null;
       const existing = found.get(number);
-      if (!existing || count3 && (!existing.episodes || count3 > existing.episodes)) {
-        found.set(number, { number, episodes: count3 });
+      if (!existing || count2 && (!existing.episodes || count2 > existing.episodes)) {
+        found.set(number, { number, episodes: count2 });
       }
     }
     return [...found.values()].sort((a, b) => a.number - b.number);
@@ -2149,25 +2149,25 @@
     }
     function renderEpisodeField() {
       const season = seasons.find((entry) => entry.number === selection.season);
-      const count3 = season?.episodes || null;
-      if (!count3 || count3 < 1) {
+      const count2 = season?.episodes || null;
+      if (!count2 || count2 < 1) {
         episodeSlot.replaceChildren(el("span", { text: "—" }));
         selection.episode = null;
         return;
       }
-      if (selection.episode == null || selection.episode > count3) selection.episode = 1;
-      if (count3 > 8) {
+      if (selection.episode == null || selection.episode > count2) selection.episode = 1;
+      if (count2 > 8) {
         const input = el("input", {
           class: "ogt-input",
           type: "number",
           min: "1",
-          max: String(count3),
+          max: String(count2),
           value: String(selection.episode),
           "aria-label": "Episode"
         });
         input.addEventListener("change", () => {
           const value = Number(input.value);
-          if (Number.isInteger(value) && value >= 1 && value <= count3) {
+          if (Number.isInteger(value) && value >= 1 && value <= count2) {
             selection.episode = value;
             persistSelection();
             updateLinkHrefs();
@@ -2179,7 +2179,7 @@
         return;
       }
       const select = el("select", { class: "ogt-select", "aria-label": "Episode" });
-      for (let i = 1; i <= count3; i++) {
+      for (let i = 1; i <= count2; i++) {
         select.append(el("option", { value: String(i), text: `Episode ${i}` }));
       }
       select.value = String(selection.episode);
@@ -4454,8 +4454,8 @@
     if (isSignedIn()) {
       const page = (n) => apiAuthPage(path, { extended: "images", page: n, limit: LIMIT });
       const first = await page(1);
-      const count3 = Math.min(first.pages ?? 1, MAX_PAGES);
-      const rest = await Promise.all(Array.from({ length: count3 - 1 }, (_, i) => page(i + 2)));
+      const count2 = Math.min(first.pages ?? 1, MAX_PAGES);
+      const rest = await Promise.all(Array.from({ length: count2 - 1 }, (_, i) => page(i + 2)));
       return [first, ...rest].flatMap((result) => Array.isArray(result.data) ? result.data : []);
     }
     const rows = [];
@@ -4635,8 +4635,8 @@
       row: scoped(row),
       icon: scoped(lists.querySelector(".list-row svg.icon")),
       likes: lists.querySelector(".list-row .counts > .glass-action"),
-      items: counts.find((count3) => !count3.getAttribute("href")?.endsWith("/comments")),
-      comments: counts.find((count3) => count3.getAttribute("href")?.endsWith("/comments")),
+      items: counts.find((count2) => !count2.getAttribute("href")?.endsWith("/comments")),
+      comments: counts.find((count2) => count2.getAttribute("href")?.endsWith("/comments")),
       tag: lists.querySelector(".list-row .chips .tag.tint"),
       text: scoped(lists.querySelector(".list-row .comment-text")),
       share: lists.querySelector(".list-row .tools > span.share"),
@@ -4647,7 +4647,7 @@
   function createRows(native) {
     const part = (tag2, name, props = {}, ...children) => el(tag2, { ...props, class: [name, native?.row].filter(Boolean).join(" ") }, ...children);
     const ownIcon = (path) => icon2(path, ["icon", native?.icon].filter(Boolean).join(" "));
-    function count3(kind, value, href, word, liked = false) {
+    function count2(kind, value, href, word, liked = false) {
       if (value == null) return null;
       const words = value === 1 ? word : `${word}s`;
       const template = native?.[kind];
@@ -4832,9 +4832,9 @@
                 "div",
                 "counts",
                 {},
-                count3("likes", entry.likes, href, "like", liked),
-                count3("items", entry.itemCount, href, "item"),
-                entry.allowComments ? count3("comments", entry.commentCount, `${href}/comments`, "comment") : null
+                count2("likes", entry.likes, href, "like", liked),
+                count2("items", entry.itemCount, href, "item"),
+                entry.allowComments ? count2("comments", entry.commentCount, `${href}/comments`, "comment") : null
               ),
               part(
                 "div",
@@ -5308,7 +5308,7 @@
           throw new Error("Trakt could not find some items; the addition may be incomplete.");
         }
         const counts = [result?.added?.movies, result?.added?.episodes, result?.updated?.movies, result?.updated?.episodes];
-        if (!counts.some((count3) => Number.isInteger(count3) && count3 > 0)) throw new Error("Trakt did not confirm a library addition.");
+        if (!counts.some((count2) => Number.isInteger(count2) && count2 > 0)) throw new Error("Trakt did not confirm a library addition.");
         const total = (counts2) => (Number(counts2?.movies) || 0) + (Number(counts2?.episodes) || 0);
         const undoable = total(result?.added) > 0 && total(result?.updated) === 0 && total(result?.existing) === 0;
         return { cancelled: false, body, undoable };
@@ -5672,7 +5672,6 @@
 
   // src/features/watchlist/api.js
   var BULK_BATCH = 100;
-  var count2 = (value) => Number.isSafeInteger(value) && value > 0 ? value : 0;
   function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn } = {}) {
     return {
       async add(route, { active: active2 = () => true } = {}) {
@@ -5690,46 +5689,47 @@
           throw new Error("Trakt could not find this title.");
         }
         const counts = [result?.added?.[lookup.type], result?.existing?.[lookup.type]];
-        if (!counts.some((count3) => Number.isSafeInteger(count3) && count3 > 0)) {
+        if (!counts.some((count2) => Number.isSafeInteger(count2) && count2 > 0)) {
           throw new Error("Trakt did not confirm a watchlist addition.");
         }
         return { cancelled: false, title, body, undoable: Number.isSafeInteger(result?.added?.[lookup.type]) && result.added[lookup.type] > 0 };
       },
-      /** Add every whole movie/show in one confirmed batch, using each route's slug. */
-      async addMany(routes, { active: active2 = () => true } = {}) {
+      /** Report each confirmed batch so a later failure cannot erase completed work. */
+      async addMany(routes, { active: active2 = () => true, onProgress = () => {
+      } } = {}) {
         if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
         if (!active2()) return { cancelled: true };
         const items = watchlistBulkItems(routes);
-        if (!items.length) return { cancelled: false, sent: 0, added: 0, existing: 0, notFound: 0, succeededKeys: [] };
-        let added = 0, existing = 0, notFound = 0;
-        const missing = /* @__PURE__ */ new Set();
+        const progress = { cancelled: false, sent: 0, added: 0, existing: 0, notFound: 0, succeededKeys: [] };
         for (let start2 = 0; start2 < items.length; start2 += BULK_BATCH) {
-          const batch = items.slice(start2, start2 + BULK_BATCH);
           if (!active2() || !signedIn()) return { cancelled: true };
+          const batch = items.slice(start2, start2 + BULK_BATCH);
           const result = await auth("POST", "/sync/watchlist", watchlistBulkBody(batch));
-          if (!result || typeof result !== "object") throw new Error("Trakt did not confirm watchlist additions.");
-          let confirmed = 0;
+          const confirmed = { added: 0, existing: 0, notFound: 0, succeededKeys: [] };
           for (const type of ["movies", "shows"]) {
-            const addedCount = count2(result.added?.[type]);
-            const existingCount = count2(result.existing?.[type]);
-            const missingItems = result.not_found?.[type];
-            let missingCount = 0;
-            if (Array.isArray(missingItems)) {
-              missingCount = missingItems.length;
-              for (const item of missingItems) {
-                const slug = item?.ids?.slug;
-                if (typeof slug === "string" && slug) missing.add(`${type}:${slug}`);
-              }
-            } else missingCount = count2(missingItems);
-            added += addedCount;
-            existing += existingCount;
-            notFound += missingCount;
-            confirmed += addedCount + existingCount + missingCount;
+            const sent = batch.filter((item) => item.type === type);
+            const added = result?.added?.[type] ?? 0;
+            const existing = result?.existing?.[type] ?? 0;
+            const missing = result?.not_found?.[type] ?? [];
+            if (!Number.isSafeInteger(added) || added < 0 || !Number.isSafeInteger(existing) || existing < 0 || !Array.isArray(missing) || added + existing + missing.length !== sent.length) {
+              throw new Error("Trakt did not confirm all watchlist additions; some titles may have been added.");
+            }
+            const missingSlugs = new Set(missing.map((item) => item?.ids?.slug));
+            if (missingSlugs.size === missing.length && [...missingSlugs].every((slug) => sent.some((item) => item.slug === slug))) {
+              confirmed.succeededKeys.push(...sent.filter((item) => !missingSlugs.has(item.slug)).map((item) => item.key));
+            }
+            confirmed.added += added;
+            confirmed.existing += existing;
+            confirmed.notFound += missing.length;
           }
-          if (!confirmed) throw new Error("Trakt did not confirm watchlist additions.");
+          progress.sent += batch.length;
+          progress.added += confirmed.added;
+          progress.existing += confirmed.existing;
+          progress.notFound += confirmed.notFound;
+          progress.succeededKeys.push(...confirmed.succeededKeys);
+          onProgress({ ...progress, succeededKeys: [...progress.succeededKeys] });
         }
-        const succeededKeys = notFound === 0 ? items.map((item) => item.key) : missing.size === notFound ? items.filter((item) => !missing.has(`${item.type}:${item.slug}`)).map((item) => item.key) : [];
-        return { cancelled: false, sent: items.length, added, existing, notFound, succeededKeys };
+        return progress;
       },
       /** Undo an addition with the exact body that was sent. */
       async remove(body, { active: active2 = () => true } = {}) {
@@ -5738,6 +5738,12 @@
         const result = await auth("POST", "/sync/watchlist/remove", body);
         if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
           throw new Error("Trakt could not find this title.");
+        }
+        for (const [type, items] of Object.entries(body)) {
+          const deleted = result?.deleted?.[type];
+          if (!Array.isArray(items) || !Number.isSafeInteger(deleted) || deleted < 0 || deleted > items.length) {
+            throw new Error("Trakt did not confirm a watchlist removal.");
+          }
         }
         return { cancelled: false };
       }
@@ -5995,9 +6001,10 @@
           entries.delete(entry.control);
         }
         function updateButton(entry, state) {
-          entry.button.hidden = state.added || state.wasWatchlisted;
-          entry.button.disabled = state.busy || state.undoing;
-          const busy = String(state.busy || state.undoing);
+          const hidden = state.added || state.wasWatchlisted;
+          if (entry.button.hidden !== hidden) entry.button.hidden = hidden;
+          entry.button.disabled = bulkBusy || state.busy || state.undoing;
+          const busy = String(bulkBusy || state.busy || state.undoing);
           if (entry.button.getAttribute("aria-busy") !== busy) entry.button.setAttribute("aria-busy", busy);
         }
         function bulkEntries() {
@@ -6006,6 +6013,7 @@
             const state = stateFor(entry.key);
             if (state.busy || state.undoing || state.added || state.wasWatchlisted) continue;
             if (!entry.control.isConnected || !entry.button.isConnected) continue;
+            if (entry.host.closest("[hidden]") || entry.host.checkVisibility?.() === false) continue;
             if (!unique.has(entry.key)) unique.set(entry.key, entry);
           }
           return [...unique.values()];
@@ -6013,7 +6021,7 @@
         function syncBulk() {
           if (!bulkButton) return;
           const control = bulk.target?.();
-          if (control && !bulkButton.isConnected) control.append(bulkButton);
+          if (control && bulkButton.parentElement !== control) control.append(bulkButton);
           const total = bulkEntries().length;
           const label = total ? `${bulk.label} (${total})` : bulk.label;
           if (bulkButton.textContent !== label) bulkButton.textContent = label;
@@ -6028,46 +6036,67 @@
             return;
           }
           const list = bulkEntries();
-          if (!list.length) {
-            toast("All credits shown are already on your watchlist.");
-            return;
-          }
-          if (!window.confirm(`Add ${list.length} title${list.length === 1 ? "" : "s"} to your watchlist?`)) return;
+          if (!list.length) return;
           const epoch = session;
           const pagePath = location.pathname;
           const active2 = () => !destroyed && session === epoch && location.pathname === pagePath;
+          let progress;
           bulkBusy = true;
-          syncBulk();
+          scan();
           try {
-            const result = await watchlistApi.addMany(list.map((entry) => entry.route), { active: active2 });
+            if (!await confirmDialog(
+              `Add ${list.length} title${list.length === 1 ? "" : "s"} to your watchlist?`,
+              { title: "Watchlist all", ok: "Add" }
+            ) || !active2()) return;
+            const result = await watchlistApi.addMany(list.map((entry) => entry.route), { active: active2, onProgress: (result2) => {
+              if (!active2()) return;
+              progress = result2;
+              for (const key of result2.succeededKeys) stateFor(key).added = true;
+              scan();
+            } });
             if (!active2() || result.cancelled) return;
-            if (!result.sent) {
-              toast("No titles to add.");
-              return;
-            }
-            const succeeded = new Set(result.succeededKeys ?? []);
-            for (const entry of entries.values()) if (succeeded.has(entry.key)) stateFor(entry.key).added = true;
-            scan();
-            const parts = [];
-            if (result.added) parts.push(`${result.added} added`);
-            if (result.existing) parts.push(`${result.existing} already there`);
-            if (result.notFound) parts.push(`${result.notFound} not found`);
-            const summary2 = parts.length ? parts.join(", ") : "nothing changed";
-            void notifyWatchlistAdded({
-              title: `Watchlist: ${summary2}`,
-              active: active2
-            });
-            for (const entry of list) {
-              if (succeeded.has(entry.key) && entry.control?.isConnected) {
-                await nativeRefresh.refresh(entry.control, entry.route, { active: active2 });
-              }
-            }
+            const summary2 = `Watchlist: ${result.added} added, ${result.existing} already there, ${result.notFound} not found.`;
+            const undoable = result.added > 0 && result.existing === 0 && result.succeededKeys.length === result.added;
+            const succeeded = new Set(result.succeededKeys);
+            const routes = list.filter((entry) => succeeded.has(entry.key)).map((entry) => entry.route);
+            void notifySuccess(summary2, active2, { undo: undoable ? () => undoAll(routes, active2) : void 0 });
           } catch (error) {
             debugError(`${logLabel} bulk watchlist addition failed`, error);
-            if (active2()) toast(error.status === 429 ? "Trakt rate limited this request; try again later." : error.status ? "Could not add these titles to your watchlist. Check your toolkit sign-in and try again." : error.message);
+            if (active2()) {
+              const completed = progress ? `Watchlist: ${progress.added} added, ${progress.existing} already there, ${progress.notFound} not found. ` : "";
+              toast(completed + (error.status === 429 ? "Trakt rate limited this request; try again later." : "Remaining titles could not be confirmed; some may have been added. Try again."));
+            }
           } finally {
-            bulkBusy = false;
-            if (!destroyed) scan();
+            if (!destroyed && epoch === session) {
+              bulkBusy = false;
+              scan();
+            }
+          }
+        }
+        async function undoAll(routes, active2) {
+          if (bulkBusy || !active2()) return false;
+          const epoch = session;
+          bulkBusy = true;
+          scan();
+          try {
+            while (routes.length) {
+              if (!active2()) return false;
+              const batch = routes.slice(0, 100);
+              const result = await watchlistApi.remove(watchlistBulkBody(watchlistBulkItems(batch)), { active: active2 });
+              if (result.cancelled || !active2()) return false;
+              for (const route of batch) stateFor(route.key).added = false;
+              routes.splice(0, batch.length);
+              scan();
+            }
+            return true;
+          } catch (error) {
+            failed(error, "undo", active2);
+            return false;
+          } finally {
+            if (!destroyed && epoch === session) {
+              bulkBusy = false;
+              scan();
+            }
           }
         }
         function activeFor(entry) {
@@ -6083,7 +6112,7 @@
           event.preventDefault();
           event.stopPropagation();
           const state = stateFor(entry.key);
-          if (state.busy || state.undoing || entry.button.hidden) return;
+          if (bulkBusy || state.busy || state.undoing || entry.button.hidden) return;
           if (!isSignedIn()) {
             toast("Sign in to Trakt through the toolkit menu first.");
             return;
@@ -6115,7 +6144,7 @@
         }
         async function undo(entry, body) {
           const state = stateFor(entry.key);
-          if (state.undoing || !body) return false;
+          if (bulkBusy || state.busy || state.undoing || !body) return false;
           if (!isSignedIn()) {
             toast("Sign in to Trakt through the toolkit menu first.");
             return false;
@@ -6199,7 +6228,7 @@
           subtree: true,
           characterData: true,
           attributes: true,
-          attributeFilter: ["href", "aria-describedby"]
+          attributeFilter: ["href", "aria-describedby", "hidden"]
         });
         document.addEventListener("ogt:authchange", authChanged);
         scan();

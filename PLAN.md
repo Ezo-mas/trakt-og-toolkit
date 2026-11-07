@@ -405,7 +405,8 @@ controls; it counts the currently shown rows that still need adding, confirms on
 shortcut, and not-found rows stay available. It reuses the shared shortcut state and does not refresh og's picker
 for every credit. Live `article.credit-row` markup was checked: the poster link names the movie/show and the row
 reuses the card-sized `ListControl`, with no native watchlist action. The captured page rendered all 211 credits at
-once; the feature still follows rows added later.
+once; the feature still follows rows added later. Bulk Undo is available for wholly new additions; mixed
+new/existing responses have no Undo. Confirmed batches remain marked if a later batch fails.
 
 **Goal:** a person's page (`/people/:id`) lists their credits by year, each row with og's own action strip (watched,
 lists, play, rating). Like cards, the lists icon opens the picker, so adding to the watchlist takes several clicks.

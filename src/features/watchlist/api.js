@@ -3,7 +3,6 @@ import { watchlistLookup, watchlistBody, watchlistBulkBody, watchlistBulkItems }
 
 /** A whole credits page can be large; 100 keeps each sync payload comfortably bounded. */
 const BULK_BATCH = 100;
-const count = value => Number.isSafeInteger(value) && value > 0 ? value : 0;
 
 export function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn } = {}) {
   return {
@@ -31,43 +30,43 @@ export function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = is
       return { cancelled: false, title, body, undoable: Number.isSafeInteger(result?.added?.[lookup.type]) && result.added[lookup.type] > 0 };
     },
 
-    /** Add every whole movie/show in one confirmed batch, using each route's slug. */
-    async addMany(routes, { active = () => true } = {}) {
+    /** Report each confirmed batch so a later failure cannot erase completed work. */
+    async addMany(routes, { active = () => true, onProgress = () => {} } = {}) {
       if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
       if (!active()) return { cancelled: true };
       const items = watchlistBulkItems(routes);
-      if (!items.length) return { cancelled: false, sent: 0, added: 0, existing: 0, notFound: 0, succeededKeys: [] };
-      let added = 0, existing = 0, notFound = 0;
-      const missing = new Set();
+      const progress = { cancelled: false, sent: 0, added: 0, existing: 0, notFound: 0, succeededKeys: [] };
       for (let start = 0; start < items.length; start += BULK_BATCH) {
-        const batch = items.slice(start, start + BULK_BATCH);
         if (!active() || !signedIn()) return { cancelled: true };
+        const batch = items.slice(start, start + BULK_BATCH);
         const result = await auth('POST', '/sync/watchlist', watchlistBulkBody(batch));
-        if (!result || typeof result !== 'object') throw new Error('Trakt did not confirm watchlist additions.');
-        let confirmed = 0;
+        const confirmed = { added: 0, existing: 0, notFound: 0, succeededKeys: [] };
         for (const type of ['movies', 'shows']) {
-          const addedCount = count(result.added?.[type]);
-          const existingCount = count(result.existing?.[type]);
-          const missingItems = result.not_found?.[type];
-          let missingCount = 0;
-          if (Array.isArray(missingItems)) {
-            missingCount = missingItems.length;
-            for (const item of missingItems) {
-              const slug = item?.ids?.slug;
-              if (typeof slug === 'string' && slug) missing.add(`${type}:${slug}`);
-            }
-          } else missingCount = count(missingItems);
-          added += addedCount;
-          existing += existingCount;
-          notFound += missingCount;
-          confirmed += addedCount + existingCount + missingCount;
+          const sent = batch.filter(item => item.type === type);
+          const added = result?.added?.[type] ?? 0;
+          const existing = result?.existing?.[type] ?? 0;
+          const missing = result?.not_found?.[type] ?? [];
+          if (!Number.isSafeInteger(added) || added < 0 || !Number.isSafeInteger(existing) || existing < 0 ||
+            !Array.isArray(missing) || added + existing + missing.length !== sent.length) {
+            throw new Error('Trakt did not confirm all watchlist additions; some titles may have been added.');
+          }
+          const missingSlugs = new Set(missing.map(item => item?.ids?.slug));
+          // Without matching slugs, the response cannot identify which shortcuts should hide.
+          if (missingSlugs.size === missing.length && [...missingSlugs].every(slug => sent.some(item => item.slug === slug))) {
+            confirmed.succeededKeys.push(...sent.filter(item => !missingSlugs.has(item.slug)).map(item => item.key));
+          }
+          confirmed.added += added;
+          confirmed.existing += existing;
+          confirmed.notFound += missing.length;
         }
-        if (!confirmed) throw new Error('Trakt did not confirm watchlist additions.');
+        progress.sent += batch.length;
+        progress.added += confirmed.added;
+        progress.existing += confirmed.existing;
+        progress.notFound += confirmed.notFound;
+        progress.succeededKeys.push(...confirmed.succeededKeys);
+        onProgress({ ...progress, succeededKeys: [...progress.succeededKeys] });
       }
-      const succeededKeys = notFound === 0 ? items.map(item => item.key)
-        : missing.size === notFound ? items.filter(item => !missing.has(`${item.type}:${item.slug}`)).map(item => item.key)
-          : [];
-      return { cancelled: false, sent: items.length, added, existing, notFound, succeededKeys };
+      return progress;
     },
 
     /** Undo an addition with the exact body that was sent. */
@@ -77,6 +76,12 @@ export function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = is
       const result = await auth('POST', '/sync/watchlist/remove', body);
       if (Object.values(result?.not_found ?? {}).some(items => !Array.isArray(items) || items.length)) {
         throw new Error('Trakt could not find this title.');
+      }
+      for (const [type, items] of Object.entries(body)) {
+        const deleted = result?.deleted?.[type];
+        if (!Array.isArray(items) || !Number.isSafeInteger(deleted) || deleted < 0 || deleted > items.length) {
+          throw new Error('Trakt did not confirm a watchlist removal.');
+        }
       }
       return { cancelled: false };
     },
