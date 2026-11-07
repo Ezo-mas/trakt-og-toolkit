@@ -178,7 +178,7 @@ test('cancelled or invalid progress sends nothing', async (t) => {
   b.setPrompt('0'); click(b.document, 'save'); await wait();
   assert.equal(b.errors[0], 'Enter a percentage from 1 to 100.', 'the dialog keeps itself open with the error');
   assert.equal(b.scrobbles.length, 0);
-  assert.equal(b.document.querySelector('dialog'), null, 'closed dialogs are removed');
+  assert.equal(b.document.querySelector('dialog[open]'), null, 'closed dialogs are removed');
 });
 test('a title page with saved playback can replace it, prefilled with the current value', async (t) => {
   const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML }); await wait();

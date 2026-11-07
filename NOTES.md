@@ -3,6 +3,60 @@
 Working notes and known issues. Newest first.
 
 
+## 2026-11-08: service logos instead of monograms (feature 26)
+
+- The user wanted real service logos (reference look: Fenn3c401's script, logo tiles plus a monochrome icon strip).
+  og's sidebar `ul.external-links` is a 4-column grid of square ghost tiles (`rgba(255,255,255,.05)`, 8px radius,
+  6px gap) with inline monochrome SVGs and `--color-site-*` brand colours on hover; the strip now uses the same grid.
+  Reference links are square logo tiles; watch/library links are 2-column logo-and-name tiles tinted with the brand
+  colour; links without a mark are 2-column text tiles. `grid-auto-flow: dense` packs them in saved order.
+- Logos: `brand-paths.js` holds 15 single-path marks from simple-icons 16.36.0 (CC0; IMDb, Letterboxd, Rotten
+  Tomatoes, Wikipedia, MyAnimeList, Metacritic, Stremio, Plex, AniList, Jellyfin, Emby, Radarr, Sonarr, MDBList,
+  Trakt), about 12 kB. simple-icons has no TMDb, TVDB, JustWatch, Seerr, OpenSubtitles or DMM. og's own TMDb/TVDB/
+  JustWatch/IMDb/Wikipedia marks are cloned from the page's `ul.external-links` when og shows them (trakt-og draws them
+  from `lib/icons/sites` and `icons/kit`, GPL-3, so they are reused at runtime, not copied into this MIT bundle).
+  DMM, OpenSubtitles and Seerr keep word marks. Brand colours prefer og's `--color-site-*` tokens.
+- Trakt's Watch Now logos come from `media.trakt.tv/watchnow/sources/<id>.webp`; of our services only `plex` exists
+  there, so they were not used.
+- Watch Now tiles now copy og's provider tile shape: a 2:1 logo card with a note (“Your service”, “Add to library”).
+
+## 2026-11-08: custom links below the poster and in Watch Now (feature 26)
+
+- Live captures of `/movies/the-matrix-1999`, `/shows/breaking-bad`
+  (`/shows/breaking-bad/seasons/1`, `/shows/breaking-bad/seasons/1/episodes/1`) on 2026-11-08 show the stable
+  insertion points: `aside.sidebar` with `.summary-poster`, `.watch-now`, a native `dialog > .streaming-links` and
+  `ul.external-links`; seasons/episodes wrap the poster in `a.poster-link`, and the phone Watch Now dialog is a
+  sibling in `.actions`/`.details`.
+- The compact strip is inserted directly before `ul.external-links`, falling back to after `.watch-now`, after the
+  poster, then the sidebar end. A `matchMedia('(max-width: 767px)')` listener moves the same node into `.phone-tools`
+  and back on resize. The management editor, presets and servers forms live in one `<dialog>` appended to `body`, not
+  inside the movable panel, so a breakpoint change cannot close an open modal or leave stale focus state.
+- Presets now declare `icon` and `surface` (`watch`, `library`, `reference`). Known marks are local colored monograms;
+  unknown/custom labels render as text chips. Every compact anchor has an `aria-label`, a tooltip and a focus style.
+  Edited preset URLs keep their icon and surface when their label still names a known service, so an edited Emby or
+  Jellyfin search path stays in Watch Now.
+- Only `watch`/`library` links are appended to summary Watch Now dialogs, as a scoped **Your services** section behind
+  a direct `.watch-now + dialog` check. Native provider sections, availability counts, controls and external links are
+  not touched. The empty live state still has a 0-services button and a dialog with og's “No watch now links in the
+  United States yet.” message; **Your services** is appended below that message. The compact fallback remains only for
+  the defensive case where no Watch Now dialog exists at all. Reference links never enter Watch Now.
+- The mutation observer watches only `aside.sidebar`, `#overview` and `.phone-tools`; observer batches reuse the links
+  resolved by the last `renderLinks()` instead of re-reading GM storage and re-resolving every template. It still
+  moves the panel and refreshes the scoped Watch Now section after lazy content settles.
+- Added current-markup fixtures (movie, show, season, episode and an empty 0-services movie) plus built-bundle tests for
+  placement, icons/fallbacks, scoped dialog sections, native counts, the empty Watch Now state, edited-label surfaces,
+  breakpoint changes with an open modal, narrow placement, repeated modal opens and SPA teardown. Pure tests cover
+  preset surfaces/icons, order preservation and filtering. Review follow-up: Plex, Jellyfin and Emby now use distinct
+  `PLEX`/`JF`/`EMBY` monograms instead of one play glyph, OpenSubtitles uses yellow-on-dark instead of IMDb's
+  dark-on-yellow, and Seerr uses `SEER` rather than `?`. Drift checks now run the sidebar and desktop/phone Watch Now
+  selectors on season and episode pages as well; the full season/episode captures also carry the chart anchors.
+- Validation: `npm run build`; focused `custom-links-presentation`, `data`, `presets`, `og-drift` and
+  `integration` tests; then the full `npm test` suite (371/371). Firefox headless checked the built userscript in a
+  fresh profile with desktop and narrow viewports; Chromium was not installed in this environment.
+- Test-only follow-up for the feature 23 review: `test/playback-integration.test.js` now checks `dialog[open]`
+  rather than any `dialog`, because the closed custom-links management dialog is intentionally present on title pages.
+  The old assertion failed and Node tried to print a happy-dom node, which OOM-killed the file.
+
 ## 2026-11-07: preset review fix (PR 31)
 
 - Episode pages read `{episodeimdb}` only from an IMDb title link that is not a season list

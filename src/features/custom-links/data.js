@@ -1,7 +1,9 @@
 /** Pure-ish readers for a title page. They take a Document so they can be tested. */
-import { cleanTitle, parseYear } from '../../core/text.js';
+import { cleanTitle, fillTemplate, missingPlaceholders, parseYear } from '../../core/text.js';
 import { text } from '../../core/dom.js';
-import { isCustomLinkUrl } from '../../settings.js';
+import { isCustomLinkUrl, SERVER_KEYS } from '../../settings.js';
+import { findPreset, resolvePresetUrl } from './presets.js';
+import { iconKeyForLabel, surfaceForLabel } from './icons.js';
 
 const TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
 const IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
@@ -220,6 +222,41 @@ export function templateVars(meta, selection = {}, servers = {}) {
     season: selection.season,
     episode: selection.episode,
   };
+}
+
+/**
+ * Resolve the saved links for one page, in their saved order. Each entry keeps the stored URL as
+ * `source` so a later refresh can re-resolve deep routes, while `href` is the URL an anchor opens.
+ * A preset's icon and surface come from its definition. An edited or user-created URL still keeps the icon and
+ * surface for its label when that label names a known service.
+ */
+export function resolveCustomLinks(links, values, kind) {
+  const resolved = [];
+  for (const entry of Array.isArray(links) ? links : []) {
+    if (!entry || typeof entry.label !== 'string' || typeof entry.url !== 'string') continue;
+    if (!isCustomLinkUrl(entry.url)) continue;
+
+    const template = resolvePresetUrl(entry.url, values, kind);
+    if (!template || missingPlaceholders(template, values).length) continue;
+
+    const preset = findPreset(entry.url);
+    resolved.push({
+      label: entry.label,
+      source: entry.url,
+      template,
+      href: fillTemplate(template, values, SERVER_KEYS),
+      icon: preset?.icon || iconKeyForLabel(entry.label),
+      surface: preset?.surface || surfaceForLabel(entry.label),
+    });
+  }
+  return resolved;
+}
+
+/** Links that belong on a watch/play/library surface, never ratings or reference sites. */
+export function watchNowLinks(entries) {
+  return (Array.isArray(entries) ? entries : []).filter(
+    (entry) => entry.surface === 'watch' || entry.surface === 'library',
+  );
 }
 
 /**
