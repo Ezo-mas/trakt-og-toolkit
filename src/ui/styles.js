@@ -277,9 +277,12 @@ export const CSS = String.raw`
 }
 
 .ogt-links-compact {
-  margin: 10px 0 14px;
-  padding: 9px 10px;
-  border-radius: 6px;
+  /* Flat like OG's own sidebar groups, not a boxed panel. */
+  margin: 10px 0 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   font-size: 12px;
 }
 
@@ -324,11 +327,27 @@ export const CSS = String.raw`
   aspect-ratio: 1;
 }
 
-.ogt-service-link--tile,
+/* OG's sidebar is ~170px wide: a service tile takes the whole row so its name fits beside the logo. */
+.ogt-service-link--tile {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+  padding: 6px 10px;
+}
+
 .ogt-service-link--text {
   grid-column: span 2;
-  justify-content: flex-start;
-  padding: 6px 9px;
+  justify-content: center;
+  padding: 4px 6px;
+  text-align: center;
+}
+
+.ogt-service-link--text .ogt-service-label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 11px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .ogt-service-link--tile {
