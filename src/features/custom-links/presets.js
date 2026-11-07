@@ -11,6 +11,7 @@ export const PRESETS = [
     url: 'https://www.imdb.com/find/?q={title}',
     kinds: ['movie', 'show'],
     deep: [
+      { url: 'https://www.imdb.com/title/{episodeimdb}/', kinds: ['show'] },
       { url: 'https://www.imdb.com/title/{imdb}/episodes?season={season}', kinds: ['show'] },
       { url: 'https://www.imdb.com/title/{imdb}/', kinds: ['movie', 'show'] },
     ],
@@ -104,15 +105,12 @@ export const PRESETS = [
   },
   {
     label: 'MDBList',
-    /**
-     * MDBList's title URLs carry its own slug prefix (`3tb7f-resident-evil`),
-     * which Trakt does not expose. Its site search does take a title or IMDb id,
-     * but movies and shows use separate forms, so the show entry overrides the
-     * movie search URL for show pages.
-     */
+    // IMDb routes redirect to MDBList's canonical title slug; searches cover titles without an IMDb id.
     url: 'https://mdblist.com/movies/?q_title={title}',
     kinds: ['movie', 'show'],
     deep: [
+      { url: 'https://mdblist.com/movie/{imdb}', kinds: ['movie'] },
+      { url: 'https://mdblist.com/show/{imdb}', kinds: ['show'] },
       { url: 'https://mdblist.com/shows/?q_title={title}', kinds: ['show'] },
     ],
   },
@@ -201,6 +199,7 @@ export const PRESETS = [
  */
 export function presetTemplateUrls(url, kind) {
   const preset = PRESETS.find((entry) => entry.url === url);
+  if (preset && !preset.kinds.includes(kind)) return [];
   if (!preset?.deep) return [url];
   return [url, ...preset.deep.filter((entry) => entry.kinds.includes(kind)).map((entry) => entry.url)];
 }
@@ -212,6 +211,7 @@ export function presetTemplateUrls(url, kind) {
  */
 export function resolvePresetUrl(url, vars, kind) {
   const preset = PRESETS.find((entry) => entry.url === url);
+  if (preset && !preset.kinds.includes(kind)) return null;
   if (!preset?.deep) return url;
   const deep = preset.deep.find(
     (entry) => entry.kinds.includes(kind) && missingPlaceholders(entry.url, vars).length === 0,

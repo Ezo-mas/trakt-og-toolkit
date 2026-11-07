@@ -10,7 +10,7 @@ import {
 import { toast } from './ui/shell.js';
 
 const PLACEHOLDER_HELP =
-  'Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}\n' +
+  'Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdb} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}\n' +
   'Server hosts: {jellyfin} {emby} {radarr} {sonarr} {seerr}';
 
 /** Ask for a "Label | URL template" pair and store it. */

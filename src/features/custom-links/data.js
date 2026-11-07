@@ -191,6 +191,7 @@ export function templateVars(meta, selection = {}, servers = {}) {
     tmdb: meta.tmdb,
     imdb: meta.imdb,
     imdbnum: imdbNumber(meta.imdb),
+    episodeimdb: meta.episodeImdb,
     episodeimdbnum: imdbNumber(meta.episodeImdb),
     tvdb: meta.tvdb,
     jellyfin: servers.jellyfin || null,

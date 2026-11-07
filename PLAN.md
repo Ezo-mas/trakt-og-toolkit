@@ -505,8 +505,8 @@ fills `{imdb}`, `{tmdb}`, `{season}` and `{episode}` with the show's values.
 Rotten Tomatoes, Wikipedia, JustWatch and MyAnimeList), plus Debrid Media Manager, MDBList and OpenSubtitles.
 IMDb, TMDb, TVDB, Letterboxd, Stremio and DMM try exact routes first; every preset keeps a fallback where one
 exists. TVDB added a `{tvdb}` placeholder, read from og's show strip and filled through `GET /shows/:id` on season
-and episode pages. MDBList uses its movie and show search forms because exact title URLs need MDBList's own slug
-prefix. OpenSubtitles uses IMDb numbers through `{imdbnum}`, with `{episodeimdbnum}` read from an episode page's
+and episode pages. MDBList uses IMDb redirect routes for exact movies/shows and retains its separate search forms
+as fallbacks. OpenSubtitles uses IMDb numbers through `{imdbnum}`, with `{episodeimdbnum}` read from an episode page's
 strip. Fanart.tv stays out. Seerr/Jellyseerr needs each user's own host; official/social links are title-specific
 and cannot be templated.
 
@@ -519,8 +519,8 @@ and cannot be templated.
 - **Letterboxd:** movie via IMDb or TMDb and search fallback.
 - **Rotten Tomatoes, Wikipedia, JustWatch, MyAnimeList:** search-only presets.
 - **Debrid Media Manager:** movie, show and season routes by IMDb id; signed-out visits redirect to `/start`.
-- **MDBList:** movie and show search through `/movies/?q_title=` and `/shows/?q_title=`; exact title URLs need its
-  own slug prefix, so they cannot be built from Trakt ids.
+- **MDBList:** exact movies/shows through `/movie/{imdb}` and `/show/{imdb}` (redirects to canonical slugs);
+  search fallbacks use `/movies/?q_title=` and `/shows/?q_title=`.
 - **OpenSubtitles:** movie/episode `imdbid-{imdbnum}`, show `pimdbid-{imdbnum}`, season
   `pimdbid-{imdbnum}/season-{season}`; `{episodeimdbnum}` comes from the episode strip, with the season as fallback.
 - **Fanart.tv:** skipped; it remains out of scope.

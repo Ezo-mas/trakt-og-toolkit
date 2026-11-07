@@ -118,7 +118,7 @@ function createPanel(meta, route) {
     const values = vars();
     for (const link of linksRow.querySelectorAll('[data-ogt-template]')) {
       const template = resolvePresetUrl(link.dataset.ogtTemplate, values, meta.kind);
-      if (missingPlaceholders(template, values).length) continue;
+      if (!template || missingPlaceholders(template, values).length) continue;
       link.setAttribute('href', fillTemplate(template, values, SERVER_KEYS));
     }
   }
@@ -137,7 +137,7 @@ function createPanel(meta, route) {
     for (const entry of links) {
       if (!isCustomLinkUrl(entry.url)) continue;
       const template = resolvePresetUrl(entry.url, values, meta.kind);
-      if (missingPlaceholders(template, values).length) continue;
+      if (!template || missingPlaceholders(template, values).length) continue;
       linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values, SERVER_KEYS), template: entry.url }));
     }
     lookUpShow(values);
@@ -417,7 +417,7 @@ function createPanel(meta, route) {
       const selected = presets.filter((preset) => selectedPresets.has(preset.url));
       if (selected.length) {
         setCustomLinks(addPresets(getCustomLinks(), selected));
-        renderLinks();
+        onRefresh();
       }
       closeTools();
     });
@@ -455,7 +455,8 @@ function createPanel(meta, route) {
   node.addEventListener('keydown', onKeyDown);
 
   function needsSelection() {
-    return !fixedSelection && getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
+    return !fixedSelection && getCustomLinks().some((entry) =>
+      presetTemplateUrls(entry.url, meta.kind).some((template) => /\{(?:season|episode)\}/.test(template)));
   }
 
   function persistSelection() {

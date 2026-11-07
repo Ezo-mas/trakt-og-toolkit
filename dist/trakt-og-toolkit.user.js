@@ -1141,6 +1141,7 @@
       tmdb: meta.tmdb,
       imdb: meta.imdb,
       imdbnum: imdbNumber(meta.imdb),
+      episodeimdb: meta.episodeImdb,
       episodeimdbnum: imdbNumber(meta.episodeImdb),
       tvdb: meta.tvdb,
       jellyfin: servers.jellyfin || null,
@@ -1204,6 +1205,7 @@
       url: "https://www.imdb.com/find/?q={title}",
       kinds: ["movie", "show"],
       deep: [
+        { url: "https://www.imdb.com/title/{episodeimdb}/", kinds: ["show"] },
         { url: "https://www.imdb.com/title/{imdb}/episodes?season={season}", kinds: ["show"] },
         { url: "https://www.imdb.com/title/{imdb}/", kinds: ["movie", "show"] }
       ]
@@ -1297,15 +1299,12 @@
     },
     {
       label: "MDBList",
-      /**
-       * MDBList's title URLs carry its own slug prefix (`3tb7f-resident-evil`),
-       * which Trakt does not expose. Its site search does take a title or IMDb id,
-       * but movies and shows use separate forms, so the show entry overrides the
-       * movie search URL for show pages.
-       */
+      // IMDb routes redirect to MDBList's canonical title slug; searches cover titles without an IMDb id.
       url: "https://mdblist.com/movies/?q_title={title}",
       kinds: ["movie", "show"],
       deep: [
+        { url: "https://mdblist.com/movie/{imdb}", kinds: ["movie"] },
+        { url: "https://mdblist.com/show/{imdb}", kinds: ["show"] },
         { url: "https://mdblist.com/shows/?q_title={title}", kinds: ["show"] }
       ]
     },
@@ -1388,11 +1387,13 @@
   ];
   function presetTemplateUrls(url, kind) {
     const preset = PRESETS.find((entry) => entry.url === url);
+    if (preset && !preset.kinds.includes(kind)) return [];
     if (!preset?.deep) return [url];
     return [url, ...preset.deep.filter((entry) => entry.kinds.includes(kind)).map((entry) => entry.url)];
   }
   function resolvePresetUrl(url, vars, kind) {
     const preset = PRESETS.find((entry) => entry.url === url);
+    if (preset && !preset.kinds.includes(kind)) return null;
     if (!preset?.deep) return url;
     const deep = preset.deep.find(
       (entry) => entry.kinds.includes(kind) && missingPlaceholders(entry.url, vars).length === 0
@@ -1884,7 +1885,7 @@
       const values = vars();
       for (const link of linksRow.querySelectorAll("[data-ogt-template]")) {
         const template = resolvePresetUrl(link.dataset.ogtTemplate, values, meta.kind);
-        if (missingPlaceholders(template, values).length) continue;
+        if (!template || missingPlaceholders(template, values).length) continue;
         link.setAttribute("href", fillTemplate(template, values, SERVER_KEYS));
       }
     }
@@ -1900,7 +1901,7 @@
       for (const entry of links) {
         if (!isCustomLinkUrl(entry.url)) continue;
         const template = resolvePresetUrl(entry.url, values, meta.kind);
-        if (missingPlaceholders(template, values).length) continue;
+        if (!template || missingPlaceholders(template, values).length) continue;
         linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values, SERVER_KEYS), template: entry.url }));
       }
       lookUpShow(values);
@@ -2150,7 +2151,7 @@
         const selected = presets.filter((preset) => selectedPresets.has(preset.url));
         if (selected.length) {
           setCustomLinks(addPresets(getCustomLinks(), selected));
-          renderLinks();
+          onRefresh();
         }
         closeTools();
       });
@@ -2184,7 +2185,7 @@
     editButton.addEventListener("click", openEditor);
     node.addEventListener("keydown", onKeyDown);
     function needsSelection() {
-      return !fixedSelection && getCustomLinks().some((entry) => /\{(?:season|episode)\}/.test(entry.url));
+      return !fixedSelection && getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => /\{(?:season|episode)\}/.test(template)));
     }
     function persistSelection() {
       if (!fixedSelection && selection.season != null) setSelection(meta.kind, meta.id, selection);
@@ -6191,7 +6192,7 @@
   });
 
   // src/actions.js
-  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}\nServer hosts: {jellyfin} {emby} {radarr} {sonarr} {seerr}";
+  var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdb} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}\nServer hosts: {jellyfin} {emby} {radarr} {sonarr} {seerr}";
   function promptAddCustomLink() {
     const answer = window.prompt(
       `Add a custom link as "Label | URL".

@@ -2,6 +2,22 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-07: PR 31 review fixes and direct links
+
+- Preset kind restrictions now apply when resolving saved links, not just in the add checklist. Radarr/Letterboxd
+  stay off show pages and Sonarr/TVDB stay off movies; arbitrary user-defined links keep their existing behavior.
+- Picker detection inspects all applicable preset routes via `presetTemplateUrls`, and adding presets calls the
+  same refresh path as editing links. A remembered season/episode is visible and editable even when the stored
+  preset URL only contains the search fallback. Deep-only presets now initialize the usual first-season/episode
+  selection when season data is available, just like explicit season/episode templates.
+- MDBList's IMDb redirect routes were confirmed on its own site: `/movie/tt0133093` redirects to
+  `/movie/a2na-the-matrix`, and `/show/tt0944947` to `/show/8pll-game-of-thrones`. Added those exact routes before
+  the existing searches; the earlier assumption that only MDBList slugs could open titles was incorrect.
+- IMDb episode pages now use `{episodeimdb}`, retaining leading zeroes from the episode's own external-link ID.
+  The show/season and search routes remain fallbacks. No new lookup or ID-mapping service was introduced.
+- Regression tests cover globally stored kind-specific presets, remembered selections, adding deep presets,
+  direct MDBList routes/search fallbacks and the IMDb episode route.
+
 ## 2026-11-06: more link presets and per-user server presets (features 24–25)
 
 - Live og.trakt.tv checks with Playwright (2026-11-06) show the external-link strip varies by page: a movie has

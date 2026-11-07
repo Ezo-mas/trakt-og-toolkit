@@ -28,9 +28,10 @@ reload. Toggles are stored in GM storage, separately from og's settings.
 A compact panel under the summary stats with user-configured links to your own services.
 
 - **Custom links** — manage your `Label | URL` templates in the inline editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{tvdb}`, `{season}`, `{episode}`.
-- **Presets** — add IMDb, TMDb, TVDB, Letterboxd, Rotten Tomatoes, Wikipedia, JustWatch, MyAnimeList, Metacritic, Stremio, Debrid Media Manager, MDBList, OpenSubtitles, Plex, AniList, Jellyfin, Emby, Radarr, Sonarr or Seerr links. The og-service presets mirror the links og itself shows, so they remain available when a title's external-link strip is missing. IMDb, TMDb, TVDB, Letterboxd, Stremio, Debrid Media Manager, OpenSubtitles, Radarr, Sonarr and Seerr open the exact title (or an add-media search) when the page has the id they need, and fall back where possible; the rest search.
+- **Presets** — add IMDb, TMDb, TVDB, Letterboxd, Rotten Tomatoes, Wikipedia, JustWatch, MyAnimeList, Metacritic, Stremio, Debrid Media Manager, MDBList, OpenSubtitles, Plex, AniList, Jellyfin, Emby, Radarr, Sonarr or Seerr links. The og-service presets mirror the links og itself shows, so they remain available when a title's external-link strip is missing. IMDb, TMDb, TVDB, Letterboxd, Stremio, Debrid Media Manager, OpenSubtitles, MDBList, Radarr, Sonarr and Seerr open the exact title (or an add-media search) when the page has the id they need, and fall back where possible; the rest search.
+  Movie-only presets (Radarr and Letterboxd) stay hidden on shows; show-only presets (Sonarr and TVDB) stay hidden on movies.
 - **Servers** — set the base URL for your own Jellyfin, Emby, Radarr, Sonarr or Seerr under **Servers…**. Server presets stay disabled until their host is configured. A bare host gets `http://`; HTTPS and base paths such as `/jellyfin` are supported. Credentials, query strings and fragments are rejected.
-- **Season/episode pickers** — appear automatically when a link uses `{season}` or `{episode}` on a show page. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
+- **Season/episode pickers** — appear automatically when a link or one of its preset routes uses `{season}` or `{episode}` on a show page, including immediately after adding a preset. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
 - **Season and episode pages** — the panel uses the show's title, year and TMDb/IMDb/TVDB ids, not the season or episode heading, and takes `{season}`/`{episode}` from the URL. The title and TMDb id come from og's show link and external links (and the IMDb id on season pages); an episode page's own IMDb id comes from its external-link strip, while the year, the show's IMDb id on episode pages, and the TVDB id on season and episode pages come from `GET /shows/:id`. Without a client ID, those links stay hidden rather than point at the season or episode.
 - **Examples**: Plex, your own Jellyfin/Emby/Radarr/Sonarr/Seerr server, or any streaming/library service og doesn't link to.
 
@@ -193,8 +194,8 @@ service links; nothing is enabled until you check it and confirm. Presets can be
 
 Stremio's preset opens the exact movie, show, season or episode when the page has the title's IMDb id (a season page
 links to the series page with `?season=`, which Stremio selects), and falls back to its search otherwise. IMDb, TMDb,
-TVDB, Letterboxd, Debrid Media Manager, OpenSubtitles, Radarr, Sonarr and Seerr do the same with the ids they use;
-Rotten Tomatoes, Wikipedia, JustWatch, MyAnimeList, Metacritic, MDBList, Plex and AniList use search. The presets
+TVDB, Letterboxd, Debrid Media Manager, MDBList, OpenSubtitles, Radarr, Sonarr and Seerr do the same with the ids they use;
+Rotten Tomatoes, Wikipedia, JustWatch, MyAnimeList, Metacritic, Plex and AniList use search. The presets
 include the external-link services og itself shows, because og's strip is not present on every title. Official-site
 and social links are not presets: their URLs are title-specific and cannot be built from the page's ids.
 
@@ -207,8 +208,9 @@ edit the preset URL if yours uses another path.
 
 OpenSubtitles uses the IMDb number without `tt` or leading zeroes: `imdbid-{imdbnum}` for a movie or episode and
 `pimdbid-{imdbnum}` for a show, with `/season-{season}` for a season. An episode page's own IMDb link supplies
-`{episodeimdbnum}`. MDBList's title URLs carry an MDBList-only slug prefix that Trakt does not expose, so its preset
-uses MDBList's separate movie and show searches instead. Both sites may show a bot challenge before the results page.
+`{episodeimdbnum}` (or `{episodeimdb}` with its `tt` prefix, used by IMDb’s episode preset). MDBList opens
+`/movie/{imdb}` or `/show/{imdb}`, which redirect to the canonical title slug; its separate movie/show searches
+remain fallbacks when the IMDb id is missing. Both sites may show a bot challenge before the results page.
 
 The menu commands **add custom link** and **remove custom link** remain available when the panel is not on screen.
 The add command asks for `Label | URL`; the label is what the chip shows and everything after the first `|` is the URL
@@ -227,6 +229,7 @@ Placeholders are filled from the page and the season/episode picker:
 | `{tmdb}` | TMDb id | `1396` |
 | `{imdb}` | IMDb id | `tt0903747` |
 | `{imdbnum}` | IMDb id without `tt` or leading zeroes | `903747` |
+| `{episodeimdb}` | Episode IMDb id with its `tt` prefix (episode pages only). |
 | `{episodeimdbnum}` | Episode IMDb id without `tt` or leading zeroes (episode pages) | `959621` |
 | `{tvdb}` | TVDB id | `81189` |
 | `{type}` | `tv` for shows, `movie` for films | `tv` |

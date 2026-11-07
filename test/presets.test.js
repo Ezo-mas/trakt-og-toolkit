@@ -8,6 +8,7 @@ import { PRESETS, presetTemplateUrls, resolvePresetUrl } from '../src/features/c
 const preset = (label) => PRESETS.find((entry) => entry.label === label);
 const withNumbers = (vars) => ({
   ...vars,
+  episodeimdb: vars.episodeImdb,
   imdbnum: imdbNumber(vars.imdb),
   episodeimdbnum: imdbNumber(vars.episodeImdb),
 });
@@ -61,7 +62,7 @@ test('deep links only apply to their own page kind and presets stay unchanged ot
     'https://web.stremio.com/#/detail/movie/tt0903747',
     'a show selection on a movie page still uses the movie route',
   );
-  assert.equal(resolvePresetUrl(stremio.url, { imdb: 'tt0903747' }, 'other'), stremio.url);
+  assert.equal(resolvePresetUrl(stremio.url, { imdb: 'tt0903747' }, 'other'), null);
 
   const metacritic = preset('Metacritic');
   assert.equal(resolvePresetUrl(metacritic.url, { imdb: 'tt0903747' }, 'show'), metacritic.url);
@@ -269,4 +270,25 @@ test('every preset has a unique search URL and server presets name their host', 
   for (const label of ['Jellyfin', 'Emby', 'Radarr', 'Sonarr', 'Seerr']) {
     assert.ok(SERVER_KEYS.includes(preset(label).requires), `${label} declares its server`);
   }
+});
+
+
+test('stored presets are unavailable on unsupported page kinds', () => {
+  for (const [label, kind] of [['Radarr', 'show'], ['Sonarr', 'movie'], ['Letterboxd', 'show'], ['TVDB', 'movie']]) {
+    assert.equal(resolvePresetUrl(preset(label).url, { title: 'Test', imdb: 'tt123', tvdb: 1, tmdb: 2 }, kind), null);
+    assert.deepEqual(presetTemplateUrls(preset(label).url, kind), []);
+  }
+});
+
+
+test('MDBList opens exact movie and show pages by IMDb id before search fallbacks', () => {
+  assert.equal(filled('MDBList', { title: 'The Matrix', imdb: 'tt0133093' }, 'movie'), 'https://mdblist.com/movie/tt0133093');
+  assert.equal(filled('MDBList', { title: 'Game of Thrones', imdb: 'tt0944947' }, 'show'), 'https://mdblist.com/show/tt0944947');
+  assert.equal(filled('MDBList', { title: 'Unknown' }, 'movie'), 'https://mdblist.com/movies/?q_title=Unknown');
+  assert.equal(filled('MDBList', { title: 'Unknown' }, 'show'), 'https://mdblist.com/shows/?q_title=Unknown');
+});
+
+test('IMDb opens the episode itself when its IMDb id is available', () => {
+  assert.equal(filled('IMDb', { imdb: 'tt0903747', episodeImdb: 'tt0959621', season: 1, episode: 1 }, 'show'),
+    'https://www.imdb.com/title/tt0959621/');
 });
