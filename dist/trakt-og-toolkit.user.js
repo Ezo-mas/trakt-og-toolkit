@@ -3421,7 +3421,7 @@
             input.value = String(selection.episode);
           }
         });
-        episodeSlot.replaceChildren(el("span", { class: "ogt-field-prefix", "aria-hidden": "true", text: "Episode" }), input);
+        episodeSlot.replaceChildren(el("span", { class: "ogt-field-prefix", "aria-hidden": "true", text: "Ep." }), input);
         return;
       }
       const select = el("select", { class: "ogt-select", "aria-label": "Episode" });

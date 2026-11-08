@@ -696,7 +696,7 @@ function createPanel(meta, route) {
         }
       });
       // A bare number box would read as just "1"; the select's options already say "Episode 1".
-      episodeSlot.replaceChildren(el('span', { class: 'ogt-field-prefix', 'aria-hidden': 'true', text: 'Episode' }), input);
+      episodeSlot.replaceChildren(el('span', { class: 'ogt-field-prefix', 'aria-hidden': 'true', text: 'Ep.' }), input);
       return;
     }
 

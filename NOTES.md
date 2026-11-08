@@ -12,7 +12,7 @@ Working notes and known issues. Newest first.
   “Powered by JustWatch”, so it no longer takes a service row or a Your services tile.
 - Season/Episode pickers copy og's dropdown triggers (34px, `#232323` with a `#3b3b3b` border, 8px radius); the visible
   word is dropped because the options already read “Season 1”/“Episode 1” (kept for screen readers). The number
-  fallback for long seasons shows an “Episode” prefix.
+  fallback for long seasons shows an “Ep.” prefix (each picker is only ~84px wide in og's sidebar).
 - Add presets / Servers / Edit links are `.ogt-manage-button`s: a 3-column row of square glass tiles with a stroked
   icon and short label (full names on `aria-label` and `title`), replacing the `.ogt-chip` pills.
 
