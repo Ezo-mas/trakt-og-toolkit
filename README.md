@@ -1,395 +1,164 @@
 # Trakt OG Toolkit
 
-An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that adds the useful old-Trakt bits og doesn't have
-— without reusing og's session or its internal endpoints. Not affiliated with or endorsed by Trakt.
-
-**Status:** v0.3.0: custom links with presets and an inline editor, a season ratings chart with your own ratings,
-optional Trakt sign-in with a paused-playback manager, a month-in-review dashboard card that browses earlier months, manual library additions
-and one-click watchlist additions, an all-lists view on profile pages, and in-page name pronunciation on person pages.
+An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that brings back useful bits of classic Trakt that
+og doesn't have yet. It talks only to the documented Trakt API, with your own client ID and optional sign-in. Not
+affiliated with or endorsed by Trakt.
 
 ## Install
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/) (or Violentmonkey).
-2. Open `dist/trakt-og-toolkit.user.js` and confirm the install.
-   On GitHub, use the "Raw" link so the manager sees the file as a userscript.
+1. Install [Violentmonkey](https://violentmonkey.github.io/) or [Tampermonkey](https://www.tampermonkey.net/).
+2. Open [`dist/trakt-og-toolkit.user.js`](dist/trakt-og-toolkit.user.js), choose **Raw**, and confirm the install.
+3. Optional: set a Trakt client ID and sign in (see [Setup](#setup)). Features that need them say so below.
 
-It matches `https://og.trakt.tv/*` and `http://localhost:5173|5174/*` for development against a local og checkout.
+Every feature has its own **toggle** in the userscript menu. All are on by default, and switching one off removes it
+immediately.
 
-## What it does
+## Features
 
-### Turning features off
+### Custom links
 
-Every feature has its own toggle in the userscript menu (`Trakt OG Toolkit: toggle …`). All features are on by default.
-Switching one off removes its UI immediately and keeps it off across reloads; switching it back on restores it without a
-reload. Toggles are stored in GM storage, separately from og's settings.
+A strip in the title sidebar, above og's external links, on movie, show, season and episode pages.
 
-### Custom links panel (title, season and episode pages)
+- Your own `Label | URL` templates, plus presets for IMDb, TMDb, TVDB, Letterboxd, Rotten Tomatoes, Wikipedia,
+  JustWatch, MyAnimeList, Metacritic, Stremio, Debrid Media Manager, MDBList, OpenSubtitles, Plex, AniList, Jellyfin,
+  Emby, Radarr, Sonarr and Seerr.
+- Presets open the exact title, season or episode when the page has the id they need, and search otherwise.
+- Self-hosted services (Jellyfin, Emby, Radarr, Sonarr, Seerr) use the base URLs you set under **Servers**.
+- Watch and library services also appear under **Your services** in og's Watch Now dialog.
+- On show pages, Season and Episode pickers appear when a link uses `{season}` or `{episode}`.
+- Logos are bundled [Simple Icons](https://simpleicons.org) (CC0) or the marks og already draws; no favicons are
+  fetched.
 
-A compact strip in the summary sidebar, below the poster and directly above og's native external links. Management forms open in a modal so the sidebar stays compact.
+See [Custom link templates](#custom-link-templates) for placeholders.
 
-- **Custom links** — manage your `Label | URL` templates in the editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{tvdb}`, `{season}`, `{episode}`.
-- **Service logos** — links are grouped: watch and library services (Stremio, Plex, Jellyfin, Radarr…) first as full-row tiles with logo and name, then reference sites (IMDb, Letterboxd, JustWatch, Rotten Tomatoes…) as square logo tiles in the same 4-column grid as og's sidebar external links, taking their brand colour on hover, then text-only links. Season/Episode pickers look like og's dropdowns, and Presets, Servers and Edit are square sidebar buttons. Logos are bundled [Simple Icons](https://simpleicons.org) marks (CC0), and TMDb, TVDB and JustWatch reuse the marks og already draws in its sidebar. Services without a logo (Debrid Media Manager, OpenSubtitles, Seerr) get a short word mark; custom or unknown labels stay readable text tiles. The service name is on the anchor, in a tooltip and on keyboard focus. No favicon or third-party request is made.
-- **Watch Now** — watch, play and library presets (Plex, Stremio, Jellyfin, Emby, Debrid Media Manager, Radarr, Sonarr and Seerr) also appear under **Your services** in og's Watch Now dialog. og's own provider sections, counts and links are left unchanged. A title with no providers keeps og's “No watch now links in United States yet.” message, with **Your services** below it; if the block is missing entirely, the compact strip has a fallback. Ratings, databases and other reference links stay out of Watch Now. Editing a known service's URL (for example Emby's search path) keeps its service mark and Watch Now placement based on its label.
-- **Presets** — add IMDb, TMDb, TVDB, Letterboxd, Rotten Tomatoes, Wikipedia, JustWatch, MyAnimeList, Metacritic, Stremio, Debrid Media Manager, MDBList, OpenSubtitles, Plex, AniList, Jellyfin, Emby, Radarr, Sonarr or Seerr links. The og-service presets mirror the links og itself shows, so they remain available when a title's external-link strip is missing. IMDb, TMDb, TVDB, Letterboxd, Stremio, Debrid Media Manager, OpenSubtitles, MDBList, Radarr, Sonarr and Seerr open the exact title (or an add-media search) when the page has the id they need, and fall back where possible; Rotten Tomatoes reuses OG’s direct title link when available; the rest search.
-  Movie-only presets (Radarr and Letterboxd) stay hidden on shows; show-only presets (Sonarr and TVDB) stay hidden on movies.
-- **Servers** — set the base URL for your own Jellyfin, Emby, Radarr, Sonarr or Seerr under **Servers…**. Server presets stay disabled until their host is configured. A bare host gets `http://`; HTTPS and base paths such as `/jellyfin` are supported. Credentials, query strings and fragments are rejected.
-- **Season/episode pickers** — appear automatically when a link or one of its preset routes uses `{season}` or `{episode}` on a show page, including immediately after adding a preset. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards. Stremio and TMDb open the picked episode; with a client ID set, IMDb and OpenSubtitles also open it, using the episode's IMDb id from `GET /shows/:id/seasons/:s/episodes/:e` (looked up once per picked episode; until it arrives, or without a client ID, they open the season). Debrid Media Manager has no episode pages and opens the season.
-- **Season and episode pages** — the panel uses the show's title, year and TMDb/IMDb/TVDB ids, not the season or episode heading, and takes `{season}`/`{episode}` from the URL. The title and TMDb id come from og's show link and external links (and the IMDb id on season pages); an episode page's own IMDb id comes from its external-link strip, while the year, the show's IMDb id on episode pages, and the TVDB id on season and episode pages come from `GET /shows/:id`. Without a client ID, those links stay hidden rather than point at the season or episode.
-- **Examples**: Plex, your own Jellyfin/Emby/Radarr/Sonarr/Seerr server, or any streaming/library service og doesn't link to.
+### Season chart and your ratings
 
-### Season chart
+- An episode ratings chart on each season page, from the API with a client ID or og's displayed ratings without one.
+  Episodes with under 10 votes are hollow and left out of the average.
+- Signed in: your episode ratings as a second line, **Your average** in the summary, and your average on each season
+  card.
 
-On a show's season page, an episode ratings chart shows the shape of the season. It uses the Trakt API when a client
-ID is set and og's displayed ratings otherwise; episodes with fewer than 10 votes appear as hollow points and do not
-affect the average.
+### Add to library and Add to watchlist
 
-### Your ratings and averages
+Signed in, movie, show, season and episode pages get **Add to library** and **Add to watchlist** actions.
 
-Sign in through the toolkit menu to overlay your episode ratings as a blue line on the season chart. Unrated
-episodes leave gaps, and the summary adds **Your average** with the rated episode count once you have rated at least
-two episodes. Season cards on show pages and the Seasons page get a small blue heart with your average after the episode
-count; hover it for the number of rated episodes. Averages are plain means of episode ratings from the toolkit's account,
-which may differ from your og account. og already shows a season rating you set directly. Ratings stay in memory for
-ten minutes and are cleared when the account changes; nothing private enters the public API cache.
+- Each hides once og shows the title is already in your library or watchlist. og's own controls refresh without a
+  reload where og allows it.
+- Movie and show cards, and every credit on a person's page, get a watchlist shortcut. **Watchlist all** adds every
+  shown credit at once.
+- Success notices offer **Undo** for newly added titles.
 
-### All lists in one view
+The toolkit's sign-in is separate from og's, so it can be a different Trakt account.
 
-og's **Lists** dropdown on a profile gains **All lists**, after Collaborations. On the personal lists page it keeps
-the personal lists under a **Personal** heading and adds the profile's **Collaborations** and **Liked** lists below,
-so everything is one scroll instead of three pages; from the other list pages it links there. Picking any of og's
-own choices goes back to its normal view. Rows look like og's own: when the page shows og's rows, the new ones
-reuse their classes, icons and count and share buttons, with owners' VIP labels and, signed in, a filled likes pill
-on lists you liked. Liked lists load every page (up to 2,500, like og), and
-each row's posters load as it nears the screen. Needs a client ID; with the toolkit sign-in, private lists you can
-see are included and rows get og's watched-progress link. The toolkit doesn't like, edit or leave lists.
+### Paused playback
 
-### List preview titles
+Signed in:
 
-Each poster in a list card's preview stack opens that title instead of the list; the fan itself still opens the
-list. Middle-click or Ctrl/Cmd-click opens the title in a new tab. Titles come from the media URL, so the links need
-no client ID or extra API calls. Screen readers get a hidden list of the same title links. With the toolkit sign-in,
-your movie and show ratings appear in og's coloured corner triangle on each poster (og shows none on the fan); they
-load once per page and are cached for 10 minutes.
+- Movie and episode pages show saved playback progress with **Clear**.
+- Your og **Progress** page gets a **Paused playback** section for clearing items one by one, in bulk, or by age.
+- **Save progress…** sets a percentage by hand. It uses Trakt's scrobble start and pause, never stop, so it doesn't
+  mark the title watched.
 
-### Last month in review
+### Profiles and lists
 
-Sign in through the toolkit to see last month’s plays, hours, ratings and comments under the dashboard’s month
-strip. Previous and next arrows step through earlier months; next stops at last month and previous stops at the
-month of your first history entry. The fanart card highlights your first play and links to the full Month in Review.
-Hide dismisses the card for your toolkit account until next month, whichever month is on screen. Nothing appears for last month with no plays;
-an earlier month without plays shows an empty card so gaps stay navigable. Month boundaries use your browser’s time
-zone; results are stored in userscript storage per account and month. Earlier months stay cached, while last month
-refreshes at most daily during the first seven days.
-Hours use the API’s reported runtimes, rounded to whole hours; missing runtimes contribute no time.
+- **All lists:** og's Lists dropdown on a profile gains **All lists**: personal, collaboration and liked lists in one
+  scroll. Needs a client ID.
+- **List previews:** each poster in a list card's preview opens its title. Signed in, posters show your rating.
 
-### Add to library
+### Month in review and pronunciation
 
-Movie, show, season and episode pages have an **Add to library** button in the action stack. Sign in through the
-toolkit menu first: it uses that Trakt account, independently of OG’s login. Additions use the current date.
-Shows and seasons confirm the aired episode count before saving; whole shows exclude specials (add season 0
-separately). The add button disappears after saving, or whenever OG already shows a library control.
-Success shows **You added Fight Club to your library.** (using the title) in the matching toolkit notice, with an
-**Undo** button when the save added new items. OG’s native notifier cannot hold a button, so undoable library additions
-use the toolkit notice. Undo removes the same items from the toolkit account and asks OG to refresh its collection
-state; items that were already in the library are not offered an Undo. Movie/show saves ask OG to refresh its own collection state without a page
-reload or opening a popup. Module discovery runs during the save; a disabled **Updating library…** row keeps
-the stack steady until OG’s native control appears or the refresh finishes. Native reads still take network time.
-This reads OG’s signed-in account; different toolkit/OG accounts remain separate.
-If OG is signed out, the native module is unavailable or the browser blocks it, reload remains the fallback.
-Season/episode pages retain the reload fallback. Removing an item through OG restores the add action once OG
-shows the change. No toolkit library button is added to cards.
-The button uses OG’s design values for action styling and spacing, with separate toolkit classes.
+- **Last month in review:** signed in, the dashboard gets a card with last month's plays, hours, ratings and comments.
+  Arrows step back through earlier months.
+- **Pronounce:** on person pages, plays the name from Forvo, or links to Forvo's search when there's no recording.
 
-### Add to watchlist
+## Setup
 
-Movie, show, season and episode pages have a separate **Add to watchlist** action. Sign in through the toolkit menu
-first; one click adds that exact item to the toolkit’s Trakt account, which may differ from your OG account.
-The action hides after success or when OG’s **Listed On** detail includes **Watchlist**. Other list memberships
-leave it available. Movie/show additions ask OG’s list picker to reread membership and update its native controls
-without opening the popup. This uses OG’s signed-in account; it cannot mark a different OG account’s watchlist.
-Reload remains the fallback when OG is signed out or its picker cannot refresh, and for season/episode additions.
-Removing the item through OG restores the action once OG shows the change. This action only adds; use OG’s list
-picker to remove items.
+### Trakt client ID
 
-Movie and whole-show poster and fanart cards also have a bookmark shortcut beside the blue lists button,
-including cards loaded as you browse. Season and episode cards (including Up Next) have no shortcut. It uses
-the card’s own title and the same toolkit account. The shortcut hides when that card’s native list tooltip
-includes Watchlist, or after a successful add; custom lists alone keep it available.
-On a desktop display at 100% system scaling, poster shortcuts hide at 150–170% browser zoom and return at
-180%. Wider fanart cards are unaffected. This uses CSS resolution, which includes system/display scaling;
-it cannot distinguish browser zoom from display scaling. Card width alone does not hide the shortcut.
-
-On a person’s page, every credit row also has the same bookmark shortcut next to its blue lists icon. Movie
-rows add the movie; show rows, including a guest credit for a single episode, add the whole show. It uses the
-row’s own link and toolkit account, hides when the row’s native list tooltip includes Watchlist, and appears
-for rows rendered as you browse. A **Watchlist all (N)** button beside the credits toolbar’s sort controls adds every
-currently shown credit in list or grid view that is not already known to be on the watchlist. The button stays
-in the same toolbar position when switching views. It confirms once with the count, sends the rows’ slugs in
-batches, and reports how many were added, already there or not found. Added rows lose their shortcut. OG’s own list controls reload their membership automatically after bulk adds and
-Undo, using the same native refresh as the individual shortcut. Confirmed batches stay marked if a later batch fails. Bulk **Undo** is offered when every successful title was newly added; mixed new/existing results have no
-Undo because Trakt does not identify which titles were already there.
-
-Success shows **You added Spider-Man: Brand New Day to your watchlist.** (using the added title) in the matching
-toolkit notice, with an **Undo** button for newly added titles. It appears below the header on the right, with a green
-check, close button and five-second countdown. OG’s native notifier cannot hold a button, so undoable additions use
-this notice; other toolkit notices still prefer OG’s native one. Undo removes the title with the same request body
-and refreshes OG’s native controls. Titles that were already on the watchlist are not offered an Undo.
-Hovering or focusing the notice pauses dismissal. Existing native notifications stay above the fallback.
-
-### Name pronunciation
-
-On person pages, **Pronounce** looks the name up on Forvo in the background and plays the first recording whose word
-matches the person’s name in place; the button becomes **Pause** while it plays. If a recording fails to load, the next
-one is tried before giving up. If Forvo has no matching recording or the lookup fails, a **Forvo** link opens the
-search page instead. Lookups are cached in memory for 10 minutes.
-
-### Trakt client ID (optional for now)
-
-The panel works without one. With a client ID, the episode pickers get exact counts from the Trakt API instead of og's
-season cards, and the upcoming features need one. Any user can create one for free at
+Custom links and the season chart work without one. Other features need a free client ID from
 <https://developer.trakt.tv/apps/new>:
 
 | Field | Value |
 | --- | --- |
-| App name | `OG Toolkit` (or `Trakt OG Toolkit`) |
-| Description | `Userscript for og.trakt.tv: custom links and rating helpers. Public API endpoints only.` |
-| App type | **Development** — currently the only option |
-| Redirect URIs | `http://localhost:5173/callback` — must match the value entered at sign-in; used when refreshing tokens |
-| Allowed origins | leave empty (GM_xmlhttpRequest bypasses CORS); `http://localhost:5173` only if you use the fetch fallback |
+| App name | `Trakt OG Toolkit` (any name works) |
+| App type | **Development** |
+| Redirect URIs | `http://localhost:5173/callback` |
+| Allowed origins | leave empty |
 
-Then copy the **Client ID**. Never copy the Client Secret into the script — current Trakt device authentication does not need it.
+Copy the **Client ID** (never the secret) and set it from the menu: **Trakt OG Toolkit: set API client ID**.
 
-A Development app only lets you (and people you add) sign in with OAuth. That is fine for this script: it calls
-public endpoints with the client ID and does not sign anyone in yet. For a published script, leave
-`DEFAULT_CLIENT_ID` empty and let each user bring their own client ID, as the prompt already does.
+### Sign in
 
-Set it from the userscript menu: **Trakt OG Toolkit: set API client ID**.
+Run **Trakt OG Toolkit: sign in** from the menu.
 
-### Publisher callback hosting (feature 30 preparation)
+1. Confirm the redirect URI you registered above.
+2. A device code is copied to your clipboard, and Trakt's activation page opens in a new tab.
+3. Paste the code there and approve.
 
-The `site/` directory contains the callback landing page. In this repository's **Settings → Pages**, select
-**GitHub Actions** as the publishing source. Once `.github/workflows/pages.yml` is merged into `main`, its workflow
-publishes only `site/` at `https://ezo-mas.github.io/trakt-og-toolkit/`.
+Tokens stay in your userscript manager's private storage, never in the page. **Sign out** revokes them and always
+clears them locally. No client secret is used.
 
-Verify `https://ezo-mas.github.io/trakt-og-toolkit/callback.html` loads over HTTPS before adding that exact address
-to the Toolkit application's registered redirect URIs. Keep the existing redirect registered for current sessions.
-This is a hosting prerequisite only: the page does not complete sign-in or exchange codes yet. It removes query
-and fragment parameters from the address without storing or forwarding them, and loads no third-party resources.
-Keep using device-code sign-in until the verified PKCE handoff is implemented and tested. Do not change the
-userscript's configured redirect merely because the landing page exists.
+## Custom link templates
 
-## Optional Trakt sign-in
-
-The userscript menu now supports **sign in**, **cancel sign-in**, **sign out**, and **show signed-in user**.
-Set your own API client ID first. Sign-in asks for your app's registered redirect URI (needed for token refresh),
-pre-filled with `http://localhost:5173/callback`. A notice then shows a device code (already copied to your clipboard)
-and Trakt's verification URL: it opens in a new tab, so paste the code there. The notice stays up until sign-in finishes; use **cancel sign-in**
-to stop waiting.
-No client secret is needed with Trakt's current device API.
-
-Access and refresh tokens stay in the userscript manager's GM storage, separate from og's login. Tokens refresh
-on authenticated use before expiry, and sign-out attempts revocation and always clears local tokens. If revocation
-fails, remove the app connection in Trakt settings. This requires a userscript manager; OAuth never falls back to
-page localStorage. The playback manager below uses this connection.
-
-## Paused playback
-
-After signing in through the toolkit menu, movie and episode pages with saved playback show a percentage bar and
-**Clear** action. On your og **Progress** page, the **Paused playback** section loads movies and episodes only when
-its **Load paused playback** button is pressed. It uses your toolkit Trakt account, which can differ from og’s login.
-
-The list shows posters (when available), titles, progress and paused dates, newest first. Clear one item, select
-several and **Clear selected**, or enter an age and **Clear older items** (strictly older than that many elapsed days).
-Every deletion asks for confirmation with the item count. Bulk actions report partial failures and refresh the list.
-**Refresh paused playback** checks for changes made elsewhere; cached data lasts about a minute. Clearing removes
-saved playback, not watched history. **Save progress…** on a movie or episode page (with or without saved playback)
-and on each overview row asks for a percentage from 1 to 100, with the warning in the same dialog. It sends Trakt's
-scrobble start and pause, so your profile may briefly show the title as watching, and it never sends stop (which can mark the title
-watched). Start replaces any earlier progress for the title; if the pause then fails, the panel says so.
-
-## Custom links
-
-Use **Edit links** in the panel to add, rename, reorder or remove links. Choose **Add presets…** to select optional
-service links; nothing is enabled until you check it and confirm. The editor and preset/servers forms open in a modal
-and return focus to the button that opened them. Presets can be edited like any other link.
-
-Stremio's preset opens the exact movie, show, season or episode when the page has the title's IMDb id (a season page
-links to the series page with `?season=`, which Stremio selects), and falls back to its search otherwise. IMDb, TMDb,
-TVDB, Letterboxd, Debrid Media Manager, MDBList, OpenSubtitles, Radarr, Sonarr and Seerr do the same with the ids they use;
-Rotten Tomatoes reuses OG’s direct title URL when present and falls back to search otherwise. Wikipedia,
-JustWatch, MyAnimeList, Metacritic, Plex and AniList use search. The presets
-include the external-link services og itself shows, because og's strip is not present on every title. Official-site
-and social links are not presets: their URLs are title-specific and cannot be built from the page's ids.
-
-Metacritic supports direct movie, show, season and episode pages, but those URLs require its own title slugs
-(and episode-title slugs). The preset keeps search rather than guess URLs from Trakt titles or ids.
-
-Jellyfin, Emby, Radarr, Sonarr and Seerr are self-hosted, so their presets use the base URL you set under
-**Servers…** instead of a shared public host. Radarr searches its add-movie form by IMDb or TMDb id, Sonarr uses its
-add-series form by TVDB id, and Seerr opens `/movie/{tmdb}` or `/tv/{tmdb}`. Jellyfin and Emby have no deep link from
-Trakt ids, so their presets open the server's web search: Jellyfin uses `/web/#/search?query=` and Emby uses
-`/web/index.html#!/list/list.html?type=search&searchtext=`. Those search paths differ between web-client versions;
-edit the preset URL if yours uses another path.
-
-OpenSubtitles uses the IMDb number without `tt` or leading zeroes: `imdbid-{imdbnum}` for a movie or episode and
-`pimdbid-{imdbnum}` for a show, with `/season-{season}` for a season. An episode page's own IMDb link supplies
-`{episodeimdbnum}` (or `{episodeimdb}` with its `tt` prefix, used by IMDb’s episode preset). MDBList opens
-`/movie/{imdb}` or `/show/{imdb}`, which redirect to the canonical title slug; its separate movie/show searches
-remain fallbacks when the IMDb id is missing. Both sites may show a bot challenge before the results page.
-
-The menu commands **add custom link** and **remove custom link** remain available when the panel is not on screen.
-The add command asks for `Label | URL`; the label is what the chip shows and everything after the first `|` is the URL
-template.
+Use **Edit** in the strip, or the menu's **add custom link** (`Label | URL`):
 
 ```text
 My service | https://example.com/watch/{tmdb}?s={season}&e={episode}
 ```
 
-Placeholders are filled from the page and the season/episode picker:
-
 | Placeholder | Value | Example |
 | --- | --- | --- |
 | `{title}` | Title without the year | `Breaking Bad` |
 | `{year}` | Release year | `2008` |
-| `{tmdb}` | TMDb id | `1396` |
-| `{imdb}` | IMDb id | `tt0903747` |
+| `{tmdb}` / `{imdb}` / `{tvdb}` | Ids | `1396` / `tt0903747` / `81189` |
 | `{imdbnum}` | IMDb id without `tt` or leading zeroes | `903747` |
-| `{episodeimdb}` | Episode IMDb id with its `tt` prefix (episode pages only) | `tt0959621` |
-| `{episodeimdbnum}` | Episode IMDb id without `tt` or leading zeroes (episode pages) | `959621` |
-| `{tvdb}` | TVDB id | `81189` |
-| `{type}` | `tv` for shows, `movie` for films | `tv` |
-| `{season}` | Selected season (shows only) | `1` |
-| `{episode}` | Selected episode (shows only) | `1` |
-| `{id}` | Trakt slug or id from the URL | `breaking-bad` |
-| `{plural}` | `shows` or `movies` | `shows` |
-| `{jellyfin}` | Jellyfin base URL from **Servers…** | `http://192.168.1.20:8096` |
-| `{emby}` | Emby base URL from **Servers…** | `https://media.example/emby` |
-| `{radarr}` | Radarr base URL from **Servers…** | `http://192.168.1.20:7878` |
-| `{sonarr}` | Sonarr base URL from **Servers…** | `http://192.168.1.20:8989` |
-| `{seerr}` | Seerr base URL from **Servers…** | `http://192.168.1.20:5055` |
+| `{episodeimdb}` / `{episodeimdbnum}` | The episode's own IMDb id | `tt0959621` / `959621` |
+| `{season}` / `{episode}` | From the page or the pickers (shows only) | `1` |
+| `{type}` / `{plural}` | `tv` or `movie` / `shows` or `movies` | `tv` |
+| `{id}` | Trakt slug from the URL | `breaking-bad` |
+| `{jellyfin}` `{emby}` `{radarr}` `{sonarr}` `{seerr}` | Base URLs from **Servers** | `http://192.168.1.20:8096` |
 
-Notes:
+- Values are URL-encoded for you. Server base URLs are inserted as-is.
+- A link is hidden on pages where one of its placeholders has no value, so one template works for shows and movies.
+- URLs must start with `http://`, `https://` or a server placeholder.
+- Links are stored per browser and are not synced.
 
-- Names are lowercase and case-sensitive: `{tmdb}`, not `{TMDb}`.
-- Values are URL-encoded for you, so `{title}` becomes `Breaking%20Bad`. Don't encode them yourself. Server base
-  URLs are the exception: they are inserted as-is so their scheme, port and base path survive.
-- A link is hidden on pages where one of its placeholders has no value — a `{season}` link won't appear on a movie, and
-  `{episode}` has no value on a season page. This is intentional, so one template works across shows and films.
-- URL templates must start with `http://`, `https://`, or one of the five server placeholders such as `{jellyfin}/`.
-  Other placeholders at the start, such as `{title}/`, are not server templates and are rejected.
-- Links and server URLs are stored per browser, not synced. The inline editor checks that each saved link has a label
-  and an HTTP(S) or known server-placeholder URL.
+## Trakt API use
+
+- **Endpoints:** only documented Trakt API endpoints, with your client ID. Signed-in calls use your own OAuth
+  connection: playback, collection, watchlist, history, ratings, `users/me` and your comments.
+- **What it never touches:** it never fetches Trakt HTML, calls og's internal endpoints, or reads og's sign-in.
+- **og integration:** it calls og's own notifier and its read-only collection refresh, so og updates its controls
+  itself.
+- **Reads:** public GETs are cached for 8 hours, de-duplicated while in flight, and honour `Retry-After` on 429.
+- **Writes:** they share one queue, sent at most once per second, Trakt's standard-app limit. A 429 pauses the
+  queue for the full `Retry-After`. Failed writes are never replayed automatically, and queued writes are dropped on
+  sign-out or when you leave the page.
+- **Other sites:** pronunciation fetches Forvo's public search page. Nothing else leaves your browser, and there is
+  no backend.
+
+## Known issues
+
+- uBlock's cosmetic filter `trakt.tv##a[target="_blank"][style]:has(img[src])` can hide og's external ratings. Add
+  `og.trakt.tv#@#a[target="_blank"][style]:has(img[src])` to uBlock's My filters.
 
 ## Development
 
 ```bash
 npm install
 npm run build     # dist/trakt-og-toolkit.user.js
-npm run dev       # watch + localhost:8787 for Violentmonkey tracking
+npm run dev       # watch + localhost:8787 for Violentmonkey "Track external edits"
 npm test          # unit + happy-dom integration tests
+npm run drift     # check live og.trakt.tv still has the selectors we rely on (needs a build)
 ```
 
-`npm run dev` starts the esbuild watcher and a no-cache server for `dist/` in one terminal. Install the script from
-`http://localhost:8787/trakt-og-toolkit.user.js` once in Violentmonkey, click **Track external edits**, and keep the
-installer tab open. Every rebuild is picked up automatically. See `NOTES.md` for details.
-
-## Keeping up with og
-
-`npm run drift` fetches live **og.trakt.tv** pages and checks the selectors and panel mounts the toolkit relies on,
-including the title action stack, the summary list control and its picker trigger, and card quick-icon list controls on
-`/movies/trending`. It also follows og's app entry to its root layout and its static imports, then validates the public
-toast and library-refresh module shapes used by the native bridges without a page realm or sign-in. Panel pages are
-booted a second time with their feature turned off, and the check fails if the panel still appears. The daily GitHub
-Actions workflow runs the same check at 06:00 UTC and can also be started manually. Run
-`npm run drift -- --save <dir>` to save the fetched HTML for inspecting markup or refreshing fixtures. The check
-needs a built bundle (`npm run build`); `npm test` stays offline.
-
-### Layout
-
-```
-src/
-  main.js              entry point, router wiring
-  meta.js              name, version, hosts
-  config.js            API base, cache TTL, default client ID
-  settings.js          GM storage (client id, custom links, server URLs, selections, feature toggles)
-  actions.js           prompts shared by the menu and the panel
-  menu.js              userscript menu commands
-  core/
-    dom.js             el(), debounce(), text()
-    router.js          og path parsing + SPA navigation
-    hydration.js       waits for SvelteKit to hydrate before the first mount
-    http.js            GM_xmlhttpRequest wrapper, queue, GET cache
-    trakt.js           public Trakt API calls
-    store.js           GM_getValue with a localStorage fallback
-    text.js            template + URL helpers
-  features/
-    host.js            mounts/unmounts features per route
-    custom-links/      the panel (index.js) and its DOM readers (data.js)
-    season-chart/      episode ratings chart and API/data helpers
-  ui/                  injected CSS, toasts and og-styled confirm/prompt dialogs (dialog.js)
-```
-
-### Design notes
-
-- **No og session reuse.** og keeps its token in an `httpOnly` cookie set by `/api/store-token`; page scripts can't
-  read it and there is no generic API proxy. Everything here uses the public Trakt API with the user's own client ID.
-- **No `turbo:load`.** og is SvelteKit, so we patch `history.pushState`/`replaceState`, listen for `popstate`, and
-  re-check after debounced mutations. Features re-mount if the app renders over them.
-- **No Trakt page scraping for data.** og is server-rendered, but the API is the stable surface. The only DOM reads
-  from og include name/title headings, native action status, ids og already prints (TMDb/IMDb) and the season
-  cards' episode counts.
-  Pronunciation reads a Forvo search page fetched separately, never a Trakt page.
-- **Selectors.** Only semantic classes (`.summary-frame`, `#overview`, `.top`, `.subtitle`) — never `svelte-*` hashes.
-
-## Known issues
-
-- uBlock’s cosmetic filter `trakt.tv##a[target="_blank"][style]:has(img[src])` can hide OG’s external ratings after
-  loading. Add `og.trakt.tv#@#a[target="_blank"][style]:has(img[src])` to uBlock’s My filters as a workaround.
-
-## Roadmap
-
-See [PLAN.md](PLAN.md). Shipped or dropped because og now does it itself: ratings distribution, trailers, metadata
-links, poster rating corners. Backlog:
-
-- set playback progress by hand;
-- list preview posters that link to their titles;
-- more link presets that open the exact title (MDBList and Fanart.tv routes are still blocked by Cloudflare checks);
-- a review and cleanup of the test suite.
-
-## Trakt API compliance
-
-- Only documented Trakt endpoints: public ones with your client ID, plus `/sync/playback`, `/sync/collection`, `/sync/watchlist`,
-  `/sync/history`, `/sync/ratings`, `/users/me` and `/users/me/comments` through your own optional OAuth sign-in.
-  All lists reads the public `/users/:id/lists/collaborations` and `/users/:id/likes/lists`, through that sign-in
-  when there is one.
-  No Trakt HTML fetching or toolkit calls to internal og endpoints. Toolkit API writes use only its own OAuth
-  connection.
-  Native notification/collection-refresh discovery reads only already-loaded public JavaScript assets,
-  without credentials. Page-realm bridges call OG’s native notifier or its read-only collection refresh;
-  OG performs its own signed-in reads. The toolkit does not read OG tokens, copy its session, patch its
-  collection data or perform a second collection write.
-  Pronunciation fetches Forvo's public search page (with `@connect forvo.com`) to find recordings.
-- Public GETs are cached for 8 hours, de-duplicated while in flight, and retried with the full `Retry-After` on 429 (up to a minute; longer waits fail instead).
-- Authenticated writes (`POST`, `PUT`, `DELETE`) share one FIFO queue and are sent at most once per second, Trakt's
-  current standard-app limit. A 429 pauses every queued write for the full `Retry-After` (or uses a bounded jittered
-  backoff when the header is missing); a wait over a minute fails the action instead of leaving it spinning. Ambiguous
-  network or 5xx failures are never replayed automatically.
-  Queued writes are discarded if you sign out, change accounts, or leave the page that queued them before they are
-  sent, except the pause that completes a playback start already sent, so saved progress is not left half-written.
-  Pacing is per open page;
-  other tabs and apps share the same server-side limit. Bulk actions and Undo can take a few seconds longer.
-- Nothing is uploaded, resold or redistributed; the script has no backend.
-- Season data prefers the API when a client ID is present; rendered cards are the fallback.
-
-Trakt OG Toolkit uses Trakt but is not endorsed or certified by Trakt.
+Each feature lives in `src/features/<name>/`. [PLAN.md](PLAN.md) has the roadmap and the rules for new features, and
+[NOTES.md](NOTES.md) has findings about og.
 
 ## Licence and credits
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
 
-Written from scratch. Ideas and UX inspiration came from
-[saad1430/tampermonkey](https://github.com/saad1430/tampermonkey) (MIT) and
-[Fenn3c401/Trakt.tv-Userscript-Collection](https://github.com/Fenn3c401/Trakt.tv-Userscript-Collection) (GPL-3.0).
-No GPL code was copied, so this project can stay MIT.
-
-Trakt OG Toolkit is not affiliated with Trakt.
+Written from scratch. Ideas came from [saad1430/tampermonkey](https://github.com/saad1430/tampermonkey) (MIT) and
+[Fenn3c401/Trakt.tv-Userscript-Collection](https://github.com/Fenn3c401/Trakt.tv-Userscript-Collection) (GPL-3.0); no
+GPL code was copied.
