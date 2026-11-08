@@ -3,6 +3,17 @@
 Working notes and known issues. Newest first.
 
 
+## 2026-11-09: feature 27 review follow-ups
+
+- Restored OG’s direct RT links from `.ratings-strip` alongside `ul.external-links`; unrelated page links remain
+  excluded. Tests use the header ratings markup for movie/show links and retain search on seasons without a link.
+- Lookup starts on pointer hover or keyboard focus, with click/middle-click fallback. Links reuse cached URLs when
+  drawn, preserving direct destinations for copy-link and context-menu navigation after redraws. A fast unresolved
+  click can still open search; page rendering never waits for Wikidata.
+- Requests send a versioned `Api-User-Agent` with the repository contact URL, following Wikimedia’s
+  [browser-script guidance](https://www.mediawiki.org/wiki/API:Etiquette#The_User-Agent_header). Removed the redundant
+  config wrapper and unused normalization argument.
+
 ## 2026-11-08: external-id resolution for direct custom links (feature 27)
 
 - Metacritic and Rotten Tomatoes reuse a valid direct URL from OG's native `ul.external-links` strip. Comments,

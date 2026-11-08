@@ -126,7 +126,7 @@ sign-out, account switches and credentials kept out of the page. Verify with a s
 
 **Status:** implemented (2026-11-09) for Rotten Tomatoes and Metacritic; anime mapping remains deferred.
 Lookups use validated native links first, then lazy Wikidata resolution with cached hits/misses and one shared
-Wikidata cooldown. The first cold activation keeps search; later activations use the resolved URL.
+Wikidata cooldown. Hover/focus starts resolution, redraws reuse cached URLs, and fast unresolved clicks keep search.
 
 Improve destinations that currently search because Trakt does not provide
 that site's identifier. Add only specific resolvers needed by enabled presets, reusing the existing custom-links

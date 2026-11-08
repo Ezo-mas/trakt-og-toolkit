@@ -1306,34 +1306,42 @@ test('the picker looks up the episode IMDb id so IMDb and OpenSubtitles open the
   assert.deepEqual(requested, ['1/1', '2/1', '2/3']);
 });
 
-test('Rotten Tomatoes uses OG’s exact native-strip URL and keeps search when it is missing', async t => {
+test('Rotten Tomatoes reuses OG’s header ratings URL without a lookup and keeps search when missing', async t => {
   const preset = { label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' };
   for (const [kind, html, route, href] of [
     ['movie', MOVIE_HTML, '/movies/the-dark-2005', 'https://www.rottentomatoes.com/m/the_dark'],
     ['show', SHOW_HTML, '/shows/breaking-bad', 'https://www.rottentomatoes.com/tv/breaking_bad'],
-    ['show', SEASON_PAGE_HTML, '/shows/breaking-bad/seasons/1', 'https://www.rottentomatoes.com/tv/breaking_bad/s01'],
+    ['show', SEASON_PAGE_HTML, '/shows/breaking-bad/seasons/1', null],
   ]) {
-    for (const available of [true, false]) {
+    for (const available of href ? [true, false] : [false]) {
+      let requests = 0;
       const native = available
         ? `<li><a class="glass-action" href="${href}?tracking=og" aria-label="Rotten Tomatoes">Rotten Tomatoes</a></li>`
         : '';
       const withNative = available
-        ? html.replace('<ul class="external-links">', `<ul class="external-links">${native}`)
+        ? html.replace('<div class="ratings-strip"><ul>', `<div class="ratings-strip"><ul>${native}`)
         : html;
       const b = boot({ url: `https://og.trakt.tv${route}`, html: withNative,
-        storage: { 'watch.customLinks': [preset] } });
+        storage: { 'watch.customLinks': [preset] },
+        gmRequest() { requests += 1; return { abort() {} }; } });
       t.after(() => b.window.close());
       await wait(50);
       const link = chip(b.document, 'Rotten Tomatoes');
       assert.equal(link.getAttribute('href'), available ? href :
         `https://www.rottentomatoes.com/search?search=${kind === 'movie' ? 'The%20Dark' : 'Breaking%20Bad'}`);
+      if (available) {
+        link.dispatchEvent(new b.window.Event('pointerenter'));
+        link.dispatchEvent(new b.window.FocusEvent('focusin', { bubbles: true }));
+        activate(b.window, link);
+        assert.equal(requests, 0, 'native RT URLs never need Wikidata, even on activation');
+      }
       b.document.dispatchEvent(new b.window.CustomEvent('ogt:refresh'));
       assert.equal(chip(b.document, 'Rotten Tomatoes').getAttribute('href'), link.getAttribute('href'));
     }
   }
 });
 
-test('Rotten Tomatoes resolves a show mapping on activation and reuses the cache', async (t) => {
+test('Rotten Tomatoes resolves on hover and preserves cached hrefs across redraws', async (t) => {
   const requests = [];
   const b = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad',
@@ -1353,15 +1361,22 @@ test('Rotten Tomatoes resolves a show mapping on activation and reuses the cache
 
   const link = chip(b.document, 'Rotten Tomatoes');
   assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/search?search=Breaking%20Bad');
-  activate(b.window, link);
+  assert.equal(requests.length, 0, 'rendering does not start a lookup');
+  link.dispatchEvent(new b.window.Event('pointerenter'));
   await wait(40);
 
   assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/tv/breaking_bad');
   assert.equal(requests.length, 1);
+  assert.match(requests[0].headers['Api-User-Agent'], /^TraktOGToolkit\/[\d.]+ \(https:\/\/github.com\/Ezo-mas\/trakt-og-toolkit\)$/);
   assert.equal(requests[0].timeout, 8000, 'the lookup is bounded');
   assert.match(decodeURIComponent(requests[0].url), /wdt:P1258/);
 
-  activate(b.window, link);
+  b.document.dispatchEvent(new b.window.CustomEvent('ogt:refresh'));
+  const redrawn = chip(b.document, 'Rotten Tomatoes');
+  assert.notEqual(redrawn, link);
+  assert.equal(redrawn.getAttribute('href'), 'https://www.rottentomatoes.com/tv/breaking_bad',
+    'cached href is direct before hover, copy-link, context-menu or click');
+  activate(b.window, redrawn);
   await wait(20);
   assert.equal(requests.length, 1, 'a warm activation does not look up again');
 });
@@ -1386,7 +1401,7 @@ test('Metacritic resolves a movie mapping and keeps the search fallback on a mis
   await wait(50);
 
   const link = chip(b.document, 'Metacritic');
-  activate(b.window, link);
+  link.dispatchEvent(new b.window.FocusEvent('focusin', { bubbles: true }));
   await wait(40);
   assert.equal(link.getAttribute('href'), 'https://www.metacritic.com/movie/the-dark/');
   assert.match(decodeURIComponent(requests[0].url), /wdt:P1712/);

@@ -110,13 +110,11 @@ function readMetacriticUrl(doc, kind) {
 }
 
 /**
- * Only the title's own external-link strip is authoritative. Comments, related titles and
+ * Only the title's ratings and external-link strips are authoritative. Comments, related titles and
  * other page anchors can mention the same service and must not redirect this title there.
  */
 function readNativeExternalUrl(doc, kind, service) {
-  const strip = doc.querySelector('ul.external-links');
-  if (!strip) return null;
-  for (const link of strip.querySelectorAll('a[href]')) {
+  for (const link of doc.querySelectorAll('.ratings-strip a[href], ul.external-links a[href]')) {
     const url = validateDirectUrl(service, kind, link.getAttribute('href'));
     if (url) return url;
   }

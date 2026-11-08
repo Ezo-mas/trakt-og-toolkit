@@ -14,6 +14,7 @@
  * time-bounded, and no page render waits for one.
  */
 import { getJSON, headerValue } from '../../core/http.js';
+import { VERSION } from '../../meta.js';
 
 export const RESOLVE_TIMEOUT_MS = 8000;
 /** An identifier found once is stable for the life of the page; a day is plenty. */
@@ -69,7 +70,7 @@ export function validImdbId(value) {
   return IMDB_RE.test(imdb) ? imdb : null;
 }
 
-function normalise(def, kind, identifier) {
+function normalise(def, identifier) {
   const match = String(identifier ?? '').match(def.property === 'P1258' ? RT_ID_RE : MC_ID_RE);
   if (!match || match[1] !== def.prefix) return null;
   if (def.property === 'P1258') return `https://www.rottentomatoes.com/${match[1]}/${match[2]}`;
@@ -84,7 +85,7 @@ function normalise(def, kind, identifier) {
  * because episode slugs vary.
  */
 export function validateDirectUrl(service, kind, raw) {
-  const config = SERVICE_CONFIG(service);
+  const config = SERVICES[service];
   const def = config?.kinds[kind];
   if (!def || !raw) return null;
 
@@ -117,16 +118,11 @@ export function validateDirectUrl(service, kind, raw) {
   return null;
 }
 
-/** Kept as a small wrapper so the direct-URL contract above is the only validator. */
-function SERVICE_CONFIG(service) {
-  return SERVICES[service] || null;
-}
-
 /** Build the identifier URL for one Wikidata claim value, or null when malformed/kind-mismatched. */
 export function externalIdUrl(service, kind, identifier) {
   const def = serviceConfig(service, kind);
   if (!def) return null;
-  return normalise(def, kind, identifier);
+  return normalise(def, identifier);
 }
 
 /**
@@ -202,7 +198,10 @@ function fetchBase(input, { fetchImpl }) {
   const query = buildWikidataQuery(input);
   const url = `${SPARQL_URL}?format=json&query=${encodeURIComponent(query)}`;
   const fetchJson = fetchImpl || ((target) => getJSON(target, {
-    headers: { Accept: 'application/sparql-results+json' },
+    headers: {
+      Accept: 'application/sparql-results+json',
+      'Api-User-Agent': `TraktOGToolkit/${VERSION} (https://github.com/Ezo-mas/trakt-og-toolkit)`,
+    },
     timeout: RESOLVE_TIMEOUT_MS,
     retries: 0,
   }));

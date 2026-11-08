@@ -1994,14 +1994,14 @@
     const imdb = String(value ?? "").trim();
     return IMDB_RE.test(imdb) ? imdb : null;
   }
-  function normalise(def, kind, identifier) {
+  function normalise(def, identifier) {
     const match = String(identifier ?? "").match(def.property === "P1258" ? RT_ID_RE : MC_ID_RE);
     if (!match || match[1] !== def.prefix) return null;
     if (def.property === "P1258") return `https://www.rottentomatoes.com/${match[1]}/${match[2]}`;
     return `https://www.metacritic.com/${match[1]}/${match[2]}/`;
   }
   function validateDirectUrl(service, kind, raw) {
-    const config = SERVICE_CONFIG(service);
+    const config = SERVICES[service];
     const def = config?.kinds[kind];
     if (!def || !raw) return null;
     let url;
@@ -2028,13 +2028,10 @@
     if (kind === "show" && /^season-\d+$/.test(segments[2])) return `${url.origin}/${segments.join("/")}/`;
     return null;
   }
-  function SERVICE_CONFIG(service) {
-    return SERVICES[service] || null;
-  }
   function externalIdUrl(service, kind, identifier) {
     const def = serviceConfig(service, kind);
     if (!def) return null;
-    return normalise(def, kind, identifier);
+    return normalise(def, identifier);
   }
   function buildDestinationUrl(service, baseUrl, context = {}) {
     const def = serviceConfig(service, context.kind);
@@ -2084,7 +2081,10 @@
     const query = buildWikidataQuery(input);
     const url = `${SPARQL_URL}?format=json&query=${encodeURIComponent(query)}`;
     const fetchJson = fetchImpl || ((target) => getJSON(target, {
-      headers: { Accept: "application/sparql-results+json" },
+      headers: {
+        Accept: "application/sparql-results+json",
+        "Api-User-Agent": `TraktOGToolkit/${VERSION} (https://github.com/Ezo-mas/trakt-og-toolkit)`
+      },
       timeout: RESOLVE_TIMEOUT_MS,
       retries: 0
     }));
@@ -2606,9 +2606,7 @@
     return readNativeExternalUrl(doc, kind, "metacritic");
   }
   function readNativeExternalUrl(doc, kind, service) {
-    const strip = doc.querySelector("ul.external-links");
-    if (!strip) return null;
-    for (const link of strip.querySelectorAll("a[href]")) {
+    for (const link of doc.querySelectorAll(".ratings-strip a[href], ul.external-links a[href]")) {
       const url = validateDirectUrl(service, kind, link.getAttribute("href"));
       if (url) return url;
     }
@@ -3416,6 +3414,8 @@
       const service = presetResolver(source, meta.kind);
       if (!service || link.dataset.ogtResolver) return;
       link.dataset.ogtResolver = service;
+      const cached = peekExternalUrl(resolverInput(service));
+      if (cached) link.setAttribute("href", cached);
       const activate = () => {
         const input = resolverInput(service);
         const exact = peekExternalUrl(input);
@@ -3433,6 +3433,8 @@
           if (!cancelled) debugError(`${service} lookup failed`, error);
         });
       };
+      link.addEventListener("pointerenter", activate);
+      link.addEventListener("focusin", activate);
       link.addEventListener("click", activate);
       link.addEventListener("auxclick", (event) => {
         if (event.button === 1) activate();

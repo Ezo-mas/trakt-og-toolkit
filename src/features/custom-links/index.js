@@ -247,15 +247,16 @@ function createPanel(meta, route) {
   }
 
   /**
-   * Start a lazy lookup when a link is activated. Navigation is never prevented: a cold first
-   * click still opens the search URL, while a cached mapping upgrades the href inside the
-   * click handler before the browser follows it. Late results are ignored after teardown,
+   * Resolve on hover/focus so ordinary navigation can use the exact href. A fast cold click
+   * still has a usable search fallback. Late results are ignored after teardown,
    * navigation or a picker/template change.
    */
   function attachResolver(link, source) {
     const service = presetResolver(source, meta.kind);
     if (!service || link.dataset.ogtResolver) return;
     link.dataset.ogtResolver = service;
+    const cached = peekExternalUrl(resolverInput(service));
+    if (cached) link.setAttribute('href', cached);
 
     const activate = () => {
       const input = resolverInput(service);
@@ -276,6 +277,8 @@ function createPanel(meta, route) {
         .catch((error) => { if (!cancelled) debugError(`${service} lookup failed`, error); });
     };
 
+    link.addEventListener('pointerenter', activate);
+    link.addEventListener('focusin', activate);
     link.addEventListener('click', activate);
     link.addEventListener('auxclick', (event) => { if (event.button === 1) activate(); });
   }
