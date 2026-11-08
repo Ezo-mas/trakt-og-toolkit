@@ -58,6 +58,9 @@ export const PRESETS = [
     icon: 'rt',
     surface: 'reference',
     kinds: ['movie', 'show'],
+    // Reuse OG's direct URL; otherwise Wikidata P1258 resolves the title id lazily.
+    directVar: 'rottenTomatoesUrl',
+    resolver: 'rotten-tomatoes',
   },
   {
     label: 'Wikipedia',
@@ -87,6 +90,9 @@ export const PRESETS = [
     icon: 'metacritic',
     surface: 'reference',
     kinds: ['movie', 'show'],
+    // Reuse OG's direct URL when present; otherwise Wikidata P1712 resolves the title id lazily.
+    directVar: 'metacriticUrl',
+    resolver: 'metacritic',
   },
   {
     label: 'Stremio',
@@ -258,10 +264,16 @@ export function presetTemplateUrls(url, kind) {
 export function resolvePresetUrl(url, vars, kind) {
   const preset = PRESETS.find((entry) => entry.url === url);
   if (preset && !preset.kinds.includes(kind)) return null;
-  if (preset?.label === 'Rotten Tomatoes' && vars.rottenTomatoesUrl) return vars.rottenTomatoesUrl;
+  if (preset?.directVar && vars[preset.directVar]) return vars[preset.directVar];
   if (!preset?.deep) return url;
   const deep = preset.deep.find(
     (entry) => entry.kinds.includes(kind) && missingPlaceholders(entry.url, vars).length === 0,
   );
   return deep ? deep.url : url;
+}
+
+/** The external-id resolver for a stored preset URL on this page kind, if it has one. */
+export function presetResolver(url, kind) {
+  const preset = PRESETS.find((entry) => entry.url === url);
+  return preset && preset.kinds.includes(kind) ? preset.resolver || null : null;
 }

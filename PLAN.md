@@ -10,7 +10,7 @@ behaviour, never its code. Finished features are listed at the end; their detail
 | # | Feature | Needs | Status |
 |---|---|---|---|
 | 30 | Trakt onboarding without manual API setup | Trakt's answer on app access | blocked on Trakt |
-| 27 | Resolve external site IDs for direct custom links | public lookup services | planned |
+| 27 | Resolve external site IDs for direct custom links | public lookup services | implemented; anime mapping deferred |
 | 28 | Conditional presets and person-page custom links | genre/person metadata; 27 for anime | planned |
 | 31 | Trakt ratings distribution in the summary's empty space | client ID optional | backlog |
 | 23 | Test suite review and cleanup | — | before 0.4.0 |
@@ -124,7 +124,11 @@ sign-out, account switches and credentials kept out of the page. Verify with a s
 
 ## 27. Resolve external site IDs for direct custom links
 
-**Status:** planned. Improve destinations that currently search because Trakt does not provide
+**Status:** implemented (2026-11-09) for Rotten Tomatoes and Metacritic; anime mapping remains deferred.
+Lookups use validated native links first, then lazy Wikidata resolution with cached hits/misses and one shared
+Wikidata cooldown. Hover/focus starts resolution, redraws reuse cached URLs, and fast unresolved clicks keep search.
+
+Improve destinations that currently search because Trakt does not provide
 that site's identifier. Add only specific resolvers needed by enabled presets, reusing the existing custom-links
 resolution path rather than building a general API wrapper or executing JavaScript stored in templates.
 

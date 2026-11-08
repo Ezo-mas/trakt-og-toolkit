@@ -1,11 +1,12 @@
 /** Small request layer: cross-origin via GM_xmlhttpRequest, with a queue and GET cache. */
 
 export class HttpError extends Error {
-  constructor(message, status, body) {
+  constructor(message, status, body, headers = null) {
     super(message);
     this.name = 'HttpError';
     this.status = status;
     this.body = body;
+    this.headers = headers;
   }
 }
 
@@ -110,22 +111,28 @@ export function headerValue(headers, name) {
 
 const cache = new Map(); // url -> { expires, value }
 
-/** GET JSON, deduped and cached for `ttl` ms. */
-export async function getJSON(url, { headers = {}, ttl = 0 } = {}) {
+/** GET JSON, deduped and cached for `ttl` ms. `timeout`/`retries` are for bounded, non-retrying lookups. */
+export async function getJSON(url, { headers = {}, ttl = 0, timeout, retries } = {}) {
   const now = Date.now();
   const hit = cache.get(url);
   if (hit && hit.expires > now) return hit.value;
 
-  const response = await request({ url, headers, method: 'GET' });
+  const response = await request({
+    url,
+    headers,
+    method: 'GET',
+    ...(timeout !== undefined ? { timeout } : {}),
+    ...(retries !== undefined ? { retries } : {}),
+  });
   if (response.status < 200 || response.status >= 300) {
-    throw new HttpError(`HTTP ${response.status} for ${url}`, response.status, response.text);
+    throw new HttpError(`HTTP ${response.status} for ${url}`, response.status, response.text, response.headers);
   }
 
   let value;
   try {
     value = JSON.parse(response.text);
   } catch (error) {
-    throw new HttpError(`Invalid JSON from ${url}`, response.status, response.text);
+    throw new HttpError(`Invalid JSON from ${url}`, response.status, response.text, response.headers);
   }
 
   if (ttl > 0) cache.set(url, { expires: now + ttl, value });

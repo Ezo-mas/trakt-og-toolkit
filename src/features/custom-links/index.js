@@ -32,10 +32,11 @@ import {
   validateCustomLinks,
   watchNowLinks,
 } from './data.js';
-import { PRESETS, presetTemplateUrls } from './presets.js';
+import { PRESETS, presetResolver, presetTemplateUrls } from './presets.js';
 import { hasServiceIcon, serviceColor, serviceIcon } from './icons.js';
 import { getSeasons } from '../../core/trakt.js';
 import { getEpisode, getShowDetails } from './api.js';
+import { peekExternalUrl, resolveExternalUrl } from './resolve.js';
 
 const PANEL_ID = 'ogt-custom-links';
 const TITLE_ID = 'ogt-custom-links-title';
@@ -107,11 +108,11 @@ function manageButton(name, text, d) {
     svg, el('span', { text }));
 }
 
-function compactLink(entry) {
+function compactLink(entry, attachResolver) {
   const label = entry.label.trim() || 'Custom link';
   const icon = serviceIcon(entry.icon);
   const variant = !icon ? 'text' : entry.surface === 'reference' ? 'icon' : 'tile';
-  return el(
+  const link = el(
     'a',
     {
       class: `ogt-service-link ogt-service-link--${variant}`,
@@ -126,14 +127,16 @@ function compactLink(entry) {
     icon,
     variant === 'icon' ? null : el('span', { class: 'ogt-service-label', text: label }),
   );
+  attachResolver?.(link, entry.source);
+  return link;
 }
 
 const SURFACE_NOTES = { watch: 'Your service', library: 'Add to library' };
 
 /** A Watch Now tile shaped like OG's provider tiles: a 2:1 logo card with a note underneath. */
-function watchLink(entry) {
+function watchLink(entry, attachResolver) {
   const label = entry.label.trim() || 'Custom link';
-  return el(
+  const link = el(
     'a',
     {
       class: 'ogt-watch-now-link',
@@ -147,6 +150,8 @@ function watchLink(entry) {
     el('span', { class: 'ogt-watch-now-card' }, serviceIcon(entry.icon), el('span', { class: 'ogt-service-name', text: label })),
     el('span', { class: 'ogt-watch-now-note', text: SURFACE_NOTES[entry.surface] || 'Your link' }),
   );
+  attachResolver?.(link, entry.source);
+  return link;
 }
 
 function signatureFor(entries) {
@@ -228,6 +233,55 @@ function createPanel(meta, route) {
     selection,
     getServers(),
   );
+
+  /** Page facts a resolver needs, read at activation so a late show lookup is included. */
+  function resolverInput(service) {
+    return {
+      service,
+      kind: meta.kind,
+      tmdb: meta.tmdb,
+      imdb: meta.imdb,
+      directUrl: service === 'metacritic' ? meta.metacriticUrl : meta.rottenTomatoesUrl,
+      context: { kind: meta.kind, routeName: route.name, season: selection.season, episode: selection.episode },
+    };
+  }
+
+  /**
+   * Resolve on hover/focus so ordinary navigation can use the exact href. A fast cold click
+   * still has a usable search fallback. Late results are ignored after teardown,
+   * navigation or a picker/template change.
+   */
+  function attachResolver(link, source) {
+    const service = presetResolver(source, meta.kind);
+    if (!service || link.dataset.ogtResolver) return;
+    link.dataset.ogtResolver = service;
+    const cached = peekExternalUrl(resolverInput(service));
+    if (cached) link.setAttribute('href', cached);
+
+    const activate = () => {
+      const input = resolverInput(service);
+      const exact = peekExternalUrl(input);
+      if (exact) {
+        if (link.getAttribute('href') !== exact) link.setAttribute('href', exact);
+        return;
+      }
+
+      const fallbackHref = link.getAttribute('href');
+      const pageHref = location.href;
+      resolveExternalUrl(input)
+        .then((url) => {
+          if (!url || cancelled || !link.isConnected || location.href !== pageHref) return;
+          if (link.getAttribute('href') !== fallbackHref) return;
+          link.setAttribute('href', url);
+        })
+        .catch((error) => { if (!cancelled) debugError(`${service} lookup failed`, error); });
+    };
+
+    link.addEventListener('pointerenter', activate);
+    link.addEventListener('focusin', activate);
+    link.addEventListener('click', activate);
+    link.addEventListener('auxclick', (event) => { if (event.button === 1) activate(); });
+  }
 
   let currentView = null;
   let returnFocus = null;
@@ -564,7 +618,7 @@ function createPanel(meta, route) {
     const logos = entries.filter((entry) => entry.surface === 'reference' && hasServiceIcon(entry.icon));
     const texts = entries.filter((entry) => !hasServiceIcon(entry.icon));
     for (const [kind, group] of [['services', services], ['logos', logos], ['texts', texts]]) {
-      if (group.length) linksRow.append(el('div', { class: `ogt-links-group ogt-links-${kind}` }, group.map(compactLink)));
+      if (group.length) linksRow.append(el('div', { class: `ogt-links-group ogt-links-${kind}` }, group.map((entry) => compactLink(entry, attachResolver))));
     }
     syncWatchNow(entries);
     lookUpShow(values);
@@ -602,7 +656,7 @@ function createPanel(meta, route) {
             'Your services',
             el('span', { class: 'count', text: String(watch.length) }),
           ),
-          el('div', { class: 'tiles ogt-watch-now-tiles' }, watch.map(watchLink)),
+          el('div', { class: 'tiles ogt-watch-now-tiles' }, watch.map((entry) => watchLink(entry, attachResolver))),
         ),
       );
     }
@@ -616,7 +670,7 @@ function createPanel(meta, route) {
             el('span', { class: 'ogt-watch-fallback-title', text: 'Watch Now' }),
             el('span', { class: 'ogt-watch-fallback-note', text: 'your links' }),
           ),
-          el('div', { class: 'ogt-watch-now-tiles' }, watch.map(watchLink)),
+          el('div', { class: 'ogt-watch-now-tiles' }, watch.map((entry) => watchLink(entry, attachResolver))),
         );
         watchFallback.dataset.ogtSignature = signature;
       }

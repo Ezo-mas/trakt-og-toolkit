@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { fillTemplate } from '../src/core/text.js';
 import { SERVER_KEYS } from '../src/settings.js';
 import { imdbNumber } from '../src/features/custom-links/data.js';
-import { PRESETS, presetTemplateUrls, resolvePresetUrl } from '../src/features/custom-links/presets.js';
+import { PRESETS, presetResolver, presetTemplateUrls, resolvePresetUrl } from '../src/features/custom-links/presets.js';
 
 const preset = (label) => PRESETS.find((entry) => entry.label === label);
 const withNumbers = (vars) => ({
@@ -240,6 +240,29 @@ test('server presets use the configured host and the best id they have', () => {
     filled('Seerr', { title: 'Breaking Bad', tmdb: 1396, ...servers }, 'show'),
     'https://requests.test/seerr/tv/1396',
   );
+});
+
+test('Metacritic and Rotten Tomatoes reuse a validated direct URL and expose their resolver', () => {
+  assert.equal(
+    resolvePresetUrl(
+      preset('Metacritic').url,
+      { title: 'Breaking Bad', metacriticUrl: 'https://www.metacritic.com/tv/breaking-bad/' },
+      'show',
+    ),
+    'https://www.metacritic.com/tv/breaking-bad/',
+  );
+  assert.equal(
+    resolvePresetUrl(
+      preset('Rotten Tomatoes').url,
+      { title: 'Breaking Bad', rottenTomatoesUrl: 'https://www.rottentomatoes.com/tv/breaking_bad' },
+      'show',
+    ),
+    'https://www.rottentomatoes.com/tv/breaking_bad',
+  );
+  assert.equal(presetResolver(preset('Metacritic').url, 'show'), 'metacritic');
+  assert.equal(presetResolver(preset('Rotten Tomatoes').url, 'movie'), 'rotten-tomatoes');
+  assert.equal(presetResolver('https://custom.test/{title}', 'movie'), null);
+  assert.equal(presetResolver(preset('Radarr').url, 'show'), null, 'kind restrictions still apply');
 });
 
 test('the og external-link services have search presets', () => {

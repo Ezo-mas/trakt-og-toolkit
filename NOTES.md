@@ -3,6 +3,45 @@
 Working notes and known issues. Newest first.
 
 
+## 2026-11-09: feature 27 review follow-ups
+
+- Network/timeout and 5xx failures now share a ten-second Wikidata cooldown without caching a missing mapping.
+  Longer `Retry-After` waits and existing cooldowns are preserved; hover/focus keeps search usable until retry.
+
+- Restored OG’s direct RT links from `.ratings-strip` alongside `ul.external-links`; unrelated page links remain
+  excluded. Tests use the header ratings markup for movie/show links and retain search on seasons without a link.
+- Lookup starts on pointer hover or keyboard focus, with click/middle-click fallback. Links reuse cached URLs when
+  drawn, preserving direct destinations for copy-link and context-menu navigation after redraws. A fast unresolved
+  click can still open search; page rendering never waits for Wikidata.
+- Requests send a versioned `Api-User-Agent` with the repository contact URL, following Wikimedia’s
+  [browser-script guidance](https://www.mediawiki.org/wiki/API:Etiquette#The_User-Agent_header). Removed the redundant
+  config wrapper and unused normalization argument.
+
+## 2026-11-08: external-id resolution for direct custom links (feature 27)
+
+- Metacritic and Rotten Tomatoes reuse a valid direct URL from OG's native `ul.external-links` strip. Comments,
+  related-title anchors and other page links are ignored, so an unrelated Metacritic URL cannot redirect the current
+  title. Without a native URL, `resolve.js` queries Wikidata P1258/P1712 by a validated TMDb or IMDb id, with the
+  media-class check and strict destination prefix validation from the original feature 27 work.
+- The resolver is wired into the current feature 26 sidebar: compact service links and both Watch Now surfaces all
+  attach the same lazy behavior through `presetResolver` and `resolveCustomLinks`' stored `source`. The old panel,
+  old tests and old bundle were not restored. A cold click keeps search; a cached mapping upgrades the href before
+  navigation. Late results are rejected after teardown, navigation or a changed href.
+- Lookups dedupe by service/kind/title id, time out at 8 s, cache hits for a day and genuine misses for five minutes,
+  and leave transport failures retryable. Only `@connect query.wikidata.org` was added.
+- Review fix: a 429 now records a Wikidata-wide cooldown from `Retry-After` (falling back to 60 s when the header is
+  absent) and returns `null`, leaving the search URL in place. `HttpError` carries response headers and `getJSON`
+  accepts bounded timeout/retry options so the resolver does not wait through the shared transport's retry loop.
+  Both destinations share one cooldown, so switching service or title cannot bypass throttling. Concurrent 429s
+  preserve the longest deadline. Cached mappings and native links remain usable during the cooldown.
+- `readTitleData` now emits `metacriticUrl` alongside `rottenTomatoesUrl`; both presets declare a `directVar` and
+  resolver, and the template values expose the validated native URL without treating it as a user placeholder.
+- Tests cover native-strip scoping against unrelated comment links, direct Metacritic/RT reuse, resolver activation,
+  misses/ambiguity, failure retry, concurrent chips, navigation during lookup, 429 cooldown (with and without
+  `Retry-After`), and built-bundle cooldown behavior. Anime remains search-only; its maintained mapping data was not
+  added. The resolver cache is in-memory per page instance.
+
+
 ## 2026-11-08: clicked custom links turned red (feature 26)
 
 - og styles every link with `a:is(:hover, :focus) { color: var(--color-link-hover); text-decoration: underline; }`
