@@ -137,11 +137,6 @@ My service | https://example.com/watch/{tmdb}?s={season}&e={episode}
 - **Other sites:** pronunciation fetches Forvo's public search page. Nothing else leaves your browser, and there is
   no backend.
 
-## Known issues
-
-- uBlock's cosmetic filter `trakt.tv##a[target="_blank"][style]:has(img[src])` can hide og's external ratings. Add
-  `og.trakt.tv#@#a[target="_blank"][style]:has(img[src])` to uBlock's My filters.
-
 ## Development
 
 ```bash
