@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { parseRoute } from '../src/core/router.js';
 import {
+  ELEMENT_TITLE_SHOW_HTML,
   EPISODE_PAGE_HTML,
   PERSON_PAGE_HTML,
   SEASON_PAGE_HTML,
@@ -203,6 +204,15 @@ test('show pages read the TVDB id from og\'s external links', () => {
   window.close();
   assert.equal(show.title, 'Breaking Bad');
   assert.equal(show.tvdb, 81189);
+});
+
+test('a decorated og title (Breaking Bad\'s element tiles) reads as its plain screen-reader title', () => {
+  const window = new Window();
+  window.document.body.innerHTML = ELEMENT_TITLE_SHOW_HTML;
+  const show = readTitleData(window.document, parseRoute('/shows/breaking-bad'));
+  window.close();
+  assert.equal(show.title, 'Breaking Bad');
+  assert.equal(show.year, 2008);
 });
 
 test('route selection presets season and episode, while title pages keep the stored picker values', () => {

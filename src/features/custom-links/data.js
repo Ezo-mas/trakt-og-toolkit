@@ -1,6 +1,6 @@
 /** Pure-ish readers for a title page. They take a Document so they can be tested. */
 import { cleanTitle, fillTemplate, missingPlaceholders, parseYear } from '../../core/text.js';
-import { text } from '../../core/dom.js';
+import { headingTitle, text } from '../../core/dom.js';
 import { isCustomLinkUrl, SERVER_KEYS } from '../../settings.js';
 import { validateDirectUrl } from './resolve.js';
 import { findPreset, presetGenresAllowed, resolvePresetUrl } from './presets.js';
@@ -189,18 +189,10 @@ function readNativeExternalUrl(doc, kind, service) {
   return null;
 }
 
-/**
- * The h1 also contains a year span, a certification span and tooltips. Only the
- * direct text nodes are the title.
- */
+/** The heading's title (see `headingTitle`), or all its text when og renders the title some other way. */
 function headingText(heading) {
   if (!heading) return '';
-  const direct = [...heading.childNodes]
-    .filter((node) => node.nodeType === 3)
-    .map((node) => node.textContent)
-    .join(' ')
-    .trim();
-  return direct || text(heading);
+  return headingTitle(heading) || text(heading);
 }
 
 function firstMatch(doc, selector, pattern, value) {

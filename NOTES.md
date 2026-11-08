@@ -3,6 +3,18 @@
 Working notes and known issues. Newest first.
 
 
+## 2026-11-09: decorated summary titles (Breaking Bad's element tiles)
+
+- After hydration, og redraws Breaking Bad's show-page `h1` as periodic-table tiles: `span.element-title` holds a
+  `.visually-hidden` span with the plain title and an `aria-hidden` copy built from `.tile` spans ("35 Br 79.904"). The
+  server HTML still has the plain text, and trakt/trakt-og had no such component yet, so it ships live first. Only
+  that page used it (seasons, episodes, El Camino, Better Call Saul, The Matrix and Dune: Prophecy were plain).
+- The custom-links reader fell back to the whole heading's text, so `{title}` became "Breaking Bad 35Br79.904eaking
+  56Ba137.327d 2008 TV-MA…" and broke search links; the library notice read only direct text nodes and got nothing.
+- `headingTitle()` in `src/core/dom.js` now prefers a `.visually-hidden` title inside the h1 (skipping the year,
+  certification and tooltip) and otherwise keeps the direct-text-node rule. Both readers use it. The fixture
+  `ELEMENT_TITLE_SHOW_HTML` is the live hydrated heading with svelte classes stripped.
+
 ## 2026-11-09: feature 27 review follow-ups
 
 - Network/timeout and 5xx failures now share a ten-second Wikidata cooldown without caching a missing mapping.
