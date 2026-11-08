@@ -20,6 +20,7 @@
 // @connect      api.trakt.tv
 // @connect      auth.trakt.tv
 // @connect      forvo.com
+// @connect      query.wikidata.org
 // @noframes
 // ==/UserScript==
 
@@ -1825,6 +1826,323 @@
     return match ? Number(match[0]) : null;
   }
 
+  // src/core/http.js
+  var HttpError = class extends Error {
+    constructor(message, status, body, headers2 = null) {
+      super(message);
+      this.name = "HttpError";
+      this.status = status;
+      this.body = body;
+      this.headers = headers2;
+    }
+  };
+  var MAX_CONCURRENT = 4;
+  var MAX_RETRIES = 2;
+  var DEFAULT_TIMEOUT = 2e4;
+  var active = 0;
+  var waiting = [];
+  function acquire() {
+    if (active < MAX_CONCURRENT) {
+      active += 1;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => waiting.push(resolve));
+  }
+  function release() {
+    const next = waiting.shift();
+    if (next) next();
+    else active -= 1;
+  }
+  function rawRequest({ method = "GET", url, headers: headers2 = {}, body = null, timeout = DEFAULT_TIMEOUT, signal }) {
+    const gmRequest = typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function" ? GM.xmlHttpRequest : null;
+    if (!gmRequest) {
+      return fetch(url, { method, headers: headers2, body, signal }).then(async (response) => ({
+        status: response.status,
+        headers: response.headers,
+        text: await response.text()
+      }));
+    }
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) return reject(new HttpError("Request cancelled", 0, null));
+      let handle;
+      const abort = () => {
+        handle?.abort();
+        reject(new HttpError("Request cancelled", 0, null));
+      };
+      const finish = (callback, value) => {
+        signal?.removeEventListener("abort", abort);
+        callback(value);
+      };
+      signal?.addEventListener("abort", abort, { once: true });
+      handle = gmRequest({
+        method,
+        url,
+        headers: headers2,
+        data: body,
+        timeout,
+        onload: (response) => finish(resolve, { status: response.status, headers: response.responseHeaders, text: response.responseText }),
+        onerror: () => finish(reject, new HttpError(`Network error for ${url}`, 0, null)),
+        ontimeout: () => finish(reject, new HttpError(`Timed out for ${url}`, 0, null)),
+        onabort: () => finish(reject, new HttpError(`Aborted ${url}`, 0, null))
+      });
+    });
+  }
+  var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  var MAX_RETRY_WAIT_MS = 6e4;
+  async function request(options) {
+    await acquire();
+    try {
+      let attempt = 0;
+      for (; ; ) {
+        const prepared = options.beforeSend ? await options.beforeSend() : null;
+        const response = await rawRequest(prepared ? { ...options, ...prepared } : options);
+        const retryable = response.status === 429 || response.status >= 500;
+        if (!retryable || attempt >= (options.retries ?? MAX_RETRIES)) return response;
+        const retryAfter = Number(headerValue(response.headers, "retry-after"));
+        const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1e3 : 1e3 * (attempt + 1);
+        if (delay > MAX_RETRY_WAIT_MS) return response;
+        attempt += 1;
+        await sleep(delay);
+      }
+    } finally {
+      release();
+    }
+  }
+  function headerValue(headers2, name) {
+    if (!headers2) return null;
+    if (typeof headers2.get === "function") return headers2.get(name);
+    const line = String(headers2).split(/\r?\n/).find((row) => row.toLowerCase().startsWith(`${name}:`));
+    return line ? line.slice(line.indexOf(":") + 1).trim() : null;
+  }
+  var cache = /* @__PURE__ */ new Map();
+  async function getJSON(url, { headers: headers2 = {}, ttl = 0, timeout, retries } = {}) {
+    const now = Date.now();
+    const hit = cache.get(url);
+    if (hit && hit.expires > now) return hit.value;
+    const response = await request({
+      url,
+      headers: headers2,
+      method: "GET",
+      ...timeout !== void 0 ? { timeout } : {},
+      ...retries !== void 0 ? { retries } : {}
+    });
+    if (response.status < 200 || response.status >= 300) {
+      throw new HttpError(`HTTP ${response.status} for ${url}`, response.status, response.text, response.headers);
+    }
+    let value;
+    try {
+      value = JSON.parse(response.text);
+    } catch (error) {
+      throw new HttpError(`Invalid JSON from ${url}`, response.status, response.text, response.headers);
+    }
+    if (ttl > 0) cache.set(url, { expires: now + ttl, value });
+    return value;
+  }
+  function clearCache(prefix) {
+    if (!prefix) {
+      cache.clear();
+      return;
+    }
+    for (const key of cache.keys()) if (key.startsWith(prefix)) cache.delete(key);
+  }
+  function cacheSize() {
+    return cache.size;
+  }
+
+  // src/features/custom-links/resolve.js
+  var RESOLVE_TIMEOUT_MS = 8e3;
+  var HIT_TTL_MS = 24 * 60 * 60 * 1e3;
+  var MISS_TTL_MS = 5 * 60 * 1e3;
+  var DEFAULT_COOLDOWN_MS = 60 * 1e3;
+  var SPARQL_URL = "https://query.wikidata.org/sparql";
+  var IMDB_RE = /^tt\d{5,10}$/;
+  var RT_ID_RE = /^(m|tv)\/([a-z0-9][a-z0-9_-]*)$/;
+  var MC_ID_RE = /^(movie|tv)\/([a-z0-9][a-z0-9-]*)$/;
+  var MC_SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+  var RT_PATH_RE = /^[a-z0-9][a-z0-9_-]*$/;
+  var WIKIDATA_ITEM_RE = /^https?:\/\/www\.wikidata\.org\/entity\/Q\d+$/;
+  var SERVICES = {
+    "rotten-tomatoes": {
+      property: "P1258",
+      hostnames: ["www.rottentomatoes.com", "rottentomatoes.com"],
+      kinds: {
+        movie: { className: "Q11424", tmdbProperty: "P4947", prefix: "m" },
+        show: { className: "Q5398426", tmdbProperty: "P4983", prefix: "tv" }
+      }
+    },
+    metacritic: {
+      property: "P1712",
+      hostnames: ["www.metacritic.com", "metacritic.com"],
+      kinds: {
+        movie: { className: "Q11424", tmdbProperty: "P4947", prefix: "movie" },
+        show: { className: "Q5398426", tmdbProperty: "P4983", prefix: "tv" }
+      }
+    }
+  };
+  var cache2 = /* @__PURE__ */ new Map();
+  var inflight = /* @__PURE__ */ new Map();
+  var nextLookupAt = 0;
+  function serviceConfig(service, kind) {
+    const config = SERVICES[service];
+    if (!config || !config.kinds[kind]) return null;
+    return { ...config.kinds[kind], property: config.property, hostnames: config.hostnames };
+  }
+  function validTmdbId(value) {
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+  }
+  function validImdbId(value) {
+    const imdb = String(value ?? "").trim();
+    return IMDB_RE.test(imdb) ? imdb : null;
+  }
+  function normalise(def, kind, identifier) {
+    const match = String(identifier ?? "").match(def.property === "P1258" ? RT_ID_RE : MC_ID_RE);
+    if (!match || match[1] !== def.prefix) return null;
+    if (def.property === "P1258") return `https://www.rottentomatoes.com/${match[1]}/${match[2]}`;
+    return `https://www.metacritic.com/${match[1]}/${match[2]}/`;
+  }
+  function validateDirectUrl(service, kind, raw) {
+    const config = SERVICE_CONFIG(service);
+    const def = config?.kinds[kind];
+    if (!def || !raw) return null;
+    let url;
+    try {
+      url = new URL(String(raw));
+    } catch {
+      return null;
+    }
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
+    if (!config.hostnames.includes(url.hostname)) return null;
+    const segments = url.pathname.split("/").filter(Boolean);
+    if (service === "rotten-tomatoes") {
+      if (!segments.length || !["m", "tv"].includes(segments[0])) return null;
+      if (segments[0] !== def.prefix) return null;
+      if (segments.length === 2 && RT_PATH_RE.test(segments[1])) return `${url.origin}/${segments.join("/")}`;
+      if (kind === "show" && segments.length === 3 && /^s\d+$/.test(segments[2]) && RT_PATH_RE.test(segments[1])) return `${url.origin}/${segments.join("/")}`;
+      if (kind === "show" && segments.length === 4 && /^s\d+$/.test(segments[2]) && /^e\d+$/.test(segments[3]) && RT_PATH_RE.test(segments[1])) return `${url.origin}/${segments.join("/")}`;
+      return null;
+    }
+    if (!segments.length || !["movie", "tv"].includes(segments[0])) return null;
+    if (segments[0] !== def.prefix || segments.length > 3) return null;
+    if (!MC_SLUG_RE.test(segments[1] || "")) return null;
+    if (segments.length === 2) return `${url.origin}/${segments.join("/")}/`;
+    if (kind === "show" && /^season-\d+$/.test(segments[2])) return `${url.origin}/${segments.join("/")}/`;
+    return null;
+  }
+  function SERVICE_CONFIG(service) {
+    return SERVICES[service] || null;
+  }
+  function externalIdUrl(service, kind, identifier) {
+    const def = serviceConfig(service, kind);
+    if (!def) return null;
+    return normalise(def, kind, identifier);
+  }
+  function buildDestinationUrl(service, baseUrl, context = {}) {
+    const def = serviceConfig(service, context.kind);
+    if (!def || !baseUrl) return null;
+    const season = context.season;
+    if (context.kind !== "show" || !(context.routeName === "season" || context.routeName === "episode")) return baseUrl;
+    if (!Number.isSafeInteger(season) || season < 1) return baseUrl;
+    if (service === "rotten-tomatoes") return `${baseUrl.replace(/\/+$/, "")}/s${String(season).padStart(2, "0")}`;
+    return `${baseUrl.replace(/\/+$/, "")}/season-${season}/`;
+  }
+  function resolverKey({ service, kind, tmdb, imdb }) {
+    return `${service}|${kind}|${validTmdbId(tmdb) ?? ""}|${validImdbId(imdb) ?? ""}`;
+  }
+  function buildWikidataQuery({ service, kind, tmdb, imdb }) {
+    const def = serviceConfig(service, kind);
+    if (!def) throw new Error("Unsupported resolver service or kind.");
+    const tmdbId = validTmdbId(tmdb);
+    const imdbId = validImdbId(imdb);
+    const idClause = tmdbId != null ? `?item wdt:${def.tmdbProperty} "${tmdbId}" .` : imdbId != null ? `?item wdt:P345 "${imdbId}" .` : null;
+    if (!idClause) throw new Error("No validated TMDb or IMDb id.");
+    return [
+      "SELECT DISTINCT ?item ?value WHERE {",
+      `  ${idClause}`,
+      `  ?item wdt:P31/wdt:P279* wd:${def.className} .`,
+      `  ?item wdt:${def.property} ?value .`,
+      "}"
+    ].join("\n");
+  }
+  function parseWikidataResponse(payload, service, kind) {
+    const bindings = payload?.results?.bindings;
+    if (!Array.isArray(bindings)) throw new Error("Malformed Wikidata response.");
+    const values = /* @__PURE__ */ new Set();
+    for (const binding of bindings) {
+      const item = binding?.item?.value;
+      const value = binding?.value?.value;
+      if (typeof item !== "string" || !WIKIDATA_ITEM_RE.test(item)) throw new Error("Malformed Wikidata item.");
+      if (typeof value !== "string") throw new Error("Malformed Wikidata value.");
+      values.add(value);
+    }
+    if (values.size !== 1) return null;
+    return externalIdUrl(service, kind, [...values][0]);
+  }
+  function directUrlFor(input) {
+    return validateDirectUrl(input.service, input.kind, input.directUrl);
+  }
+  function fetchBase(input, { fetchImpl }) {
+    const query = buildWikidataQuery(input);
+    const url = `${SPARQL_URL}?format=json&query=${encodeURIComponent(query)}`;
+    const fetchJson = fetchImpl || ((target) => getJSON(target, {
+      headers: { Accept: "application/sparql-results+json" },
+      timeout: RESOLVE_TIMEOUT_MS,
+      retries: 0
+    }));
+    return Promise.resolve(fetchJson(url)).then((payload) => parseWikidataResponse(payload, input.service, input.kind));
+  }
+  function retryAfterMs(value, nowMs = Date.now()) {
+    if (value == null || value === "") return DEFAULT_COOLDOWN_MS;
+    const seconds = Number(value);
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1e3;
+    const date = Date.parse(String(value));
+    if (Number.isFinite(date)) return Math.max(0, date - nowMs);
+    return DEFAULT_COOLDOWN_MS;
+  }
+  function coolingDown(now) {
+    return nextLookupAt > now();
+  }
+  function recordCooldown(error, now) {
+    const at = now();
+    nextLookupAt = Math.max(nextLookupAt, at + retryAfterMs(headerValue(error?.headers, "retry-after"), at));
+  }
+  function peekExternalUrl(input, options = {}) {
+    const direct = directUrlFor(input);
+    if (direct) return direct;
+    if (!serviceConfig(input.service, input.kind)) return null;
+    const now = options.now || Date.now;
+    const hit = cache2.get(resolverKey(input));
+    if (!hit || hit.expires <= now()) return null;
+    return hit.url ? buildDestinationUrl(input.service, hit.url, input.context) : null;
+  }
+  function resolveExternalUrl(input, options = {}) {
+    const direct = directUrlFor(input);
+    if (direct) return Promise.resolve(direct);
+    if (!serviceConfig(input.service, input.kind)) return Promise.resolve(null);
+    if (validTmdbId(input.tmdb) == null && validImdbId(input.imdb) == null) return Promise.resolve(null);
+    const now = options.now || Date.now;
+    const key = resolverKey(input);
+    const hit = cache2.get(key);
+    if (hit && hit.expires > now()) {
+      return Promise.resolve(hit.url ? buildDestinationUrl(input.service, hit.url, input.context) : null);
+    }
+    if (coolingDown(now)) return Promise.resolve(null);
+    let pending = inflight.get(key);
+    if (!pending) {
+      pending = fetchBase(input, { fetchImpl: options.fetchImpl }).then((url) => {
+        cache2.set(key, { url, expires: now() + (url ? HIT_TTL_MS : MISS_TTL_MS) });
+        return url;
+      }).catch((error) => {
+        if (error?.status === 429) {
+          recordCooldown(error, now);
+          return null;
+        }
+        throw error;
+      }).finally(() => inflight.delete(key));
+      inflight.set(key, pending);
+    }
+    return pending.then((url) => url ? buildDestinationUrl(input.service, url, input.context) : null);
+  }
+
   // src/features/custom-links/presets.js
   var PRESETS = [
     {
@@ -1878,7 +2196,10 @@
       url: "https://www.rottentomatoes.com/search?search={title}",
       icon: "rt",
       surface: "reference",
-      kinds: ["movie", "show"]
+      kinds: ["movie", "show"],
+      // Reuse OG's direct URL; otherwise Wikidata P1258 resolves the title id lazily.
+      directVar: "rottenTomatoesUrl",
+      resolver: "rotten-tomatoes"
     },
     {
       label: "Wikipedia",
@@ -1907,7 +2228,10 @@
       url: "https://www.metacritic.com/search/{title}/",
       icon: "metacritic",
       surface: "reference",
-      kinds: ["movie", "show"]
+      kinds: ["movie", "show"],
+      // Reuse OG's direct URL when present; otherwise Wikidata P1712 resolves the title id lazily.
+      directVar: "metacriticUrl",
+      resolver: "metacritic"
     },
     {
       label: "Stremio",
@@ -2065,12 +2389,16 @@
   function resolvePresetUrl(url, vars, kind) {
     const preset = PRESETS.find((entry) => entry.url === url);
     if (preset && !preset.kinds.includes(kind)) return null;
-    if (preset?.label === "Rotten Tomatoes" && vars.rottenTomatoesUrl) return vars.rottenTomatoesUrl;
+    if (preset?.directVar && vars[preset.directVar]) return vars[preset.directVar];
     if (!preset?.deep) return url;
     const deep = preset.deep.find(
       (entry) => entry.kinds.includes(kind) && missingPlaceholders(entry.url, vars).length === 0
     );
     return deep ? deep.url : url;
+  }
+  function presetResolver(url, kind) {
+    const preset = PRESETS.find((entry) => entry.url === url);
+    return preset && preset.kinds.includes(kind) ? preset.resolver || null : null;
   }
 
   // src/features/custom-links/brand-paths.js
@@ -2203,7 +2531,7 @@
 
   // src/features/custom-links/data.js
   var TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
-  var IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
+  var IMDB_RE2 = /imdb\.com\/title\/(tt\d+)/;
   var TVDB_RE = /thetvdb\.com\/(?:dereferrer\/)?series\/(\d+)/;
   var SEASON_HREF_RE = /\/seasons\/(\d+)(?:\/|$)/;
   var SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
@@ -2222,7 +2550,8 @@
         imdb: route.name === "season" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null,
         episodeImdb: route.name === "episode" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', EPISODE_IMDB_RE, (match) => match[1]) : null,
         tvdb: null,
-        rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind)
+        rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind),
+        metacriticUrl: readMetacriticUrl(doc, route.kind)
       };
     }
     const heading = doc.querySelector(".summary-title h1") || doc.querySelector("h1");
@@ -2239,7 +2568,7 @@
     }
     let imdb = null;
     for (const link of doc.querySelectorAll('a[href*="imdb.com/title/"]')) {
-      const match = link.getAttribute("href")?.match(IMDB_RE);
+      const match = link.getAttribute("href")?.match(IMDB_RE2);
       if (match) {
         imdb = match[1];
         break;
@@ -2266,17 +2595,22 @@
       imdb,
       episodeImdb: null,
       rottenTomatoesUrl: readRottenTomatoesUrl(doc, kind),
+      metacriticUrl: readMetacriticUrl(doc, kind),
       tvdb
     };
   }
   function readRottenTomatoesUrl(doc, kind) {
-    const path = kind === "movie" ? /^\/m\/[a-z0-9_-]+\/?$/i : /^\/tv\/[a-z0-9_-]+(?:\/s\d+(?:\/e\d+)?)?\/?$/i;
-    for (const link of doc.querySelectorAll('a[href*="rottentomatoes.com/"]')) {
-      try {
-        const url = new URL(link.getAttribute("href"));
-        if (url.protocol === "https:" && ["www.rottentomatoes.com", "rottentomatoes.com"].includes(url.hostname) && !url.username && !url.password && !url.port && path.test(url.pathname)) return url.origin + url.pathname;
-      } catch {
-      }
+    return readNativeExternalUrl(doc, kind, "rotten-tomatoes");
+  }
+  function readMetacriticUrl(doc, kind) {
+    return readNativeExternalUrl(doc, kind, "metacritic");
+  }
+  function readNativeExternalUrl(doc, kind, service) {
+    const strip = doc.querySelector("ul.external-links");
+    if (!strip) return null;
+    for (const link of strip.querySelectorAll("a[href]")) {
+      const url = validateDirectUrl(service, kind, link.getAttribute("href"));
+      if (url) return url;
     }
     return null;
   }
@@ -2356,6 +2690,7 @@
       episodeimdbnum: imdbNumber(meta.episodeImdb),
       tvdb: meta.tvdb,
       rottenTomatoesUrl: meta.rottenTomatoesUrl,
+      metacriticUrl: meta.metacriticUrl,
       jellyfin: servers.jellyfin || null,
       emby: servers.emby || null,
       radarr: servers.radarr || null,
@@ -2432,122 +2767,6 @@
       }
     }
     return errors;
-  }
-
-  // src/core/http.js
-  var HttpError = class extends Error {
-    constructor(message, status, body) {
-      super(message);
-      this.name = "HttpError";
-      this.status = status;
-      this.body = body;
-    }
-  };
-  var MAX_CONCURRENT = 4;
-  var MAX_RETRIES = 2;
-  var DEFAULT_TIMEOUT = 2e4;
-  var active = 0;
-  var waiting = [];
-  function acquire() {
-    if (active < MAX_CONCURRENT) {
-      active += 1;
-      return Promise.resolve();
-    }
-    return new Promise((resolve) => waiting.push(resolve));
-  }
-  function release() {
-    const next = waiting.shift();
-    if (next) next();
-    else active -= 1;
-  }
-  function rawRequest({ method = "GET", url, headers: headers2 = {}, body = null, timeout = DEFAULT_TIMEOUT, signal }) {
-    const gmRequest = typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function" ? GM.xmlHttpRequest : null;
-    if (!gmRequest) {
-      return fetch(url, { method, headers: headers2, body, signal }).then(async (response) => ({
-        status: response.status,
-        headers: response.headers,
-        text: await response.text()
-      }));
-    }
-    return new Promise((resolve, reject) => {
-      if (signal?.aborted) return reject(new HttpError("Request cancelled", 0, null));
-      let handle;
-      const abort = () => {
-        handle?.abort();
-        reject(new HttpError("Request cancelled", 0, null));
-      };
-      const finish = (callback, value) => {
-        signal?.removeEventListener("abort", abort);
-        callback(value);
-      };
-      signal?.addEventListener("abort", abort, { once: true });
-      handle = gmRequest({
-        method,
-        url,
-        headers: headers2,
-        data: body,
-        timeout,
-        onload: (response) => finish(resolve, { status: response.status, headers: response.responseHeaders, text: response.responseText }),
-        onerror: () => finish(reject, new HttpError(`Network error for ${url}`, 0, null)),
-        ontimeout: () => finish(reject, new HttpError(`Timed out for ${url}`, 0, null)),
-        onabort: () => finish(reject, new HttpError(`Aborted ${url}`, 0, null))
-      });
-    });
-  }
-  var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  var MAX_RETRY_WAIT_MS = 6e4;
-  async function request(options) {
-    await acquire();
-    try {
-      let attempt = 0;
-      for (; ; ) {
-        const prepared = options.beforeSend ? await options.beforeSend() : null;
-        const response = await rawRequest(prepared ? { ...options, ...prepared } : options);
-        const retryable = response.status === 429 || response.status >= 500;
-        if (!retryable || attempt >= (options.retries ?? MAX_RETRIES)) return response;
-        const retryAfter = Number(headerValue(response.headers, "retry-after"));
-        const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1e3 : 1e3 * (attempt + 1);
-        if (delay > MAX_RETRY_WAIT_MS) return response;
-        attempt += 1;
-        await sleep(delay);
-      }
-    } finally {
-      release();
-    }
-  }
-  function headerValue(headers2, name) {
-    if (!headers2) return null;
-    if (typeof headers2.get === "function") return headers2.get(name);
-    const line = String(headers2).split(/\r?\n/).find((row) => row.toLowerCase().startsWith(`${name}:`));
-    return line ? line.slice(line.indexOf(":") + 1).trim() : null;
-  }
-  var cache = /* @__PURE__ */ new Map();
-  async function getJSON(url, { headers: headers2 = {}, ttl = 0 } = {}) {
-    const now = Date.now();
-    const hit = cache.get(url);
-    if (hit && hit.expires > now) return hit.value;
-    const response = await request({ url, headers: headers2, method: "GET" });
-    if (response.status < 200 || response.status >= 300) {
-      throw new HttpError(`HTTP ${response.status} for ${url}`, response.status, response.text);
-    }
-    let value;
-    try {
-      value = JSON.parse(response.text);
-    } catch (error) {
-      throw new HttpError(`Invalid JSON from ${url}`, response.status, response.text);
-    }
-    if (ttl > 0) cache.set(url, { expires: now + ttl, value });
-    return value;
-  }
-  function clearCache(prefix) {
-    if (!prefix) {
-      cache.clear();
-      return;
-    }
-    for (const key of cache.keys()) if (key.startsWith(prefix)) cache.delete(key);
-  }
-  function cacheSize() {
-    return cache.size;
   }
 
   // src/core/oauth.js
@@ -3073,11 +3292,11 @@
       el("span", { text: text2 })
     );
   }
-  function compactLink(entry) {
+  function compactLink(entry, attachResolver) {
     const label = entry.label.trim() || "Custom link";
     const icon3 = serviceIcon(entry.icon);
     const variant = !icon3 ? "text" : entry.surface === "reference" ? "icon" : "tile";
-    return el(
+    const link = el(
       "a",
       {
         class: `ogt-service-link ogt-service-link--${variant}`,
@@ -3092,11 +3311,13 @@
       icon3,
       variant === "icon" ? null : el("span", { class: "ogt-service-label", text: label })
     );
+    attachResolver?.(link, entry.source);
+    return link;
   }
   var SURFACE_NOTES = { watch: "Your service", library: "Add to library" };
-  function watchLink(entry) {
+  function watchLink(entry, attachResolver) {
     const label = entry.label.trim() || "Custom link";
-    return el(
+    const link = el(
       "a",
       {
         class: "ogt-watch-now-link",
@@ -3110,6 +3331,8 @@
       el("span", { class: "ogt-watch-now-card" }, serviceIcon(entry.icon), el("span", { class: "ogt-service-name", text: label })),
       el("span", { class: "ogt-watch-now-note", text: SURFACE_NOTES[entry.surface] || "Your link" })
     );
+    attachResolver?.(link, entry.source);
+    return link;
   }
   function signatureFor(entries) {
     return JSON.stringify(entries.map(({ label, href, icon: icon3, surface }) => [label, href, icon3, surface]));
@@ -3179,6 +3402,42 @@
       selection,
       getServers()
     );
+    function resolverInput(service) {
+      return {
+        service,
+        kind: meta.kind,
+        tmdb: meta.tmdb,
+        imdb: meta.imdb,
+        directUrl: service === "metacritic" ? meta.metacriticUrl : meta.rottenTomatoesUrl,
+        context: { kind: meta.kind, routeName: route.name, season: selection.season, episode: selection.episode }
+      };
+    }
+    function attachResolver(link, source) {
+      const service = presetResolver(source, meta.kind);
+      if (!service || link.dataset.ogtResolver) return;
+      link.dataset.ogtResolver = service;
+      const activate = () => {
+        const input = resolverInput(service);
+        const exact = peekExternalUrl(input);
+        if (exact) {
+          if (link.getAttribute("href") !== exact) link.setAttribute("href", exact);
+          return;
+        }
+        const fallbackHref = link.getAttribute("href");
+        const pageHref = location.href;
+        resolveExternalUrl(input).then((url) => {
+          if (!url || cancelled || !link.isConnected || location.href !== pageHref) return;
+          if (link.getAttribute("href") !== fallbackHref) return;
+          link.setAttribute("href", url);
+        }).catch((error) => {
+          if (!cancelled) debugError(`${service} lookup failed`, error);
+        });
+      };
+      link.addEventListener("click", activate);
+      link.addEventListener("auxclick", (event) => {
+        if (event.button === 1) activate();
+      });
+    }
     let currentView = null;
     let returnFocus = null;
     let draft = [];
@@ -3483,7 +3742,7 @@
       const logos = entries.filter((entry) => entry.surface === "reference" && hasServiceIcon(entry.icon));
       const texts = entries.filter((entry) => !hasServiceIcon(entry.icon));
       for (const [kind, group] of [["services", services], ["logos", logos], ["texts", texts]]) {
-        if (group.length) linksRow.append(el("div", { class: `ogt-links-group ogt-links-${kind}` }, group.map(compactLink)));
+        if (group.length) linksRow.append(el("div", { class: `ogt-links-group ogt-links-${kind}` }, group.map((entry) => compactLink(entry, attachResolver))));
       }
       syncWatchNow(entries);
       lookUpShow(values);
@@ -3516,7 +3775,7 @@
               "Your services",
               el("span", { class: "count", text: String(watch.length) })
             ),
-            el("div", { class: "tiles ogt-watch-now-tiles" }, watch.map(watchLink))
+            el("div", { class: "tiles ogt-watch-now-tiles" }, watch.map((entry) => watchLink(entry, attachResolver)))
           )
         );
       }
@@ -3529,7 +3788,7 @@
               el("span", { class: "ogt-watch-fallback-title", text: "Watch Now" }),
               el("span", { class: "ogt-watch-fallback-note", text: "your links" })
             ),
-            el("div", { class: "ogt-watch-now-tiles" }, watch.map(watchLink))
+            el("div", { class: "ogt-watch-now-tiles" }, watch.map((entry) => watchLink(entry, attachResolver)))
           );
           watchFallback.dataset.ogtSignature = signature;
         }
@@ -3873,13 +4132,13 @@
     return body === void 0 ? auth(method, path) : auth(method, path, body);
   }
   function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isSignedIn, now = Date.now } = {}) {
-    const cache3 = /* @__PURE__ */ new Map();
+    const cache4 = /* @__PURE__ */ new Map();
     const flights2 = /* @__PURE__ */ new Map();
     let revision = 0;
     let session = 0;
     function invalidate() {
       revision += 1;
-      cache3.clear();
+      cache4.clear();
       flights2.clear();
     }
     function resetSession() {
@@ -3892,7 +4151,7 @@
         return [];
       }
       if (force) invalidate();
-      const hit = cache3.get(kind);
+      const hit = cache4.get(kind);
       if (hit && hit.until > now()) return hit.items;
       if (flights2.has(kind)) return flights2.get(kind);
       const rev = revision;
@@ -3902,7 +4161,7 @@
         if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
         if (!Array.isArray(rows)) throw new Error("Invalid playback response.");
         const items = mapPlayback(rows, kind);
-        if (rev === revision) cache3.set(kind, { items, until: now() + TTL });
+        if (rev === revision) cache4.set(kind, { items, until: now() + TTL });
         return items;
       })();
       flights2.set(kind, flight);
@@ -4351,15 +4610,15 @@
   // src/features/pronunciation/api.js
   var CACHE_TTL2 = 10 * 60 * 1e3;
   var MAX_ENTRIES = 20;
-  var cache2 = /* @__PURE__ */ new Map();
+  var cache3 = /* @__PURE__ */ new Map();
   function remember(url, recordings) {
-    cache2.delete(url);
-    cache2.set(url, { expires: Date.now() + CACHE_TTL2, recordings });
-    while (cache2.size > MAX_ENTRIES) cache2.delete(cache2.keys().next().value);
+    cache3.delete(url);
+    cache3.set(url, { expires: Date.now() + CACHE_TTL2, recordings });
+    while (cache3.size > MAX_ENTRIES) cache3.delete(cache3.keys().next().value);
   }
   async function getForvoRecordings(name, { signal } = {}) {
     const url = forvoUrl(name);
-    const hit = cache2.get(url);
+    const hit = cache3.get(url);
     if (hit && hit.expires > Date.now()) return hit.recordings;
     const response = await request({
       url,
@@ -4636,14 +4895,14 @@
   var TTL2 = 10 * 6e4;
   var emptyTitles = () => ({ movie: /* @__PURE__ */ new Map(), show: /* @__PURE__ */ new Map() });
   function createRatingsApi({ auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
-    let cache3 = null;
+    let cache4 = null;
     let flight = null;
     let titleCache = null;
     let titleFlight = null;
     let generation3 = 0;
     function resetSession() {
       generation3++;
-      cache3 = null;
+      cache4 = null;
       flight = null;
       titleCache = null;
       titleFlight = null;
@@ -4653,7 +4912,7 @@
         resetSession();
         return [];
       }
-      if (cache3 && cache3.until > now()) return cache3.items;
+      if (cache4 && cache4.until > now()) return cache4.items;
       if (flight) return flight;
       const epoch = generation3;
       const pending = (async () => {
@@ -4661,7 +4920,7 @@
         if (epoch !== generation3 || !signedIn()) throw new Error("Ratings session changed.");
         if (!Array.isArray(rows)) throw new Error("Invalid ratings response.");
         const items = mapRatings(rows);
-        cache3 = { items, until: now() + TTL2 };
+        cache4 = { items, until: now() + TTL2 };
         return items;
       })();
       flight = pending;

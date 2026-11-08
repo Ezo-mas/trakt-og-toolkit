@@ -203,3 +203,33 @@ test('Rotten Tomatoes reader rejects lookalike domains, searches and the wrong p
     assert.equal(readTitleData(window.document, parseRoute('/movies/test')).rottenTomatoesUrl, null, href);
   }
 });
+
+test('direct Metacritic and Rotten Tomatoes URLs come only from the native external-link strip', t => {
+  const window = new Window({ url: 'https://og.trakt.tv/movies/the-dark-2005' });
+  t.after(() => window.close());
+  const route = parseRoute('/movies/the-dark-2005');
+
+  window.document.body.innerHTML = '<a href="https://www.metacritic.com/movie/the-matrix">Comment</a>' +
+    '<a href="https://www.rottentomatoes.com/m/the_matrix">Comment</a>';
+  const unrelated = readTitleData(window.document, route);
+  assert.equal(unrelated.metacriticUrl, null, 'a comment link must not choose another title');
+  assert.equal(unrelated.rottenTomatoesUrl, null);
+
+  window.document.body.innerHTML = `<ul class="external-links">
+    <li><a href="https://www.metacritic.com/movie/the-dark">Metacritic</a></li>
+    <li><a href="https://www.rottentomatoes.com/m/the_dark?tracking=og">Rotten Tomatoes</a></li>
+  </ul>`;
+  const native = readTitleData(window.document, route);
+  assert.equal(native.metacriticUrl, 'https://www.metacritic.com/movie/the-dark/');
+  assert.equal(native.rottenTomatoesUrl, 'https://www.rottentomatoes.com/m/the_dark');
+});
+
+test('template vars expose direct Metacritic and Rotten Tomatoes URLs', () => {
+  const vars = templateVars({
+    id: 'the-dark',
+    metacriticUrl: 'https://www.metacritic.com/movie/the-dark/',
+    rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/the_dark',
+  });
+  assert.equal(vars.metacriticUrl, 'https://www.metacritic.com/movie/the-dark/');
+  assert.equal(vars.rottenTomatoesUrl, 'https://www.rottentomatoes.com/m/the_dark');
+});

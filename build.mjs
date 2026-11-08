@@ -27,6 +27,7 @@ ${matches.map((match) => `// @match        ${match}`).join('\n')}
 // @connect      api.trakt.tv
 // @connect      auth.trakt.tv
 // @connect      forvo.com
+// @connect      query.wikidata.org
 // @noframes
 // ==/UserScript==
 `;

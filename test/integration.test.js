@@ -69,6 +69,19 @@ const chips = (document) => [
 ];
 const chip = (document, label) => chips(document).find((node) =>
   node.textContent.trim() === label || node.getAttribute('aria-label') === label || node.dataset.ogtTooltip === label);
+const activate = (window, link) => link.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+const wikidataResponse = (...values) => ({
+  status: 200,
+  responseHeaders: '',
+  responseText: JSON.stringify({
+    results: {
+      bindings: values.map((value, index) => ({
+        item: { value: `http://www.wikidata.org/entity/Q${1000 + index}` },
+        value: { value },
+      })),
+    },
+  }),
+});
 
 test('mounts under the summary stats with preset and editor chips', async (t) => {
   const { window, document } = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
@@ -1293,7 +1306,7 @@ test('the picker looks up the episode IMDb id so IMDb and OpenSubtitles open the
   assert.deepEqual(requested, ['1/1', '2/1', '2/3']);
 });
 
-test('Rotten Tomatoes uses OG’s exact title URL and keeps search when it is missing', async t => {
+test('Rotten Tomatoes uses OG’s exact native-strip URL and keeps search when it is missing', async t => {
   const preset = { label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' };
   for (const [kind, html, route, href] of [
     ['movie', MOVIE_HTML, '/movies/the-dark-2005', 'https://www.rottentomatoes.com/m/the_dark'],
@@ -1301,8 +1314,13 @@ test('Rotten Tomatoes uses OG’s exact title URL and keeps search when it is mi
     ['show', SEASON_PAGE_HTML, '/shows/breaking-bad/seasons/1', 'https://www.rottentomatoes.com/tv/breaking_bad/s01'],
   ]) {
     for (const available of [true, false]) {
-      const native = available ? `<a href="${href}?tracking=og">Rotten Tomatoes</a>` : '';
-      const b = boot({ url: `https://og.trakt.tv${route}`, html: html + native,
+      const native = available
+        ? `<li><a class="glass-action" href="${href}?tracking=og" aria-label="Rotten Tomatoes">Rotten Tomatoes</a></li>`
+        : '';
+      const withNative = available
+        ? html.replace('<ul class="external-links">', `<ul class="external-links">${native}`)
+        : html;
+      const b = boot({ url: `https://og.trakt.tv${route}`, html: withNative,
         storage: { 'watch.customLinks': [preset] } });
       t.after(() => b.window.close());
       await wait(50);
@@ -1313,4 +1331,226 @@ test('Rotten Tomatoes uses OG’s exact title URL and keeps search when it is mi
       assert.equal(chip(b.document, 'Rotten Tomatoes').getAttribute('href'), link.getAttribute('href'));
     }
   }
+});
+
+test('Rotten Tomatoes resolves a show mapping on activation and reuses the cache', async (t) => {
+  const requests = [];
+  const b = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: { 'watch.customLinks': [{ label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' }] },
+    gmRequest(options) {
+      requests.push(options);
+      if (options.url.startsWith('https://query.wikidata.org/sparql')) {
+        setTimeout(() => options.onload(wikidataResponse('tv/breaking_bad')), 0);
+        return { abort() {} };
+      }
+      return { abort() {} };
+    },
+  });
+  t.after(() => b.window.close());
+  await wait(50);
+
+  const link = chip(b.document, 'Rotten Tomatoes');
+  assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/search?search=Breaking%20Bad');
+  activate(b.window, link);
+  await wait(40);
+
+  assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/tv/breaking_bad');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].timeout, 8000, 'the lookup is bounded');
+  assert.match(decodeURIComponent(requests[0].url), /wdt:P1258/);
+
+  activate(b.window, link);
+  await wait(20);
+  assert.equal(requests.length, 1, 'a warm activation does not look up again');
+});
+
+test('Metacritic resolves a movie mapping and keeps the search fallback on a miss', async (t) => {
+  const requests = [];
+  let result = ['movie/the-dark'];
+  const b = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_HTML,
+    storage: { 'watch.customLinks': [{ label: 'Metacritic', url: 'https://www.metacritic.com/search/{title}/' }] },
+    gmRequest(options) {
+      requests.push(options);
+      if (options.url.startsWith('https://query.wikidata.org/sparql')) {
+        setTimeout(() => options.onload(wikidataResponse(...result)), 0);
+        return { abort() {} };
+      }
+      return { abort() {} };
+    },
+  });
+  t.after(() => b.window.close());
+  await wait(50);
+
+  const link = chip(b.document, 'Metacritic');
+  activate(b.window, link);
+  await wait(40);
+  assert.equal(link.getAttribute('href'), 'https://www.metacritic.com/movie/the-dark/');
+  assert.match(decodeURIComponent(requests[0].url), /wdt:P1712/);
+
+  result = [];
+  const second = boot({
+    url: 'https://og.trakt.tv/movies/another-2005',
+    html: MOVIE_HTML,
+    storage: { 'watch.customLinks': [{ label: 'Metacritic', url: 'https://www.metacritic.com/search/{title}/' }] },
+    gmRequest(options) {
+      if (options.url.startsWith('https://query.wikidata.org/sparql')) {
+        setTimeout(() => options.onload(wikidataResponse(...result)), 0);
+      }
+      return { abort() {} };
+    },
+  });
+  t.after(() => second.window.close());
+  await wait(50);
+  const missingLink = chip(second.document, 'Metacritic');
+  activate(second.window, missingLink);
+  await wait(40);
+  assert.equal(missingLink.getAttribute('href'), 'https://www.metacritic.com/search/The%20Dark/');
+});
+
+test('ambiguous mappings leave the search URL and are cached as a brief miss', async (t) => {
+  let requests = 0;
+  const b = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: { 'watch.customLinks': [{ label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' }] },
+    gmRequest(options) {
+      if (options.url.startsWith('https://query.wikidata.org/sparql')) {
+        requests += 1;
+        setTimeout(() => options.onload(wikidataResponse('tv/breaking_bad', 'tv/breaking_bad_2')), 0);
+      }
+      return { abort() {} };
+    },
+  });
+  t.after(() => b.window.close());
+  await wait(50);
+
+  const link = chip(b.document, 'Rotten Tomatoes');
+  activate(b.window, link);
+  await wait(40);
+  const fallback = 'https://www.rottentomatoes.com/search?search=Breaking%20Bad';
+  assert.equal(link.getAttribute('href'), fallback);
+
+  activate(b.window, link);
+  await wait(20);
+  assert.equal(requests, 1, 'the ambiguous result is a cached miss');
+  assert.equal(link.getAttribute('href'), fallback);
+});
+
+test('a failed lookup stays on search and is retried on the next activation', async (t) => {
+  let requests = 0;
+  let fail = true;
+  const b = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: { 'watch.customLinks': [{ label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' }] },
+    gmRequest(options) {
+      if (options.url.startsWith('https://query.wikidata.org/sparql')) {
+        requests += 1;
+        if (fail) setTimeout(() => options.onerror(), 0);
+        else setTimeout(() => options.onload(wikidataResponse('tv/breaking_bad')), 0);
+      }
+      return { abort() {} };
+    },
+  });
+  t.after(() => b.window.close());
+  await wait(50);
+
+  const link = chip(b.document, 'Rotten Tomatoes');
+  activate(b.window, link);
+  await wait(40);
+  assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/search?search=Breaking%20Bad');
+
+  fail = false;
+  activate(b.window, link);
+  await wait(40);
+  assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/tv/breaking_bad');
+  assert.equal(requests, 2, 'a transport failure is not cached');
+});
+
+test('concurrent activations share one lookup and both chips upgrade', async (t) => {
+  let requests = 0;
+  const preset = { label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' };
+  const b = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: { 'watch.customLinks': [{ ...preset, label: 'RT one' }, { ...preset, label: 'RT two' }] },
+    gmRequest(options) {
+      if (options.url.startsWith('https://query.wikidata.org/sparql')) {
+        requests += 1;
+        setTimeout(() => options.onload(wikidataResponse('tv/breaking_bad')), 20);
+      }
+      return { abort() {} };
+    },
+  });
+  t.after(() => b.window.close());
+  await wait(50);
+
+  const first = chip(b.document, 'RT one');
+  const second = chip(b.document, 'RT two');
+  activate(b.window, first);
+  activate(b.window, second);
+  await wait(60);
+
+  assert.equal(first.getAttribute('href'), 'https://www.rottentomatoes.com/tv/breaking_bad');
+  assert.equal(second.getAttribute('href'), 'https://www.rottentomatoes.com/tv/breaking_bad');
+  assert.equal(requests, 1);
+});
+
+test('a result arriving after navigation does not touch the old chip', async (t) => {
+  const b = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: { 'watch.customLinks': [{ label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' }] },
+    gmRequest(options) {
+      if (options.url.startsWith('https://query.wikidata.org/sparql')) {
+        setTimeout(() => options.onload(wikidataResponse('tv/breaking_bad')), 350);
+      }
+      return { abort() {} };
+    },
+  });
+  t.after(() => b.window.close());
+  await wait(50);
+
+  const oldLink = chip(b.document, 'Rotten Tomatoes');
+  activate(b.window, oldLink);
+  b.window.history.pushState({}, '', '/shows/another-show');
+  await wait(500);
+
+  assert.equal(oldLink.getAttribute('href'), 'https://www.rottentomatoes.com/search?search=Breaking%20Bad');
+});
+
+test('a Wikidata 429 cools down and does not retry on the next activation', async (t) => {
+  let requests = 0;
+  const b = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: { 'watch.customLinks': [{ label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' }] },
+    gmRequest(options) {
+      if (options.url.startsWith('https://query.wikidata.org/sparql')) {
+        requests += 1;
+        setTimeout(() => options.onload({
+          status: 429,
+          responseHeaders: 'Retry-After: 60',
+          responseText: 'rate limited',
+        }), 0);
+      }
+      return { abort() {} };
+    },
+  });
+  t.after(() => b.window.close());
+  await wait(50);
+
+  const link = chip(b.document, 'Rotten Tomatoes');
+  activate(b.window, link);
+  await wait(40);
+  activate(b.window, link);
+  await wait(40);
+
+  assert.equal(requests, 1, 'Retry-After blocks a second lookup');
+  assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/search?search=Breaking%20Bad');
+  assert.notEqual(link.getAttribute('href'), 'javascript:void(0)');
 });

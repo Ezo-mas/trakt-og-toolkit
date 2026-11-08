@@ -23,6 +23,10 @@ A strip in the title sidebar, above og's external links, on movie, show, season 
   JustWatch, MyAnimeList, Metacritic, Stremio, Debrid Media Manager, MDBList, OpenSubtitles, Plex, AniList, Jellyfin,
   Emby, Radarr, Sonarr and Seerr.
 - Presets open the exact title, season or episode when the page has the id they need, and search otherwise.
+- Rotten Tomatoes and Metacritic reuse OG’s native direct links first. Otherwise, a first activation starts a
+  Wikidata lookup while opening search; later clicks use the resolved destination. Episodes fall back to the season.
+  Missing or ambiguous mappings retain search. Both destinations share Wikidata’s `Retry-After` cooldown;
+  cached mappings and native direct links remain usable. No Trakt client ID is needed for these lookups.
 - Self-hosted services (Jellyfin, Emby, Radarr, Sonarr, Seerr) use the base URLs you set under **Servers**.
 - Watch and library services also appear under **Your services** in og's Watch Now dialog.
 - On show pages, Season and Episode pickers appear when a link uses `{season}` or `{episode}`.
