@@ -17,7 +17,7 @@ immediately.
 
 ### Custom links
 
-A strip in the title sidebar, above og's external links, on movie, show, season and episode pages.
+A strip in the title sidebar, above og's external links, on movie, show, season, episode and person pages.
 
 - Your own `Label | URL` templates, plus presets for IMDb, TMDb, TVDB, Letterboxd, Rotten Tomatoes, Wikipedia,
   JustWatch, MyAnimeList, Metacritic, Stremio, Debrid Media Manager, MDBList, OpenSubtitles, Plex, AniList, Jellyfin,
@@ -34,6 +34,10 @@ A strip in the title sidebar, above og's external links, on movie, show, season 
 - On show pages, Season and Episode pickers appear when a link uses `{season}` or `{episode}`.
 - Logos are bundled [Simple Icons](https://simpleicons.org) (CC0) or the marks og already draws; no favicons are
   fetched.
+
+MyAnimeList and AniList appear for known anime titles and remain available when genres are unknown. Hidden
+presets stay saved; edited/custom templates remain unrestricted. Genres come only from the title’s metadata field.
+Person pages offer **YouTube interviews** and person template variables, using only native profile IDs.
 
 See [Custom link templates](#custom-link-templates) for placeholders.
 
@@ -122,12 +126,19 @@ My service | https://example.com/watch/{tmdb}?s={season}&e={episode}
 | `{season}` / `{episode}` | From the page or the pickers (shows only) | `1` |
 | `{type}` / `{plural}` | `tv` or `movie` / `shows` or `movies` | `tv` |
 | `{id}` | Trakt slug from the URL | `breaking-bad` |
+| `{person}` | Person name; person pages only | `Bryan Cranston` |
+| `{personid}` | Person Trakt slug/id; person pages only | `bryan-cranston` |
+| `{personimdb}` | Native IMDb person ID; person pages only | `nm0186505` |
+| `{persontmdb}` | Native TMDb person ID; person pages only | `17419` |
 | `{jellyfin}` `{emby}` `{radarr}` `{sonarr}` `{seerr}` | Base URLs from **Servers** | `http://192.168.1.20:8096` |
 
 - Values are URL-encoded for you. Server base URLs are inserted as-is.
 - A link is hidden on pages where one of its placeholders has no value, so one template works for shows and movies.
 - URLs must start with `http://`, `https://` or a server placeholder.
 - Links are stored per browser and are not synced.
+
+Person and title variables are separate: links needing unavailable variables stay hidden. Person IDs come only
+from the native external-link strip, and missing genre metadata keeps anime presets available without extra requests.
 
 ## Trakt API use
 
@@ -140,8 +151,8 @@ My service | https://example.com/watch/{tmdb}?s={season}&e={episode}
 - **Writes:** they share one queue, sent at most once per second, Trakt's standard-app limit. A 429 pauses the
   queue for the full `Retry-After`. Failed writes are never replayed automatically, and queued writes are dropped on
   sign-out or when you leave the page.
-- **Other sites:** pronunciation fetches Forvo's public search page. Nothing else leaves your browser, and there is
-  no backend.
+- **Other sites:** pronunciation fetches Forvo’s public search page. Hovering/focusing Metacritic or Rotten Tomatoes
+  can query Wikidata with title IDs when OG has no direct URL. There is no backend.
 
 ## Development
 

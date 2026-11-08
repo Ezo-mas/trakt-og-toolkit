@@ -2,14 +2,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { parseRoute } from '../src/core/router.js';
-import { EPISODE_PAGE_HTML, SEASON_PAGE_HTML, SHOW_HTML } from './fixtures.js';
+import {
+  EPISODE_PAGE_HTML,
+  PERSON_PAGE_HTML,
+  SEASON_PAGE_HTML,
+  SHOW_HTML,
+  withGenres,
+} from './fixtures.js';
 import {
   addPresets,
   filterPresetsByKind,
   imdbNumber,
   mergeSeasons,
   moveLink,
+  personTemplateVars,
   presetAlreadyAdded,
+  readGenres,
+  readPersonData,
   readTitleData,
   selectionForRoute,
   showTemplateData,
@@ -49,6 +58,87 @@ test('presets filter by kind and detect existing URLs', () => {
   assert.deepEqual(filterPresetsByKind(presets, 'show'), [presets[1]]);
   assert.equal(presetAlreadyAdded([{ label: 'Saved', url: presets[0].url }], presets[0]), true);
   assert.equal(presetAlreadyAdded([], presets[0]), false);
+});
+
+test('genre restrictions gate conditional presets and fail open when metadata is unknown', () => {
+  const anime = { label: 'Anime', url: 'https://anime.test/{title}', kinds: ['show'], genres: ['anime'] };
+  const all = { label: 'All', url: 'https://all.test/{title}', kinds: ['show'] };
+  assert.deepEqual(filterPresetsByKind([anime, all], 'show', ['anime']), [anime, all]);
+  assert.deepEqual(filterPresetsByKind([anime, all], 'show', ['drama']), [all]);
+  assert.deepEqual(filterPresetsByKind([anime, all], 'show', null), [anime, all], 'unknown genres keep presets');
+  assert.deepEqual(filterPresetsByKind([anime, all], 'show'), [anime, all], 'omitted genres are unknown');
+});
+
+test('title genres come only from the current title genre field', (t) => {
+  const window = new Window();
+  t.after(() => window.close());
+
+  window.document.body.innerHTML = withGenres(SHOW_HTML, ['anime', 'action']) +
+    '<nav><a href="/shows/popular?genres=drama">Browse drama</a></nav>';
+  assert.deepEqual(readGenres(window.document), ['anime', 'action'], 'navigation links are ignored');
+  assert.deepEqual(readTitleData(window.document, parseRoute('/shows/cowboy-bebop')).genres, ['anime', 'action']);
+
+  window.document.body.innerHTML = withGenres(SHOW_HTML, ['drama']) +
+    '<nav><a href="/shows/popular?genres=anime">Browse anime</a></nav>';
+  assert.deepEqual(readGenres(window.document), ['drama'], 'the field wins over a navigation link');
+
+  window.document.body.innerHTML = SHOW_HTML +
+    '<nav><a href="/shows/popular?genres=drama">Browse drama</a></nav>';
+  assert.equal(readGenres(window.document), null, 'missing genre metadata stays unknown');
+  assert.equal(readTitleData(window.document, parseRoute('/shows/unknown')).genres, null);
+});
+
+test('person pages read their name and native ids without title variables', (t) => {
+  const window = new Window();
+  t.after(() => window.close());
+  window.document.body.innerHTML = PERSON_PAGE_HTML;
+  const person = readPersonData(window.document, parseRoute('/people/bryan-cranston'));
+  assert.deepEqual(person, {
+    kind: 'person',
+    id: 'bryan-cranston',
+    name: 'Bryan Cranston',
+    imdb: 'nm0186505',
+    tmdb: 17419,
+  });
+  assert.deepEqual(personTemplateVars(person), {
+    person: 'Bryan Cranston',
+    personid: 'bryan-cranston',
+    personimdb: 'nm0186505',
+    persontmdb: 17419,
+  });
+  const titleVars = templateVars({ id: 'breaking-bad', title: 'Breaking Bad' });
+  assert.equal('person' in titleVars, false, 'person values do not leak into title templates');
+  assert.equal('personid' in titleVars, false);
+});
+
+test('person ids come only from the native external-link strip', (t) => {
+  const window = new Window();
+  t.after(() => window.close());
+  const html = PERSON_PAGE_HTML
+    .replace(/<li><a[^>]*href="https:\/\/www\.imdb\.com\/name\/nm0186505"[^>]*>[\s\S]*?<\/li>/, '')
+    .replace('</main>', '<section id="comments"><a href="https://www.imdb.com/name/nm9999999">Other person</a></section></main>');
+  window.document.body.innerHTML = html;
+  const person = readPersonData(window.document, parseRoute('/people/bryan-cranston'));
+  assert.equal(person.imdb, null, 'a comment link cannot supply the person id');
+  assert.equal(person.tmdb, 17419, 'the native TMDb link still works');
+});
+
+test('person ids ignore lookalike hosts and insecure links', (t) => {
+  const window = new Window();
+  t.after(() => window.close());
+  window.document.body.innerHTML = PERSON_PAGE_HTML
+    .replace('https://www.imdb.com/name/nm0186505', 'https://imdb.com.evil.test/name/nm0186505')
+    .replace('https://www.themoviedb.org/person/17419', 'http://www.themoviedb.org/person/17419');
+  const person = readPersonData(window.document, parseRoute('/people/bryan-cranston'));
+  assert.equal(person.imdb, null);
+  assert.equal(person.tmdb, null);
+});
+
+test('person pages keep a missing name and missing native links null', (t) => {
+  const window = new Window();
+  t.after(() => window.close());
+  window.document.body.innerHTML = '<div class="summary-title"><h1> </h1></div>';
+  assert.equal(readPersonData(window.document, parseRoute('/people/unknown')).name, null);
 });
 
 test('adding presets copies only link fields and skips duplicate URLs', () => {

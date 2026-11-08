@@ -3,7 +3,7 @@ import { cleanTitle, fillTemplate, missingPlaceholders, parseYear } from '../../
 import { text } from '../../core/dom.js';
 import { isCustomLinkUrl, SERVER_KEYS } from '../../settings.js';
 import { validateDirectUrl } from './resolve.js';
-import { findPreset, resolvePresetUrl } from './presets.js';
+import { findPreset, presetGenresAllowed, resolvePresetUrl } from './presets.js';
 import { iconKeyForLabel, surfaceForLabel } from './icons.js';
 
 const TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
@@ -14,6 +14,9 @@ const SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
 const SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
 /** An episode's own title link; a show's season list (`/title/ttSHOW/episodes`) is not the episode. */
 const EPISODE_IMDB_RE = /imdb\.com\/title\/(tt\d+)(?!\d|\/episodes)/;
+const GENRE_HREF_RE = /^\/(?:shows|movies)\/popular\/?$/;
+const PERSON_IMDB_PATH_RE = /^\/name\/(nm\d+)\/?$/;
+const PERSON_TMDB_PATH_RE = /^\/person\/(\d+)\/?$/;
 
 /**
  * Read what the page already knows: title, year, TMDb, IMDb and TVDB ids.
@@ -39,6 +42,7 @@ export function readTitleData(doc, route) {
         ? firstMatch(doc, 'a[href*="imdb.com/title/"]', EPISODE_IMDB_RE, (match) => match[1])
         : null,
       tvdb: null,
+      genres: readGenres(doc),
       rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind),
       metacriticUrl: readMetacriticUrl(doc, route.kind),
     };
@@ -96,7 +100,71 @@ export function readTitleData(doc, route) {
     rottenTomatoesUrl: readRottenTomatoesUrl(doc, kind),
     metacriticUrl: readMetacriticUrl(doc, kind),
     tvdb,
+    genres: readGenres(doc),
   };
+}
+
+/**
+ * Genres from the current title's metadata field, not from any genre link on the page. og renders
+ * `<li><span class="label">Genres</span> …</li>` inside the summary overview; scoping to that field
+ * keeps a comment or a "Browse drama" navigation link from changing preset visibility. Returns null
+ * when the field is absent so unknown metadata keeps conditional presets available.
+ */
+export function readGenres(doc) {
+  const overview = doc.querySelector('#overview') || doc.querySelector('.summary-frame');
+  if (!overview) return null;
+  const label = [...overview.querySelectorAll('span.label')]
+    .find((node) => text(node).trim().toLowerCase() === 'genres');
+  const field = label?.closest('li');
+  if (!field) return null;
+
+  const genres = new Set();
+  for (const link of field.querySelectorAll('a[href*="genres="]')) {
+    let url;
+    try {
+      url = new URL(link.getAttribute('href'), 'https://og.trakt.tv');
+    } catch {
+      continue;
+    }
+    if (url.origin !== 'https://og.trakt.tv' || !GENRE_HREF_RE.test(url.pathname)) continue;
+    const genre = url.searchParams.get('genres');
+    if (genre && /^[a-z0-9-]+$/i.test(genre)) genres.add(genre.toLowerCase());
+  }
+  return genres.size ? [...genres] : null;
+}
+
+/** Read a person's own name and native ids. Person ids never enter title template values. */
+export function readPersonData(doc, route) {
+  const heading = doc.querySelector('.summary .summary-title h1') || doc.querySelector('.summary-title h1') || doc.querySelector('h1');
+  const fallback = text(doc.querySelector('title')).replace(/\s*[-–|]\s*Trakt.*$/i, '').trim();
+  return {
+    kind: 'person',
+    id: route.id,
+    name: text(heading).trim() || fallback || null,
+    imdb: readPersonLinkId(doc, 'imdb.com', PERSON_IMDB_PATH_RE),
+    tmdb: readPersonLinkId(doc, 'themoviedb.org', PERSON_TMDB_PATH_RE, (match) => Number(match[1])),
+  };
+}
+
+/** A person's ids come only from the native external-link strip, never a comment or credit row. */
+function readPersonLinkId(doc, hostname, pathPattern, value = (match) => match[1]) {
+  const strip = doc.querySelector('aside.sidebar ul.external-links') ||
+    doc.querySelector('.summary-frame ul.external-links');
+  if (!strip) return null;
+
+  for (const link of strip.querySelectorAll('a[href]')) {
+    let url;
+    try {
+      url = new URL(link.getAttribute('href'), 'https://og.trakt.tv');
+    } catch {
+      continue;
+    }
+    const host = url.hostname.replace(/^www\./i, '');
+    if (url.protocol !== 'https:' || host !== hostname || url.port || url.username || url.password) continue;
+    const match = url.pathname.match(pathPattern);
+    if (match) return value(match);
+  }
+  return null;
 }
 
 /** Use OG's title link; Rotten Tomatoes slugs cannot be derived from Trakt/IMDb ids. */
@@ -211,6 +279,16 @@ export function imdbNumber(imdb) {
   return match ? match[1] : null;
 }
 
+/** Variables available to person-page link templates; title values deliberately stay out. */
+export function personTemplateVars(person = {}) {
+  return {
+    person: person.name,
+    personid: person.id,
+    personimdb: person.imdb,
+    persontmdb: person.tmdb,
+  };
+}
+
 /** Variables available to link templates. */
 export function templateVars(meta, selection = {}, servers = {}) {
   return {
@@ -243,13 +321,13 @@ export function templateVars(meta, selection = {}, servers = {}) {
  * A preset's icon and surface come from its definition. An edited or user-created URL still keeps the icon and
  * surface for its label when that label names a known service.
  */
-export function resolveCustomLinks(links, values, kind) {
+export function resolveCustomLinks(links, values, kind, genres = null) {
   const resolved = [];
   for (const entry of Array.isArray(links) ? links : []) {
     if (!entry || typeof entry.label !== 'string' || typeof entry.url !== 'string') continue;
     if (!isCustomLinkUrl(entry.url)) continue;
 
-    const template = resolvePresetUrl(entry.url, values, kind);
+    const template = resolvePresetUrl(entry.url, values, kind, genres);
     if (!template || missingPlaceholders(template, values).length) continue;
 
     const preset = findPreset(entry.url);
@@ -287,8 +365,8 @@ export function mergeSeasons(primary, fallback = []) {
     .sort((a, b) => a.number - b.number);
 }
 
-export function filterPresetsByKind(presets, kind) {
-  return presets.filter((preset) => preset.kinds.includes(kind));
+export function filterPresetsByKind(presets, kind, genres = null) {
+  return presets.filter((preset) => preset.kinds.includes(kind) && presetGenresAllowed(preset, genres));
 }
 
 export function presetAlreadyAdded(links, preset) {

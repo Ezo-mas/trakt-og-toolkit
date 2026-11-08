@@ -2224,7 +2224,8 @@
       url: "https://myanimelist.net/search/all?q={title}",
       icon: "mal",
       surface: "reference",
-      kinds: ["movie", "show"]
+      kinds: ["movie", "show"],
+      genres: ["anime"]
     },
     {
       label: "Metacritic",
@@ -2318,7 +2319,15 @@
       url: "https://anilist.co/search/anime?search={title}",
       icon: "anilist",
       surface: "reference",
-      kinds: ["movie", "show"]
+      kinds: ["movie", "show"],
+      genres: ["anime"]
+    },
+    {
+      label: "YouTube interviews",
+      url: "https://www.youtube.com/results?search_query={person}+interview",
+      icon: "youtube",
+      surface: "reference",
+      kinds: ["person"]
     },
     {
       label: "Jellyfin",
@@ -2380,6 +2389,16 @@
       ]
     }
   ];
+  function presetGenresAllowed(preset, genres = null) {
+    if (!preset?.genres?.length) return true;
+    if (!Array.isArray(genres)) return true;
+    return preset.genres.some((genre) => genres.includes(genre));
+  }
+  function presetAllowedOnPage(url, kind, genres = null) {
+    const preset = PRESETS.find((entry) => entry.url === url);
+    if (!preset) return true;
+    return preset.kinds.includes(kind) && presetGenresAllowed(preset, genres);
+  }
   function findPreset(url) {
     return PRESETS.find((entry) => entry.url === url) || null;
   }
@@ -2389,9 +2408,9 @@
     if (!preset?.deep) return [url];
     return [url, ...preset.deep.filter((entry) => entry.kinds.includes(kind)).map((entry) => entry.url)];
   }
-  function resolvePresetUrl(url, vars, kind) {
+  function resolvePresetUrl(url, vars, kind, genres = null) {
     const preset = PRESETS.find((entry) => entry.url === url);
-    if (preset && !preset.kinds.includes(kind)) return null;
+    if (preset && !presetAllowedOnPage(url, kind, genres)) return null;
     if (preset?.directVar && vars[preset.directVar]) return vars[preset.directVar];
     if (!preset?.deep) return url;
     const deep = preset.deep.find(
@@ -2441,6 +2460,7 @@
     opensubtitles: { text: "OS", color: "#7aa7d8" },
     plex: { brand: "plex", text: "PLEX", color: "var(--color-site-plex, #e5a00d)" },
     anilist: { brand: "anilist", text: "AL", color: "#02a9ff" },
+    youtube: { text: "YT", color: "#ff0000" },
     jellyfin: { brand: "jellyfin", text: "JF", color: "var(--color-site-jellyfin, #aa5cc3)" },
     emby: { brand: "emby", text: "EMBY", color: "#52b54b" },
     radarr: { brand: "radarr", text: "R", color: "#ffcb3d" },
@@ -2466,6 +2486,8 @@
     opensubtitles: "opensubtitles",
     plex: "plex",
     anilist: "anilist",
+    youtube: "youtube",
+    "youtube interviews": "youtube",
     jellyfin: "jellyfin",
     emby: "emby",
     radarr: "radarr",
@@ -2540,6 +2562,9 @@
   var SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
   var SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
   var EPISODE_IMDB_RE = /imdb\.com\/title\/(tt\d+)(?!\d|\/episodes)/;
+  var GENRE_HREF_RE = /^\/(?:shows|movies)\/popular\/?$/;
+  var PERSON_IMDB_PATH_RE = /^\/name\/(nm\d+)\/?$/;
+  var PERSON_TMDB_PATH_RE = /^\/person\/(\d+)\/?$/;
   function readTitleData(doc, route) {
     if (route.kind === "show" && (route.name === "season" || route.name === "episode")) {
       return {
@@ -2553,6 +2578,7 @@
         imdb: route.name === "season" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null,
         episodeImdb: route.name === "episode" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', EPISODE_IMDB_RE, (match) => match[1]) : null,
         tvdb: null,
+        genres: readGenres(doc),
         rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind),
         metacriticUrl: readMetacriticUrl(doc, route.kind)
       };
@@ -2599,8 +2625,57 @@
       episodeImdb: null,
       rottenTomatoesUrl: readRottenTomatoesUrl(doc, kind),
       metacriticUrl: readMetacriticUrl(doc, kind),
-      tvdb
+      tvdb,
+      genres: readGenres(doc)
     };
+  }
+  function readGenres(doc) {
+    const overview = doc.querySelector("#overview") || doc.querySelector(".summary-frame");
+    if (!overview) return null;
+    const label = [...overview.querySelectorAll("span.label")].find((node) => text(node).trim().toLowerCase() === "genres");
+    const field = label?.closest("li");
+    if (!field) return null;
+    const genres = /* @__PURE__ */ new Set();
+    for (const link of field.querySelectorAll('a[href*="genres="]')) {
+      let url;
+      try {
+        url = new URL(link.getAttribute("href"), "https://og.trakt.tv");
+      } catch {
+        continue;
+      }
+      if (url.origin !== "https://og.trakt.tv" || !GENRE_HREF_RE.test(url.pathname)) continue;
+      const genre = url.searchParams.get("genres");
+      if (genre && /^[a-z0-9-]+$/i.test(genre)) genres.add(genre.toLowerCase());
+    }
+    return genres.size ? [...genres] : null;
+  }
+  function readPersonData(doc, route) {
+    const heading = doc.querySelector(".summary .summary-title h1") || doc.querySelector(".summary-title h1") || doc.querySelector("h1");
+    const fallback = text(doc.querySelector("title")).replace(/\s*[-–|]\s*Trakt.*$/i, "").trim();
+    return {
+      kind: "person",
+      id: route.id,
+      name: text(heading).trim() || fallback || null,
+      imdb: readPersonLinkId(doc, "imdb.com", PERSON_IMDB_PATH_RE),
+      tmdb: readPersonLinkId(doc, "themoviedb.org", PERSON_TMDB_PATH_RE, (match) => Number(match[1]))
+    };
+  }
+  function readPersonLinkId(doc, hostname, pathPattern, value = (match) => match[1]) {
+    const strip = doc.querySelector("aside.sidebar ul.external-links") || doc.querySelector(".summary-frame ul.external-links");
+    if (!strip) return null;
+    for (const link of strip.querySelectorAll("a[href]")) {
+      let url;
+      try {
+        url = new URL(link.getAttribute("href"), "https://og.trakt.tv");
+      } catch {
+        continue;
+      }
+      const host = url.hostname.replace(/^www\./i, "");
+      if (url.protocol !== "https:" || host !== hostname || url.port || url.username || url.password) continue;
+      const match = url.pathname.match(pathPattern);
+      if (match) return value(match);
+    }
+    return null;
   }
   function readRottenTomatoesUrl(doc, kind) {
     return readNativeExternalUrl(doc, kind, "rotten-tomatoes");
@@ -2677,6 +2752,14 @@
     const match = String(imdb || "").match(/^tt0*(\d+)$/);
     return match ? match[1] : null;
   }
+  function personTemplateVars(person = {}) {
+    return {
+      person: person.name,
+      personid: person.id,
+      personimdb: person.imdb,
+      persontmdb: person.tmdb
+    };
+  }
   function templateVars(meta, selection = {}, servers = {}) {
     return {
       id: meta.id,
@@ -2701,12 +2784,12 @@
       episode: selection.episode
     };
   }
-  function resolveCustomLinks(links, values, kind) {
+  function resolveCustomLinks(links, values, kind, genres = null) {
     const resolved = [];
     for (const entry of Array.isArray(links) ? links : []) {
       if (!entry || typeof entry.label !== "string" || typeof entry.url !== "string") continue;
       if (!isCustomLinkUrl(entry.url)) continue;
-      const template = resolvePresetUrl(entry.url, values, kind);
+      const template = resolvePresetUrl(entry.url, values, kind, genres);
       if (!template || missingPlaceholders(template, values).length) continue;
       const preset = findPreset(entry.url);
       resolved.push({
@@ -2732,8 +2815,8 @@
       episodes: season.episodes ?? rendered.get(season.number)?.episodes ?? null
     })).sort((a, b) => a.number - b.number);
   }
-  function filterPresetsByKind(presets, kind) {
-    return presets.filter((preset) => preset.kinds.includes(kind));
+  function filterPresetsByKind(presets, kind, genres = null) {
+    return presets.filter((preset) => preset.kinds.includes(kind) && presetGenresAllowed(preset, genres));
   }
   function presetAlreadyAdded(links, preset) {
     return links.some((link) => link.url === preset.url);
@@ -3357,7 +3440,7 @@
     let seasons = [];
     const timers = [];
     const fixedSelection = route.name === "season" || route.name === "episode";
-    let selection = selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
+    let selection = meta.kind === "person" ? { season: null, episode: null } : selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
     const linksRow = el("div", { class: "ogt-links" });
     const controlsRow = el("div", { class: "ogt-row ogt-fields", hidden: true });
     const watchFallback = el("div", { class: "ogt-watch-fallback", hidden: true, [FALLBACK_ATTR]: "" });
@@ -3398,7 +3481,7 @@
     );
     const episodeImdbs = /* @__PURE__ */ new Map();
     const episodeKey = () => `${selection.season}:${selection.episode}`;
-    const vars = () => templateVars(
+    const vars = () => meta.kind === "person" ? personTemplateVars(meta) : templateVars(
       meta.episodeImdb ? meta : { ...meta, episodeImdb: episodeImdbs.get(episodeKey()) ?? null },
       selection,
       getServers()
@@ -3654,7 +3737,7 @@
     function renderPresetChecklist() {
       const links = getCustomLinks();
       const servers = getServers();
-      const presets = filterPresetsByKind(PRESETS, meta.kind);
+      const presets = filterPresetsByKind(PRESETS, meta.kind, meta.genres);
       const list = el("div", { class: "ogt-preset-list" });
       selectedPresets = /* @__PURE__ */ new Set();
       for (const [index, preset] of presets.entries()) {
@@ -3735,7 +3818,7 @@
     });
     function renderLinks() {
       const values = vars();
-      const entries = resolveCustomLinks(getCustomLinks(), values, meta.kind);
+      const entries = resolveCustomLinks(getCustomLinks(), values, meta.kind, meta.genres);
       renderedEntries = entries;
       linksRow.replaceChildren();
       if (!entries.length) {
@@ -4028,11 +4111,11 @@
   var customLinks = {
     id: "custom-links",
     match(route) {
-      return route.kind === "movie" || route.kind === "show";
+      return route.kind === "movie" || route.kind === "show" || route.kind === "person";
     },
     mount(route) {
       if (document.getElementById(PANEL_ID)) return null;
-      const meta = readTitleData(document, route);
+      const meta = route.kind === "person" ? readPersonData(document, route) : readTitleData(document, route);
       if (!meta.id) return null;
       const target = findMountTarget();
       if (!target) return null;

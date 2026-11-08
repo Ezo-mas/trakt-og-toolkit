@@ -41,6 +41,31 @@ Working notes and known issues. Newest first.
   `Retry-After`), and built-bundle cooldown behavior. Anime remains search-only; its maintained mapping data was not
   added. The resolver cache is in-memory per page instance.
 
+## 2026-11-09: conditional presets and person-page custom links (feature 28)
+
+- OG's live person page carries IMDb/TMDb in `aside.sidebar ul.external-links`, and title genres in an overview
+  `li` whose `span.label` reads "Genres". The first implementation searched every `genres=` link and every person
+  IMDb link, so a "Browse drama" navigation link could establish genres and a comment could supply another person's
+  id. Both readers now require the native field and return `null` when it is missing. The person reader only accepts
+  exact-host HTTPS `imdb.com/name/nm…` and `themoviedb.org/person/…` paths in the native strip.
+- `readGenres()` scopes to `#overview` (falling back to `.summary-frame`), finds the labeled Genres `li`, and only
+  accepts og-origin `/shows/popular` or `/movies/popular` links with a `genres=` value. Unknown metadata stays `null`,
+  so MyAnimeList and AniList remain available; a known non-anime list hides them from the checklist and rendered
+  links. The filter applies only to the built-in preset URLs, so user-edited templates are unrestricted. Hidden
+  presets stay in `watch.customLinks` and return on an anime title.
+- Person pages use `readPersonData()` for the `.summary .summary-title h1` name and the native IDs. Templates get only
+  `{person}`, `{personid}`, `{personimdb}` and `{persontmdb}`; title variables stay absent, and person IDs never enter
+  title templates. Missing values hide just the affected link. `YouTube interviews` is the only new person preset;
+  og already supplies IMDb/TMDb/Wikipedia/social profile links, and pronunciation remains separate.
+- The feature is wired into the current feature 26 sidebar, icon groups, modal preset checklist and saved order.
+  Person routes use the existing `parseRoute` kind, skip season controls and show lookups, and mount above the native
+  `ul.external-links` strip. The old stash's panel, tests and bundle were not restored.
+- Tests cover the two review reproductions at reader and built-bundle level, plus anime/non-anime/unknown genre
+  visibility, saved-link preservation, person variables, person-only preset eligibility, native-strip ID scoping and
+  the current sidebar/dialog. The full suite and build pass. Limitation: season and episode pages usually have no
+  genre field, so those pages fail open and keep anime presets; no extra title-detail request is made. Anime
+  destinations remain searches, and feature 27's external-ID resolution remains separate.
+
 
 ## 2026-11-08: clicked custom links turned red (feature 26)
 

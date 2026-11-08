@@ -83,6 +83,7 @@ export const PRESETS = [
     icon: 'mal',
     surface: 'reference',
     kinds: ['movie', 'show'],
+    genres: ['anime'],
   },
   {
     label: 'Metacritic',
@@ -177,6 +178,14 @@ export const PRESETS = [
     icon: 'anilist',
     surface: 'reference',
     kinds: ['movie', 'show'],
+    genres: ['anime'],
+  },
+  {
+    label: 'YouTube interviews',
+    url: 'https://www.youtube.com/results?search_query={person}+interview',
+    icon: 'youtube',
+    surface: 'reference',
+    kinds: ['person'],
   },
   {
     label: 'Jellyfin',
@@ -239,6 +248,19 @@ export const PRESETS = [
   },
 ];
 
+/** Genre restrictions apply only to the built-in preset with this exact URL; user templates stay unrestricted. */
+export function presetGenresAllowed(preset, genres = null) {
+  if (!preset?.genres?.length) return true;
+  if (!Array.isArray(genres)) return true;
+  return preset.genres.some((genre) => genres.includes(genre));
+}
+
+export function presetAllowedOnPage(url, kind, genres = null) {
+  const preset = PRESETS.find((entry) => entry.url === url);
+  if (!preset) return true;
+  return preset.kinds.includes(kind) && presetGenresAllowed(preset, genres);
+}
+
 /** The built-in preset behind a stored URL, if the user has not edited its template. */
 export function findPreset(url) {
   return PRESETS.find((entry) => entry.url === url) || null;
@@ -261,9 +283,9 @@ export function presetTemplateUrls(url, kind) {
  * when the page lacks an id that the deep route needs. The stored URL remains the fallback, and
  * hides itself when even its placeholders are missing.
  */
-export function resolvePresetUrl(url, vars, kind) {
+export function resolvePresetUrl(url, vars, kind, genres = null) {
   const preset = PRESETS.find((entry) => entry.url === url);
-  if (preset && !preset.kinds.includes(kind)) return null;
+  if (preset && !presetAllowedOnPage(url, kind, genres)) return null;
   if (preset?.directVar && vars[preset.directVar]) return vars[preset.directVar];
   if (!preset?.deep) return url;
   const deep = preset.deep.find(

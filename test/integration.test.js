@@ -14,6 +14,8 @@ import {
   SEASON_PAGE_HTML,
   EPISODE_PAGE_HTML,
   PERSON_HTML,
+  PERSON_PAGE_HTML,
+  withGenres,
   FORVO_HTML,
   FORVO_EMPTY_HTML,
   FORVO_MULTI_HTML,
@@ -1567,4 +1569,95 @@ test('a Wikidata 429 cools down and does not retry on the next activation', asyn
   assert.equal(requests, 1, 'Retry-After blocks a second lookup');
   assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/search?search=Breaking%20Bad');
   assert.notEqual(link.getAttribute('href'), 'javascript:void(0)');
+});
+
+test('anime-only presets follow the title genre field and ignore navigation links', async (t) => {
+  const links = [
+    { label: 'AniList', url: 'https://anilist.co/search/anime?search={title}' },
+    { label: 'MyAnimeList', url: 'https://myanimelist.net/search/all?q={title}' },
+    { label: 'Wikipedia', url: 'https://en.wikipedia.org/w/index.php?search={title}' },
+  ];
+  const cases = [
+    ['anime', withGenres(SHOW_HTML, ['anime', 'action']), [true, true, true]],
+    ['non-anime', withGenres(SHOW_HTML, ['drama', 'crime']) +
+      '<nav><a href="/shows/popular?genres=anime">Browse anime</a></nav>', [false, false, true]],
+    ['unknown', SHOW_HTML + '<nav><a href="/shows/popular?genres=drama">Browse drama</a></nav>', [true, true, true]],
+  ];
+  for (const [name, html, visible] of cases) {
+    const b = boot({ url: 'https://og.trakt.tv/shows/cowboy-bebop', html, storage: { 'watch.customLinks': links } });
+    t.after(() => b.window.close());
+    await wait(50);
+    assert.deepEqual(links.map((link) => Boolean(chip(b.document, link.label))), visible, name);
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(b.store.get('watch.customLinks'))),
+      links,
+      `${name}: hidden presets stay in storage`,
+    );
+  }
+});
+
+
+test('person pages use the current sidebar and offer only person presets', async (t) => {
+  const links = [
+    { label: 'YouTube interviews', url: 'https://www.youtube.com/results?search_query={person}+interview' },
+    { label: 'Person IDs', url: 'https://e.test/{personid}/{personimdb}/{persontmdb}' },
+    { label: 'Title only', url: 'https://e.test/{title}' },
+    { label: 'Trakt id', url: 'https://e.test/{id}' },
+  ];
+  const b = boot({
+    url: 'https://og.trakt.tv/people/bryan-cranston',
+    html: PERSON_PAGE_HTML,
+    storage: { 'watch.customLinks': links },
+  });
+  t.after(() => b.window.close());
+  await wait(50);
+
+  const node = panel(b.document);
+  assert.ok(node, 'person panel is mounted');
+  assert.equal(node.parentElement, b.document.querySelector('aside.sidebar'));
+  assert.ok(node.nextElementSibling?.matches('ul.external-links'), 'panel sits above the native person links');
+  assert.equal(
+    chip(b.document, 'YouTube interviews').getAttribute('href'),
+    'https://www.youtube.com/results?search_query=Bryan%20Cranston+interview',
+  );
+  assert.equal(
+    chip(b.document, 'Person IDs').getAttribute('href'),
+    'https://e.test/bryan-cranston/nm0186505/17419',
+  );
+  assert.equal(Boolean(chip(b.document, 'Title only')), false, 'title variables are unavailable on a person page');
+  assert.equal(Boolean(chip(b.document, 'Trakt id')), false, 'the person route id uses {personid}, not {id}');
+  assert.deepEqual(JSON.parse(JSON.stringify(b.store.get('watch.customLinks'))), links);
+
+  chip(b.document, 'Add presets…').click();
+  assert.ok(b.document.querySelector('.ogt-presets input[aria-label="YouTube interviews"]'));
+  assert.equal(
+    b.document.querySelector('.ogt-presets input[aria-label="Wikipedia"]'),
+    null,
+    'title presets are not offered on a person page',
+  );
+});
+
+
+test('person ids ignore unrelated profile links outside the native strip', async (t) => {
+  const html = PERSON_PAGE_HTML
+    .replace(/<li><a[^>]*href="https:\/\/www\.imdb\.com\/name\/nm0186505"[^>]*>[\s\S]*?<\/li>/, '')
+    .replace('</main>', '<section id="comments"><a href="https://www.imdb.com/name/nm9999999">Other person</a></section></main>');
+  const links = [
+    { label: 'IMDb profile', url: 'https://e.test/{personimdb}' },
+    { label: 'TMDb profile', url: 'https://e.test/{persontmdb}' },
+  ];
+  const b = boot({
+    url: 'https://og.trakt.tv/people/bryan-cranston',
+    html,
+    storage: { 'watch.customLinks': links },
+  });
+  t.after(() => b.window.close());
+  await wait(50);
+
+  assert.equal(Boolean(chip(b.document, 'IMDb profile')), false, 'a comment link cannot supply the IMDb id');
+  assert.equal(
+    chip(b.document, 'TMDb profile').getAttribute('href'),
+    'https://e.test/17419',
+    'the native TMDb link still supplies its id',
+  );
 });

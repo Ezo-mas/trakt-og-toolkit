@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { fillTemplate } from '../src/core/text.js';
 import { SERVER_KEYS } from '../src/settings.js';
 import { imdbNumber } from '../src/features/custom-links/data.js';
-import { PRESETS, presetResolver, presetTemplateUrls, resolvePresetUrl } from '../src/features/custom-links/presets.js';
+import { PRESETS, presetAllowedOnPage, presetResolver, presetTemplateUrls, resolvePresetUrl } from '../src/features/custom-links/presets.js';
 
 const preset = (label) => PRESETS.find((entry) => entry.label === label);
 const withNumbers = (vars) => ({
@@ -314,4 +314,40 @@ test('MDBList opens exact movie and show pages by IMDb id before search fallback
 test('IMDb opens the episode itself when its IMDb id is available', () => {
   assert.equal(filled('IMDb', { imdb: 'tt0903747', episodeImdb: 'tt0959621', season: 1, episode: 1 }, 'show'),
     'https://www.imdb.com/title/tt0959621/');
+});
+
+test('anime presets are conditional, while unknown genres keep them available', () => {
+  for (const label of ['MyAnimeList', 'AniList']) {
+    const entry = preset(label);
+    assert.deepEqual(entry.genres, ['anime']);
+    assert.equal(presetAllowedOnPage(entry.url, 'show', ['anime']), true);
+    assert.equal(presetAllowedOnPage(entry.url, 'movie', ['anime']), true);
+    assert.equal(presetAllowedOnPage(entry.url, 'show', ['drama']), false);
+    assert.equal(presetAllowedOnPage(entry.url, 'movie', ['drama']), false);
+    assert.equal(presetAllowedOnPage(entry.url, 'show', null), true, 'unknown metadata fails open');
+    assert.equal(presetAllowedOnPage(entry.url, 'show'), true);
+    assert.equal(resolvePresetUrl(entry.url, { title: 'Cowboy Bebop' }, 'show', ['drama']), null);
+    assert.equal(resolvePresetUrl(entry.url, { title: 'Cowboy Bebop' }, 'show', ['anime']), entry.url);
+  }
+  assert.equal(
+    resolvePresetUrl('https://custom.test/{title}', { title: 'Breaking Bad' }, 'show', ['drama']),
+    'https://custom.test/{title}',
+    'genre restrictions apply only to built-in presets',
+  );
+});
+
+
+test('YouTube interviews is a person-only preset that fills the person name', () => {
+  const entry = preset('YouTube interviews');
+  assert.deepEqual(entry.kinds, ['person']);
+  assert.equal(entry.icon, 'youtube');
+  assert.equal(entry.surface, 'reference');
+  assert.equal(
+    fillTemplate(entry.url, { person: 'Bryan Cranston' }),
+    'https://www.youtube.com/results?search_query=Bryan%20Cranston+interview',
+  );
+  assert.equal(presetAllowedOnPage(entry.url, 'person'), true);
+  assert.equal(presetAllowedOnPage(entry.url, 'show'), false);
+  assert.equal(resolvePresetUrl(entry.url, { person: 'Bryan Cranston' }, 'person'), entry.url);
+  assert.equal(resolvePresetUrl(entry.url, { person: 'Bryan Cranston' }, 'movie'), null);
 });

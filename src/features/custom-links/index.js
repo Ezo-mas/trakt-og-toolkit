@@ -22,7 +22,9 @@ import {
   filterPresetsByKind,
   mergeSeasons,
   moveLink,
+  personTemplateVars,
   presetAlreadyAdded,
+  readPersonData,
   readSeasons,
   readTitleData,
   resolveCustomLinks,
@@ -180,7 +182,9 @@ function createPanel(meta, route) {
   const timers = [];
   // Season/episode pages take their values from the route; only title pages use the picker.
   const fixedSelection = route.name === 'season' || route.name === 'episode';
-  let selection = selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
+  let selection = meta.kind === 'person'
+    ? { season: null, episode: null }
+    : selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
 
   const linksRow = el('div', { class: 'ogt-links' });
   const controlsRow = el('div', { class: 'ogt-row ogt-fields', hidden: true });
@@ -228,11 +232,13 @@ function createPanel(meta, route) {
   // og didn't render) has no other source for them. `null` means looked up (or in flight) without an id.
   const episodeImdbs = new Map();
   const episodeKey = () => `${selection.season}:${selection.episode}`;
-  const vars = () => templateVars(
-    meta.episodeImdb ? meta : { ...meta, episodeImdb: episodeImdbs.get(episodeKey()) ?? null },
-    selection,
-    getServers(),
-  );
+  const vars = () => meta.kind === 'person'
+    ? personTemplateVars(meta)
+    : templateVars(
+      meta.episodeImdb ? meta : { ...meta, episodeImdb: episodeImdbs.get(episodeKey()) ?? null },
+      selection,
+      getServers(),
+    );
 
   /** Page facts a resolver needs, read at activation so a late show lookup is included. */
   function resolverInput(service) {
@@ -512,7 +518,7 @@ function createPanel(meta, route) {
   function renderPresetChecklist() {
     const links = getCustomLinks();
     const servers = getServers();
-    const presets = filterPresetsByKind(PRESETS, meta.kind);
+    const presets = filterPresetsByKind(PRESETS, meta.kind, meta.genres);
     const list = el('div', { class: 'ogt-preset-list' });
     selectedPresets = new Set();
 
@@ -603,7 +609,7 @@ function createPanel(meta, route) {
 
   function renderLinks() {
     const values = vars();
-    const entries = resolveCustomLinks(getCustomLinks(), values, meta.kind);
+    const entries = resolveCustomLinks(getCustomLinks(), values, meta.kind, meta.genres);
     renderedEntries = entries;
     linksRow.replaceChildren();
 
@@ -957,12 +963,12 @@ function createPanel(meta, route) {
 export const customLinks = {
   id: 'custom-links',
   match(route) {
-    return route.kind === 'movie' || route.kind === 'show';
+    return route.kind === 'movie' || route.kind === 'show' || route.kind === 'person';
   },
   mount(route) {
     if (document.getElementById(PANEL_ID)) return null;
 
-    const meta = readTitleData(document, route);
+    const meta = route.kind === 'person' ? readPersonData(document, route) : readTitleData(document, route);
     if (!meta.id) return null;
 
     const target = findMountTarget();

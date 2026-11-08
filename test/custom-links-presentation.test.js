@@ -15,6 +15,7 @@ test('every preset declares a known surface and a bundled local icon', () => {
 test('unknown labels get no mark and known labels normalise to one', () => {
   assert.equal(iconKeyForLabel('Rotten Tomatoes'), 'rt');
   assert.equal(iconKeyForLabel('My Anime List'), 'mal');
+  assert.equal(iconKeyForLabel('YouTube interviews'), 'youtube');
   assert.equal(iconKeyForLabel('  PLEX  '), 'plex');
   assert.equal(iconKeyForLabel('My Cinema'), null);
 });
