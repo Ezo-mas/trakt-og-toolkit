@@ -3,6 +3,15 @@
 Working notes and known issues. Newest first.
 
 
+## 2026-11-08: clicked custom links turned red (feature 26)
+
+- og styles every link with `a:is(:hover, :focus) { color: var(--color-link-hover); text-decoration: underline; }`
+  (specificity 0-1-1). A mouse click leaves the tile focused (`:focus` but not `:focus-visible`), so that rule beat the
+  bare `.ogt-service-link` colour and the tile and its monochrome icon went `#af0e14` and underlined until focus moved.
+  Reproduced live with a real click on og.trakt.tv (script `focus()` in an unfocused pane matches neither state);
+  `.ogt-service-link:focus` and `.ogt-watch-now-link:focus` now restate the resting colour. happy-dom gives `:is()` no
+  specificity and lacks `light-dark()`, so the test only checks the rules exist.
+
 ## 2026-11-08: picker episodes for IMDb and OpenSubtitles (feature 26)
 
 - Of the presets, only Stremio (`{imdb}:{season}:{episode}`) and TMDb (`tv/:id/season/:s/episode/:e`) could open the
