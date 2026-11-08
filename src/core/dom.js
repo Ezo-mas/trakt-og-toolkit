@@ -42,3 +42,24 @@ export function isDetached(node) {
 export function text(node) {
   return (node?.textContent || '').replace(/\s+/g, ' ').trim();
 }
+
+/**
+ * The title in og's summary `h1`. The h1 also holds the year, the certification and its tooltip, so the title is the
+ * h1's own text nodes. After hydration og may swap that text for a decorated version: Breaking Bad's show page draws
+ * periodic-table tiles ("Br", "Ba") in `.element-title` (live 2026-11-09, not yet in trakt/trakt-og), keeping the
+ * plain title in a `.visually-hidden` span for screen readers. That span is the title whenever og provides one.
+ */
+export function headingTitle(heading) {
+  if (!heading) return '';
+  for (const hidden of heading.querySelectorAll('.visually-hidden')) {
+    if (hidden.closest('.year, .certification, .tooltip, [role="tooltip"]')) continue;
+    const title = text(hidden);
+    if (title) return title;
+  }
+  return [...heading.childNodes]
+    .filter((node) => node.nodeType === 3)
+    .map((node) => node.textContent)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

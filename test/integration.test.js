@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import {
   SHOW_HTML,
+  ELEMENT_TITLE_SHOW_HTML,
   MOVIE_HTML,
   MOVIE_NO_PROVIDER_HTML,
   SEASON_HTML,
@@ -583,6 +584,17 @@ test('Stremio opens the exact episode once the show IMDb id is looked up', async
     'https://web.stremio.com/#/detail/series/tt0903747/tt0903747:1:1',
   );
   assert.equal(requested.length, 1, 'the deep route asks for the show IMDb id the page does not have');
+});
+
+test('custom links use the plain title when og decorates the heading', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: ELEMENT_TITLE_SHOW_HTML,
+    storage: { 'watch.customLinks': [{ label: 'Search', url: 'https://search.test/{title}/{year}' }] },
+  });
+  t.after(() => window.close());
+  await wait(50);
+  assert.equal(chip(document, 'Search').getAttribute('href'), 'https://search.test/Breaking%20Bad/2008');
 });
 
 test('the Stremio link follows the season/episode picker on a show page', async (t) => {

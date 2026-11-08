@@ -933,6 +933,15 @@
   function text(node) {
     return (node?.textContent || "").replace(/\s+/g, " ").trim();
   }
+  function headingTitle(heading) {
+    if (!heading) return "";
+    for (const hidden of heading.querySelectorAll(".visually-hidden")) {
+      if (hidden.closest('.year, .certification, .tooltip, [role="tooltip"]')) continue;
+      const title = text(hidden);
+      if (title) return title;
+    }
+    return [...heading.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join(" ").replace(/\s+/g, " ").trim();
+  }
 
   // src/ui/shell.js
   var STYLE_ID = "ogt-styles";
@@ -2282,8 +2291,7 @@
   }
   function headingText(heading) {
     if (!heading) return "";
-    const direct = [...heading.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join(" ").trim();
-    return direct || text(heading);
+    return headingTitle(heading) || text(heading);
   }
   function firstMatch(doc, selector, pattern, value) {
     for (const link of doc.querySelectorAll(selector)) {
@@ -6904,8 +6912,7 @@
 
   // src/features/library/data.js
   function readLibraryTitle(doc) {
-    const heading = doc.querySelector(".fanart-header .summary-title h1");
-    return [...heading?.childNodes ?? []].filter((node) => node.nodeType === 3).map((node) => node.textContent).join("").trim() || "this title";
+    return headingTitle(doc.querySelector(".fanart-header .summary-title h1")) || "this title";
   }
 
   // src/ui/action-button.js
