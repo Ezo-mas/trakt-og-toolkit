@@ -37,16 +37,17 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 23 | Test suite review and cleanup | — | last |
 | 24 | More exact-title link presets | — | done |
 | 25 | Per-user server presets | — | done |
-| 26 | Custom links below the poster, with icons and Watch Now integration | check current OG markup | planned; first |
+| 26 | Custom links below the poster, with icons and Watch Now integration | check current OG markup | done |
 | 27 | Resolve external site IDs for direct custom links | 26; public lookup services | planned; after 26 |
 | 28 | Conditional presets and person-page custom links | 26; genre/person metadata | planned; after 26; anime mapping after 27 |
 | 29 | Shared authenticated-write queue and rate-limit handling | existing OAuth | done |
 | 30 | Trakt onboarding without manual API setup | publisher-registered app; HTTPS callback for PKCE | planned; device flow first, PKCE later |
+| 31 | Trakt ratings distribution in the summary's empty space | client ID optional | backlog |
 
 **Released:** 0.3.0 on 2026-11-03 (features 6–8, 11–13, 15 and 16). Bump the version again whenever main should
 reach userscript managers; they only offer an update when `@version` changes.
 
-**Not planned, og already ships these:** ratings distribution chart (`/stats` pages), trailers and videos, external
+**Not planned, og already ships these:** ratings distribution chart (`/stats` pages; feature 31 only mirrors it into the summary), trailers and videos, external
 links and ratings strip, profile cover images, list pages, header navigation. Also not planned: anything that unlocks
 VIP features, scheduled e-mail exports, bug-fix patches for the classic site.
 
@@ -556,7 +557,13 @@ server hosts are shipped.
 
 ## 26. Custom links below the poster, with icons and Watch Now integration
 
-**Status:** planned (2026-11-07). First priority for the custom-links improvements. Move the existing links out of
+**Status:** done (2026-11-08). The links now sit in the sidebar above og's external links, grouped as service rows,
+a 4-column logo grid (Simple Icons, CC0, plus og's own marks cloned from the page) and text tiles, with og-style
+Season/Episode dropdowns and Presets/Servers/Edit buttons; watch and library links join og's Watch Now dialog as
+**Your services**. og is desktop-only, so the narrow-layout requirement was dropped. The picker also looks up the
+episode's IMDb id so IMDb and OpenSubtitles open the picked episode. See NOTES.md (2026-11-08).
+
+Original plan (2026-11-07): first priority for the custom-links improvements. Move the existing links out of
 its large panel in the main content column and into the sidebar below the title's poster/card, near the native
 external-link area. Use compact service icons and add relevant links to OG's Watch Now card/popover as well.
 On narrow screens, follow OG's actual poster/Watch Now layout rather than a fixed desktop position.
@@ -745,6 +752,35 @@ verified PKCE handoff exists; publishing and application access verification rem
 cancellation, reload, refresh, sign-out, app/account switches and isolation of credentials from the page. For PKCE,
 add wrong-state/origin, replay, expired-attempt and concurrent-tab checks. Verify real connect/refresh/disconnect
 with the release app and a second account. No user should need developer-portal setup in the default flow.
+
+## 31. Trakt ratings distribution in the summary's empty space
+
+**Status:** backlog (2026-11-08). The action stack grew with Add to watchlist and Add to library (features 12–13),
+so on movie, show, season and episode summaries the overview column under the tagline/overview text now ends well
+above the buttons and leaves an empty block. Fill it with the **Trakt** section of the title's stats page: the 1–10
+ratings distribution bars with the average marker, and the Rating / Votes / Most given / Liked it tiles. The user's
+screenshots (2026-11-08, Dune: Prophecy show and S1E3) show the gap and og's `/stats` section to mirror.
+
+- Check live og and `trakt/trakt-og` first: the summary's overview column, what already sits below the overview
+  (playback progress on episodes, feature 2's panel), and how `/stats` renders the section, so the copy matches og's
+  bar colours, labels ("Weak Sauce :(" … "Totally Ninja!"), heart icons and tile style. Build it ourselves; don't copy
+  og's GPL code or styles verbatim into the MIT bundle.
+- Data: with a client ID, `GET /movies/:id/ratings`, `/shows/:id/ratings`, `/shows/:id/seasons/:s/ratings` and
+  `/shows/:id/seasons/:s/episodes/:e/ratings` return `rating`, `votes` and the `distribution`; the watcher share
+  ("5.5% of watchers") needs the matching `/stats` endpoint's `watchers`, or drop that line. Without a client ID,
+  decide between hiding the section and reading og's own `/stats` page (same origin, server-rendered); prefer the
+  API per Trakt's policy. Derive Most given and Liked it (share of 7+) from the distribution.
+- Only fill space that is actually empty: measure the overview column against the action stack and skip (or shrink to
+  the tiles) when the overview text is long enough to reach the buttons. No layout shift for og's own content; mount
+  after hydration, clean up on SPA navigation, and add a feature toggle (feature 20).
+- Link the section to the title's `/stats` page. Accessible bars (names with value and label), keyboard focus, and
+  no hover-only information.
+
+**Scope:** a new `src/features/summary-ratings/` feature, shared `apiGet`, `src/ui/styles.js`, the feature registry
+and menu toggle, trimmed live fixtures (summary pages plus a `/stats` capture), drift selectors, README/NOTES.
+
+**Acceptance:** movies, shows, seasons and episodes, short and long overviews, titles with few or no votes, with and
+without a client ID, Firefox and Chromium; the gap is filled without pushing og's content or the action stack.
 
 ## 23. Test suite review and cleanup
 

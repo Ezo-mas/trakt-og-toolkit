@@ -25,13 +25,15 @@ reload. Toggles are stored in GM storage, separately from og's settings.
 
 ### Custom links panel (title, season and episode pages)
 
-A compact panel under the summary stats with user-configured links to your own services.
+A compact strip in the summary sidebar, below the poster and directly above og's native external links. Management forms open in a modal so the sidebar stays compact.
 
-- **Custom links** — manage your `Label | URL` templates in the inline editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{tvdb}`, `{season}`, `{episode}`.
+- **Custom links** — manage your `Label | URL` templates in the editor, with placeholders like `{title}`, `{year}`, `{tmdb}`, `{imdb}`, `{tvdb}`, `{season}`, `{episode}`.
+- **Service logos** — links are grouped: watch and library services (Stremio, Plex, Jellyfin, Radarr…) first as full-row tiles with logo and name, then reference sites (IMDb, Letterboxd, JustWatch, Rotten Tomatoes…) as square logo tiles in the same 4-column grid as og's sidebar external links, taking their brand colour on hover, then text-only links. Season/Episode pickers look like og's dropdowns, and Presets, Servers and Edit are square sidebar buttons. Logos are bundled [Simple Icons](https://simpleicons.org) marks (CC0), and TMDb, TVDB and JustWatch reuse the marks og already draws in its sidebar. Services without a logo (Debrid Media Manager, OpenSubtitles, Seerr) get a short word mark; custom or unknown labels stay readable text tiles. The service name is on the anchor, in a tooltip and on keyboard focus. No favicon or third-party request is made.
+- **Watch Now** — watch, play and library presets (Plex, Stremio, Jellyfin, Emby, Debrid Media Manager, Radarr, Sonarr and Seerr) also appear under **Your services** in og's Watch Now dialog. og's own provider sections, counts and links are left unchanged. A title with no providers keeps og's “No watch now links in United States yet.” message, with **Your services** below it; if the block is missing entirely, the compact strip has a fallback. Ratings, databases and other reference links stay out of Watch Now. Editing a known service's URL (for example Emby's search path) keeps its service mark and Watch Now placement based on its label.
 - **Presets** — add IMDb, TMDb, TVDB, Letterboxd, Rotten Tomatoes, Wikipedia, JustWatch, MyAnimeList, Metacritic, Stremio, Debrid Media Manager, MDBList, OpenSubtitles, Plex, AniList, Jellyfin, Emby, Radarr, Sonarr or Seerr links. The og-service presets mirror the links og itself shows, so they remain available when a title's external-link strip is missing. IMDb, TMDb, TVDB, Letterboxd, Stremio, Debrid Media Manager, OpenSubtitles, MDBList, Radarr, Sonarr and Seerr open the exact title (or an add-media search) when the page has the id they need, and fall back where possible; Rotten Tomatoes reuses OG’s direct title link when available; the rest search.
   Movie-only presets (Radarr and Letterboxd) stay hidden on shows; show-only presets (Sonarr and TVDB) stay hidden on movies.
 - **Servers** — set the base URL for your own Jellyfin, Emby, Radarr, Sonarr or Seerr under **Servers…**. Server presets stay disabled until their host is configured. A bare host gets `http://`; HTTPS and base paths such as `/jellyfin` are supported. Credentials, query strings and fragments are rejected.
-- **Season/episode pickers** — appear automatically when a link or one of its preset routes uses `{season}` or `{episode}` on a show page, including immediately after adding a preset. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards.
+- **Season/episode pickers** — appear automatically when a link or one of its preset routes uses `{season}` or `{episode}` on a show page, including immediately after adding a preset. Episode counts come from the Trakt API when a client ID is set, otherwise from og's season cards. Stremio and TMDb open the picked episode; with a client ID set, IMDb and OpenSubtitles also open it, using the episode's IMDb id from `GET /shows/:id/seasons/:s/episodes/:e` (looked up once per picked episode; until it arrives, or without a client ID, they open the season). Debrid Media Manager has no episode pages and opens the season.
 - **Season and episode pages** — the panel uses the show's title, year and TMDb/IMDb/TVDB ids, not the season or episode heading, and takes `{season}`/`{episode}` from the URL. The title and TMDb id come from og's show link and external links (and the IMDb id on season pages); an episode page's own IMDb id comes from its external-link strip, while the year, the show's IMDb id on episode pages, and the TVDB id on season and episode pages come from `GET /shows/:id`. Without a client ID, those links stay hidden rather than point at the season or episode.
 - **Examples**: Plex, your own Jellyfin/Emby/Radarr/Sonarr/Seerr server, or any streaming/library service og doesn't link to.
 
@@ -208,7 +210,8 @@ watched). Start replaces any earlier progress for the title; if the pause then f
 ## Custom links
 
 Use **Edit links** in the panel to add, rename, reorder or remove links. Choose **Add presets…** to select optional
-service links; nothing is enabled until you check it and confirm. Presets can be edited like any other link.
+service links; nothing is enabled until you check it and confirm. The editor and preset/servers forms open in a modal
+and return focus to the button that opened them. Presets can be edited like any other link.
 
 Stremio's preset opens the exact movie, show, season or episode when the page has the title's IMDb id (a season page
 links to the series page with `?season=`, which Stremio selects), and falls back to its search otherwise. IMDb, TMDb,

@@ -1,5 +1,60 @@
 /** Trimmed, hand-written mirrors of the real og markup these selectors rely on. */
 
+/** Current Watch Now block and its dialog; og renders one in the sidebar and a `.phone` copy in the actions/details.
+ * `empty` mirrors a live title with no providers: the button still says 0 services and the dialog carries og's
+ * no-links message (Blueberry Inn, 2026-11-08). */
+function watchNowHtml({ phone = false, nativeServices = 8, empty = false } = {}) {
+  const titleId = phone ? 'watch-now-title-phone' : 'watch-now-title';
+  const tiles = empty ? '' : `
+        <a class="service" href="https://watchnow.trakt.tv/watchnow/1" target="_blank" rel="nofollow noopener"><span class="icon" style="--service-color: #000000;"><img src="https://media.trakt.tv/watchnow/sources/apple_tv.webp" alt="Apple TV Store"></span></a>
+        <a class="service" href="https://watchnow.trakt.tv/watchnow/2" target="_blank" rel="nofollow noopener"><span class="icon" style="--service-color: #607d8b;"><img src="https://media.trakt.tv/watchnow/sources/google_play_movies.webp" alt="Google Play Movies"></span></a>`;
+  const streaming = empty
+    ? '<p class="streaming-empty">No watch now links in United States yet.</p>'
+    : `<div>
+          <h3 class="section-title">Stream <span class="count">2</span></h3>
+          <div class="tiles">
+            <a class="service" href="https://watchnow.trakt.tv/watchnow/1" target="_blank" rel="nofollow noopener">Apple TV Store</a>
+            <a class="service" href="https://watchnow.trakt.tv/watchnow/2" target="_blank" rel="nofollow noopener">Google Play Movies</a>
+          </div>
+        </div>`;
+  return `<div class="watch-now${phone ? ' phone' : ''}">
+      <div class="tiles">${tiles}
+      </div>
+      <button type="button" class="open" aria-haspopup="dialog"><span class="text"><span class="main-info">Watch Now</span> <span class="under-info">${empty ? 0 : nativeServices} services</span></span></button>
+    </div>
+    <dialog class="dialog xl art" aria-labelledby="${titleId}">
+      <header class="art-header"><h2 id="${titleId}">Watch Now</h2></header>
+      <div class="streaming-links" aria-busy="false">${streaming}
+      </div>
+    </dialog>`;
+}
+
+/**
+ * Current-og summary sidebar (live captures 2026-11-08): the poster, Watch Now with its own dialog, and the
+ * native external links. Movie/show sidebars put these under `aside.sidebar`; seasons and episodes wrap the
+ * poster in `a.poster-link` but use the same watch-now/dialog pairing. Svelte hashes and comments are omitted.
+ */
+export function summarySidebarHtml({
+  label = 'Title',
+  poster = 'movies/1/medium/poster.webp',
+  posterAlt = 'Title (2000)',
+  watchNow = true,
+  nativeServices = 8,
+  emptyWatchNow = false,
+  external = true,
+  backHref = null,
+} = {}) {
+  const posterHtml = `<div class="summary-poster"><img src="https://media.trakt.tv/${poster}" alt="${posterAlt}"></div>`;
+  return `<aside class="sidebar" aria-label="${label}">
+    ${backHref ? `<a class="poster-link" href="${backHref}" aria-label="Back to ${label}">${posterHtml}</a>` : posterHtml}
+    ${watchNow ? watchNowHtml({ nativeServices, empty: emptyWatchNow }) : ''}
+    ${external ? `<ul class="external-links">
+      <li><a class="glass-action" href="https://www.imdb.com/title/tt0903747" target="_blank" rel="noopener" aria-label="IMDB">IMDB</a></li>
+      <li><a class="glass-action" href="https://www.themoviedb.org/tv/1396" target="_blank" rel="noopener" aria-label="TMDB">TMDB</a></li>
+    </ul>` : ''}
+  </aside>`;
+}
+
 /** Action-stack structure trimmed by hand from live signed-out captures on 2026-11-01:
  * /movies/fight-club-1999, /shows/breaking-bad, and its /seasons/1 and /seasons/1/episodes/1.
  * All four use this stack/list control. Icons, unrelated actions and Svelte hashes omitted.
@@ -65,12 +120,13 @@ export const SHOW_HTML = `
 
   <section class="summary-frame">
     <div class="container"><div class="columns">
-      <aside class="sidebar"></aside>
+      ${summarySidebarHtml({ label: 'Breaking Bad', poster: 'shows/1388/medium/poster.webp', posterAlt: 'Breaking Bad (2008)', nativeServices: 6 })}
       <div class="info" id="overview">
         <div class="top">
           <div class="details"><p class="overview">A chemistry teacher turns to crime.</p></div>
-          <div class="actions"></div>
+          <div class="actions">${watchNowHtml({ phone: true, nativeServices: 6 })}</div>
         </div>
+        <div class="phone-tools"></div>
       </div>
     </div></div>
   </section>
@@ -92,7 +148,8 @@ export const SHOW_HTML = `
   </section>
 </main>`;
 
-export const MOVIE_HTML = `
+function moviePageHtml({ watchNow = true, emptyWatchNow = false } = {}) {
+  return `
 <main id="content">
   <section class="fanart-header with-stats">
     <div class="summary">
@@ -105,13 +162,18 @@ export const MOVIE_HTML = `
   </section>
   <section class="summary-frame">
     <div class="container"><div class="columns">
-      <aside class="sidebar"></aside>
+      ${summarySidebarHtml({ label: 'The Dark', poster: 'movies/8967/medium/poster.webp', posterAlt: 'The Dark (2005)', watchNow, nativeServices: emptyWatchNow ? 0 : 8, emptyWatchNow })}
       <div class="info" id="overview">
-        <div class="top"><div class="details"></div><div class="actions"></div></div>
+        <div class="top"><div class="details"></div><div class="actions">${watchNow ? watchNowHtml({ phone: true, nativeServices: emptyWatchNow ? 0 : 8, empty: emptyWatchNow }) : ''}</div></div>
+        <div class="phone-tools"></div>
       </div>
     </div></div>
   </section>
 </main>`;
+}
+
+export const MOVIE_HTML = moviePageHtml();
+export const MOVIE_NO_PROVIDER_HTML = moviePageHtml({ emptyWatchNow: true });
 
 export const SEASON_HTML = `
 <main id="content">
@@ -262,11 +324,11 @@ export const SEASON_PAGE_HTML = `
   </section>
   <section class="summary-frame">
     <div class="container"><div class="columns">
-      <aside class="sidebar"></aside>
-      <div class="info" id="overview"><div class="top"><div class="details"></div><div class="actions"></div></div></div>
+      ${summarySidebarHtml({ label: 'Breaking Bad', poster: 'images/seasons/000/003/950/posters/medium/season.webp', posterAlt: 'Breaking Bad: Season 1', nativeServices: 6, backHref: '/shows/breaking-bad' })}
+      <div class="info" id="overview"><div class="top"><div class="details">${watchNowHtml({ phone: true, nativeServices: 6 })}</div><div class="actions"></div></div><div class="phone-tools"></div></div>
     </div></div>
   </section>
-  <section class="episodes"><article class="row"><span class="rating-trigger"><span class="value">83%</span></span></article></section>
+  <section class="episodes"><article class="row"><span class="rating-trigger"><span class="value">83%</span></span><div class="titles"><h3><span class="number">1x01</span> Pilot</h3></div></article></section>
 </main>`;
 
 /** Live `/shows/breaking-bad/seasons/1/episodes/1` capture, 2026-11-02; trimmed to the show/season
@@ -290,8 +352,8 @@ export const EPISODE_PAGE_HTML = `
   </section>
   <section class="summary-frame">
     <div class="container"><div class="columns">
-      <aside class="sidebar"></aside>
-      <div class="info" id="overview"><div class="top"><div class="details"></div><div class="actions"></div></div></div>
+      ${summarySidebarHtml({ label: 'Breaking Bad', poster: 'images/seasons/000/003/950/posters/medium/season.webp', posterAlt: 'Breaking Bad: Season 1', nativeServices: 6, backHref: '/shows/breaking-bad' })}
+      <div class="info" id="overview"><div class="top"><div class="details">${watchNowHtml({ phone: true, nativeServices: 6 })}</div><div class="actions"></div></div><div class="phone-tools"></div></div>
     </div></div>
   </section>
   <section class="episodes"><article class="row"><span class="rating-trigger"><span class="value">83%</span></span></article></section>

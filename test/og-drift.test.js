@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { checkSelectors, unreachableReason } from '../scripts/og-drift-checks.mjs';
 import { checkNativeModules } from '../scripts/og-drift-native.mjs';
-import { MOVIE_HTML, SHOW_HTML, SEASON_HTML, PLAYBACK_EPISODE_HTML, PERSON_HTML, PERSON_CREDITS_HTML, SEASON_PAGE_HTML, EPISODE_PAGE_HTML, WATCHLIST_HTML, watchlistCardHtml } from './fixtures.js';
+import { MOVIE_HTML, SHOW_HTML, PERSON_HTML, PERSON_CREDITS_HTML, SEASON_PAGE_HTML, EPISODE_PAGE_HTML, WATCHLIST_HTML, watchlistCardHtml } from './fixtures.js';
 
 function documentFor(html) {
   const window = new Window();
@@ -12,17 +12,16 @@ function documentFor(html) {
 }
 
 test('checks each page against its required markup', (t) => {
-  for (const [page, html] of Object.entries({ movie: MOVIE_HTML, show: SHOW_HTML, season: SEASON_HTML, episode: PLAYBACK_EPISODE_HTML, person: PERSON_HTML })) {
+  for (const [page, html] of Object.entries({ movie: MOVIE_HTML, show: SHOW_HTML, season: SEASON_PAGE_HTML, episode: EPISODE_PAGE_HTML, person: PERSON_HTML })) {
     const window = documentFor(html);
     t.after(() => window.close());
-    // The show-link checks run against the live season/episode captures below, and the
+    // The full season/episode captures supply the show-link and summary anchors, and the
     // action-stack checks have their own live-shaped action fixture below.
     assert.deepEqual(checkSelectors(window.document, page)
-      .filter((check) => !check.ok && !SHOW_CONTEXT(check) && !ACTION_CONTEXT(check)), [], page);
+      .filter((check) => !check.ok && !ACTION_CONTEXT(check)), [], page);
   }
 });
 
-const SHOW_CONTEXT = (check) => check.feature.startsWith('custom links (show');
 const ACTION_CONTEXT = (check) => ['title actions', 'watchlist list control', 'watchlist picker trigger', 'watchlist card list controls',
   'watchlist credit rows', 'watchlist credit list controls', 'watchlist credit toolbar'].includes(check.feature);
 
@@ -85,21 +84,21 @@ test('static native module check reports a missing root layout and missing store
   }), ['native toast: import not found', 'native library refresh: import not found']);
 });
 
-test('season and episode pages still carry the show link and the show ids custom links read', (t) => {
+test('season and episode pages carry the show ids and the summary anchors custom links use', (t) => {
   for (const [page, html] of Object.entries({ season: SEASON_PAGE_HTML, episode: EPISODE_PAGE_HTML })) {
     const window = documentFor(html);
     t.after(() => window.close());
-    const checks = checkSelectors(window.document, page).filter(SHOW_CONTEXT);
-    assert.equal(checks.length, page === 'season' ? 3 : 2, page);
+    const checks = checkSelectors(window.document, page).filter((check) => check.feature.startsWith('custom links'));
+    assert.equal(checks.length, page === 'season' ? 7 : 6, page);
     assert.deepEqual(checks.filter((check) => !check.ok), [], page);
   }
 });
 
 test('reports missing selectors by feature and checks the first episode row', (t) => {
-  const window = documentFor(SEASON_HTML);
+  const window = documentFor(SEASON_PAGE_HTML);
   t.after(() => window.close());
   window.document.querySelector('article.row .rating-trigger .value').remove();
-  assert.deepEqual(checkSelectors(window.document, 'season').filter((check) => !check.ok && !SHOW_CONTEXT(check) && !ACTION_CONTEXT(check)), [
+  assert.deepEqual(checkSelectors(window.document, 'season').filter((check) => !check.ok && !ACTION_CONTEXT(check)), [
     { feature: 'season chart', selector: '.rating-trigger .value', ok: false },
   ]);
 });
