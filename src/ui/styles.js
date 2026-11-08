@@ -291,12 +291,27 @@ export const CSS = String.raw`
   gap: 7px;
 }
 
-/* Same grid as OG's sidebar ul.external-links, so the strip reads as an extension of it. */
-.ogt-links {
+/* Grouped strip: full-row services, then the same 4-column logo grid as og's ul.external-links, then text links. */
+.ogt-links,
+.ogt-links-services {
+  display: grid;
+  gap: 6px;
+}
+
+.ogt-links-logos {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-flow: row dense;
   gap: 6px;
+}
+
+.ogt-links-texts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ogt-links-texts .ogt-service-link--text {
+  grid-column: auto;
 }
 
 .ogt-links .ogt-hint {
@@ -434,30 +449,122 @@ export const CSS = String.raw`
 }
 
 .ogt-links-manage {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-block-start: 8px;
-}
-
-.ogt-links-compact .ogt-chip {
-  padding: 3px 8px;
-  font-size: 10px;
-  line-height: 1.3;
-}
-
-.ogt-links-compact .ogt-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+  margin-block-start: 10px;
+}
+
+/* Square glass actions like og's sidebar tiles, not pills. */
+.ogt-manage-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-inline-size: 0;
+  block-size: 48px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: light-dark(#444, #d9d9d9);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.ogt-manage-button svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.ogt-manage-button:hover,
+.ogt-manage-button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  color: light-dark(#111, #fff);
+}
+
+.ogt-manage-button:focus-visible {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 2px;
+}
+
+/* Season/episode pickers look like og's own dropdown triggers ("Sort: Released"). */
+.ogt-links-compact .ogt-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-block-start: 10px;
+}
+
+.ogt-links-compact .ogt-fields[hidden] {
+  display: none;
 }
 
 .ogt-links-compact .ogt-field {
-  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+  block-size: 34px;
+  padding: 0 8px 0 10px;
+  border: 1px solid light-dark(#d4d4d4, #3b3b3b);
+  border-radius: 8px;
+  background: light-dark(#f2f2f2, #232323);
+  color: var(--ogt-muted);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ogt-links-compact .ogt-field:focus-within {
+  border-color: light-dark(#999, #5a5a5a);
+}
+
+.ogt-links-compact .ogt-episode {
+  display: flex;
+  flex: 1;
+  min-inline-size: 0;
 }
 
 .ogt-links-compact .ogt-select,
 .ogt-links-compact .ogt-input {
-  padding: 3px 22px 3px 7px;
-  font-size: 11px;
+  flex: 1;
+  min-inline-size: 0;
+  padding: 0 14px 0 0;
+  border: 0;
+  background-color: transparent;
+  background-position: calc(100% - 5px) 50%, calc(100% - 1px) 50%;
+  color: var(--ogt-fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ogt-links-compact .ogt-field-prefix {
+  flex: none;
+  margin-inline-end: 4px;
+  color: var(--ogt-muted);
+  font-size: 12px;
+}
+
+.ogt-links-compact input.ogt-input {
+  padding-inline-end: 0;
+  background-image: none;
+}
+
+.ogt-links-compact .ogt-select:focus-visible,
+.ogt-links-compact .ogt-input:focus-visible {
+  outline: none;
+}
+
+.ogt-links-compact .ogt-field:has(:focus-visible) {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 1px;
 }
 
 .ogt-watch-fallback {

@@ -321,12 +321,27 @@
   gap: 7px;
 }
 
-/* Same grid as OG's sidebar ul.external-links, so the strip reads as an extension of it. */
-.ogt-links {
+/* Grouped strip: full-row services, then the same 4-column logo grid as og's ul.external-links, then text links. */
+.ogt-links,
+.ogt-links-services {
+  display: grid;
+  gap: 6px;
+}
+
+.ogt-links-logos {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-flow: row dense;
   gap: 6px;
+}
+
+.ogt-links-texts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ogt-links-texts .ogt-service-link--text {
+  grid-column: auto;
 }
 
 .ogt-links .ogt-hint {
@@ -464,30 +479,122 @@
 }
 
 .ogt-links-manage {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-block-start: 8px;
-}
-
-.ogt-links-compact .ogt-chip {
-  padding: 3px 8px;
-  font-size: 10px;
-  line-height: 1.3;
-}
-
-.ogt-links-compact .ogt-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+  margin-block-start: 10px;
+}
+
+/* Square glass actions like og's sidebar tiles, not pills. */
+.ogt-manage-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-inline-size: 0;
+  block-size: 48px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: light-dark(#444, #d9d9d9);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.ogt-manage-button svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.ogt-manage-button:hover,
+.ogt-manage-button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  color: light-dark(#111, #fff);
+}
+
+.ogt-manage-button:focus-visible {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 2px;
+}
+
+/* Season/episode pickers look like og's own dropdown triggers ("Sort: Released"). */
+.ogt-links-compact .ogt-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-block-start: 10px;
+}
+
+.ogt-links-compact .ogt-fields[hidden] {
+  display: none;
 }
 
 .ogt-links-compact .ogt-field {
-  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+  block-size: 34px;
+  padding: 0 8px 0 10px;
+  border: 1px solid light-dark(#d4d4d4, #3b3b3b);
+  border-radius: 8px;
+  background: light-dark(#f2f2f2, #232323);
+  color: var(--ogt-muted);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ogt-links-compact .ogt-field:focus-within {
+  border-color: light-dark(#999, #5a5a5a);
+}
+
+.ogt-links-compact .ogt-episode {
+  display: flex;
+  flex: 1;
+  min-inline-size: 0;
 }
 
 .ogt-links-compact .ogt-select,
 .ogt-links-compact .ogt-input {
-  padding: 3px 22px 3px 7px;
-  font-size: 11px;
+  flex: 1;
+  min-inline-size: 0;
+  padding: 0 14px 0 0;
+  border: 0;
+  background-color: transparent;
+  background-position: calc(100% - 5px) 50%, calc(100% - 1px) 50%;
+  color: var(--ogt-fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ogt-links-compact .ogt-field-prefix {
+  flex: none;
+  margin-inline-end: 4px;
+  color: var(--ogt-muted);
+  font-size: 12px;
+}
+
+.ogt-links-compact input.ogt-input {
+  padding-inline-end: 0;
+  background-image: none;
+}
+
+.ogt-links-compact .ogt-select:focus-visible,
+.ogt-links-compact .ogt-input:focus-visible {
+  outline: none;
+}
+
+.ogt-links-compact .ogt-field:has(:focus-visible) {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 1px;
 }
 
 .ogt-watch-fallback {
@@ -1774,7 +1881,8 @@
       label: "JustWatch",
       url: "https://www.justwatch.com/us/search?q={title}",
       icon: "justwatch",
-      surface: "watch",
+      // A reference link like og's own JustWatch icon; og's Watch Now dialog is already powered by JustWatch.
+      surface: "reference",
       kinds: ["movie", "show"]
     },
     {
@@ -2030,7 +2138,7 @@
     const key = String(label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     return LABEL_ICONS[key] || null;
   }
-  var WATCH_ICONS = /* @__PURE__ */ new Set(["justwatch", "plex", "stremio", "jellyfin", "emby", "dmm"]);
+  var WATCH_ICONS = /* @__PURE__ */ new Set(["plex", "stremio", "jellyfin", "emby", "dmm"]);
   var LIBRARY_ICONS = /* @__PURE__ */ new Set(["radarr", "sonarr", "seerr"]);
   function surfaceForLabel(label) {
     const key = iconKeyForLabel(label);
@@ -2040,6 +2148,9 @@
   }
   function serviceColor(key) {
     return ICONS[key]?.color || null;
+  }
+  function hasServiceIcon(key) {
+    return Boolean(key && ICONS[key]);
   }
   function brandSvg(doc, d) {
     const svg3 = doc.createElementNS(SVG_NS, "svg");
@@ -2763,6 +2874,31 @@
   function seasonLabel(number) {
     return number === 0 ? "Specials" : `Season ${number}`;
   }
+  var ICON_ADD = "M12 5v14M5 12h14";
+  var ICON_SERVER = "M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01";
+  var ICON_EDIT = "M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4";
+  function manageButton(name, text2, d) {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg3.setAttribute("viewBox", "0 0 24 24");
+    svg3.setAttribute("aria-hidden", "true");
+    svg3.setAttribute("focusable", "false");
+    const path = document.createElementNS(svg3.namespaceURI, "path");
+    for (const [key, value] of Object.entries({
+      d,
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    })) path.setAttribute(key, value);
+    svg3.append(path);
+    return el(
+      "button",
+      { class: "ogt-manage-button", type: "button", "aria-label": name, title: name },
+      svg3,
+      el("span", { text: text2 })
+    );
+  }
   function compactLink(entry) {
     const label = entry.label.trim() || "Custom link";
     const icon3 = serviceIcon(entry.icon);
@@ -2830,9 +2966,9 @@
     const editor = el("div", { class: "ogt-editor", hidden: true });
     const presetChecklist = el("div", { class: "ogt-presets", hidden: true });
     const serversPanel = el("div", { class: "ogt-servers", hidden: true });
-    const presetsButton = el("button", { class: "ogt-chip", type: "button", text: "Add presets…" });
-    const serversButton = el("button", { class: "ogt-chip", type: "button", text: "Servers…" });
-    const editButton = el("button", { class: "ogt-chip", type: "button", text: "Edit links" });
+    const presetsButton = manageButton("Add presets…", "Presets", ICON_ADD);
+    const serversButton = manageButton("Servers…", "Servers", ICON_SERVER);
+    const editButton = manageButton("Edit links", "Edit", ICON_EDIT);
     const closeButton = el("button", { class: "ogt-manager-close", type: "button", text: "Close" });
     const manager = el(
       "dialog",
@@ -3163,7 +3299,12 @@
           el("p", { class: "ogt-hint", text: "Add links to your own services: Plex, Jellyfin, Sonarr, or any URL." })
         );
       }
-      for (const entry of entries) linksRow.append(compactLink(entry));
+      const services = entries.filter((entry) => entry.surface !== "reference" && hasServiceIcon(entry.icon));
+      const logos = entries.filter((entry) => entry.surface === "reference" && hasServiceIcon(entry.icon));
+      const texts = entries.filter((entry) => !hasServiceIcon(entry.icon));
+      for (const [kind, group] of [["services", services], ["logos", logos], ["texts", texts]]) {
+        if (group.length) linksRow.append(el("div", { class: `ogt-links-group ogt-links-${kind}` }, group.map(compactLink)));
+      }
       syncWatchNow(entries);
       lookUpShow(values);
     }
@@ -3237,8 +3378,8 @@
     }
     const seasonSelect = el("select", { class: "ogt-select", "aria-label": "Season" });
     const episodeSlot = el("span", { class: "ogt-episode" });
-    const seasonField = el("label", { class: "ogt-field" }, "Season", seasonSelect);
-    const episodeField = el("label", { class: "ogt-field" }, "Episode", episodeSlot);
+    const seasonField = el("label", { class: "ogt-field" }, el("span", { class: "ogt-visually-hidden", text: "Season" }), seasonSelect);
+    const episodeField = el("label", { class: "ogt-field" }, el("span", { class: "ogt-visually-hidden", text: "Episode" }), episodeSlot);
     let controlsBuilt = false;
     function ensureControls() {
       if (controlsBuilt) return;
@@ -3280,7 +3421,7 @@
             input.value = String(selection.episode);
           }
         });
-        episodeSlot.replaceChildren(input);
+        episodeSlot.replaceChildren(el("span", { class: "ogt-field-prefix", "aria-hidden": "true", text: "Episode" }), input);
         return;
       }
       const select = el("select", { class: "ogt-select", "aria-label": "Episode" });

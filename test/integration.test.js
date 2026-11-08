@@ -65,7 +65,7 @@ function boot({ url, html, storage = {}, gmRequest, narrow = null }) {
 
 const panel = (document) => document.getElementById('ogt-custom-links');
 const chips = (document) => [
-  ...document.querySelectorAll('#ogt-custom-links .ogt-chip, #ogt-custom-links .ogt-links a.ogt-service-link'),
+  ...document.querySelectorAll('#ogt-custom-links .ogt-chip, #ogt-custom-links .ogt-manage-button, #ogt-custom-links .ogt-links a.ogt-service-link'),
 ];
 const chip = (document, label) => chips(document).find((node) =>
   node.textContent.trim() === label || node.getAttribute('aria-label') === label || node.dataset.ogtTooltip === label);
@@ -104,12 +104,20 @@ test('compact links show local service marks with names and a text fallback', as
 
   const links = [...document.querySelectorAll('#ogt-custom-links .ogt-links a.ogt-service-link')];
   assert.equal(links.length, 3);
-  assert.deepEqual(links.map((link) => link.getAttribute('aria-label')), ['IMDb', 'My Cinema', 'Plex']);
-  assert.ok(links[0].querySelector('.ogt-service-icon'), 'a known service gets a local mark');
-  assert.equal(links[0].getAttribute('data-ogt-tooltip'), 'IMDb');
-  assert.equal(links[1].querySelector('.ogt-service-icon'), null, 'an unknown service has no mark');
-  assert.equal(links[1].querySelector('.ogt-service-label').textContent, 'My Cinema');
-  assert.ok(links[2].querySelector('.ogt-service-icon'), 'Plex gets a local mark');
+  assert.deepEqual(links.map((link) => link.getAttribute('aria-label')), ['Plex', 'IMDb', 'My Cinema'],
+    'grouped: services, then logos, then text links');
+  assert.ok(links[0].closest('.ogt-links-services'), 'Plex is a service row');
+  assert.ok(links[0].querySelector('.ogt-service-icon'), 'Plex gets a local mark');
+  assert.ok(links[1].closest('.ogt-links-logos'), 'IMDb sits in the logo grid');
+  assert.ok(links[1].querySelector('.ogt-service-icon'), 'a known service gets a local mark');
+  assert.equal(links[1].getAttribute('data-ogt-tooltip'), 'IMDb');
+  assert.ok(links[2].closest('.ogt-links-texts'), 'unknown labels come last');
+  assert.equal(links[2].querySelector('.ogt-service-icon'), null, 'an unknown service has no mark');
+  assert.equal(links[2].querySelector('.ogt-service-label').textContent, 'My Cinema');
+  const manage = [...document.querySelectorAll('#ogt-custom-links .ogt-links-manage button')];
+  assert.deepEqual(manage.map((button) => button.getAttribute('aria-label')), ['Add presets…', 'Servers…', 'Edit links']);
+  assert.ok(manage.every((button) => button.classList.contains('ogt-manage-button') && !button.classList.contains('ogt-chip')),
+    'management actions are square buttons, not pills');
   for (const link of links) {
     assert.equal(link.getAttribute('target'), '_blank');
     assert.match(link.getAttribute('rel'), /noopener/);
@@ -178,12 +186,13 @@ test('watch and library links join only the summary Watch Now dialogs and keep n
     assert.ok(section, 'a scoped Your services section is added');
     assert.deepEqual(
       [...section.querySelectorAll('a')].map((link) => link.getAttribute('aria-label')),
-      ['JustWatch', 'Radarr', 'Plex'],
+      ['Radarr', 'Plex'],
       'only watch/library links are added, in saved order',
     );
     assert.equal(dialog.querySelector('.section-title .count').textContent, '2', 'native availability count is untouched');
     assert.equal(dialog.querySelectorAll('a.service').length, 2, 'native provider links are untouched');
     assert.equal(section.querySelector('[aria-label="IMDb"]'), null, 'reference links stay out of Watch Now');
+    assert.equal(section.querySelector('[aria-label="JustWatch"]'), null, 'JustWatch is a reference link, like og\'s own');
     for (const link of section.querySelectorAll('a')) {
       assert.equal(link.getAttribute('target'), '_blank');
       assert.match(link.getAttribute('rel'), /noopener/);
@@ -193,8 +202,8 @@ test('watch and library links join only the summary Watch Now dialogs and keep n
   assert.deepEqual(
     [...document.querySelectorAll('#ogt-custom-links .ogt-links a.ogt-service-link')]
       .map((link) => link.getAttribute('aria-label')),
-    ['IMDb', 'JustWatch', 'Radarr', 'Plex'],
-    'the compact strip keeps all saved links',
+    ['Radarr', 'Plex', 'IMDb', 'JustWatch'],
+    'the compact strip keeps all saved links, services first, then logos',
   );
 });
 

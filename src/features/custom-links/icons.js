@@ -75,7 +75,7 @@ export function iconKeyForLabel(label) {
   return LABEL_ICONS[key] || null;
 }
 
-const WATCH_ICONS = new Set(['justwatch', 'plex', 'stremio', 'jellyfin', 'emby', 'dmm']);
+const WATCH_ICONS = new Set(['plex', 'stremio', 'jellyfin', 'emby', 'dmm']);
 const LIBRARY_ICONS = new Set(['radarr', 'sonarr', 'seerr']);
 
 /**

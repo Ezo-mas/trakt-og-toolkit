@@ -70,7 +70,8 @@ export const PRESETS = [
     label: 'JustWatch',
     url: 'https://www.justwatch.com/us/search?q={title}',
     icon: 'justwatch',
-    surface: 'watch',
+    // A reference link like og's own JustWatch icon; og's Watch Now dialog is already powered by JustWatch.
+    surface: 'reference',
     kinds: ['movie', 'show'],
   },
   {

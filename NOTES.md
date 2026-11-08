@@ -3,6 +3,19 @@
 Working notes and known issues. Newest first.
 
 
+## 2026-11-08: grouped custom-link strip and og-style controls (feature 26)
+
+- The single dense grid interleaved full-row services with logo tiles and looked scattered. The strip now renders
+  three groups in saved order within each: `.ogt-links-services` (full-row logo + name), `.ogt-links-logos` (4-column
+  square tiles, og's external-link grid) and `.ogt-links-texts` (2-column text tiles).
+- JustWatch is now a `reference` link: og shows it as an external-link icon and its Watch Now dialog is already
+  “Powered by JustWatch”, so it no longer takes a service row or a Your services tile.
+- Season/Episode pickers copy og's dropdown triggers (34px, `#232323` with a `#3b3b3b` border, 8px radius); the visible
+  word is dropped because the options already read “Season 1”/“Episode 1” (kept for screen readers). The number
+  fallback for long seasons shows an “Episode” prefix.
+- Add presets / Servers / Edit links are `.ogt-manage-button`s: a 3-column row of square glass tiles with a stroked
+  icon and short label (full names on `aria-label` and `title`), replacing the `.ogt-chip` pills.
+
 ## 2026-11-08: service logos instead of monograms (feature 26)
 
 - The user wanted real service logos (reference look: Fenn3c401's script, logo tiles plus a monochrome icon strip).

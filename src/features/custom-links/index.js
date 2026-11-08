@@ -33,7 +33,7 @@ import {
   watchNowLinks,
 } from './data.js';
 import { PRESETS, presetTemplateUrls } from './presets.js';
-import { serviceColor, serviceIcon } from './icons.js';
+import { hasServiceIcon, serviceColor, serviceIcon } from './icons.js';
 import { getSeasons } from '../../core/trakt.js';
 import { getShowDetails } from './api.js';
 
@@ -89,6 +89,24 @@ function seasonLabel(number) {
  * Sidebar strip tiles, laid out like OG's `ul.external-links` grid: reference sites are square logo tiles, watch and
  * library services are wide logo-and-name tiles, and links without a known mark are wide text tiles.
  */
+const ICON_ADD = 'M12 5v14M5 12h14';
+const ICON_SERVER = 'M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01';
+const ICON_EDIT = 'M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4';
+
+/** A management button styled like og's square sidebar actions: a stroked icon over a short label. */
+function manageButton(name, text, d) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const path = document.createElementNS(svg.namespaceURI, 'path');
+  for (const [key, value] of Object.entries({ d, fill: 'none', stroke: 'currentColor', 'stroke-width': '2',
+    'stroke-linecap': 'round', 'stroke-linejoin': 'round' })) path.setAttribute(key, value);
+  svg.append(path);
+  return el('button', { class: 'ogt-manage-button', type: 'button', 'aria-label': name, title: name },
+    svg, el('span', { text }));
+}
+
 function compactLink(entry) {
   const label = entry.label.trim() || 'Custom link';
   const icon = serviceIcon(entry.icon);
@@ -166,9 +184,9 @@ function createPanel(meta, route) {
   const presetChecklist = el('div', { class: 'ogt-presets', hidden: true });
   const serversPanel = el('div', { class: 'ogt-servers', hidden: true });
 
-  const presetsButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Add presets…' });
-  const serversButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Servers…' });
-  const editButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Edit links' });
+  const presetsButton = manageButton('Add presets…', 'Presets', ICON_ADD);
+  const serversButton = manageButton('Servers…', 'Servers', ICON_SERVER);
+  const editButton = manageButton('Edit links', 'Edit', ICON_EDIT);
   const closeButton = el('button', { class: 'ogt-manager-close', type: 'button', text: 'Close' });
 
   const manager = el(
@@ -533,7 +551,13 @@ function createPanel(meta, route) {
       );
     }
 
-    for (const entry of entries) linksRow.append(compactLink(entry));
+    // Grouped like og's sidebar: service rows first, then the square logo grid, then text-only links.
+    const services = entries.filter((entry) => entry.surface !== 'reference' && hasServiceIcon(entry.icon));
+    const logos = entries.filter((entry) => entry.surface === 'reference' && hasServiceIcon(entry.icon));
+    const texts = entries.filter((entry) => !hasServiceIcon(entry.icon));
+    for (const [kind, group] of [['services', services], ['logos', logos], ['texts', texts]]) {
+      if (group.length) linksRow.append(el('div', { class: `ogt-links-group ogt-links-${kind}` }, group.map(compactLink)));
+    }
     syncWatchNow(entries);
     lookUpShow(values);
   }
@@ -624,8 +648,8 @@ function createPanel(meta, route) {
 
   const seasonSelect = el('select', { class: 'ogt-select', 'aria-label': 'Season' });
   const episodeSlot = el('span', { class: 'ogt-episode' });
-  const seasonField = el('label', { class: 'ogt-field' }, 'Season', seasonSelect);
-  const episodeField = el('label', { class: 'ogt-field' }, 'Episode', episodeSlot);
+  const seasonField = el('label', { class: 'ogt-field' }, el('span', { class: 'ogt-visually-hidden', text: 'Season' }), seasonSelect);
+  const episodeField = el('label', { class: 'ogt-field' }, el('span', { class: 'ogt-visually-hidden', text: 'Episode' }), episodeSlot);
   let controlsBuilt = false;
 
   function ensureControls() {
@@ -671,7 +695,8 @@ function createPanel(meta, route) {
           input.value = String(selection.episode);
         }
       });
-      episodeSlot.replaceChildren(input);
+      // A bare number box would read as just "1"; the select's options already say "Episode 1".
+      episodeSlot.replaceChildren(el('span', { class: 'ogt-field-prefix', 'aria-hidden': 'true', text: 'Episode' }), input);
       return;
     }
 

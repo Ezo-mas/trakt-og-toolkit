@@ -82,7 +82,7 @@ test('resolved links keep saved order and carry icon, surface and normal hrefs',
         label: 'JustWatch',
         href: 'https://www.justwatch.com/us/search?q=The%20Dark',
         icon: 'justwatch',
-        surface: 'watch',
+        surface: 'reference',
       },
       {
         label: 'Radarr',
