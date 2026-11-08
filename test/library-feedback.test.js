@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { readFileSync } from 'node:fs';
-import { MOVIE_HTML, SHOW_HTML } from './fixtures.js';
+import { ELEMENT_TITLE_SHOW_HTML, MOVIE_HTML, SHOW_HTML } from './fixtures.js';
 import { readLibraryTitle } from '../src/features/library/data.js';
 import { nativeLibraryImports, isNativeLibraryStore } from '../src/features/library/native-refresh.js';
 import { answerDialogs } from './dialogs.js';
@@ -23,6 +23,14 @@ test('library title reads only the summary title, preserving punctuation without
   assert.equal(readLibraryTitle(window.document), 'Spider-Man: "Brand New Day"');
   heading.remove();
   assert.equal(readLibraryTitle(window.document), 'this title');
+});
+
+test('library title uses og\'s screen-reader title when the heading is decorated', t => {
+  const window = new Window(); t.after(() => window.close());
+  window.document.body.innerHTML = ELEMENT_TITLE_SHOW_HTML;
+  assert.equal(readLibraryTitle(window.document), 'Breaking Bad');
+  window.document.body.innerHTML = SHOW_HTML;
+  assert.equal(readLibraryTitle(window.document), 'Breaking Bad');
 });
 
 test('library module discovery follows only loaded root imports with the native overlay contract', () => {
