@@ -2,6 +2,7 @@
 import { cleanTitle, fillTemplate, missingPlaceholders, parseYear } from '../../core/text.js';
 import { headingTitle, text } from '../../core/dom.js';
 import { isCustomLinkUrl, SERVER_KEYS } from '../../settings.js';
+import { validateDirectUrl } from './resolve.js';
 import { findPreset, resolvePresetUrl } from './presets.js';
 import { iconKeyForLabel, surfaceForLabel } from './icons.js';
 
@@ -39,6 +40,7 @@ export function readTitleData(doc, route) {
         : null,
       tvdb: null,
       rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind),
+      metacriticUrl: readMetacriticUrl(doc, route.kind),
     };
   }
 
@@ -92,19 +94,29 @@ export function readTitleData(doc, route) {
     imdb,
     episodeImdb: null,
     rottenTomatoesUrl: readRottenTomatoesUrl(doc, kind),
+    metacriticUrl: readMetacriticUrl(doc, kind),
     tvdb,
   };
 }
 
 /** Use OG's title link; Rotten Tomatoes slugs cannot be derived from Trakt/IMDb ids. */
 function readRottenTomatoesUrl(doc, kind) {
-  const path = kind === 'movie' ? /^\/m\/[a-z0-9_-]+\/?$/i : /^\/tv\/[a-z0-9_-]+(?:\/s\d+(?:\/e\d+)?)?\/?$/i;
-  for (const link of doc.querySelectorAll('a[href*="rottentomatoes.com/"]')) {
-    try {
-      const url = new URL(link.getAttribute('href'));
-      if (url.protocol === 'https:' && ['www.rottentomatoes.com', 'rottentomatoes.com'].includes(url.hostname) &&
-        !url.username && !url.password && !url.port && path.test(url.pathname)) return url.origin + url.pathname;
-    } catch { /* Ignore malformed external links. */ }
+  return readNativeExternalUrl(doc, kind, 'rotten-tomatoes');
+}
+
+/** Metacritic links can be reused when OG's native strip already has one. */
+function readMetacriticUrl(doc, kind) {
+  return readNativeExternalUrl(doc, kind, 'metacritic');
+}
+
+/**
+ * Only the title's ratings and external-link strips are authoritative. Comments, related titles and
+ * other page anchors can mention the same service and must not redirect this title there.
+ */
+function readNativeExternalUrl(doc, kind, service) {
+  for (const link of doc.querySelectorAll('.ratings-strip a[href], ul.external-links a[href]')) {
+    const url = validateDirectUrl(service, kind, link.getAttribute('href'));
+    if (url) return url;
   }
   return null;
 }
@@ -206,6 +218,7 @@ export function templateVars(meta, selection = {}, servers = {}) {
     episodeimdbnum: imdbNumber(meta.episodeImdb),
     tvdb: meta.tvdb,
     rottenTomatoesUrl: meta.rottenTomatoesUrl,
+    metacriticUrl: meta.metacriticUrl,
     jellyfin: servers.jellyfin || null,
     emby: servers.emby || null,
     radarr: servers.radarr || null,

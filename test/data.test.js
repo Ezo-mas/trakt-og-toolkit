@@ -208,7 +208,40 @@ test('Rotten Tomatoes reader rejects lookalike domains, searches and the wrong p
   for (const href of ['https://evilrottentomatoes.com/m/test', 'https://rottentomatoes.com.evil.test/m/test',
     'https://www.rottentomatoes.com/search?search=test', 'https://www.rottentomatoes.com/tv/test',
     'https://user:secret@www.rottentomatoes.com/m/test']) {
-    window.document.body.innerHTML = `<a href="${href}">Link</a>`;
+    window.document.body.innerHTML = `<div class="ratings-strip"><a href="${href}">Link</a></div>`;
     assert.equal(readTitleData(window.document, parseRoute('/movies/test')).rottenTomatoesUrl, null, href);
   }
+});
+
+test('direct Metacritic and Rotten Tomatoes URLs come only from native title strips', t => {
+  const window = new Window({ url: 'https://og.trakt.tv/movies/the-dark-2005' });
+  t.after(() => window.close());
+  const route = parseRoute('/movies/the-dark-2005');
+
+  window.document.body.innerHTML = '<a href="https://www.metacritic.com/movie/the-matrix">Comment</a>' +
+    '<a href="https://www.rottentomatoes.com/m/the_matrix">Comment</a>';
+  const unrelated = readTitleData(window.document, route);
+  assert.equal(unrelated.metacriticUrl, null, 'a comment link must not choose another title');
+  assert.equal(unrelated.rottenTomatoesUrl, null);
+
+  for (const [open, close] of [['<div class="ratings-strip"><ul>', '</ul></div>'],
+    ['<ul class="external-links">', '</ul>']]) {
+    window.document.body.innerHTML = `${open}
+      <li><a href="https://www.metacritic.com/movie/the-dark">Metacritic</a></li>
+      <li><a href="https://www.rottentomatoes.com/m/the_dark?tracking=og">Rotten Tomatoes</a></li>
+    ${close}`;
+    const native = readTitleData(window.document, route);
+    assert.equal(native.metacriticUrl, 'https://www.metacritic.com/movie/the-dark/');
+    assert.equal(native.rottenTomatoesUrl, 'https://www.rottentomatoes.com/m/the_dark');
+  }
+});
+
+test('template vars expose direct Metacritic and Rotten Tomatoes URLs', () => {
+  const vars = templateVars({
+    id: 'the-dark',
+    metacriticUrl: 'https://www.metacritic.com/movie/the-dark/',
+    rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/the_dark',
+  });
+  assert.equal(vars.metacriticUrl, 'https://www.metacritic.com/movie/the-dark/');
+  assert.equal(vars.rottenTomatoesUrl, 'https://www.rottentomatoes.com/m/the_dark');
 });
