@@ -111,7 +111,7 @@ test('built bundle leaves failed additions visible and retryable', async t => {
       assert.equal(b.button().disabled, false);
       assert.match(b.panel().querySelector('[role="status"]').textContent, /Trakt/);
       assert.equal(b.document.querySelector('.ogt-toast'), null);
-      b.button().click(); await wait(); assert.equal(b.writes().length, 2);
+      b.button().click(); await wait(1200); assert.equal(b.writes().length, 2);
     });
   }
 });

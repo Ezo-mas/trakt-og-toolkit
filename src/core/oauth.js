@@ -26,7 +26,9 @@ export async function privateRequest(url, options = {}) {
   try {
     const r = await request({ ...options, url, retries: 0 });
     return r;
-  } catch {
+  } catch (error) {
+    // A guard that runs after the HTTP slot is acquired reports cancellation, not a failed network call.
+    if (error?.control) throw error;
     throw authError('Trakt request failed; check your connection.');
   }
 }
@@ -44,6 +46,10 @@ export function readTokens() {
 export function isSignedIn() {
   const t = readTokens();
   return Boolean(t?.access_token && t?.refresh_token);
+}
+/** Identifies the signed-in session without exposing credentials; changes on sign-out and sign-in. */
+export function getSessionGeneration() {
+  return generation;
 }
 function saveTokens(text, clientId) {
   let t;
@@ -162,6 +168,8 @@ export async function signIn({ onCode = () => {}, onMessage = () => {} } = {}) {
       if (Date.now() >= deadline) { emit(DEVICE_MESSAGES[410]); return; }
       if (result.status === 200) {
         saveTokens(result.text, clientId);
+        // A new session invalidates writes queued by any earlier one.
+        generation += 1;
         if (typeof document !== 'undefined') document.dispatchEvent(new Event('ogt:authchange'));
         emit('Signed in to Trakt.');
         return;

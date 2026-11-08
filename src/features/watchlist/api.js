@@ -4,20 +4,28 @@ import { watchlistLookup, watchlistBody, watchlistBulkBody, watchlistBulkItems }
 /** A whole credits page can be large; 100 keeps each sync payload comfortably bounded. */
 const BULK_BATCH = 100;
 
+/** Only pass the queue guard when the caller supplied one, so injected transports keep their old shape. */
+function writeRequest(auth, path, body, active, signal) {
+  return active || signal
+    ? auth('POST', path, body, undefined, { active, signal })
+    : auth('POST', path, body);
+}
+
 export function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn } = {}) {
   return {
-    async add(route, { active = () => true } = {}) {
+    async add(route, { active, signal } = {}) {
       if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
       const lookup = watchlistLookup(route);
       if (!lookup) throw new Error('Unsupported watchlist page.');
-      if (!active()) return { cancelled: true };
+      const isActive = active ?? (() => true);
+      if (!isActive()) return { cancelled: true };
       const data = await get(lookup.path);
       const body = watchlistBody(lookup, data);
       const item = lookup.type === 'seasons' ? data.find(season => season?.number === lookup.season) : data;
       const title = typeof item?.title === 'string' && item.title.trim() ? item.title.trim()
         : lookup.type === 'seasons' ? `Season ${lookup.season}` : 'this title';
-      if (!active() || !signedIn()) return { cancelled: true };
-      const result = await auth('POST', '/sync/watchlist', body);
+      if (!isActive() || !signedIn()) return { cancelled: true };
+      const result = await writeRequest(auth, '/sync/watchlist', body, active, signal);
       if (Object.values(result?.not_found ?? {}).some(items => !Array.isArray(items) || items.length)) {
         throw new Error('Trakt could not find this title.');
       }
@@ -31,15 +39,16 @@ export function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = is
     },
 
     /** Report each confirmed batch so a later failure cannot erase completed work. */
-    async addMany(routes, { active = () => true, onProgress = () => {} } = {}) {
+    async addMany(routes, { active, signal, onProgress = () => {} } = {}) {
       if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
-      if (!active()) return { cancelled: true };
+      const isActive = active ?? (() => true);
+      if (!isActive()) return { cancelled: true };
       const items = watchlistBulkItems(routes);
       const progress = { cancelled: false, sent: 0, added: 0, existing: 0, notFound: 0, succeededKeys: [] };
       for (let start = 0; start < items.length; start += BULK_BATCH) {
-        if (!active() || !signedIn()) return { cancelled: true };
+        if (!isActive() || !signedIn()) return { cancelled: true };
         const batch = items.slice(start, start + BULK_BATCH);
-        const result = await auth('POST', '/sync/watchlist', watchlistBulkBody(batch));
+        const result = await writeRequest(auth, '/sync/watchlist', watchlistBulkBody(batch), active, signal);
         const confirmed = { added: 0, existing: 0, notFound: 0, succeededKeys: [] };
         for (const type of ['movies', 'shows']) {
           const sent = batch.filter(item => item.type === type);
@@ -70,10 +79,11 @@ export function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = is
     },
 
     /** Undo an addition with the exact body that was sent. */
-    async remove(body, { active = () => true } = {}) {
+    async remove(body, { active, signal } = {}) {
       if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
-      if (!body || typeof body !== 'object' || !active()) return { cancelled: true };
-      const result = await auth('POST', '/sync/watchlist/remove', body);
+      const isActive = active ?? (() => true);
+      if (!body || typeof body !== 'object' || !isActive()) return { cancelled: true };
+      const result = await writeRequest(auth, '/sync/watchlist/remove', body, active, signal);
       if (Object.values(result?.not_found ?? {}).some(items => !Array.isArray(items) || items.length)) {
         throw new Error('Trakt could not find this title.');
       }

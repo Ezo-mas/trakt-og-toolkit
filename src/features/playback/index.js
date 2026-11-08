@@ -82,8 +82,12 @@ function createPanel(route) {
   }
   async function clear(ids) {
     if (!ids.length) { status.textContent = 'No paused items selected.'; return; }
-    const result = await playbackApi.clearItems(ids, (message) =>
-      confirmDialog(message, { title: 'Clear paused playback', ok: 'Clear' }));
+    const result = await playbackApi.clearItems(ids, async (message) => {
+      const ok = await confirmDialog(message, { title: 'Clear paused playback', ok: 'Clear' });
+      // Writes are paced at one per second, so a large selection takes visible time.
+      if (ok && alive()) status.textContent = `Clearing ${ids.length > 1 ? `${ids.length} items` : '1 item'}…`;
+      return ok;
+    }, { active: alive });
     if (result.cancelled || !alive()) return;
     selected.clear();
     const summary = `${result.cleared.length} cleared${result.failed.length ? `; ${result.failed.length} failed — try again` : ''}.`;
@@ -115,8 +119,8 @@ function createPanel(route) {
     if (progress == null) return;
     status.textContent = 'Saving progress…';
     try {
-      if (item) await playbackApi.setProgress(item, progress);
-      else await playbackApi.setRouteProgress(route, progress);
+      if (item) await playbackApi.setProgress(item, progress, undefined, { active: alive });
+      else await playbackApi.setRouteProgress(route, progress, { active: alive });
     } catch (error) {
       if (!error.partial) throw error;
       debugError('playback pause failed after start', error);

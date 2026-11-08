@@ -7,6 +7,13 @@ import { PERSON_CREDITS_HTML, personCreditRowHtml, personCreditCardHtml, watchli
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 80) => new Promise(resolve => setTimeout(resolve, ms));
+async function waitFor(condition, timeout = 4000) {
+  const deadline = Date.now() + timeout;
+  while (!condition()) {
+    if (Date.now() >= deadline) throw new Error('Timed out waiting for the UI to settle');
+    await wait(50);
+  }
+}
 
 function boot(t, { signedIn = true } = {}) {
   const window = new Window({ url: 'https://og.trakt.tv/people/bryan-cranston' });
@@ -69,9 +76,22 @@ test('built bundle adds a watchlist shortcut beside the lists control on credit 
   assert.equal(buttons[0].hidden, true);
   assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, 'You added Jackpot to your watchlist.');
 
-  buttons[1].click(); await wait();
+  buttons[1].click(); await wait(1200);
   assert.deepEqual(JSON.parse(b.writes()[1].data), { shows: [{ ids: { trakt: 320413 } }] });
   assert.equal(buttons[1].hidden, true);
+});
+
+test('navigation cancels a queued credit addition instead of writing after teardown', async t => {
+  const b = boot(t); await wait();
+  const buttons = b.buttons();
+  buttons[0].click(); await wait();
+  assert.equal(b.writes().length, 1);
+  buttons[1].click(); await wait(100);
+  assert.equal(b.writes().length, 1, 'the second addition is queued behind the pacing interval');
+  b.window.history.pushState({}, '', '/dashboard');
+  await wait(1300);
+  assert.equal(b.writes().length, 1, 'the queued write was cancelled when its page went away');
+  assert.equal(b.buttons().length, 0);
 });
 
 test('credit shortcuts follow native watchlist membership, custom lists and later rows', async t => {
@@ -164,7 +184,7 @@ test('signed-out clicks guide and leaving the person page removes the shortcuts'
 test('bulk Undo removes only confirmed new titles and restores shortcuts', async t => {
   const b = boot(t); await wait();
   b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
-  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait();
+  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait(1200);
   assert.equal(b.writes().length, 2);
   assert.equal(new URL(b.writes()[1].url).pathname, '/sync/watchlist/remove');
   assert.deepEqual(JSON.parse(b.writes()[1].data), JSON.parse(b.writes()[0].data));
@@ -197,7 +217,9 @@ test('bulk progress survives a later batch failure', async t => {
   await wait();
   let batches = 0;
   b.setPostResult(sent => ++batches === 1 ? { added: { movies: sent.movies?.length ?? 0, shows: sent.shows?.length ?? 0 } } : {});
-  b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
+  b.document.querySelector('.ogt-watchlist-bulk').click();
+  await waitFor(() => b.writes().length === 2 &&
+    /Remaining titles could not be confirmed/.test(b.document.querySelector('.ogt-toast')?.textContent ?? ''));
   assert.equal(b.writes().length, 2);
   assert.equal(b.buttons().filter(button => button.hidden).length, 100);
   assert.equal(b.document.querySelector('.ogt-watchlist-bulk').textContent, 'Watchlist all (2)');
@@ -221,7 +243,7 @@ test('bulk Undo leaves not-found titles untouched', async t => {
   b.setPostResult((sent, path) => path.endsWith('/remove') ? { deleted: { movies: 1 } } :
     { added: { movies: 1 }, not_found: { shows: sent.shows } });
   b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
-  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait();
+  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait(1200);
   assert.deepEqual(JSON.parse(b.writes()[1].data), { movies: [{ ids: { slug: 'jackpot-1115926' } }] });
   assert.ok(b.buttons().every(button => !button.hidden));
 });
@@ -235,13 +257,17 @@ test('bulk Undo retries only remaining removal batches after a failure', async t
   let removals = 0;
   b.setPostResult((sent, path) => path.endsWith('/remove') && ++removals === 2 ? {} :
     { [path.endsWith('/remove') ? 'deleted' : 'added']: { movies: sent.movies?.length ?? 0, shows: sent.shows?.length ?? 0 } });
-  b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
+  b.document.querySelector('.ogt-watchlist-bulk').click();
+  await waitFor(() => b.document.querySelector('.ogt-watchlist-toast__undo'));
   const undo = b.document.querySelector('.ogt-watchlist-toast__undo');
-  undo.click(); await wait();
+  undo.click();
+  await waitFor(() => removals === 2 && undo.disabled === false &&
+    b.buttons().filter(button => button.hidden).length === 2);
   assert.equal(removals, 2);
   assert.equal(b.buttons().filter(button => button.hidden).length, 2);
   assert.equal(undo.disabled, false);
-  undo.click(); await wait();
+  undo.click();
+  await waitFor(() => removals === 3 && b.buttons().every(button => !button.hidden));
   assert.equal(removals, 3);
   assert.ok(b.buttons().every(button => !button.hidden));
   const last = JSON.parse(b.writes().at(-1).data);
@@ -282,7 +308,7 @@ test('bulk add and Undo reload native credit controls without opening or clickin
   assert.equal(reads, 7);
   assert.ok(peak <= 4, 'native loads are bounded');
   assert.equal(b.document.querySelectorAll('.listed-tip a').length, 7);
-  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait(160);
+  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait(1300);
   assert.equal(reads, 14);
   assert.equal(b.document.querySelectorAll('.listed-tip a').length, 0);
   assert.ok(b.buttons().every(button => !button.hidden));
@@ -312,7 +338,7 @@ test('Watchlist all stays in its toolbar spot and adds credits in grid view', as
   b.document.querySelector('section.year').replaceChildren(...rows); await wait();
   assert.equal(bulk.parentElement, toolbar);
   assert.ok(b.buttons().every(button => button.hidden), 'added grid titles stay added in list view');
-  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait();
+  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait(1300);
   assert.ok(b.buttons().every(button => !button.hidden));
   assert.equal(bulk.textContent, 'Watchlist all (2)');
 });
@@ -328,9 +354,9 @@ test('grid bulk skips known watchlisted titles, hidden cards and duplicate credi
   await wait();
   const bulk = b.document.querySelector('.ogt-watchlist-bulk');
   assert.equal(bulk.textContent, 'Watchlist all (1)');
-  bulk.click(); await wait();
+  bulk.click(); await wait(1200);
   assert.deepEqual(JSON.parse(b.writes()[1].data), { shows: [{ ids: { slug: 'after-hours-with-james-corden' } }] });
-  b.document.querySelector('.ogt-watchlist-toasts .ogt-watchlist-toast__undo').click(); await wait();
+  b.document.querySelector('.ogt-watchlist-toasts .ogt-watchlist-toast__undo').click(); await wait(1200);
   assert.equal(bulk.textContent, 'Watchlist all (1)', 'Undo restores the grid count without undoing the earlier individual add');
 });
 
@@ -356,7 +382,7 @@ test('grid bulk refreshes available native list controls after add and Undo', as
   bulk.click(); await wait();
   assert.equal(reads, 1);
   assert.ok(b.document.querySelector('#grid-native-tip .listed-tip'));
-  b.document.querySelector('.ogt-watchlist-toasts .ogt-watchlist-toast__undo').click(); await wait();
+  b.document.querySelector('.ogt-watchlist-toasts .ogt-watchlist-toast__undo').click(); await wait(1200);
   assert.equal(reads, 2);
   assert.equal(b.document.querySelector('#grid-native-tip .listed-tip'), null);
   assert.equal(bulk.textContent, 'Watchlist all (1)');
