@@ -1616,6 +1616,7 @@ test('person pages use the current sidebar and offer only person presets', async
   assert.ok(node, 'person panel is mounted');
   assert.equal(node.parentElement, b.document.querySelector('aside.sidebar'));
   assert.ok(node.nextElementSibling?.matches('ul.external-links'), 'panel sits above the native person links');
+  assert.ok(chip(b.document, 'YouTube interviews').querySelector('svg path'), 'YouTube uses its bundled logo');
   assert.equal(
     chip(b.document, 'YouTube interviews').getAttribute('href'),
     'https://www.youtube.com/results?search_query=Bryan%20Cranston+interview',

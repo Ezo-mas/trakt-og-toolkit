@@ -43,6 +43,9 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-09: conditional presets and person-page custom links (feature 28)
 
+- YouTube interviews uses the CC0 Simple Icons YouTube mark from the same 16.36.0 release as the other bundled
+  logos. Fixed URLs without placeholders remain available on person pages as part of the shared saved link list.
+
 - OG's live person page carries IMDb/TMDb in `aside.sidebar ul.external-links`, and title genres in an overview
   `li` whose `span.label` reads "Genres". The first implementation searched every `genres=` link and every person
   IMDb link, so a "Browse drama" navigation link could establish genres and a comment could supply another person's
