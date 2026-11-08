@@ -165,6 +165,19 @@ public endpoints with the client ID and does not sign anyone in yet. For a publi
 
 Set it from the userscript menu: **Trakt OG Toolkit: set API client ID**.
 
+### Publisher callback hosting (feature 30 preparation)
+
+The `site/` directory contains the callback landing page. In this repository's **Settings → Pages**, select
+**GitHub Actions** as the publishing source. Once `.github/workflows/pages.yml` is merged into `main`, its workflow
+publishes only `site/` at `https://ezo-mas.github.io/trakt-og-toolkit/`.
+
+Verify `https://ezo-mas.github.io/trakt-og-toolkit/callback.html` loads over HTTPS before adding that exact address
+to the Toolkit application's registered redirect URIs. Keep the existing redirect registered for current sessions.
+This is a hosting prerequisite only: the page does not complete sign-in or exchange codes yet. It removes query
+and fragment parameters from the address without storing or forwarding them, and loads no third-party resources.
+Keep using device-code sign-in until the verified PKCE handoff is implemented and tested. Do not change the
+userscript's configured redirect merely because the landing page exists.
+
 ## Optional Trakt sign-in
 
 The userscript menu now supports **sign in**, **cancel sign-in**, **sign out**, and **show signed-in user**.

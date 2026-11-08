@@ -700,7 +700,8 @@ replayed; rerun the existing OAuth and bulk add/Undo/playback checks, then verif
 
 ## 30. Trakt onboarding without manual API setup
 
-**Status:** planned (2026-11-07). Remove application-registration work for ordinary users while retaining their
+**Status:** in progress (2026-11-08): callback landing page and GitHub Pages workflow prepared; publishing,
+application defaults and authenticated handoff remain unfinished. Remove application-registration work for ordinary users while retaining their
 explicit approval and private credentials. The publisher registers one Toolkit application; users connect their
 own Trakt account to it. This does not automate application creation, consent or reuse OG's session.
 
@@ -743,8 +744,9 @@ own Trakt account to it. This does not automate application creation, consent or
 **Scope:** `src/config.js`, `src/settings.js`, `src/oauth-menu.js`, `src/core/{oauth,store,trakt}.js` as needed,
 existing dialogs/menu labels, focused OAuth/menu tests and README/NOTES. Stage B additionally needs a minimal
 reviewable callback page, hosting/registered URI, and tightly scoped userscript matching/permissions for it.
-Correct README's outdated setup/application-access advice when implementation ships. No real release Client ID
-or callback is configured yet; publisher registration/hosting are prerequisites, not completed work.
+Correct README's outdated setup/application-access advice when implementation ships. A public release Client ID
+has been supplied but is not configured yet. The callback page is a non-authenticating placeholder until the
+verified PKCE handoff exists; publishing and application access verification remain prerequisites.
 
 **Acceptance:** test a fresh install, preserved custom app settings, missing defaults, approval/denial/expiry,
 cancellation, reload, refresh, sign-out, app/account switches and isolation of credentials from the page. For PKCE,
