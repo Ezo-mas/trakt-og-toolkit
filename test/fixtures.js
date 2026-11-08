@@ -175,6 +175,13 @@ function moviePageHtml({ watchNow = true, emptyWatchNow = false } = {}) {
 export const MOVIE_HTML = moviePageHtml();
 export const MOVIE_NO_PROVIDER_HTML = moviePageHtml({ emptyWatchNow: true });
 
+/** The current title's genre field, matching og's labeled `li` inside the overview metadata. */
+export function withGenres(html, genres, plural = 'shows') {
+  const links = genres.map((genre) => `<a href="/${plural}/popular?genres=${genre}">${genre}</a>`).join(', ');
+  const field = `<ul class="metadata"><li class="svelte-1kquinq"><span class="label svelte-1kquinq">Genres</span> ${links}</li></ul>`;
+  return html.replace('<div class="details">', `<div class="details">${field}`);
+}
+
 export const SEASON_HTML = `
 <main id="content">
   <section class="episodes" aria-labelledby="episodes">
@@ -231,6 +238,24 @@ export const PLAYBACK_PROGRESS_HTML = `
 export const PERSON_HTML = `
 <h1>Watch Trakt on your phone</h1>
 <div class="summary"><div><div class="summary-title"><h1>Bryan Cranston <!----></h1></div></div></div>`;
+
+/** Live `/people/bryan-cranston` structure, trimmed to the summary heading, sidebar native links and overview. */
+export const PERSON_PAGE_HTML = `
+<main id="content">
+  <section class="fanart-header slim">
+    <div class="summary"><div class="summary-title"><h1>Bryan Cranston</h1></div></div>
+  </section>
+  <section class="summary-frame"><div class="container"><div class="columns">
+    <aside class="sidebar" aria-label="Bryan Cranston">
+      <ul class="external-links">
+        <li><a class="glass-action" href="https://www.imdb.com/name/nm0186505" target="_blank" rel="noopener" aria-label="IMDB">IMDB</a></li>
+        <li><a class="glass-action" href="https://www.themoviedb.org/person/17419" target="_blank" rel="noopener" aria-label="TMDB">TMDB</a></li>
+        <li><a class="glass-action" href="https://en.wikipedia.org/wiki/Bryan_Cranston" target="_blank" rel="noopener" aria-label="Wikipedia">Wikipedia</a></li>
+      </ul>
+    </aside>
+    <div class="info" id="overview"><div class="top"><div class="details"></div><div class="actions"></div></div></div>
+  </div></div></section>
+</main>`;
 
 /** One credit row trimmed from the live `/people/bryan-cranston` capture, 2026-11-04: the row's poster
  * link identifies the whole movie/show, and `.quick-icons.small.row` holds og's card-sized ListControl. */

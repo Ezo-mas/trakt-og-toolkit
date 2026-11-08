@@ -11,7 +11,7 @@ behaviour, never its code. Finished features are listed at the end; their detail
 |---|---|---|---|
 | 30 | Trakt onboarding without manual API setup | Trakt's answer on app access | blocked on Trakt |
 | 27 | Resolve external site IDs for direct custom links | public lookup services | implemented; anime mapping deferred |
-| 28 | Conditional presets and person-page custom links | genre/person metadata; 27 for anime | planned |
+| 28 | Conditional presets and person-page custom links | native genre/person metadata | implemented; anime destinations remain searches |
 | 31 | Trakt ratings distribution in the summary's empty space | client ID optional | backlog |
 | 23 | Test suite review and cleanup | — | before 0.4.0 |
 
@@ -162,8 +162,10 @@ live destinations before shipping. Lookups must not block initial page rendering
 
 ## 28. Conditional presets and person-page custom links
 
-**Status:** planned. Anime direct destinations additionally depend on feature 27's ID mapping.
-Show relevant presets in the new placements without requiring users to manage separate movie/show/person lists.
+**Status:** implemented (2026-11-09). MyAnimeList/AniList use the current title’s native Genres field; unknown
+metadata keeps presets available, and hidden links remain saved. Person pages reuse the sidebar, icons and modal
+editor with person-specific variables and a YouTube interviews preset. Person IDs come only from the native
+external-link strip. Anime destinations remain searches; reliable anime ID mapping is still deferred.
 
 - Extend existing preset kind restrictions with only the context needed by concrete presets: e.g. anime-only
   destinations when reliable genre metadata is available. Reuse DOM metadata or existing public API results;

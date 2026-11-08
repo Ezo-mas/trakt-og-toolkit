@@ -2233,7 +2233,8 @@
       url: "https://myanimelist.net/search/all?q={title}",
       icon: "mal",
       surface: "reference",
-      kinds: ["movie", "show"]
+      kinds: ["movie", "show"],
+      genres: ["anime"]
     },
     {
       label: "Metacritic",
@@ -2327,7 +2328,15 @@
       url: "https://anilist.co/search/anime?search={title}",
       icon: "anilist",
       surface: "reference",
-      kinds: ["movie", "show"]
+      kinds: ["movie", "show"],
+      genres: ["anime"]
+    },
+    {
+      label: "YouTube interviews",
+      url: "https://www.youtube.com/results?search_query={person}+interview",
+      icon: "youtube",
+      surface: "reference",
+      kinds: ["person"]
     },
     {
       label: "Jellyfin",
@@ -2389,6 +2398,16 @@
       ]
     }
   ];
+  function presetGenresAllowed(preset, genres = null) {
+    if (!preset?.genres?.length) return true;
+    if (!Array.isArray(genres)) return true;
+    return preset.genres.some((genre) => genres.includes(genre));
+  }
+  function presetAllowedOnPage(url, kind, genres = null) {
+    const preset = PRESETS.find((entry) => entry.url === url);
+    if (!preset) return true;
+    return preset.kinds.includes(kind) && presetGenresAllowed(preset, genres);
+  }
   function findPreset(url) {
     return PRESETS.find((entry) => entry.url === url) || null;
   }
@@ -2398,9 +2417,9 @@
     if (!preset?.deep) return [url];
     return [url, ...preset.deep.filter((entry) => entry.kinds.includes(kind)).map((entry) => entry.url)];
   }
-  function resolvePresetUrl(url, vars, kind) {
+  function resolvePresetUrl(url, vars, kind, genres = null) {
     const preset = PRESETS.find((entry) => entry.url === url);
-    if (preset && !preset.kinds.includes(kind)) return null;
+    if (preset && !presetAllowedOnPage(url, kind, genres)) return null;
     if (preset?.directVar && vars[preset.directVar]) return vars[preset.directVar];
     if (!preset?.deep) return url;
     const deep = preset.deep.find(
@@ -2415,6 +2434,7 @@
 
   // src/features/custom-links/brand-paths.js
   var BRAND_PATHS = {
+    youtube: "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
     imdb: "M22.3781 0H1.6218C.7411.0583.0587.7437.0018 1.5953l-.001 20.783c.0585.8761.7125 1.543 1.5559 1.6191A.337.337 0 0 0 1.6016 24h20.7971a.4579.4579 0 0 0 .0437-.002c.8727-.0768 1.5568-.8271 1.5568-1.7085V1.7098c0-.8914-.696-1.6416-1.584-1.7078A.3294.3294 0 0 0 22.3781 0zm0 .496a1.2144 1.2144 0 0 1 1.1252 1.2139v20.5797c0 .6377-.4875 1.1602-1.1045 1.2145H1.6016c-.5967-.0543-1.0645-.5297-1.1053-1.1258V1.6284C.5371 1.0185 1.0184.5364 1.6217.496h20.7564zM4.7954 8.2603v7.3636H2.8899V8.2603h1.9055zm6.5367 0v7.3636H9.6707v-4.9704l-.6711 4.9704H7.813l-.6986-4.8618-.0066 4.8618h-1.668V8.2603h2.468c.0748.4476.1492.9694.2307 1.5734l.2712 1.8713.4407-3.4447h2.4817zm2.9772 1.3289c.0742.0404.122.108.1417.2034.0279.0953.0345.3118.0345.6442v2.8548c0 .4881-.0345.7867-.0955.8954-.0609.1152-.2304.1695-.5018.1695V9.5211c.204 0 .3457.0205.4211.0681zm-.0211 6.0347c.4543 0 .8006-.0265 1.0245-.0742.2304-.0477.4204-.1357.5694-.2648.1556-.1218.2642-.298.3251-.5219.0611-.2238.1021-.6648.1021-1.3224v-2.5832c0-.6986-.0271-1.1668-.0742-1.4039-.041-.237-.1431-.4543-.3126-.6437-.1695-.1973-.4198-.3324-.7456-.421-.3191-.0808-.8542-.1285-1.7694-.1285h-1.4244v7.3636h2.3051zm5.14-1.7827c0 .3523-.0199.5762-.0544.6708-.033.0947-.1894.1424-.3046.1424-.1086 0-.19-.0477-.2238-.1351-.041-.0887-.0609-.2986-.0609-.6238v-1.9469c0-.3324.0199-.5423.0543-.6237.0338-.0808.1086-.122.2171-.122.1153 0 .2709.0412.3114.1425.041.0947.0609.2986.0609.6032v1.8926zm-2.4747-5.5809v7.3636h1.7157l.1152-.4675c.1556.1894.3251.3324.5152.4271.1828.0881.4608.1357.678.1357.3047 0 .5629-.0748.7802-.237.2165-.1562.3589-.3462.4198-.5628.0543-.2173.0887-.543.0887-.9841v-2.0675c0-.4409-.0139-.7324-.0344-.8681-.0199-.1357-.0742-.2781-.1695-.4204-.1021-.1425-.2437-.251-.4272-.3325-.1834-.0742-.3999-.1152-.6576-.1152-.2172 0-.4952.0477-.6846.1285-.1835.0887-.353.2238-.5086.4007V8.2603h-1.8309z",
     letterboxd: "M8.224 14.352a4.447 4.447 0 0 1-3.775 2.092C1.992 16.444 0 14.454 0 12s1.992-4.444 4.45-4.444c1.592 0 2.988.836 3.774 2.092-.427.682-.673 1.488-.673 2.352s.246 1.67.673 2.352zM15.101 12c0-.864.247-1.67.674-2.352-.786-1.256-2.183-2.092-3.775-2.092s-2.989.836-3.775 2.092c.427.682.674 1.488.674 2.352s-.247 1.67-.674 2.352c.786 1.256 2.183 2.092 3.775 2.092s2.989-.836 3.775-2.092A4.42 4.42 0 0 1 15.1 12zm4.45-4.444a4.447 4.447 0 0 0-3.775 2.092c.427.682.673 1.488.673 2.352s-.246 1.67-.673 2.352a4.447 4.447 0 0 0 3.775 2.092C22.008 16.444 24 14.454 24 12s-1.992-4.444-4.45-4.444z",
     rt: "M5.866 0L4.335 1.262l2.082 1.8c-2.629-.989-4.842 1.4-5.012 2.338 1.384-.323 2.24-.422 3.344-.335-7.042 4.634-4.978 13.148-1.434 16.094 5.784 4.612 13.77 3.202 17.91-1.316C27.26 13.363 22.993.65 10.86 2.766c.107-1.17.633-1.503 1.243-1.602-.89-1.493-3.67-.734-4.556 1.374C7.52 2.602 5.866 0 5.866 0zM4.422 7.217H6.9c2.673 0 2.898.012 3.55.202 1.06.307 1.868.973 2.313 1.904.05.106.092.206.13.305l7.623.008.027 2.912-2.745-.024v7.549l-2.982-.016v-7.522l-2.127.016a2.92 2.92 0 0 1-1.056 1.134c-.287.176-.3.19-.254.264.127.2 2.125 3.642 2.125 3.659l-3.39.019-2.013-3.376c-.034-.047-.122-.068-.344-.084l-.297-.02.037 3.48-3.075-.038zm3.016 2.288l.024.338c.014.186.024.729.024 1.206v.867l.582-.025c.32-.013.695-.049.833-.078.694-.146 1.048-.478 1.087-1.018.027-.378-.063-.636-.303-.87-.318-.309-.761-.416-1.733-.418Z",
@@ -2450,6 +2470,7 @@
     opensubtitles: { text: "OS", color: "#7aa7d8" },
     plex: { brand: "plex", text: "PLEX", color: "var(--color-site-plex, #e5a00d)" },
     anilist: { brand: "anilist", text: "AL", color: "#02a9ff" },
+    youtube: { brand: "youtube", text: "YT", color: "#ff0000" },
     jellyfin: { brand: "jellyfin", text: "JF", color: "var(--color-site-jellyfin, #aa5cc3)" },
     emby: { brand: "emby", text: "EMBY", color: "#52b54b" },
     radarr: { brand: "radarr", text: "R", color: "#ffcb3d" },
@@ -2475,6 +2496,8 @@
     opensubtitles: "opensubtitles",
     plex: "plex",
     anilist: "anilist",
+    youtube: "youtube",
+    "youtube interviews": "youtube",
     jellyfin: "jellyfin",
     emby: "emby",
     radarr: "radarr",
@@ -2549,6 +2572,9 @@
   var SHOW_HREF_RE = /^\/shows\/[^/]+\/?$/;
   var SEASON_IMDB_RE = /imdb\.com\/title\/(tt\d+)\/episodes/;
   var EPISODE_IMDB_RE = /imdb\.com\/title\/(tt\d+)(?!\d|\/episodes)/;
+  var GENRE_HREF_RE = /^\/(?:shows|movies)\/popular\/?$/;
+  var PERSON_IMDB_PATH_RE = /^\/name\/(nm\d+)\/?$/;
+  var PERSON_TMDB_PATH_RE = /^\/person\/(\d+)\/?$/;
   function readTitleData(doc, route) {
     if (route.kind === "show" && (route.name === "season" || route.name === "episode")) {
       return {
@@ -2562,6 +2588,7 @@
         imdb: route.name === "season" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', SEASON_IMDB_RE, (match) => match[1]) : null,
         episodeImdb: route.name === "episode" ? firstMatch(doc, 'a[href*="imdb.com/title/"]', EPISODE_IMDB_RE, (match) => match[1]) : null,
         tvdb: null,
+        genres: readGenres(doc),
         rottenTomatoesUrl: readRottenTomatoesUrl(doc, route.kind),
         metacriticUrl: readMetacriticUrl(doc, route.kind)
       };
@@ -2608,8 +2635,57 @@
       episodeImdb: null,
       rottenTomatoesUrl: readRottenTomatoesUrl(doc, kind),
       metacriticUrl: readMetacriticUrl(doc, kind),
-      tvdb
+      tvdb,
+      genres: readGenres(doc)
     };
+  }
+  function readGenres(doc) {
+    const overview = doc.querySelector("#overview") || doc.querySelector(".summary-frame");
+    if (!overview) return null;
+    const label = [...overview.querySelectorAll("span.label")].find((node) => text(node).trim().toLowerCase() === "genres");
+    const field = label?.closest("li");
+    if (!field) return null;
+    const genres = /* @__PURE__ */ new Set();
+    for (const link of field.querySelectorAll('a[href*="genres="]')) {
+      let url;
+      try {
+        url = new URL(link.getAttribute("href"), "https://og.trakt.tv");
+      } catch {
+        continue;
+      }
+      if (url.origin !== "https://og.trakt.tv" || !GENRE_HREF_RE.test(url.pathname)) continue;
+      const genre = url.searchParams.get("genres");
+      if (genre && /^[a-z0-9-]+$/i.test(genre)) genres.add(genre.toLowerCase());
+    }
+    return genres.size ? [...genres] : null;
+  }
+  function readPersonData(doc, route) {
+    const heading = doc.querySelector(".summary .summary-title h1") || doc.querySelector(".summary-title h1") || doc.querySelector("h1");
+    const fallback = text(doc.querySelector("title")).replace(/\s*[-–|]\s*Trakt.*$/i, "").trim();
+    return {
+      kind: "person",
+      id: route.id,
+      name: text(heading).trim() || fallback || null,
+      imdb: readPersonLinkId(doc, "imdb.com", PERSON_IMDB_PATH_RE),
+      tmdb: readPersonLinkId(doc, "themoviedb.org", PERSON_TMDB_PATH_RE, (match) => Number(match[1]))
+    };
+  }
+  function readPersonLinkId(doc, hostname, pathPattern, value = (match) => match[1]) {
+    const strip = doc.querySelector("aside.sidebar ul.external-links") || doc.querySelector(".summary-frame ul.external-links");
+    if (!strip) return null;
+    for (const link of strip.querySelectorAll("a[href]")) {
+      let url;
+      try {
+        url = new URL(link.getAttribute("href"), "https://og.trakt.tv");
+      } catch {
+        continue;
+      }
+      const host = url.hostname.replace(/^www\./i, "");
+      if (url.protocol !== "https:" || host !== hostname || url.port || url.username || url.password) continue;
+      const match = url.pathname.match(pathPattern);
+      if (match) return value(match);
+    }
+    return null;
   }
   function readRottenTomatoesUrl(doc, kind) {
     return readNativeExternalUrl(doc, kind, "rotten-tomatoes");
@@ -2685,6 +2761,14 @@
     const match = String(imdb || "").match(/^tt0*(\d+)$/);
     return match ? match[1] : null;
   }
+  function personTemplateVars(person = {}) {
+    return {
+      person: person.name,
+      personid: person.id,
+      personimdb: person.imdb,
+      persontmdb: person.tmdb
+    };
+  }
   function templateVars(meta, selection = {}, servers = {}) {
     return {
       id: meta.id,
@@ -2709,12 +2793,12 @@
       episode: selection.episode
     };
   }
-  function resolveCustomLinks(links, values, kind) {
+  function resolveCustomLinks(links, values, kind, genres = null) {
     const resolved = [];
     for (const entry of Array.isArray(links) ? links : []) {
       if (!entry || typeof entry.label !== "string" || typeof entry.url !== "string") continue;
       if (!isCustomLinkUrl(entry.url)) continue;
-      const template = resolvePresetUrl(entry.url, values, kind);
+      const template = resolvePresetUrl(entry.url, values, kind, genres);
       if (!template || missingPlaceholders(template, values).length) continue;
       const preset = findPreset(entry.url);
       resolved.push({
@@ -2740,8 +2824,8 @@
       episodes: season.episodes ?? rendered.get(season.number)?.episodes ?? null
     })).sort((a, b) => a.number - b.number);
   }
-  function filterPresetsByKind(presets, kind) {
-    return presets.filter((preset) => preset.kinds.includes(kind));
+  function filterPresetsByKind(presets, kind, genres = null) {
+    return presets.filter((preset) => preset.kinds.includes(kind) && presetGenresAllowed(preset, genres));
   }
   function presetAlreadyAdded(links, preset) {
     return links.some((link) => link.url === preset.url);
@@ -3365,7 +3449,7 @@
     let seasons = [];
     const timers = [];
     const fixedSelection = route.name === "season" || route.name === "episode";
-    let selection = selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
+    let selection = meta.kind === "person" ? { season: null, episode: null } : selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
     const linksRow = el("div", { class: "ogt-links" });
     const controlsRow = el("div", { class: "ogt-row ogt-fields", hidden: true });
     const watchFallback = el("div", { class: "ogt-watch-fallback", hidden: true, [FALLBACK_ATTR]: "" });
@@ -3406,7 +3490,7 @@
     );
     const episodeImdbs = /* @__PURE__ */ new Map();
     const episodeKey = () => `${selection.season}:${selection.episode}`;
-    const vars = () => templateVars(
+    const vars = () => meta.kind === "person" ? personTemplateVars(meta) : templateVars(
       meta.episodeImdb ? meta : { ...meta, episodeImdb: episodeImdbs.get(episodeKey()) ?? null },
       selection,
       getServers()
@@ -3662,7 +3746,7 @@
     function renderPresetChecklist() {
       const links = getCustomLinks();
       const servers = getServers();
-      const presets = filterPresetsByKind(PRESETS, meta.kind);
+      const presets = filterPresetsByKind(PRESETS, meta.kind, meta.genres);
       const list = el("div", { class: "ogt-preset-list" });
       selectedPresets = /* @__PURE__ */ new Set();
       for (const [index, preset] of presets.entries()) {
@@ -3743,7 +3827,7 @@
     });
     function renderLinks() {
       const values = vars();
-      const entries = resolveCustomLinks(getCustomLinks(), values, meta.kind);
+      const entries = resolveCustomLinks(getCustomLinks(), values, meta.kind, meta.genres);
       renderedEntries = entries;
       linksRow.replaceChildren();
       if (!entries.length) {
@@ -4036,11 +4120,11 @@
   var customLinks = {
     id: "custom-links",
     match(route) {
-      return route.kind === "movie" || route.kind === "show";
+      return route.kind === "movie" || route.kind === "show" || route.kind === "person";
     },
     mount(route) {
       if (document.getElementById(PANEL_ID)) return null;
-      const meta = readTitleData(document, route);
+      const meta = route.kind === "person" ? readPersonData(document, route) : readTitleData(document, route);
       if (!meta.id) return null;
       const target = findMountTarget();
       if (!target) return null;
