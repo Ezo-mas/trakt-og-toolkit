@@ -3,6 +3,16 @@
 Working notes and known issues. Newest first.
 
 
+## 2026-11-08: picker episodes for IMDb and OpenSubtitles (feature 26)
+
+- Of the presets, only Stremio (`{imdb}:{season}:{episode}`) and TMDb (`tv/:id/season/:s/episode/:e`) could open the
+  picked episode; IMDb and OpenSubtitles need the episode's own IMDb id, which og only links on episode pages, so from
+  the picker they opened the season. The panel now asks `GET /shows/:id/seasons/:s/episodes/:e` for it (basic response
+  carries `ids.imdb`) when a link's templates use `{episodeimdb}`/`{episodeimdbnum}`, a client ID is set and og's page
+  gave none. Results (including an id-less one) are kept per `season:episode` for the panel's life, so each episode is
+  asked once; a failed request is forgotten so picking it again retries. Until it returns, the links keep the season
+  route. DMM has no episode route; the rest are show-level or search.
+
 ## 2026-11-08: grouped custom-link strip and og-style controls (feature 26)
 
 - The single dense grid interleaved full-row services with logo tiles and looked scattered. The strip now renders

@@ -35,7 +35,7 @@ import {
 import { PRESETS, presetTemplateUrls } from './presets.js';
 import { hasServiceIcon, serviceColor, serviceIcon } from './icons.js';
 import { getSeasons } from '../../core/trakt.js';
-import { getShowDetails } from './api.js';
+import { getEpisode, getShowDetails } from './api.js';
 
 const PANEL_ID = 'ogt-custom-links';
 const TITLE_ID = 'ogt-custom-links-title';
@@ -219,7 +219,15 @@ function createPanel(meta, route) {
     el('div', { class: 'ogt-links-manage' }, presetsButton, serversButton, editButton),
   );
 
-  const vars = () => templateVars(meta, selection, getServers());
+  // Episode IMDb ids from the API, by "season:episode": the picker on a show page (and an episode page whose IMDb link
+  // og didn't render) has no other source for them. `null` means looked up (or in flight) without an id.
+  const episodeImdbs = new Map();
+  const episodeKey = () => `${selection.season}:${selection.episode}`;
+  const vars = () => templateVars(
+    meta.episodeImdb ? meta : { ...meta, episodeImdb: episodeImdbs.get(episodeKey()) ?? null },
+    selection,
+    getServers(),
+  );
 
   let currentView = null;
   let returnFocus = null;
@@ -560,6 +568,7 @@ function createPanel(meta, route) {
     }
     syncWatchNow(entries);
     lookUpShow(values);
+    lookUpEpisode();
   }
 
   /** Add only watch/play/library links to OG's own Watch Now dialogs; keep every native section and count. */
@@ -635,6 +644,32 @@ function createPanel(meta, route) {
     getShowDetails(route.id)
       .then((show) => setMeta(showTemplateData(show)))
       .catch((error) => { if (!cancelled) debugError('show lookup failed', error); });
+  }
+
+  /** The picked episode's own IMDb id, so IMDb and OpenSubtitles open that episode rather than its season. Until it
+   *  returns (or without a client ID) those links keep their season route. Each episode is asked for once. */
+  function lookUpEpisode() {
+    if (meta.kind !== 'show' || meta.episodeImdb || !getClientId()) return;
+    const { season, episode } = selection;
+    if (season == null || episode == null) return;
+    const key = episodeKey();
+    if (episodeImdbs.has(key)) return;
+    if (!getCustomLinks().some((entry) =>
+      presetTemplateUrls(entry.url, meta.kind).some((template) => /\{episodeimdb(?:num)?\}/.test(template))))
+      return;
+    episodeImdbs.set(key, null);
+    getEpisode(meta.id, season, episode)
+      .then((data) => {
+        if (cancelled) return;
+        const imdb = typeof data?.ids?.imdb === 'string' && /^tt\d+$/.test(data.ids.imdb) ? data.ids.imdb : null;
+        episodeImdbs.set(key, imdb);
+        if (imdb && key === episodeKey()) renderLinks();
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        episodeImdbs.delete(key); // picking the episode again retries
+        debugError('episode lookup failed', error);
+      });
   }
 
   function needsSelection() {

@@ -1226,6 +1226,62 @@ test('IMDb episode preset uses the episode id without waiting for a show lookup'
 });
 
 
+test('the picker looks up the episode IMDb id so IMDb and OpenSubtitles open the episode', async (t) => {
+  const episodes = { '1/1': 'tt0959621', '2/3': 'tt1232248' };
+  const requested = [];
+  const b = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: {
+      'trakt.clientId': 'client',
+      'watch.customLinks': [
+        { label: 'IMDb', url: 'https://www.imdb.com/find/?q={title}' },
+        { label: 'OpenSubtitles', url: 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{imdbnum}' },
+      ],
+    },
+    gmRequest(options) {
+      const path = new URL(options.url).pathname;
+      const match = path.match(/^\/shows\/breaking-bad\/seasons\/(\d+)\/episodes\/(\d+)$/);
+      let body = null;
+      if (match) {
+        requested.push(`${match[1]}/${match[2]}`);
+        body = { season: Number(match[1]), number: Number(match[2]), ids: { imdb: episodes[`${match[1]}/${match[2]}`] ?? null } };
+      } else if (path === '/shows/breaking-bad/seasons') {
+        body = [{ number: 1, episode_count: 7 }, { number: 2, episode_count: 13 }];
+      }
+      setTimeout(() => options.onload(body
+        ? { status: 200, responseHeaders: '', responseText: JSON.stringify(body) }
+        : { status: 404, responseHeaders: '', responseText: '' }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => b.window.close());
+  const href = (label) => chip(b.document, label).getAttribute('href');
+  const until = async (check) => {
+    for (let i = 0; i < 50 && !check(); i++) await wait(20);
+  };
+
+  await until(() => href('IMDb') === 'https://www.imdb.com/title/tt0959621/');
+  assert.equal(href('IMDb'), 'https://www.imdb.com/title/tt0959621/');
+  assert.equal(href('OpenSubtitles'), 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-959621');
+
+  const season = b.document.querySelector('#ogt-custom-links select[aria-label="Season"]');
+  season.value = '2';
+  season.dispatchEvent(new b.window.Event('change'));
+  assert.equal(href('IMDb'), 'https://www.imdb.com/title/tt0903747/episodes?season=2', 'season route until the id arrives');
+  const episode = b.document.querySelector('#ogt-custom-links input[aria-label="Episode"]');
+  episode.value = '3';
+  episode.dispatchEvent(new b.window.Event('change'));
+  await until(() => href('IMDb') === 'https://www.imdb.com/title/tt1232248/');
+  assert.equal(href('IMDb'), 'https://www.imdb.com/title/tt1232248/');
+  assert.equal(href('OpenSubtitles'), 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-1232248');
+
+  season.value = '1';
+  season.dispatchEvent(new b.window.Event('change'));
+  assert.equal(href('IMDb'), 'https://www.imdb.com/title/tt0959621/', 'a looked-up episode is reused');
+  assert.deepEqual(requested, ['1/1', '2/1', '2/3']);
+});
+
 test('Rotten Tomatoes uses OG’s exact title URL and keeps search when it is missing', async t => {
   const preset = { label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' };
   for (const [kind, html, route, href] of [

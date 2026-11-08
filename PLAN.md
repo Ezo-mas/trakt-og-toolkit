@@ -556,7 +556,13 @@ server hosts are shipped.
 
 ## 26. Custom links below the poster, with icons and Watch Now integration
 
-**Status:** planned (2026-11-07). First priority for the custom-links improvements. Move the existing links out of
+**Status:** done (2026-11-08). The links now sit in the sidebar above og's external links, grouped as service rows,
+a 4-column logo grid (Simple Icons, CC0, plus og's own marks cloned from the page) and text tiles, with og-style
+Season/Episode dropdowns and Presets/Servers/Edit buttons; watch and library links join og's Watch Now dialog as
+**Your services**. og is desktop-only, so the narrow-layout requirement was dropped. The picker also looks up the
+episode's IMDb id so IMDb and OpenSubtitles open the picked episode. See NOTES.md (2026-11-08).
+
+Original plan (2026-11-07): first priority for the custom-links improvements. Move the existing links out of
 its large panel in the main content column and into the sidebar below the title's poster/card, near the native
 external-link area. Use compact service icons and add relevant links to OG's Watch Now card/popover as well.
 On narrow screens, follow OG's actual poster/Watch Now layout rather than a fixed desktop position.

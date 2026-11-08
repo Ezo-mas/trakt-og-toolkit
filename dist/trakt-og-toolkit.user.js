@@ -3000,6 +3000,9 @@
   function getShowDetails(id) {
     return apiGet(`/shows/${encodeURIComponent(id)}`);
   }
+  function getEpisode(id, season, episode) {
+    return apiGet(`/shows/${encodeURIComponent(id)}/seasons/${season}/episodes/${episode}`);
+  }
 
   // src/features/custom-links/index.js
   var PANEL_ID = "ogt-custom-links";
@@ -3161,7 +3164,13 @@
       controlsRow,
       el("div", { class: "ogt-links-manage" }, presetsButton, serversButton, editButton)
     );
-    const vars = () => templateVars(meta, selection, getServers());
+    const episodeImdbs = /* @__PURE__ */ new Map();
+    const episodeKey = () => `${selection.season}:${selection.episode}`;
+    const vars = () => templateVars(
+      meta.episodeImdb ? meta : { ...meta, episodeImdb: episodeImdbs.get(episodeKey()) ?? null },
+      selection,
+      getServers()
+    );
     let currentView = null;
     let returnFocus = null;
     let draft = [];
@@ -3470,6 +3479,7 @@
       }
       syncWatchNow(entries);
       lookUpShow(values);
+      lookUpEpisode();
     }
     function syncWatchNow(entries = renderedEntries) {
       const watch = watchNowLinks(entries);
@@ -3531,6 +3541,26 @@
       showRequested = true;
       getShowDetails(route.id).then((show) => setMeta(showTemplateData(show))).catch((error) => {
         if (!cancelled) debugError("show lookup failed", error);
+      });
+    }
+    function lookUpEpisode() {
+      if (meta.kind !== "show" || meta.episodeImdb || !getClientId()) return;
+      const { season, episode } = selection;
+      if (season == null || episode == null) return;
+      const key = episodeKey();
+      if (episodeImdbs.has(key)) return;
+      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => /\{episodeimdb(?:num)?\}/.test(template))))
+        return;
+      episodeImdbs.set(key, null);
+      getEpisode(meta.id, season, episode).then((data) => {
+        if (cancelled) return;
+        const imdb = typeof data?.ids?.imdb === "string" && /^tt\d+$/.test(data.ids.imdb) ? data.ids.imdb : null;
+        episodeImdbs.set(key, imdb);
+        if (imdb && key === episodeKey()) renderLinks();
+      }).catch((error) => {
+        if (cancelled) return;
+        episodeImdbs.delete(key);
+        debugError("episode lookup failed", error);
       });
     }
     function needsSelection() {
