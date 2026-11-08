@@ -399,6 +399,13 @@
   background: color-mix(in srgb, var(--ogt-brand-tile, #888) 14%, var(--ogt-tile-bg));
 }
 
+/* og colours any focused link red and underlines it (a:is(:hover, :focus), 0-1-1), so a clicked tile kept that until
+   focus moved. Restate the resting colour for :focus; the hover rule below has the same weight and wins. */
+.ogt-service-link:focus {
+  color: light-dark(#444, #d9d9d9);
+  text-decoration: none;
+}
+
 .ogt-service-link:hover,
 .ogt-service-link:focus-visible {
   border-color: rgba(255, 255, 255, 0.12);
@@ -683,6 +690,7 @@
   line-height: 15px;
 }
 
+.ogt-watch-now-link:focus,
 .ogt-watch-now-link:hover,
 .ogt-watch-now-link:focus-visible {
   color: var(--ogt-fg, #e6e6e6);

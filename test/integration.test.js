@@ -1226,6 +1226,17 @@ test('IMDb episode preset uses the episode id without waiting for a show lookup'
 });
 
 
+test('custom-link anchors restate their colour for :focus, over og\'s red focused-link style', async (t) => {
+  // og: a:is(:hover, :focus) { color: var(--color-link-hover); text-decoration: underline; } outweighs a bare class, so
+  // a clicked tile turned red until focus moved. happy-dom gives :is() no specificity, so check the rules exist.
+  const b = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
+  t.after(() => b.window.close());
+  await wait(50);
+  const css = [...b.document.querySelectorAll('style')].map((style) => style.textContent).join('\n');
+  assert.match(css, /\.ogt-service-link:focus\s*\{[^}]*color:[^}]*text-decoration:\s*none/);
+  assert.match(css, /\.ogt-watch-now-link:focus,/);
+});
+
 test('the picker looks up the episode IMDb id so IMDb and OpenSubtitles open the episode', async (t) => {
   const episodes = { '1/1': 'tt0959621', '2/3': 'tt1232248' };
   const requested = [];
