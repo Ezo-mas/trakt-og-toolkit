@@ -529,7 +529,9 @@ export const CSS = String.raw`
 .ogt-links-compact .ogt-episode {
   display: flex;
   flex: 1;
+  align-items: center;
   min-inline-size: 0;
+  line-height: 1;
 }
 
 .ogt-links-compact .ogt-select,
