@@ -1455,9 +1455,8 @@ test('ambiguous mappings leave the search URL and are cached as a brief miss', a
   assert.equal(link.getAttribute('href'), fallback);
 });
 
-test('a failed lookup stays on search and is retried on the next activation', async (t) => {
+test('a failed lookup stays on search and pauses repeated hover/focus lookups', async (t) => {
   let requests = 0;
-  let fail = true;
   const b = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad',
     html: SHOW_HTML,
@@ -1465,8 +1464,7 @@ test('a failed lookup stays on search and is retried on the next activation', as
     gmRequest(options) {
       if (options.url.startsWith('https://query.wikidata.org/sparql')) {
         requests += 1;
-        if (fail) setTimeout(() => options.onerror(), 0);
-        else setTimeout(() => options.onload(wikidataResponse('tv/breaking_bad')), 0);
+        setTimeout(() => options.onerror(), 0);
       }
       return { abort() {} };
     },
@@ -1479,11 +1477,12 @@ test('a failed lookup stays on search and is retried on the next activation', as
   await wait(40);
   assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/search?search=Breaking%20Bad');
 
-  fail = false;
+  link.dispatchEvent(new b.window.Event('pointerenter'));
+  link.dispatchEvent(new b.window.FocusEvent('focusin', { bubbles: true }));
   activate(b.window, link);
   await wait(40);
-  assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/tv/breaking_bad');
-  assert.equal(requests, 2, 'a transport failure is not cached');
+  assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/search?search=Breaking%20Bad');
+  assert.equal(requests, 1, 'hover, focus and click all respect the shared failure pause');
 });
 
 test('concurrent activations share one lookup and both chips upgrade', async (t) => {

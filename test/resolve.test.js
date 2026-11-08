@@ -228,18 +228,63 @@ test('genuine misses are cached briefly, while a failure stays retryable', async
 
   resetResolverCache();
   let attempts = 0;
+  let now = 0;
   const flaky = async () => {
     attempts += 1;
     if (attempts === 1) throw new Error('network down');
     return payload('tv/breaking_bad');
   };
-  await assert.rejects(resolveExternalUrl(input(), { fetchImpl: flaky }), /network down/);
+  await assert.rejects(resolveExternalUrl(input(), { fetchImpl: flaky, now: () => now }), /network down/);
+  assert.equal(await resolveExternalUrl(input(), { fetchImpl: flaky, now: () => now }), null);
+  assert.equal(attempts, 1, 'failure briefly pauses rather than creating a cached miss');
+  now = 10000;
   assert.equal(
-    await resolveExternalUrl(input(), { fetchImpl: flaky }),
+    await resolveExternalUrl(input(), { fetchImpl: flaky, now: () => now }),
     'https://www.rottentomatoes.com/tv/breaking_bad',
     'a transient failure is not cached as a miss',
   );
   assert.equal(attempts, 2);
+});
+
+
+test('network, timeout and server failures pause both destinations and retry after ten seconds', async () => {
+  for (const status of [0, 500, 503]) {
+    resetResolverCache();
+    let now = 0;
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      if (calls === 1) throw Object.assign(new Error('unavailable'), { status });
+      return payload('tv/breaking-bad');
+    };
+    const options = { fetchImpl, now: () => now };
+    await assert.rejects(resolveExternalUrl(input(), options), /unavailable/);
+    now = 9999;
+    assert.equal(await resolveExternalUrl(input({ service: 'metacritic' }), options), null);
+    assert.equal(calls, 1);
+    now = 10000;
+    assert.equal(await resolveExternalUrl(input({ service: 'metacritic' }), options),
+      'https://www.metacritic.com/tv/breaking-bad/');
+    assert.equal(calls, 2);
+  }
+});
+
+test('server failure preserves a longer Retry-After deadline', async () => {
+  resetResolverCache();
+  let now = 0;
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    throw Object.assign(new Error('unavailable'), { status: 503, headers: 'Retry-After: 60' });
+  };
+  const options = { fetchImpl, now: () => now };
+  await assert.rejects(resolveExternalUrl(input(), options));
+  now = 10000;
+  assert.equal(await resolveExternalUrl(input(), options), null);
+  assert.equal(calls, 1);
+  now = 60000;
+  await assert.rejects(resolveExternalUrl(input(), options));
+  assert.equal(calls, 2);
 });
 
 test('peek returns a cached mapping for the current season without a request', async () => {

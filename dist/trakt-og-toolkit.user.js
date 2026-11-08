@@ -1954,6 +1954,7 @@
   var HIT_TTL_MS = 24 * 60 * 60 * 1e3;
   var MISS_TTL_MS = 5 * 60 * 1e3;
   var DEFAULT_COOLDOWN_MS = 60 * 1e3;
+  var FAILURE_COOLDOWN_MS = 10 * 1e3;
   var SPARQL_URL = "https://query.wikidata.org/sparql";
   var IMDB_RE = /^tt\d{5,10}$/;
   var RT_ID_RE = /^(m|tv)\/([a-z0-9][a-z0-9_-]*)$/;
@@ -2090,20 +2091,21 @@
     }));
     return Promise.resolve(fetchJson(url)).then((payload) => parseWikidataResponse(payload, input.service, input.kind));
   }
-  function retryAfterMs(value, nowMs = Date.now()) {
-    if (value == null || value === "") return DEFAULT_COOLDOWN_MS;
+  function retryAfterMs(value, nowMs = Date.now(), fallbackMs = DEFAULT_COOLDOWN_MS) {
+    if (value == null || value === "") return fallbackMs;
     const seconds = Number(value);
     if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1e3;
     const date = Date.parse(String(value));
     if (Number.isFinite(date)) return Math.max(0, date - nowMs);
-    return DEFAULT_COOLDOWN_MS;
+    return fallbackMs;
   }
   function coolingDown(now) {
     return nextLookupAt > now();
   }
-  function recordCooldown(error, now) {
+  function recordCooldown(error, now, minimumMs = 0) {
     const at = now();
-    nextLookupAt = Math.max(nextLookupAt, at + retryAfterMs(headerValue(error?.headers, "retry-after"), at));
+    const delay = retryAfterMs(headerValue(error?.headers, "retry-after"), at, minimumMs || DEFAULT_COOLDOWN_MS);
+    nextLookupAt = Math.max(nextLookupAt, at + Math.max(minimumMs, delay));
   }
   function peekExternalUrl(input, options = {}) {
     const direct = directUrlFor(input);
@@ -2136,6 +2138,7 @@
           recordCooldown(error, now);
           return null;
         }
+        if (!error?.status || error.status >= 500) recordCooldown(error, now, FAILURE_COOLDOWN_MS);
         throw error;
       }).finally(() => inflight.delete(key));
       inflight.set(key, pending);

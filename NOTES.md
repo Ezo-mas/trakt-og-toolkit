@@ -5,6 +5,9 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-09: feature 27 review follow-ups
 
+- Network/timeout and 5xx failures now share a ten-second Wikidata cooldown without caching a missing mapping.
+  Longer `Retry-After` waits and existing cooldowns are preserved; hover/focus keeps search usable until retry.
+
 - Restored OG’s direct RT links from `.ratings-strip` alongside `ul.external-links`; unrelated page links remain
   excluded. Tests use the header ratings markup for movie/show links and retain search on seasons without a link.
 - Lookup starts on pointer hover or keyboard focus, with click/middle-click fallback. Links reuse cached URLs when

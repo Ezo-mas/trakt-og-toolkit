@@ -23,6 +23,7 @@ export const HIT_TTL_MS = 24 * 60 * 60 * 1000;
 export const MISS_TTL_MS = 5 * 60 * 1000;
 /** A 429 without a usable Retry-After still blocks this service for a bounded time. */
 export const DEFAULT_COOLDOWN_MS = 60 * 1000;
+const FAILURE_COOLDOWN_MS = 10 * 1000;
 
 const SPARQL_URL = 'https://query.wikidata.org/sparql';
 const IMDB_RE = /^tt\d{5,10}$/;
@@ -209,22 +210,23 @@ function fetchBase(input, { fetchImpl }) {
 }
 
 /** Parse Retry-After seconds or an HTTP date; use a bounded fallback when the header is unusable. */
-export function retryAfterMs(value, nowMs = Date.now()) {
-  if (value == null || value === '') return DEFAULT_COOLDOWN_MS;
+export function retryAfterMs(value, nowMs = Date.now(), fallbackMs = DEFAULT_COOLDOWN_MS) {
+  if (value == null || value === '') return fallbackMs;
   const seconds = Number(value);
   if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
   const date = Date.parse(String(value));
   if (Number.isFinite(date)) return Math.max(0, date - nowMs);
-  return DEFAULT_COOLDOWN_MS;
+  return fallbackMs;
 }
 
 function coolingDown(now) {
   return nextLookupAt > now();
 }
 
-function recordCooldown(error, now) {
+function recordCooldown(error, now, minimumMs = 0) {
   const at = now();
-  nextLookupAt = Math.max(nextLookupAt, at + retryAfterMs(headerValue(error?.headers, 'retry-after'), at));
+  const delay = retryAfterMs(headerValue(error?.headers, 'retry-after'), at, minimumMs || DEFAULT_COOLDOWN_MS);
+  nextLookupAt = Math.max(nextLookupAt, at + Math.max(minimumMs, delay));
 }
 
 /** Return a successful mapping already in memory, so a warm click can upgrade before navigation. */
@@ -241,8 +243,8 @@ export function peekExternalUrl(input, options = {}) {
 
 /**
  * Resolve one service/title pair. Concurrent callers share one request; successful
- * mappings and genuine misses are cached, while transport errors are not cached
- * so the next activation retries. The promise resolves to a destination URL or null.
+ * mappings and genuine misses are cached. Transport/server failures briefly pause
+ * lookups without caching a miss. The promise resolves to a destination URL or null.
  */
 export function resolveExternalUrl(input, options = {}) {
   const direct = directUrlFor(input);
@@ -256,7 +258,7 @@ export function resolveExternalUrl(input, options = {}) {
   if (hit && hit.expires > now()) {
     return Promise.resolve(hit.url ? buildDestinationUrl(input.service, hit.url, input.context) : null);
   }
-  // A Wikidata 429 blocks both destinations; cached and native links remain usable.
+  // Wikidata cooldowns block both destinations; cached and native links remain usable.
   if (coolingDown(now)) return Promise.resolve(null);
 
   let pending = inflight.get(key);
@@ -271,6 +273,7 @@ export function resolveExternalUrl(input, options = {}) {
           recordCooldown(error, now);
           return null;
         }
+        if (!error?.status || error.status >= 500) recordCooldown(error, now, FAILURE_COOLDOWN_MS);
         throw error;
       })
       .finally(() => inflight.delete(key));
