@@ -9,6 +9,8 @@ export const PRESETS = [
   {
     label: 'IMDb',
     url: 'https://www.imdb.com/find/?q={title}',
+    icon: 'imdb',
+    surface: 'reference',
     kinds: ['movie', 'show'],
     deep: [
       { url: 'https://www.imdb.com/title/{episodeimdb}/', kinds: ['show'] },
@@ -19,6 +21,8 @@ export const PRESETS = [
   {
     label: 'TMDb',
     url: 'https://www.themoviedb.org/search?query={title}',
+    icon: 'tmdb',
+    surface: 'reference',
     kinds: ['movie', 'show'],
     deep: [
       { url: 'https://www.themoviedb.org/tv/{tmdb}/season/{season}/episode/{episode}', kinds: ['show'] },
@@ -30,6 +34,8 @@ export const PRESETS = [
   {
     label: 'TVDB',
     url: 'https://thetvdb.com/search?query={title}',
+    icon: 'tvdb',
+    surface: 'reference',
     kinds: ['show'],
     deep: [
       { url: 'https://thetvdb.com/dereferrer/series/{tvdb}', kinds: ['show'] },
@@ -38,6 +44,8 @@ export const PRESETS = [
   {
     label: 'Letterboxd',
     url: 'https://letterboxd.com/search/{title}/',
+    icon: 'letterboxd',
+    surface: 'reference',
     kinds: ['movie'],
     deep: [
       { url: 'https://letterboxd.com/imdb/{imdb}/', kinds: ['movie'] },
@@ -47,31 +55,44 @@ export const PRESETS = [
   {
     label: 'Rotten Tomatoes',
     url: 'https://www.rottentomatoes.com/search?search={title}',
+    icon: 'rt',
+    surface: 'reference',
     kinds: ['movie', 'show'],
   },
   {
     label: 'Wikipedia',
     url: 'https://en.wikipedia.org/w/index.php?search={title}',
+    icon: 'wikipedia',
+    surface: 'reference',
     kinds: ['movie', 'show'],
   },
   {
     label: 'JustWatch',
     url: 'https://www.justwatch.com/us/search?q={title}',
+    icon: 'justwatch',
+    // A reference link like og's own JustWatch icon; og's Watch Now dialog is already powered by JustWatch.
+    surface: 'reference',
     kinds: ['movie', 'show'],
   },
   {
     label: 'MyAnimeList',
     url: 'https://myanimelist.net/search/all?q={title}',
+    icon: 'mal',
+    surface: 'reference',
     kinds: ['movie', 'show'],
   },
   {
     label: 'Metacritic',
     url: 'https://www.metacritic.com/search/{title}/',
+    icon: 'metacritic',
+    surface: 'reference',
     kinds: ['movie', 'show'],
   },
   {
     label: 'Stremio',
     url: 'https://web.stremio.com/#/search?search={title}',
+    icon: 'stremio',
+    surface: 'watch',
     kinds: ['movie', 'show'],
     /**
      * Exact-item routes, most specific first. MetaDetails reads `type`, `id` and `videoId`
@@ -90,6 +111,8 @@ export const PRESETS = [
   {
     label: 'Debrid Media Manager',
     url: 'https://debridmediamanager.com/search?query={title}',
+    icon: 'dmm',
+    surface: 'watch',
     kinds: ['movie', 'show'],
     /**
      * DMM routes by IMDb id: `movie/:imdbid` and `show/:imdbid/:seasonNum` (from its
@@ -107,6 +130,8 @@ export const PRESETS = [
     label: 'MDBList',
     // IMDb routes redirect to MDBList's canonical title slug; searches cover titles without an IMDb id.
     url: 'https://mdblist.com/movies/?q_title={title}',
+    icon: 'mdblist',
+    surface: 'reference',
     kinds: ['movie', 'show'],
     deep: [
       { url: 'https://mdblist.com/movie/{imdb}', kinds: ['movie'] },
@@ -116,6 +141,8 @@ export const PRESETS = [
   },
   {
     label: 'OpenSubtitles',
+    icon: 'opensubtitles',
+    surface: 'reference',
     /**
      * OpenSubtitles' search takes an IMDb id without `tt` or leading zeroes:
      * `imdbid` for a movie or episode, and `pimdbid` for a show. The episode
@@ -134,15 +161,21 @@ export const PRESETS = [
   {
     label: 'Plex',
     url: 'https://app.plex.tv/desktop/#!/search?query={title}',
+    icon: 'plex',
+    surface: 'watch',
     kinds: ['movie', 'show'],
   },
   {
     label: 'AniList',
     url: 'https://anilist.co/search/anime?search={title}',
+    icon: 'anilist',
+    surface: 'reference',
     kinds: ['movie', 'show'],
   },
   {
     label: 'Jellyfin',
+    icon: 'jellyfin',
+    surface: 'watch',
     /**
      * Current web search route; `jellyfin-web` defines `search` without `.html` and reads
      * `?query=`. The server base URL comes from the Servers settings.
@@ -153,6 +186,8 @@ export const PRESETS = [
   },
   {
     label: 'Emby',
+    icon: 'emby',
+    surface: 'watch',
     /**
      * Current 4.9 web search page; its search field uses `searchtext`. Older Emby versions
      * used `/web/search.html` directly, so this remains editable in the link editor.
@@ -164,6 +199,8 @@ export const PRESETS = [
   {
     label: 'Radarr',
     url: '{radarr}/add/new?term={title}',
+    icon: 'radarr',
+    surface: 'library',
     kinds: ['movie'],
     requires: 'radarr',
     deep: [
@@ -174,6 +211,8 @@ export const PRESETS = [
   {
     label: 'Sonarr',
     url: '{sonarr}/add/new?term={title}',
+    icon: 'sonarr',
+    surface: 'library',
     kinds: ['show'],
     requires: 'sonarr',
     deep: [
@@ -183,6 +222,8 @@ export const PRESETS = [
   {
     label: 'Seerr',
     url: '{seerr}/search?query={title}',
+    icon: 'seerr',
+    surface: 'library',
     kinds: ['movie', 'show'],
     requires: 'seerr',
     deep: [
@@ -191,6 +232,11 @@ export const PRESETS = [
     ],
   },
 ];
+
+/** The built-in preset behind a stored URL, if the user has not edited its template. */
+export function findPreset(url) {
+  return PRESETS.find((entry) => entry.url === url) || null;
+}
 
 /**
  * Every template a stored preset link can use on this page kind, including deep ones that

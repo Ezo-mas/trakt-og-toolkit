@@ -263,6 +263,552 @@ export const CSS = String.raw`
   text-transform: uppercase;
 }
 
+/* Compact link strip below the summary poster; the same node moves into OG's phone tools under 768px. */
+.ogt-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ogt-links-compact {
+  /* Flat like OG's own sidebar groups, not a boxed panel. */
+  margin: 10px 0 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+}
+
+.ogt-links-head {
+  display: grid;
+  gap: 7px;
+}
+
+/* Grouped strip: full-row services, then the same 4-column logo grid as og's ul.external-links, then text links. */
+.ogt-links,
+.ogt-links-services {
+  display: grid;
+  gap: 6px;
+}
+
+.ogt-links-logos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ogt-links-texts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ogt-links-texts .ogt-service-link--text {
+  grid-column: auto;
+}
+
+.ogt-links .ogt-hint {
+  grid-column: 1 / -1;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.ogt-service-link {
+  --ogt-tile-bg: rgba(255, 255, 255, 0.05);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-inline-size: 0;
+  block-size: 100%;
+  min-block-size: 36px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--ogt-tile-bg);
+  color: light-dark(#444, #d9d9d9);
+  text-decoration: none;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.ogt-service-link--icon {
+  aspect-ratio: 1;
+}
+
+/* OG's sidebar is ~170px wide: a service tile takes the whole row so its name fits beside the logo. */
+.ogt-service-link--tile {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+  padding: 6px 10px;
+}
+
+.ogt-service-link--text {
+  grid-column: span 2;
+  justify-content: center;
+  padding: 4px 6px;
+  text-align: center;
+}
+
+.ogt-service-link--text .ogt-service-label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 11px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.ogt-service-link--tile {
+  background: color-mix(in srgb, var(--ogt-brand-tile, #888) 14%, var(--ogt-tile-bg));
+}
+
+/* og colours any focused link red and underlines it (a:is(:hover, :focus), 0-1-1), so a clicked tile kept that until
+   focus moved. Restate the resting colour for :focus; the hover rule below has the same weight and wins. */
+.ogt-service-link:focus {
+  color: light-dark(#444, #d9d9d9);
+  text-decoration: none;
+}
+
+.ogt-service-link:hover,
+.ogt-service-link:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  color: light-dark(#111, #fff);
+  text-decoration: none;
+}
+
+.ogt-service-link:focus-visible {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 2px;
+}
+
+.ogt-service-label {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ogt-service-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: 22px;
+  block-size: 22px;
+  color: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.ogt-service-icon svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/* Square reference tiles are monochrome like OG's own until hovered; wide service tiles keep their brand colour. */
+.ogt-service-link--icon:hover .ogt-service-icon,
+.ogt-service-link--icon:focus-visible .ogt-service-icon,
+.ogt-service-link--tile .ogt-service-icon,
+.ogt-watch-now-card .ogt-service-icon {
+  color: var(--ogt-brand, currentColor);
+}
+
+.ogt-service-icon[data-ogt-mark="text"] {
+  inline-size: auto;
+  min-inline-size: 22px;
+  padding-inline: 2px;
+}
+
+.ogt-service-link::after {
+  content: attr(data-ogt-tooltip);
+  position: absolute;
+  z-index: 10;
+  inset-block-start: 50%;
+  inset-inline-start: calc(100% + 7px);
+  transform: translateY(-50%);
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: light-dark(#222, #f2f2f2);
+  color: light-dark(#fff, #111);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease;
+}
+
+.ogt-service-link:hover::after,
+.ogt-service-link:focus-visible::after {
+  opacity: 1;
+}
+
+.ogt-links-manage {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-block-start: 10px;
+}
+
+/* Square glass actions like og's sidebar tiles, not pills. */
+.ogt-manage-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-inline-size: 0;
+  block-size: 48px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: light-dark(#444, #d9d9d9);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.ogt-manage-button svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.ogt-manage-button:hover,
+.ogt-manage-button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  color: light-dark(#111, #fff);
+}
+
+.ogt-manage-button:focus-visible {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 2px;
+}
+
+/* Season/episode pickers look like og's own dropdown triggers ("Sort: Released"). */
+.ogt-links-compact .ogt-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-block-start: 10px;
+}
+
+.ogt-links-compact .ogt-fields[hidden] {
+  display: none;
+}
+
+.ogt-links-compact .ogt-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+  block-size: 34px;
+  padding: 0 8px 0 10px;
+  border: 1px solid light-dark(#d4d4d4, #3b3b3b);
+  border-radius: 8px;
+  background: light-dark(#f2f2f2, #232323);
+  color: var(--ogt-muted);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ogt-links-compact .ogt-field:focus-within {
+  border-color: light-dark(#999, #5a5a5a);
+}
+
+.ogt-links-compact .ogt-episode {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-inline-size: 0;
+  line-height: 1;
+}
+
+.ogt-links-compact .ogt-select,
+.ogt-links-compact .ogt-input {
+  flex: 1;
+  min-inline-size: 0;
+  padding: 0 14px 0 0;
+  border: 0;
+  background-color: transparent;
+  background-position: calc(100% - 5px) 50%, calc(100% - 1px) 50%;
+  color: var(--ogt-fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ogt-links-compact .ogt-field-prefix {
+  flex: none;
+  margin-inline-end: 4px;
+  color: var(--ogt-muted);
+  font-size: 12px;
+}
+
+.ogt-links-compact input.ogt-input {
+  padding-inline-end: 0;
+  background-image: none;
+}
+
+.ogt-links-compact .ogt-select:focus-visible,
+.ogt-links-compact .ogt-input:focus-visible {
+  outline: none;
+}
+
+.ogt-links-compact .ogt-field:has(:focus-visible) {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 1px;
+}
+
+.ogt-watch-fallback {
+  display: grid;
+  gap: 6px;
+  margin-block-start: 10px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--ogt-border);
+}
+
+.ogt-watch-fallback[hidden] {
+  display: none;
+}
+
+.ogt-watch-fallback-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.ogt-watch-fallback-title {
+  color: var(--ogt-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ogt-watch-fallback-note {
+  color: var(--ogt-muted);
+  font-size: 10px;
+}
+
+.ogt-watch-now-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* Shaped like OG's Watch Now provider tiles: a 2:1 logo card with a note below. */
+.ogt-watch-now-link {
+  display: grid;
+  gap: 5px;
+  min-inline-size: 0;
+  color: var(--ogt-fg, #e6e6e6);
+  text-decoration: none;
+}
+
+.ogt-watch-now-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-inline-size: 0;
+  block-size: 56px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ogt-brand-tile, #888) 22%, #151515);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.ogt-watch-now-card .ogt-service-icon {
+  inline-size: 24px;
+  block-size: 24px;
+  font-size: 10px;
+}
+
+.ogt-watch-now-card .ogt-service-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+
+.ogt-watch-now-note {
+  color: var(--ogt-muted, #9a9a9a);
+  font-size: 12px;
+  line-height: 15px;
+}
+
+.ogt-watch-now-link:focus,
+.ogt-watch-now-link:hover,
+.ogt-watch-now-link:focus-visible {
+  color: var(--ogt-fg, #e6e6e6);
+  text-decoration: none;
+}
+
+.ogt-watch-now-link:hover .ogt-watch-now-card,
+.ogt-watch-now-link:focus-visible .ogt-watch-now-card {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.ogt-watch-now-link:focus-visible {
+  outline: 2px solid var(--ogt-accent, #ed1c24);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.ogt-service-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ogt-watch-now-section {
+  display: grid;
+  gap: 8px;
+}
+
+.ogt-watch-now-section .section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-watch-now-section, var(--ogt-muted));
+  font-size: var(--font-size-watch-now-section, 11px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ogt-watch-now-section .count {
+  color: var(--color-watch-now-section, var(--ogt-muted));
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.ogt-watch-now-section .ogt-watch-now-tiles {
+  /* OG's provider tiles: 118px columns, 16px/14px gaps, a 118x56 logo card. */
+  grid-template-columns: repeat(auto-fill, 118px);
+  gap: 16px 14px;
+}
+
+/* Management forms live in a modal so the narrow sidebar never squeezes them. */
+.ogt-manager {
+  --ogt-fg: light-dark(#333, #e6e6e6);
+  --ogt-muted: light-dark(#767676, #9a9a9a);
+  --ogt-surface: light-dark(#ffffff, #262626);
+  --ogt-raised: light-dark(#f5f5f5, #2f2f2f);
+  --ogt-border: light-dark(#e2e2e2, #3c3c3c);
+  --ogt-accent: var(--brand-primary, #ed1c24);
+  box-sizing: border-box;
+  inline-size: min(680px, calc(100vw - 24px));
+  max-inline-size: calc(100vw - 24px);
+  max-block-size: calc(100dvh - 24px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ogt-fg);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.ogt-manager[open] {
+  display: block;
+}
+
+.ogt-manager::backdrop {
+  background: rgb(0 0 0 / 0.65);
+}
+
+.ogt-manager-panel {
+  display: flex;
+  flex-direction: column;
+  max-block-size: calc(100dvh - 24px);
+  border: 1px solid var(--ogt-border);
+  border-radius: 8px;
+  background: var(--ogt-surface);
+  box-shadow: 0 12px 48px rgb(0 0 0 / 0.45);
+  overflow: hidden;
+}
+
+.ogt-manager-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-block-end: 1px solid var(--ogt-border);
+  background: var(--ogt-raised);
+}
+
+.ogt-manager-title {
+  margin: 0;
+  color: var(--ogt-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ogt-manager-close {
+  min-block-size: 28px;
+  padding: 3px 9px;
+  border: 1px solid var(--ogt-border);
+  border-radius: 4px;
+  background: var(--ogt-surface);
+  color: var(--ogt-fg);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ogt-manager-close:hover,
+.ogt-manager-close:focus-visible {
+  border-color: var(--ogt-accent);
+  color: var(--ogt-accent);
+}
+
+.ogt-manager-close:focus-visible {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 1px;
+}
+
+.ogt-manager-body {
+  padding: 14px 16px 16px;
+  overflow: auto;
+}
+
+.ogt-manager .ogt-editor-list-wrap,
+.ogt-manager .ogt-preset-list-wrap {
+  max-block-size: min(50vh, 380px);
+}
+
+.ogt-manager [hidden] {
+  display: none !important;
+}
+
 .ogt-toast {
   position: fixed;
   inset-block-end: 24px;
@@ -305,6 +851,19 @@ export const CSS = String.raw`
 
   .ogt-server-list {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ogt-manager {
+    inline-size: calc(100vw - 16px);
+    max-inline-size: calc(100vw - 16px);
+  }
+
+  .ogt-service-link::after {
+    inset-block-start: auto;
+    inset-block-end: calc(100% + 4px);
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+    transform: none;
   }
 }
 `;

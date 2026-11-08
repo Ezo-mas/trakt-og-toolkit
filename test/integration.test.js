@@ -9,6 +9,7 @@ import { Window } from 'happy-dom';
 import {
   SHOW_HTML,
   MOVIE_HTML,
+  MOVIE_NO_PROVIDER_HTML,
   SEASON_HTML,
   SEASON_PAGE_HTML,
   EPISODE_PAGE_HTML,
@@ -21,7 +22,7 @@ import {
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function boot({ url, html, storage = {}, gmRequest }) {
+function boot({ url, html, storage = {}, gmRequest, narrow = null }) {
   const window = new Window({ url });
   const { document } = window;
   const store = new Map(Object.entries(storage));
@@ -37,17 +38,37 @@ function boot({ url, html, storage = {}, gmRequest }) {
   };
   window.GM_registerMenuCommand = () => {};
   if (gmRequest) window.GM_xmlhttpRequest = gmRequest;
+  let narrowValue = narrow ?? false;
+  const mediaListeners = new Set();
+  if (narrow !== null) {
+    window.matchMedia = () => ({
+      get matches() { return narrowValue; },
+      addEventListener(type, handler) { if (type === 'change') mediaListeners.add(handler); },
+      removeEventListener(type, handler) { mediaListeners.delete(handler); },
+    });
+  }
 
   document.write(`<!doctype html><html><head><title>Test - Trakt OG Redux</title></head><body>${html}</body></html>`);
   window.eval(bundle);
   document.dispatchEvent(new window.Event('DOMContentLoaded'));
 
-  return { window, document, store };
+  return {
+    window,
+    document,
+    store,
+    setNarrow(value) {
+      narrowValue = value;
+      for (const handler of mediaListeners) handler({ matches: value, media: '(max-width: 767px)' });
+    },
+  };
 }
 
 const panel = (document) => document.getElementById('ogt-custom-links');
-const chips = (document) => [...document.querySelectorAll('#ogt-custom-links .ogt-chip')];
-const chip = (document, label) => chips(document).find((node) => node.textContent.trim() === label);
+const chips = (document) => [
+  ...document.querySelectorAll('#ogt-custom-links .ogt-chip, #ogt-custom-links .ogt-manage-button, #ogt-custom-links .ogt-links a.ogt-service-link'),
+];
+const chip = (document, label) => chips(document).find((node) =>
+  node.textContent.trim() === label || node.getAttribute('aria-label') === label || node.dataset.ogtTooltip === label);
 
 test('mounts under the summary stats with preset and editor chips', async (t) => {
   const { window, document } = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
@@ -56,13 +77,225 @@ test('mounts under the summary stats with preset and editor chips', async (t) =>
 
   const node = panel(document);
   assert.ok(node, 'panel is mounted');
-  assert.equal(node.previousElementSibling?.className, 'top');
+  assert.equal(node.parentElement, document.querySelector('aside.sidebar'), 'panel sits in the summary sidebar');
+  assert.ok(node.nextElementSibling?.matches('ul.external-links'), 'panel is directly above native external links');
 
   assert.ok(chip(document, 'Add presets…'), 'preset button exists');
   assert.ok(chip(document, 'Edit links'), 'editor button exists');
   assert.ok(document.querySelector('.ogt-hint'), 'hint text shown when no custom links');
   assert.equal(document.querySelectorAll('#ogt-custom-links .ogt-field').length, 0, 'no pickers without season-dependent links');
   assert.ok(document.querySelector('head style'), 'styles injected');
+});
+
+test('compact links show local service marks with names and a text fallback', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_HTML,
+    storage: {
+      'watch.customLinks': [
+        { label: 'IMDb', url: 'https://www.imdb.com/find/?q={title}' },
+        { label: 'My Cinema', url: 'https://cinema.test/search?q={title}' },
+        { label: 'Plex', url: 'https://app.plex.tv/desktop/#!/search?query={title}' },
+      ],
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  const links = [...document.querySelectorAll('#ogt-custom-links .ogt-links a.ogt-service-link')];
+  assert.equal(links.length, 3);
+  assert.deepEqual(links.map((link) => link.getAttribute('aria-label')), ['Plex', 'IMDb', 'My Cinema'],
+    'grouped: services, then logos, then text links');
+  assert.ok(links[0].closest('.ogt-links-services'), 'Plex is a service row');
+  assert.ok(links[0].querySelector('.ogt-service-icon'), 'Plex gets a local mark');
+  assert.ok(links[1].closest('.ogt-links-logos'), 'IMDb sits in the logo grid');
+  assert.ok(links[1].querySelector('.ogt-service-icon'), 'a known service gets a local mark');
+  assert.equal(links[1].getAttribute('data-ogt-tooltip'), 'IMDb');
+  assert.ok(links[2].closest('.ogt-links-texts'), 'unknown labels come last');
+  assert.equal(links[2].querySelector('.ogt-service-icon'), null, 'an unknown service has no mark');
+  assert.equal(links[2].querySelector('.ogt-service-label').textContent, 'My Cinema');
+  const manage = [...document.querySelectorAll('#ogt-custom-links .ogt-links-manage button')];
+  assert.deepEqual(manage.map((button) => button.getAttribute('aria-label')), ['Add presets…', 'Servers…', 'Edit links']);
+  assert.ok(manage.every((button) => button.classList.contains('ogt-manage-button') && !button.classList.contains('ogt-chip')),
+    'management actions are square buttons, not pills');
+  for (const link of links) {
+    assert.equal(link.getAttribute('target'), '_blank');
+    assert.match(link.getAttribute('rel'), /noopener/);
+    assert.match(link.getAttribute('href'), /^https:\/\//);
+  }
+});
+
+test('media servers, subtitles and Seerr use distinct service marks', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_HTML,
+    storage: {
+      'watch.customLinks': [
+        { label: 'IMDb', url: 'https://imdb.test/{title}' },
+        { label: 'Plex', url: 'https://plex.test/{title}' },
+        { label: 'Jellyfin', url: 'https://jellyfin.test/{title}' },
+        { label: 'Emby', url: 'https://emby.test/{title}' },
+        { label: 'OpenSubtitles', url: 'https://opensubtitles.test/{title}' },
+        { label: 'Seerr', url: 'https://seerr.test/{title}' },
+      ],
+    },
+  });
+  t.after(() => window.close());
+  await wait(50);
+
+  const marks = Object.fromEntries(
+    [...document.querySelectorAll('#ogt-custom-links .ogt-service-link')].map((link) => [
+      link.getAttribute('aria-label'),
+      link.querySelector('.ogt-service-icon'),
+    ]),
+  );
+  const path = (label) => marks[label].querySelector('svg path')?.getAttribute('d');
+
+  for (const label of ['Plex', 'Jellyfin', 'Emby']) {
+    assert.equal(marks[label].dataset.ogtMark, 'brand', `${label} uses its bundled logo`);
+  }
+  assert.equal(new Set([path('Plex'), path('Jellyfin'), path('Emby')]).size, 3, 'media-server logos differ');
+  assert.equal(marks.OpenSubtitles.dataset.ogtMark, 'text');
+  assert.equal(marks.OpenSubtitles.textContent, 'OS');
+  assert.notEqual(marks.OpenSubtitles.style.getPropertyValue('--ogt-brand'), marks.IMDb.style.getPropertyValue('--ogt-brand'),
+    'OpenSubtitles does not reuse IMDb colours');
+  assert.equal(marks.Seerr.textContent, 'SEER', 'Seerr has a word mark rather than a question mark');
+});
+
+test('watch and library links join only the summary Watch Now dialogs and keep native results', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_HTML,
+    storage: {
+      'watch.customLinks': [
+        { label: 'IMDb', url: 'https://www.imdb.com/find/?q={title}' },
+        { label: 'JustWatch', url: 'https://www.justwatch.com/us/search?q={title}' },
+        { label: 'Radarr', url: '{radarr}/add/new?term={title}' },
+        { label: 'Plex', url: 'https://app.plex.tv/desktop/#!/search?query={title}' },
+      ],
+      'watch.servers': { radarr: 'http://radarr.test' },
+    },
+  });
+  t.after(() => window.close());
+  await wait(100);
+
+  const dialogs = [...document.querySelectorAll('.summary-frame dialog .streaming-links')];
+  assert.equal(dialogs.length, 2, 'both desktop and phone Watch Now dialogs are found');
+  for (const dialog of dialogs) {
+    const section = dialog.querySelector(':scope > [data-ogt-watch-now]');
+    assert.ok(section, 'a scoped Your services section is added');
+    assert.deepEqual(
+      [...section.querySelectorAll('a')].map((link) => link.getAttribute('aria-label')),
+      ['Radarr', 'Plex'],
+      'only watch/library links are added, in saved order',
+    );
+    assert.equal(dialog.querySelector('.section-title .count').textContent, '2', 'native availability count is untouched');
+    assert.equal(dialog.querySelectorAll('a.service').length, 2, 'native provider links are untouched');
+    assert.equal(section.querySelector('[aria-label="IMDb"]'), null, 'reference links stay out of Watch Now');
+    assert.equal(section.querySelector('[aria-label="JustWatch"]'), null, 'JustWatch is a reference link, like og\'s own');
+    for (const link of section.querySelectorAll('a')) {
+      assert.equal(link.getAttribute('target'), '_blank');
+      assert.match(link.getAttribute('rel'), /noopener/);
+    }
+  }
+  assert.equal(document.querySelectorAll('[data-ogt-watch-now]').length, 2);
+  assert.deepEqual(
+    [...document.querySelectorAll('#ogt-custom-links .ogt-links a.ogt-service-link')]
+      .map((link) => link.getAttribute('aria-label')),
+    ['Radarr', 'Plex', 'IMDb', 'JustWatch'],
+    'the compact strip keeps all saved links, services first, then logos',
+  );
+});
+
+test('an empty native Watch Now dialog keeps its message and gets Your services below it', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_NO_PROVIDER_HTML,
+    storage: {
+      'watch.customLinks': [
+        { label: 'IMDb', url: 'https://www.imdb.com/find/?q={title}' },
+        { label: 'Plex', url: 'https://app.plex.tv/desktop/#!/search?query={title}' },
+      ],
+    },
+  });
+  t.after(() => window.close());
+  await wait(100);
+
+  assert.equal(document.querySelector('#ogt-custom-links .ogt-watch-fallback').hidden, true);
+  const dialogs = [...document.querySelectorAll('.summary-frame dialog .streaming-links')];
+  assert.equal(dialogs.length, 2, 'the 0-services Watch Now button still owns its dialogs');
+  for (const dialog of dialogs) {
+    assert.match(dialog.textContent, /No watch now links in United States yet/);
+    const section = dialog.querySelector(':scope > [data-ogt-watch-now]');
+    assert.ok(section, 'Your services is appended after the native no-links message');
+    assert.equal(section.previousElementSibling?.tagName, 'P');
+    assert.match(section.previousElementSibling.textContent, /No watch now links in United States yet/);
+    assert.deepEqual([...section.querySelectorAll('a')].map((link) => link.getAttribute('aria-label')), ['Plex']);
+    assert.equal(dialog.querySelectorAll('.section-title .count').length, 1, 'only the toolkit section has a count');
+  }
+  assert.equal(document.querySelectorAll('[data-ogt-watch-now]').length, 2);
+});
+
+test('reference-only links do not create a Watch Now fallback', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_NO_PROVIDER_HTML,
+    storage: { 'watch.customLinks': [{ label: 'IMDb', url: 'https://www.imdb.com/find/?q={title}' }] },
+  });
+  t.after(() => window.close());
+  await wait(100);
+  assert.equal(document.querySelector('#ogt-custom-links .ogt-watch-fallback').hidden, true);
+  assert.equal(document.querySelectorAll('[data-ogt-watch-now]').length, 0);
+});
+
+test('season and episode pages place the compact panel above native external links', async (t) => {
+  for (const [url, html] of [
+    ['https://og.trakt.tv/shows/breaking-bad/seasons/1', SEASON_PAGE_HTML],
+    ['https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1', EPISODE_PAGE_HTML],
+  ]) {
+    const { window, document } = boot({ url, html });
+    t.after(() => window.close());
+    await wait(50);
+    const node = panel(document);
+    assert.equal(node.parentElement, document.querySelector('aside.sidebar'), url);
+    assert.ok(node.nextElementSibling?.matches('ul.external-links'), `${url} sits above external links`);
+  }
+});
+
+test('leaving a title page removes injected Watch Now sections', async (t) => {
+  const { window, document } = boot({
+    url: 'https://og.trakt.tv/movies/the-dark-2005',
+    html: MOVIE_HTML,
+    storage: { 'watch.customLinks': [{ label: 'Plex', url: 'https://app.plex.tv/desktop/#!/search?query={title}' }] },
+  });
+  t.after(() => window.close());
+  await wait(100);
+  assert.equal(document.querySelectorAll('[data-ogt-watch-now]').length, 2);
+
+  window.history.pushState({}, '', '/dashboard');
+  await wait(300);
+  assert.equal(document.querySelectorAll('[data-ogt-watch-now]').length, 0, 'injected sections leave with the panel');
+});
+
+test('the management dialog reopens without duplicating controls', async (t) => {
+  const { window, document } = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
+  t.after(() => window.close());
+  await wait(50);
+
+  const open = chip(document, 'Add presets…');
+  open.click();
+  const manager = () => document.getElementById('ogt-custom-links-manager');
+  assert.equal(manager().open, true);
+  assert.equal(manager().parentElement, document.body, 'the modal lives outside the movable panel');
+  assert.equal(document.querySelectorAll('.ogt-manager').length, 1);
+  document.querySelector('.ogt-manager-close').click();
+  assert.equal(manager().open, false);
+  assert.equal(document.activeElement, open, 'focus returns after closing');
+
+  open.click();
+  assert.equal(manager().open, true);
+  assert.ok(document.querySelector('.ogt-presets input[aria-label="IMDb"]'), 'preset form is rebuilt on reopen');
+  assert.equal(document.querySelectorAll('.ogt-manager').length, 1);
 });
 
 test('season and episode pickers come from the season cards when a custom link needs them', async (t) => {
@@ -415,7 +648,7 @@ test('inline editor renames, reorders, deletes and saves links', async (t) => {
     { label: 'Renamed A', url: 'https://a.test/{title}' },
   ]);
   assert.deepEqual(
-    [...document.querySelectorAll('#ogt-custom-links .ogt-links a.ogt-chip')].map((link) => link.textContent),
+    [...document.querySelectorAll('#ogt-custom-links .ogt-links a.ogt-service-link')].map((link) => link.textContent),
     ['B', 'Renamed A'],
   );
   assert.equal(document.activeElement, edit, 'focus returns to the editor chip when closed');
@@ -513,7 +746,7 @@ test('leaving a title page removes the panel', async (t) => {
   await wait(300);
 
   assert.equal(panel(document), null);
-  assert.equal(document.querySelector('.ogt-link-tools'), null, 'inline tools are removed with the panel');
+  assert.equal(Boolean(document.querySelector('.ogt-manager')), false, 'management dialog is removed with the panel');
   const escape = new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
   document.dispatchEvent(escape);
   assert.equal(escape.defaultPrevented, false, 'the document listener is removed on navigation');
@@ -992,6 +1225,73 @@ test('IMDb episode preset uses the episode id without waiting for a show lookup'
   assert.equal(chip(b.document, 'IMDb').getAttribute('href'), 'https://www.imdb.com/title/tt0959621/');
 });
 
+
+test('custom-link anchors restate their colour for :focus, over og\'s red focused-link style', async (t) => {
+  // og: a:is(:hover, :focus) { color: var(--color-link-hover); text-decoration: underline; } outweighs a bare class, so
+  // a clicked tile turned red until focus moved. happy-dom gives :is() no specificity, so check the rules exist.
+  const b = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
+  t.after(() => b.window.close());
+  await wait(50);
+  const css = [...b.document.querySelectorAll('style')].map((style) => style.textContent).join('\n');
+  assert.match(css, /\.ogt-service-link:focus\s*\{[^}]*color:[^}]*text-decoration:\s*none/);
+  assert.match(css, /\.ogt-watch-now-link:focus,/);
+});
+
+test('the picker looks up the episode IMDb id so IMDb and OpenSubtitles open the episode', async (t) => {
+  const episodes = { '1/1': 'tt0959621', '2/3': 'tt1232248' };
+  const requested = [];
+  const b = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: {
+      'trakt.clientId': 'client',
+      'watch.customLinks': [
+        { label: 'IMDb', url: 'https://www.imdb.com/find/?q={title}' },
+        { label: 'OpenSubtitles', url: 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{imdbnum}' },
+      ],
+    },
+    gmRequest(options) {
+      const path = new URL(options.url).pathname;
+      const match = path.match(/^\/shows\/breaking-bad\/seasons\/(\d+)\/episodes\/(\d+)$/);
+      let body = null;
+      if (match) {
+        requested.push(`${match[1]}/${match[2]}`);
+        body = { season: Number(match[1]), number: Number(match[2]), ids: { imdb: episodes[`${match[1]}/${match[2]}`] ?? null } };
+      } else if (path === '/shows/breaking-bad/seasons') {
+        body = [{ number: 1, episode_count: 7 }, { number: 2, episode_count: 13 }];
+      }
+      setTimeout(() => options.onload(body
+        ? { status: 200, responseHeaders: '', responseText: JSON.stringify(body) }
+        : { status: 404, responseHeaders: '', responseText: '' }), 0);
+      return { abort() {} };
+    },
+  });
+  t.after(() => b.window.close());
+  const href = (label) => chip(b.document, label).getAttribute('href');
+  const until = async (check) => {
+    for (let i = 0; i < 50 && !check(); i++) await wait(20);
+  };
+
+  await until(() => href('IMDb') === 'https://www.imdb.com/title/tt0959621/');
+  assert.equal(href('IMDb'), 'https://www.imdb.com/title/tt0959621/');
+  assert.equal(href('OpenSubtitles'), 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-959621');
+
+  const season = b.document.querySelector('#ogt-custom-links select[aria-label="Season"]');
+  season.value = '2';
+  season.dispatchEvent(new b.window.Event('change'));
+  assert.equal(href('IMDb'), 'https://www.imdb.com/title/tt0903747/episodes?season=2', 'season route until the id arrives');
+  const episode = b.document.querySelector('#ogt-custom-links input[aria-label="Episode"]');
+  episode.value = '3';
+  episode.dispatchEvent(new b.window.Event('change'));
+  await until(() => href('IMDb') === 'https://www.imdb.com/title/tt1232248/');
+  assert.equal(href('IMDb'), 'https://www.imdb.com/title/tt1232248/');
+  assert.equal(href('OpenSubtitles'), 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-1232248');
+
+  season.value = '1';
+  season.dispatchEvent(new b.window.Event('change'));
+  assert.equal(href('IMDb'), 'https://www.imdb.com/title/tt0959621/', 'a looked-up episode is reused');
+  assert.deepEqual(requested, ['1/1', '2/1', '2/3']);
+});
 
 test('Rotten Tomatoes uses OG’s exact title URL and keeps search when it is missing', async t => {
   const preset = { label: 'Rotten Tomatoes', url: 'https://www.rottentomatoes.com/search?search={title}' };

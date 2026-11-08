@@ -1,13 +1,12 @@
 /**
- * Custom links panel on title pages.
+ * Custom links below the summary poster, with compact service marks and a Watch Now integration.
  *
- * Adds user-configured links with template placeholders like {title}, {tmdb},
- * {season}, {episode}. The links work from the DOM alone; a client ID only
- * improves the episode counts behind the season/episode pickers.
+ * The saved `watch.customLinks` list is still the only configuration: the compact strip, its management
+ * dialog and the extra Watch Now section all resolve the same entries, in the same order, through
+ * `resolveCustomLinks`. Links are ordinary anchors; nothing here intercepts clicks or triggers playback.
  */
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
-import { fillTemplate, missingPlaceholders } from '../../core/text.js';
 import {
   getSelection,
   setSelection,
@@ -17,8 +16,6 @@ import {
   getServers,
   setServers,
   normalizeServerUrl,
-  SERVER_KEYS,
-  isCustomLinkUrl,
 } from '../../settings.js';
 import {
   addPresets,
@@ -28,17 +25,23 @@ import {
   presetAlreadyAdded,
   readSeasons,
   readTitleData,
+  resolveCustomLinks,
   selectionForRoute,
   showTemplateData,
   templateVars,
   validateCustomLinks,
+  watchNowLinks,
 } from './data.js';
-import { PRESETS, presetTemplateUrls, resolvePresetUrl } from './presets.js';
+import { PRESETS, presetTemplateUrls } from './presets.js';
+import { hasServiceIcon, serviceColor, serviceIcon } from './icons.js';
 import { getSeasons } from '../../core/trakt.js';
-import { getShowDetails } from './api.js';
+import { getEpisode, getShowDetails } from './api.js';
 
 const PANEL_ID = 'ogt-custom-links';
 const TITLE_ID = 'ogt-custom-links-title';
+const MANAGER_ID = 'ogt-custom-links-manager';
+const FALLBACK_ATTR = 'data-ogt-watch-fallback';
+const WATCH_ATTR = 'data-ogt-watch-now';
 const SERVER_FIELDS = [
   { key: 'jellyfin', label: 'Jellyfin', placeholder: 'http://192.168.1.20:8096' },
   { key: 'emby', label: 'Emby', placeholder: 'http://192.168.1.20:8096' },
@@ -46,16 +49,34 @@ const SERVER_FIELDS = [
   { key: 'sonarr', label: 'Sonarr', placeholder: 'http://192.168.1.20:8989' },
   { key: 'seerr', label: 'Seerr', placeholder: 'http://192.168.1.20:5055' },
 ];
-/** Where the panel belongs: under the summary's stats, above its full-width sections. */
-function findMountPoint() {
-  const top = document.querySelector('.summary-frame #overview .top') || document.querySelector('#overview .top');
+
+function desktopTarget(aside) {
+  // Native external links are the last tools in the sidebar; sit right above them, below the poster/Watch Now.
+  const external = aside.querySelector('ul.external-links');
+  if (external) return { parent: external.parentElement, before: external };
+
+  const watchNow = aside.querySelector('.watch-now');
+  if (watchNow) {
+    // Keep the panel after Watch Now's own dialog; inserting between an adjacent button and dialog can break og's
+    // native positioning.
+    const next = watchNow.nextElementSibling;
+    return { parent: watchNow.parentElement, before: next?.tagName === 'DIALOG' ? next.nextSibling : watchNow.nextSibling };
+  }
+
+  const poster = aside.querySelector('.summary-poster');
+  const holder = poster?.closest('a.poster-link') || poster;
+  if (holder?.parentElement) return { parent: holder.parentElement, before: holder.nextSibling };
+
+  return { parent: aside, before: null };
+}
+
+/** OG is desktop-only (phones and portrait tablets get a splash), so the summary sidebar is the one home. */
+function findMountTarget() {
+  const aside = document.querySelector('aside.sidebar');
+  if (aside) return desktopTarget(aside);
+
+  const top = document.querySelector('#overview .top') || document.querySelector('.summary-frame .top');
   if (top?.parentElement) return { parent: top.parentElement, before: top.nextSibling };
-
-  const overview = document.querySelector('#overview');
-  if (overview) return { parent: overview, before: null };
-
-  const hero = document.querySelector('.fanart-header');
-  if (hero?.parentElement) return { parent: hero.parentElement, before: hero.nextSibling };
 
   return null;
 }
@@ -64,16 +85,88 @@ function seasonLabel(number) {
   return number === 0 ? 'Specials' : `Season ${number}`;
 }
 
-function chip({ label, href, template }) {
-  const link = el('a', {
-    class: 'ogt-chip',
-    href,
-    target: '_blank',
-    rel: 'noopener noreferrer',
-    text: label,
-  });
-  if (template) link.dataset.ogtTemplate = template;
-  return link;
+/**
+ * Sidebar strip tiles, laid out like OG's `ul.external-links` grid: reference sites are square logo tiles, watch and
+ * library services are wide logo-and-name tiles, and links without a known mark are wide text tiles.
+ */
+const ICON_ADD = 'M12 5v14M5 12h14';
+const ICON_SERVER = 'M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01';
+const ICON_EDIT = 'M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4';
+
+/** A management button styled like og's square sidebar actions: a stroked icon over a short label. */
+function manageButton(name, text, d) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const path = document.createElementNS(svg.namespaceURI, 'path');
+  for (const [key, value] of Object.entries({ d, fill: 'none', stroke: 'currentColor', 'stroke-width': '2',
+    'stroke-linecap': 'round', 'stroke-linejoin': 'round' })) path.setAttribute(key, value);
+  svg.append(path);
+  return el('button', { class: 'ogt-manage-button', type: 'button', 'aria-label': name, title: name },
+    svg, el('span', { text }));
+}
+
+function compactLink(entry) {
+  const label = entry.label.trim() || 'Custom link';
+  const icon = serviceIcon(entry.icon);
+  const variant = !icon ? 'text' : entry.surface === 'reference' ? 'icon' : 'tile';
+  return el(
+    'a',
+    {
+      class: `ogt-service-link ogt-service-link--${variant}`,
+      href: entry.href,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      'aria-label': label,
+      'data-ogt-tooltip': label,
+      'data-ogt-surface': entry.surface,
+      style: serviceColor(entry.icon) ? `--ogt-brand-tile:${serviceColor(entry.icon)}` : undefined,
+    },
+    icon,
+    variant === 'icon' ? null : el('span', { class: 'ogt-service-label', text: label }),
+  );
+}
+
+const SURFACE_NOTES = { watch: 'Your service', library: 'Add to library' };
+
+/** A Watch Now tile shaped like OG's provider tiles: a 2:1 logo card with a note underneath. */
+function watchLink(entry) {
+  const label = entry.label.trim() || 'Custom link';
+  return el(
+    'a',
+    {
+      class: 'ogt-watch-now-link',
+      href: entry.href,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      'aria-label': label,
+      'data-ogt-surface': entry.surface,
+      style: serviceColor(entry.icon) ? `--ogt-brand-tile:${serviceColor(entry.icon)}` : undefined,
+    },
+    el('span', { class: 'ogt-watch-now-card' }, serviceIcon(entry.icon), el('span', { class: 'ogt-service-name', text: label })),
+    el('span', { class: 'ogt-watch-now-note', text: SURFACE_NOTES[entry.surface] || 'Your link' }),
+  );
+}
+
+function signatureFor(entries) {
+  return JSON.stringify(entries.map(({ label, href, icon, surface }) => [label, href, icon, surface]));
+}
+
+/** Watch Now dialogs that belong to this summary: a `.watch-now` with a direct dialog sibling. */
+function watchNowContainers() {
+  const containers = [];
+  for (const watchNow of document.querySelectorAll('.watch-now')) {
+    const parent = watchNow.parentElement;
+    if (!parent) continue;
+    for (const child of parent.children) {
+      if (child.tagName !== 'DIALOG') continue;
+      const links = child.querySelector('.streaming-links');
+      if (!links || !/watch now/i.test(child.textContent || '')) continue;
+      if (!containers.includes(links)) containers.push(links);
+    }
+  }
+  return containers;
 }
 
 function createPanel(meta, route) {
@@ -84,100 +177,99 @@ function createPanel(meta, route) {
   const fixedSelection = route.name === 'season' || route.name === 'episode';
   let selection = selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
 
-  const linksRow = el('div', { class: 'ogt-row ogt-links' });
-  const controlsRow = el('div', { class: 'ogt-row', hidden: true });
-  const actionsRow = el('div', { class: 'ogt-row ogt-link-actions' });
-  const tools = el('div', { class: 'ogt-link-tools', hidden: true });
+  const linksRow = el('div', { class: 'ogt-links' });
+  const controlsRow = el('div', { class: 'ogt-row ogt-fields', hidden: true });
+  const watchFallback = el('div', { class: 'ogt-watch-fallback', hidden: true, [FALLBACK_ATTR]: '' });
   const editor = el('div', { class: 'ogt-editor', hidden: true });
   const presetChecklist = el('div', { class: 'ogt-presets', hidden: true });
   const serversPanel = el('div', { class: 'ogt-servers', hidden: true });
-  tools.append(editor, presetChecklist, serversPanel);
-  const presetsButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Add presets…' });
-  const serversButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Servers…' });
-  const editButton = el('button', { class: 'ogt-chip', type: 'button', text: 'Edit links' });
-  actionsRow.append(presetsButton, serversButton, editButton);
+
+  const presetsButton = manageButton('Add presets…', 'Presets', ICON_ADD);
+  const serversButton = manageButton('Servers…', 'Servers', ICON_SERVER);
+  const editButton = manageButton('Edit links', 'Edit', ICON_EDIT);
+  const closeButton = el('button', { class: 'ogt-manager-close', type: 'button', text: 'Close' });
+
+  const manager = el(
+    'dialog',
+    { class: 'ogt-manager', id: MANAGER_ID, 'aria-labelledby': `${MANAGER_ID}-title` },
+    el(
+      'div',
+      { class: 'ogt-manager-panel' },
+      el(
+        'header',
+        { class: 'ogt-manager-head' },
+        el('h2', { class: 'ogt-manager-title', id: `${MANAGER_ID}-title`, text: 'Custom links' }),
+        closeButton,
+      ),
+      el('div', { class: 'ogt-manager-body' }, editor, presetChecklist, serversPanel),
+    ),
+  );
 
   const node = el(
     'section',
-    { class: 'ogt-panel', id: PANEL_ID, 'aria-labelledby': TITLE_ID },
+    { class: 'ogt-panel ogt-links-compact', id: PANEL_ID, 'aria-labelledby': TITLE_ID },
     el(
       'div',
-      { class: 'ogt-head' },
-      el('h2', { class: 'ogt-title', id: TITLE_ID, text: 'Custom links' }),
-      el('span', { class: 'ogt-badge', text: 'og toolkit' }),
+      { class: 'ogt-links-head' },
+      el('h2', { class: 'ogt-visually-hidden', id: TITLE_ID, text: 'Custom links' }),
+      linksRow,
     ),
-    linksRow,
+    watchFallback,
     controlsRow,
-    actionsRow,
-    tools,
+    el('div', { class: 'ogt-links-manage' }, presetsButton, serversButton, editButton),
   );
 
-  const vars = () => templateVars(meta, selection, getServers());
-
-  function updateLinkHrefs() {
-    const values = vars();
-    for (const link of linksRow.querySelectorAll('[data-ogt-template]')) {
-      const template = resolvePresetUrl(link.dataset.ogtTemplate, values, meta.kind);
-      if (!template || missingPlaceholders(template, values).length) continue;
-      link.setAttribute('href', fillTemplate(template, values, SERVER_KEYS));
-    }
-  }
-
-  function renderLinks() {
-    const values = vars();
-    linksRow.replaceChildren();
-
-    const links = getCustomLinks();
-    if (!links.length) {
-      linksRow.append(
-        el('p', { class: 'ogt-hint', text: 'Add links to your own services: Plex, Jellyfin, Sonarr, or any URL.' }),
-      );
-    }
-
-    for (const entry of links) {
-      if (!isCustomLinkUrl(entry.url)) continue;
-      const template = resolvePresetUrl(entry.url, values, meta.kind);
-      if (!template || missingPlaceholders(template, values).length) continue;
-      linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values, SERVER_KEYS), template: entry.url }));
-    }
-    lookUpShow(values);
-  }
-
-  let showRequested = false;
-  /** Season/episode pages: fetch the show once a link needs what og's page doesn't give (the show's year, an episode
-   *  page's IMDb id). This runs on every render, so a link added in the editor triggers it too. Without a client ID
-   *  those links stay hidden rather than point at the season or episode. */
-  function lookUpShow(values) {
-    if (!fixedSelection || showRequested || !getClientId()) return;
-    const missing = ['year', 'tmdb', 'imdb', 'tvdb'].filter((key) => meta[key] == null);
-    if (!missing.length) return;
-    // Deep preset routes may need the show's IMDb id even though the stored search URL doesn't.
-    const needed = missing.flatMap((key) => (key === 'imdb' ? ['{imdb}', '{imdbnum}'] : [`{${key}}`]));
-    if (!getCustomLinks().some((entry) =>
-      presetTemplateUrls(entry.url, meta.kind).some((template) =>
-        needed.some((placeholder) => template.includes(placeholder))))
-    ) return;
-    showRequested = true;
-    getShowDetails(route.id)
-      .then((show) => setMeta(showTemplateData(show)))
-      .catch((error) => { if (!cancelled) debugError('show lookup failed', error); });
-  }
+  // Episode IMDb ids from the API, by "season:episode": the picker on a show page (and an episode page whose IMDb link
+  // og didn't render) has no other source for them. `null` means looked up (or in flight) without an id.
+  const episodeImdbs = new Map();
+  const episodeKey = () => `${selection.season}:${selection.episode}`;
+  const vars = () => templateVars(
+    meta.episodeImdb ? meta : { ...meta, episodeImdb: episodeImdbs.get(episodeKey()) ?? null },
+    selection,
+    getServers(),
+  );
 
   let currentView = null;
   let returnFocus = null;
   let draft = [];
   let nextDraftId = 0;
   let selectedPresets = new Set();
+  let renderedEntries = [];
+
+  function restoreFocus(target) {
+    if (cancelled || !target?.isConnected) return;
+    target.focus?.();
+  }
 
   function closeTools() {
     currentView = null;
-    tools.hidden = true;
     editor.hidden = true;
     presetChecklist.hidden = true;
     serversPanel.hidden = true;
     const target = returnFocus;
     returnFocus = null;
-    target?.focus();
+    if (manager.open) {
+      manager.close();
+      // The close event sees returnFocus already cleared, so restore here for the programmatic path.
+      restoreFocus(target);
+    } else {
+      manager.removeAttribute('open');
+      restoreFocus(target);
+    }
+  }
+
+  function openManager(view, opener, render) {
+    currentView = view;
+    returnFocus = opener;
+    editor.hidden = view !== 'editor';
+    presetChecklist.hidden = view !== 'presets';
+    serversPanel.hidden = view !== 'servers';
+    if (typeof manager.showModal === 'function') {
+      if (!manager.open) manager.showModal();
+    } else {
+      manager.setAttribute('open', '');
+    }
+    render();
   }
 
   function renderEditor(focusKey) {
@@ -298,14 +390,9 @@ function createPanel(meta, route) {
   }
 
   function openEditor() {
-    currentView = 'editor';
     returnFocus = editButton;
     draft = getCustomLinks().map((link) => ({ ...link, id: nextDraftId++ }));
-    tools.hidden = false;
-    editor.hidden = false;
-    presetChecklist.hidden = true;
-    serversPanel.hidden = true;
-    renderEditor(draft.length ? `${draft[0].id}-label` : 'add-link');
+    openManager('editor', editButton, () => renderEditor(draft.length ? `${draft[0].id}-label` : 'add-link'));
   }
 
   function renderServers() {
@@ -364,13 +451,8 @@ function createPanel(meta, route) {
   }
 
   function openServers() {
-    currentView = 'servers';
     returnFocus = serversButton;
-    tools.hidden = false;
-    editor.hidden = true;
-    presetChecklist.hidden = true;
-    serversPanel.hidden = false;
-    renderServers();
+    openManager('servers', serversButton, renderServers);
   }
 
   function renderPresetChecklist() {
@@ -395,7 +477,7 @@ function createPanel(meta, route) {
       });
       const label = el(
         'label',
-        { class: 'ogt-preset-item', for: `ogt-preset-${index}` },
+        { class: 'ogt-preset-item', for: `${MANAGER_ID}-preset-${index}` },
         checkbox,
         el('span', { text: preset.label }),
         added
@@ -404,7 +486,7 @@ function createPanel(meta, route) {
             ? el('span', { class: 'ogt-preset-added', text: 'set server URL' })
             : null,
       );
-      checkbox.id = `ogt-preset-${index}`;
+      checkbox.id = `${MANAGER_ID}-preset-${index}`;
       list.append(label);
     }
 
@@ -431,15 +513,12 @@ function createPanel(meta, route) {
   }
 
   function openPresets() {
-    currentView = 'presets';
     returnFocus = presetsButton;
-    tools.hidden = false;
-    editor.hidden = true;
-    serversPanel.hidden = true;
-    presetChecklist.hidden = false;
-    renderPresetChecklist();
-    const firstChoice = presetChecklist.querySelector('input[type="checkbox"]:not(:disabled)');
-    (firstChoice || presetChecklist.querySelector('button'))?.focus();
+    openManager('presets', presetsButton, () => {
+      renderPresetChecklist();
+      const firstChoice = presetChecklist.querySelector('input[type="checkbox"]:not(:disabled)');
+      (firstChoice || presetChecklist.querySelector('button'))?.focus();
+    });
   }
 
   function onKeyDown(event) {
@@ -452,7 +531,146 @@ function createPanel(meta, route) {
   presetsButton.addEventListener('click', openPresets);
   serversButton.addEventListener('click', openServers);
   editButton.addEventListener('click', openEditor);
-  node.addEventListener('keydown', onKeyDown);
+  closeButton.addEventListener('click', closeTools);
+  manager.addEventListener('keydown', onKeyDown);
+  manager.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    closeTools();
+  });
+  manager.addEventListener('close', () => {
+    currentView = null;
+    editor.hidden = true;
+    presetChecklist.hidden = true;
+    serversPanel.hidden = true;
+    const target = returnFocus;
+    returnFocus = null;
+    restoreFocus(target);
+  });
+
+  function renderLinks() {
+    const values = vars();
+    const entries = resolveCustomLinks(getCustomLinks(), values, meta.kind);
+    renderedEntries = entries;
+    linksRow.replaceChildren();
+
+    if (!entries.length) {
+      linksRow.append(
+        el('p', { class: 'ogt-hint', text: 'Add links to your own services: Plex, Jellyfin, Sonarr, or any URL.' }),
+      );
+    }
+
+    // Grouped like og's sidebar: service rows first, then the square logo grid, then text-only links.
+    const services = entries.filter((entry) => entry.surface !== 'reference' && hasServiceIcon(entry.icon));
+    const logos = entries.filter((entry) => entry.surface === 'reference' && hasServiceIcon(entry.icon));
+    const texts = entries.filter((entry) => !hasServiceIcon(entry.icon));
+    for (const [kind, group] of [['services', services], ['logos', logos], ['texts', texts]]) {
+      if (group.length) linksRow.append(el('div', { class: `ogt-links-group ogt-links-${kind}` }, group.map(compactLink)));
+    }
+    syncWatchNow(entries);
+    lookUpShow(values);
+    lookUpEpisode();
+  }
+
+  /** Add only watch/play/library links to OG's own Watch Now dialogs; keep every native section and count. */
+  function syncWatchNow(entries = renderedEntries) {
+    const watch = watchNowLinks(entries);
+    const containers = watchNowContainers();
+
+    for (const section of document.querySelectorAll(`[${WATCH_ATTR}]`)) {
+      if (!containers.includes(section.parentElement)) section.remove();
+    }
+
+    if (!watch.length) {
+      watchFallback.hidden = true;
+      watchFallback.replaceChildren();
+      delete watchFallback.dataset.ogtSignature;
+      return;
+    }
+
+    const signature = signatureFor(watch);
+    for (const container of containers) {
+      const existing = container.querySelector(`:scope > [${WATCH_ATTR}]`);
+      if (existing?.dataset.ogtSignature === signature) continue;
+      existing?.remove();
+      container.append(
+        el(
+          'div',
+          { class: 'ogt-watch-now-section', [WATCH_ATTR]: '', 'data-ogt-signature': signature },
+          el(
+            'h3',
+            { class: 'section-title' },
+            'Your services',
+            el('span', { class: 'count', text: String(watch.length) }),
+          ),
+          el('div', { class: 'tiles ogt-watch-now-tiles' }, watch.map(watchLink)),
+        ),
+      );
+    }
+
+    if (!containers.length) {
+      if (watchFallback.dataset.ogtSignature !== signature) {
+        watchFallback.replaceChildren(
+          el(
+            'div',
+            { class: 'ogt-watch-fallback-head' },
+            el('span', { class: 'ogt-watch-fallback-title', text: 'Watch Now' }),
+            el('span', { class: 'ogt-watch-fallback-note', text: 'your links' }),
+          ),
+          el('div', { class: 'ogt-watch-now-tiles' }, watch.map(watchLink)),
+        );
+        watchFallback.dataset.ogtSignature = signature;
+      }
+      watchFallback.hidden = false;
+    } else {
+      watchFallback.hidden = true;
+    }
+  }
+
+  let showRequested = false;
+  /** Season/episode pages: fetch the show once a link needs what og's page doesn't give (the show's year, an episode
+   *  page's IMDb id). This runs on every render, so a link added in the editor triggers it too. Without a client ID
+   *  those links stay hidden rather than point at the season or episode. */
+  function lookUpShow(values) {
+    if (!fixedSelection || showRequested || !getClientId()) return;
+    const missing = ['year', 'tmdb', 'imdb', 'tvdb'].filter((key) => meta[key] == null);
+    if (!missing.length) return;
+    // Deep preset routes may need the show's IMDb id even though the stored search URL doesn't.
+    const needed = missing.flatMap((key) => (key === 'imdb' ? ['{imdb}', '{imdbnum}'] : [`{${key}}`]));
+    if (!getCustomLinks().some((entry) =>
+      presetTemplateUrls(entry.url, meta.kind).some((template) =>
+        needed.some((placeholder) => template.includes(placeholder)))))
+      return;
+    showRequested = true;
+    getShowDetails(route.id)
+      .then((show) => setMeta(showTemplateData(show)))
+      .catch((error) => { if (!cancelled) debugError('show lookup failed', error); });
+  }
+
+  /** The picked episode's own IMDb id, so IMDb and OpenSubtitles open that episode rather than its season. Until it
+   *  returns (or without a client ID) those links keep their season route. Each episode is asked for once. */
+  function lookUpEpisode() {
+    if (meta.kind !== 'show' || meta.episodeImdb || !getClientId()) return;
+    const { season, episode } = selection;
+    if (season == null || episode == null) return;
+    const key = episodeKey();
+    if (episodeImdbs.has(key)) return;
+    if (!getCustomLinks().some((entry) =>
+      presetTemplateUrls(entry.url, meta.kind).some((template) => /\{episodeimdb(?:num)?\}/.test(template))))
+      return;
+    episodeImdbs.set(key, null);
+    getEpisode(meta.id, season, episode)
+      .then((data) => {
+        if (cancelled) return;
+        const imdb = typeof data?.ids?.imdb === 'string' && /^tt\d+$/.test(data.ids.imdb) ? data.ids.imdb : null;
+        episodeImdbs.set(key, imdb);
+        if (imdb && key === episodeKey()) renderLinks();
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        episodeImdbs.delete(key); // picking the episode again retries
+        debugError('episode lookup failed', error);
+      });
+  }
 
   function needsSelection() {
     return !fixedSelection && getCustomLinks().some((entry) =>
@@ -465,8 +683,8 @@ function createPanel(meta, route) {
 
   const seasonSelect = el('select', { class: 'ogt-select', 'aria-label': 'Season' });
   const episodeSlot = el('span', { class: 'ogt-episode' });
-  const seasonField = el('label', { class: 'ogt-field' }, 'Season', seasonSelect);
-  const episodeField = el('label', { class: 'ogt-field' }, 'Episode', episodeSlot);
+  const seasonField = el('label', { class: 'ogt-field' }, el('span', { class: 'ogt-visually-hidden', text: 'Season' }), seasonSelect);
+  const episodeField = el('label', { class: 'ogt-field' }, el('span', { class: 'ogt-visually-hidden', text: 'Episode' }), episodeSlot);
   let controlsBuilt = false;
 
   function ensureControls() {
@@ -476,7 +694,7 @@ function createPanel(meta, route) {
       selection.episode = 1;
       persistSelection();
       renderEpisodeField();
-      updateLinkHrefs();
+      renderLinks();
     });
     controlsRow.replaceChildren(seasonField, episodeField);
     controlsBuilt = true;
@@ -507,12 +725,13 @@ function createPanel(meta, route) {
         if (Number.isInteger(value) && value >= 1 && value <= count) {
           selection.episode = value;
           persistSelection();
-          updateLinkHrefs();
+          renderLinks();
         } else {
           input.value = String(selection.episode);
         }
       });
-      episodeSlot.replaceChildren(input);
+      // A bare number box would read as just "1"; the select's options already say "Episode 1".
+      episodeSlot.replaceChildren(el('span', { class: 'ogt-field-prefix', 'aria-hidden': 'true', text: 'Ep.' }), input);
       return;
     }
 
@@ -524,7 +743,7 @@ function createPanel(meta, route) {
     select.addEventListener('change', () => {
       selection.episode = Number(select.value);
       persistSelection();
-      updateLinkHrefs();
+      renderLinks();
     });
     episodeSlot.replaceChildren(select);
   }
@@ -556,7 +775,6 @@ function createPanel(meta, route) {
     renderEpisodeField();
     // Re-render so templates that need {season}/{episode} appear now that they have values.
     renderLinks();
-    updateLinkHrefs();
   }
 
   /** Trakt's API policy asks apps to use documented endpoints rather than read the site. When a client
@@ -618,18 +836,65 @@ function createPanel(meta, route) {
     renderLinks();
   }
 
+  /** Keep the one panel above og's sidebar external links when og re-renders around it. */
+  function place() {
+    const target = findMountTarget();
+    if (!target) return;
+    if (target.before) {
+      if (node.parentElement === target.parent && node.nextSibling === target.before) return;
+      target.parent.insertBefore(node, target.before);
+    } else {
+      if (node.parentElement === target.parent && !node.nextSibling) return;
+      target.parent.append(node);
+    }
+  }
+
+
+  let watchTimer = null;
+  const observer = new MutationObserver(() => {
+    if (cancelled || watchTimer) return;
+    watchTimer = setTimeout(() => {
+      watchTimer = null;
+      if (cancelled) return;
+      place();
+      syncWatchNow(renderedEntries);
+    }, 60);
+  });
+
+  /** Watch only the summary areas this feature can move between or inject into, not the whole page. */
+  function observeAreas() {
+    observer.disconnect();
+    const roots = new Set();
+    const aside = document.querySelector('aside.sidebar');
+    const overview = document.querySelector('#overview');
+    if (aside) roots.add(aside);
+    if (overview) roots.add(overview);
+    if (!roots.size) roots.add(document.querySelector('.summary-frame') || document.body);
+    for (const root of roots) observer.observe(root, { childList: true, subtree: true });
+  }
+
+  document.addEventListener('ogt:refresh', onRefresh);
+  observeAreas();
   renderLinks();
   if (meta.kind === 'show' && needsSelection()) loadSeasons();
   else renderControls();
-  document.addEventListener('ogt:refresh', onRefresh);
 
   return {
     node,
+    manager,
+    place,
     destroy() {
       cancelled = true;
+      if (watchTimer) clearTimeout(watchTimer);
+      watchTimer = null;
       for (const timer of timers) clearTimeout(timer);
       timers.length = 0;
+      observer.disconnect();
       document.removeEventListener('ogt:refresh', onRefresh);
+      for (const section of document.querySelectorAll(`[${WATCH_ATTR}]`)) section.remove();
+      watchFallback.replaceChildren();
+      if (manager.open) manager.close();
+      manager.remove();
       node.remove();
     },
   };
@@ -646,11 +911,14 @@ export const customLinks = {
     const meta = readTitleData(document, route);
     if (!meta.id) return null;
 
-    const mount = findMountPoint();
-    if (!mount) return null;
+    const target = findMountTarget();
+    if (!target) return null;
 
     const panel = createPanel(meta, route);
-    mount.parent.insertBefore(panel.node, mount.before);
+    // Keep the modal outside the movable panel: moving a node that contains an open dialog closes it.
+    document.body.append(panel.manager);
+    target.parent.insertBefore(panel.node, target.before);
+    panel.place();
 
     return panel;
   },

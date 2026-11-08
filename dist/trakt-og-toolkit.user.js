@@ -293,6 +293,552 @@
   text-transform: uppercase;
 }
 
+/* Compact link strip below the summary poster; the same node moves into OG's phone tools under 768px. */
+.ogt-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ogt-links-compact {
+  /* Flat like OG's own sidebar groups, not a boxed panel. */
+  margin: 10px 0 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+}
+
+.ogt-links-head {
+  display: grid;
+  gap: 7px;
+}
+
+/* Grouped strip: full-row services, then the same 4-column logo grid as og's ul.external-links, then text links. */
+.ogt-links,
+.ogt-links-services {
+  display: grid;
+  gap: 6px;
+}
+
+.ogt-links-logos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ogt-links-texts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ogt-links-texts .ogt-service-link--text {
+  grid-column: auto;
+}
+
+.ogt-links .ogt-hint {
+  grid-column: 1 / -1;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.ogt-service-link {
+  --ogt-tile-bg: rgba(255, 255, 255, 0.05);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-inline-size: 0;
+  block-size: 100%;
+  min-block-size: 36px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--ogt-tile-bg);
+  color: light-dark(#444, #d9d9d9);
+  text-decoration: none;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.ogt-service-link--icon {
+  aspect-ratio: 1;
+}
+
+/* OG's sidebar is ~170px wide: a service tile takes the whole row so its name fits beside the logo. */
+.ogt-service-link--tile {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+  padding: 6px 10px;
+}
+
+.ogt-service-link--text {
+  grid-column: span 2;
+  justify-content: center;
+  padding: 4px 6px;
+  text-align: center;
+}
+
+.ogt-service-link--text .ogt-service-label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 11px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.ogt-service-link--tile {
+  background: color-mix(in srgb, var(--ogt-brand-tile, #888) 14%, var(--ogt-tile-bg));
+}
+
+/* og colours any focused link red and underlines it (a:is(:hover, :focus), 0-1-1), so a clicked tile kept that until
+   focus moved. Restate the resting colour for :focus; the hover rule below has the same weight and wins. */
+.ogt-service-link:focus {
+  color: light-dark(#444, #d9d9d9);
+  text-decoration: none;
+}
+
+.ogt-service-link:hover,
+.ogt-service-link:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  color: light-dark(#111, #fff);
+  text-decoration: none;
+}
+
+.ogt-service-link:focus-visible {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 2px;
+}
+
+.ogt-service-label {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ogt-service-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: 22px;
+  block-size: 22px;
+  color: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.ogt-service-icon svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/* Square reference tiles are monochrome like OG's own until hovered; wide service tiles keep their brand colour. */
+.ogt-service-link--icon:hover .ogt-service-icon,
+.ogt-service-link--icon:focus-visible .ogt-service-icon,
+.ogt-service-link--tile .ogt-service-icon,
+.ogt-watch-now-card .ogt-service-icon {
+  color: var(--ogt-brand, currentColor);
+}
+
+.ogt-service-icon[data-ogt-mark="text"] {
+  inline-size: auto;
+  min-inline-size: 22px;
+  padding-inline: 2px;
+}
+
+.ogt-service-link::after {
+  content: attr(data-ogt-tooltip);
+  position: absolute;
+  z-index: 10;
+  inset-block-start: 50%;
+  inset-inline-start: calc(100% + 7px);
+  transform: translateY(-50%);
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: light-dark(#222, #f2f2f2);
+  color: light-dark(#fff, #111);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease;
+}
+
+.ogt-service-link:hover::after,
+.ogt-service-link:focus-visible::after {
+  opacity: 1;
+}
+
+.ogt-links-manage {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-block-start: 10px;
+}
+
+/* Square glass actions like og's sidebar tiles, not pills. */
+.ogt-manage-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-inline-size: 0;
+  block-size: 48px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: light-dark(#444, #d9d9d9);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.ogt-manage-button svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.ogt-manage-button:hover,
+.ogt-manage-button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  color: light-dark(#111, #fff);
+}
+
+.ogt-manage-button:focus-visible {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 2px;
+}
+
+/* Season/episode pickers look like og's own dropdown triggers ("Sort: Released"). */
+.ogt-links-compact .ogt-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-block-start: 10px;
+}
+
+.ogt-links-compact .ogt-fields[hidden] {
+  display: none;
+}
+
+.ogt-links-compact .ogt-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+  block-size: 34px;
+  padding: 0 8px 0 10px;
+  border: 1px solid light-dark(#d4d4d4, #3b3b3b);
+  border-radius: 8px;
+  background: light-dark(#f2f2f2, #232323);
+  color: var(--ogt-muted);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.ogt-links-compact .ogt-field:focus-within {
+  border-color: light-dark(#999, #5a5a5a);
+}
+
+.ogt-links-compact .ogt-episode {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-inline-size: 0;
+  line-height: 1;
+}
+
+.ogt-links-compact .ogt-select,
+.ogt-links-compact .ogt-input {
+  flex: 1;
+  min-inline-size: 0;
+  padding: 0 14px 0 0;
+  border: 0;
+  background-color: transparent;
+  background-position: calc(100% - 5px) 50%, calc(100% - 1px) 50%;
+  color: var(--ogt-fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ogt-links-compact .ogt-field-prefix {
+  flex: none;
+  margin-inline-end: 4px;
+  color: var(--ogt-muted);
+  font-size: 12px;
+}
+
+.ogt-links-compact input.ogt-input {
+  padding-inline-end: 0;
+  background-image: none;
+}
+
+.ogt-links-compact .ogt-select:focus-visible,
+.ogt-links-compact .ogt-input:focus-visible {
+  outline: none;
+}
+
+.ogt-links-compact .ogt-field:has(:focus-visible) {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 1px;
+}
+
+.ogt-watch-fallback {
+  display: grid;
+  gap: 6px;
+  margin-block-start: 10px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--ogt-border);
+}
+
+.ogt-watch-fallback[hidden] {
+  display: none;
+}
+
+.ogt-watch-fallback-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.ogt-watch-fallback-title {
+  color: var(--ogt-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ogt-watch-fallback-note {
+  color: var(--ogt-muted);
+  font-size: 10px;
+}
+
+.ogt-watch-now-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* Shaped like OG's Watch Now provider tiles: a 2:1 logo card with a note below. */
+.ogt-watch-now-link {
+  display: grid;
+  gap: 5px;
+  min-inline-size: 0;
+  color: var(--ogt-fg, #e6e6e6);
+  text-decoration: none;
+}
+
+.ogt-watch-now-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-inline-size: 0;
+  block-size: 56px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ogt-brand-tile, #888) 22%, #151515);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.ogt-watch-now-card .ogt-service-icon {
+  inline-size: 24px;
+  block-size: 24px;
+  font-size: 10px;
+}
+
+.ogt-watch-now-card .ogt-service-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+
+.ogt-watch-now-note {
+  color: var(--ogt-muted, #9a9a9a);
+  font-size: 12px;
+  line-height: 15px;
+}
+
+.ogt-watch-now-link:focus,
+.ogt-watch-now-link:hover,
+.ogt-watch-now-link:focus-visible {
+  color: var(--ogt-fg, #e6e6e6);
+  text-decoration: none;
+}
+
+.ogt-watch-now-link:hover .ogt-watch-now-card,
+.ogt-watch-now-link:focus-visible .ogt-watch-now-card {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.ogt-watch-now-link:focus-visible {
+  outline: 2px solid var(--ogt-accent, #ed1c24);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.ogt-service-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ogt-watch-now-section {
+  display: grid;
+  gap: 8px;
+}
+
+.ogt-watch-now-section .section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-watch-now-section, var(--ogt-muted));
+  font-size: var(--font-size-watch-now-section, 11px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ogt-watch-now-section .count {
+  color: var(--color-watch-now-section, var(--ogt-muted));
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.ogt-watch-now-section .ogt-watch-now-tiles {
+  /* OG's provider tiles: 118px columns, 16px/14px gaps, a 118x56 logo card. */
+  grid-template-columns: repeat(auto-fill, 118px);
+  gap: 16px 14px;
+}
+
+/* Management forms live in a modal so the narrow sidebar never squeezes them. */
+.ogt-manager {
+  --ogt-fg: light-dark(#333, #e6e6e6);
+  --ogt-muted: light-dark(#767676, #9a9a9a);
+  --ogt-surface: light-dark(#ffffff, #262626);
+  --ogt-raised: light-dark(#f5f5f5, #2f2f2f);
+  --ogt-border: light-dark(#e2e2e2, #3c3c3c);
+  --ogt-accent: var(--brand-primary, #ed1c24);
+  box-sizing: border-box;
+  inline-size: min(680px, calc(100vw - 24px));
+  max-inline-size: calc(100vw - 24px);
+  max-block-size: calc(100dvh - 24px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ogt-fg);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.ogt-manager[open] {
+  display: block;
+}
+
+.ogt-manager::backdrop {
+  background: rgb(0 0 0 / 0.65);
+}
+
+.ogt-manager-panel {
+  display: flex;
+  flex-direction: column;
+  max-block-size: calc(100dvh - 24px);
+  border: 1px solid var(--ogt-border);
+  border-radius: 8px;
+  background: var(--ogt-surface);
+  box-shadow: 0 12px 48px rgb(0 0 0 / 0.45);
+  overflow: hidden;
+}
+
+.ogt-manager-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-block-end: 1px solid var(--ogt-border);
+  background: var(--ogt-raised);
+}
+
+.ogt-manager-title {
+  margin: 0;
+  color: var(--ogt-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ogt-manager-close {
+  min-block-size: 28px;
+  padding: 3px 9px;
+  border: 1px solid var(--ogt-border);
+  border-radius: 4px;
+  background: var(--ogt-surface);
+  color: var(--ogt-fg);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ogt-manager-close:hover,
+.ogt-manager-close:focus-visible {
+  border-color: var(--ogt-accent);
+  color: var(--ogt-accent);
+}
+
+.ogt-manager-close:focus-visible {
+  outline: 2px solid var(--ogt-accent);
+  outline-offset: 1px;
+}
+
+.ogt-manager-body {
+  padding: 14px 16px 16px;
+  overflow: auto;
+}
+
+.ogt-manager .ogt-editor-list-wrap,
+.ogt-manager .ogt-preset-list-wrap {
+  max-block-size: min(50vh, 380px);
+}
+
+.ogt-manager [hidden] {
+  display: none !important;
+}
+
 .ogt-toast {
   position: fixed;
   inset-block-end: 24px;
@@ -335,6 +881,19 @@
 
   .ogt-server-list {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ogt-manager {
+    inline-size: calc(100vw - 16px);
+    max-inline-size: calc(100vw - 16px);
+  }
+
+  .ogt-service-link::after {
+    inset-block-start: auto;
+    inset-block-end: calc(100% + 4px);
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+    transform: none;
   }
 }
 `;
@@ -1041,31 +1600,6 @@
     };
   }
 
-  // src/core/text.js
-  function fillTemplate(template, vars, rawKeys = []) {
-    const raw = rawKeys instanceof Set ? rawKeys : new Set(rawKeys);
-    return template.replace(/\{(\w+)\}/g, (_, key) => {
-      const value = vars[key];
-      if (value === void 0 || value === null || value === "") return "";
-      return raw.has(key) ? String(value) : encodeURIComponent(String(value));
-    });
-  }
-  function missingPlaceholders(template, vars) {
-    const missing = [];
-    for (const [, key] of String(template).matchAll(/\{(\w+)\}/g)) {
-      const value = vars[key];
-      if ((value === void 0 || value === null || value === "") && !missing.includes(key)) missing.push(key);
-    }
-    return missing;
-  }
-  function cleanTitle(value) {
-    return String(value || "").replace(/\s*\(\d{4}\)\s*$/, "").trim();
-  }
-  function parseYear(value) {
-    const match = String(value || "").match(/\b(18|19|20)\d{2}\b/);
-    return match ? Number(match[0]) : null;
-  }
-
   // src/config.js
   var DEFAULT_CLIENT_ID = "";
   var API = {
@@ -1266,6 +1800,407 @@
     return !disabled.has(featureId);
   }
 
+  // src/core/text.js
+  function fillTemplate(template, vars, rawKeys = []) {
+    const raw = rawKeys instanceof Set ? rawKeys : new Set(rawKeys);
+    return template.replace(/\{(\w+)\}/g, (_, key) => {
+      const value = vars[key];
+      if (value === void 0 || value === null || value === "") return "";
+      return raw.has(key) ? String(value) : encodeURIComponent(String(value));
+    });
+  }
+  function missingPlaceholders(template, vars) {
+    const missing = [];
+    for (const [, key] of String(template).matchAll(/\{(\w+)\}/g)) {
+      const value = vars[key];
+      if ((value === void 0 || value === null || value === "") && !missing.includes(key)) missing.push(key);
+    }
+    return missing;
+  }
+  function cleanTitle(value) {
+    return String(value || "").replace(/\s*\(\d{4}\)\s*$/, "").trim();
+  }
+  function parseYear(value) {
+    const match = String(value || "").match(/\b(18|19|20)\d{2}\b/);
+    return match ? Number(match[0]) : null;
+  }
+
+  // src/features/custom-links/presets.js
+  var PRESETS = [
+    {
+      label: "IMDb",
+      url: "https://www.imdb.com/find/?q={title}",
+      icon: "imdb",
+      surface: "reference",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://www.imdb.com/title/{episodeimdb}/", kinds: ["show"] },
+        { url: "https://www.imdb.com/title/{imdb}/episodes?season={season}", kinds: ["show"] },
+        { url: "https://www.imdb.com/title/{imdb}/", kinds: ["movie", "show"] }
+      ]
+    },
+    {
+      label: "TMDb",
+      url: "https://www.themoviedb.org/search?query={title}",
+      icon: "tmdb",
+      surface: "reference",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://www.themoviedb.org/tv/{tmdb}/season/{season}/episode/{episode}", kinds: ["show"] },
+        { url: "https://www.themoviedb.org/tv/{tmdb}/season/{season}", kinds: ["show"] },
+        { url: "https://www.themoviedb.org/movie/{tmdb}", kinds: ["movie"] },
+        { url: "https://www.themoviedb.org/tv/{tmdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "TVDB",
+      url: "https://thetvdb.com/search?query={title}",
+      icon: "tvdb",
+      surface: "reference",
+      kinds: ["show"],
+      deep: [
+        { url: "https://thetvdb.com/dereferrer/series/{tvdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "Letterboxd",
+      url: "https://letterboxd.com/search/{title}/",
+      icon: "letterboxd",
+      surface: "reference",
+      kinds: ["movie"],
+      deep: [
+        { url: "https://letterboxd.com/imdb/{imdb}/", kinds: ["movie"] },
+        { url: "https://letterboxd.com/tmdb/{tmdb}/", kinds: ["movie"] }
+      ]
+    },
+    {
+      label: "Rotten Tomatoes",
+      url: "https://www.rottentomatoes.com/search?search={title}",
+      icon: "rt",
+      surface: "reference",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "Wikipedia",
+      url: "https://en.wikipedia.org/w/index.php?search={title}",
+      icon: "wikipedia",
+      surface: "reference",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "JustWatch",
+      url: "https://www.justwatch.com/us/search?q={title}",
+      icon: "justwatch",
+      // A reference link like og's own JustWatch icon; og's Watch Now dialog is already powered by JustWatch.
+      surface: "reference",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "MyAnimeList",
+      url: "https://myanimelist.net/search/all?q={title}",
+      icon: "mal",
+      surface: "reference",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "Metacritic",
+      url: "https://www.metacritic.com/search/{title}/",
+      icon: "metacritic",
+      surface: "reference",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "Stremio",
+      url: "https://web.stremio.com/#/search?search={title}",
+      icon: "stremio",
+      surface: "watch",
+      kinds: ["movie", "show"],
+      /**
+       * Exact-item routes, most specific first. MetaDetails reads `type`, `id` and `videoId`
+       * from `useParams()`, and its episode search builds the video id as
+       * `<id>:<season>:<episode>`, so that shape opens one episode directly. With `videoId`
+       * unset, `useSeason` reads `?season=` from the same URL, so a season page opens that
+       * season's episode list.
+       */
+      deep: [
+        { url: "https://web.stremio.com/#/detail/series/{imdb}/{imdb}:{season}:{episode}", kinds: ["show"] },
+        { url: "https://web.stremio.com/#/detail/series/{imdb}?season={season}", kinds: ["show"] },
+        { url: "https://web.stremio.com/#/detail/movie/{imdb}", kinds: ["movie"] },
+        { url: "https://web.stremio.com/#/detail/series/{imdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "Debrid Media Manager",
+      url: "https://debridmediamanager.com/search?query={title}",
+      icon: "dmm",
+      surface: "watch",
+      kinds: ["movie", "show"],
+      /**
+       * DMM routes by IMDb id: `movie/:imdbid` and `show/:imdbid/:seasonNum` (from its
+       * `src/pages/movie/[imdbid]/index.tsx` and `src/pages/show/[imdbid]/[seasonNum]/index.tsx`).
+       * It has no episode page, so an episode opens its season instead. Signed-out visits
+       * redirect to `/start`; the deep routes are for a signed-in DMM session.
+       */
+      deep: [
+        { url: "https://debridmediamanager.com/show/{imdb}/{season}", kinds: ["show"] },
+        { url: "https://debridmediamanager.com/movie/{imdb}", kinds: ["movie"] },
+        { url: "https://debridmediamanager.com/show/{imdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "MDBList",
+      // IMDb routes redirect to MDBList's canonical title slug; searches cover titles without an IMDb id.
+      url: "https://mdblist.com/movies/?q_title={title}",
+      icon: "mdblist",
+      surface: "reference",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://mdblist.com/movie/{imdb}", kinds: ["movie"] },
+        { url: "https://mdblist.com/show/{imdb}", kinds: ["show"] },
+        { url: "https://mdblist.com/shows/?q_title={title}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "OpenSubtitles",
+      icon: "opensubtitles",
+      surface: "reference",
+      /**
+       * OpenSubtitles' search takes an IMDb id without `tt` or leading zeroes:
+       * `imdbid` for a movie or episode, and `pimdbid` for a show. The episode
+       * page's own IMDb link supplies the episode id; without it the season route
+       * is the fallback. The stored URL is the movie route, while every show page
+       * resolves to one of the deep routes.
+       */
+      url: "https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{imdbnum}",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{episodeimdbnum}", kinds: ["show"] },
+        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-{imdbnum}/season-{season}", kinds: ["show"] },
+        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-{imdbnum}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "Plex",
+      url: "https://app.plex.tv/desktop/#!/search?query={title}",
+      icon: "plex",
+      surface: "watch",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "AniList",
+      url: "https://anilist.co/search/anime?search={title}",
+      icon: "anilist",
+      surface: "reference",
+      kinds: ["movie", "show"]
+    },
+    {
+      label: "Jellyfin",
+      icon: "jellyfin",
+      surface: "watch",
+      /**
+       * Current web search route; `jellyfin-web` defines `search` without `.html` and reads
+       * `?query=`. The server base URL comes from the Servers settings.
+       */
+      url: "{jellyfin}/web/#/search?query={title}",
+      kinds: ["movie", "show"],
+      requires: "jellyfin"
+    },
+    {
+      label: "Emby",
+      icon: "emby",
+      surface: "watch",
+      /**
+       * Current 4.9 web search page; its search field uses `searchtext`. Older Emby versions
+       * used `/web/search.html` directly, so this remains editable in the link editor.
+       */
+      url: "{emby}/web/index.html#!/list/list.html?type=search&searchtext={title}",
+      kinds: ["movie", "show"],
+      requires: "emby"
+    },
+    {
+      label: "Radarr",
+      url: "{radarr}/add/new?term={title}",
+      icon: "radarr",
+      surface: "library",
+      kinds: ["movie"],
+      requires: "radarr",
+      deep: [
+        { url: "{radarr}/add/new?term=imdb:{imdb}", kinds: ["movie"] },
+        { url: "{radarr}/add/new?term=tmdb:{tmdb}", kinds: ["movie"] }
+      ]
+    },
+    {
+      label: "Sonarr",
+      url: "{sonarr}/add/new?term={title}",
+      icon: "sonarr",
+      surface: "library",
+      kinds: ["show"],
+      requires: "sonarr",
+      deep: [
+        { url: "{sonarr}/add/new?term=tvdb:{tvdb}", kinds: ["show"] }
+      ]
+    },
+    {
+      label: "Seerr",
+      url: "{seerr}/search?query={title}",
+      icon: "seerr",
+      surface: "library",
+      kinds: ["movie", "show"],
+      requires: "seerr",
+      deep: [
+        { url: "{seerr}/movie/{tmdb}", kinds: ["movie"] },
+        { url: "{seerr}/tv/{tmdb}", kinds: ["show"] }
+      ]
+    }
+  ];
+  function findPreset(url) {
+    return PRESETS.find((entry) => entry.url === url) || null;
+  }
+  function presetTemplateUrls(url, kind) {
+    const preset = PRESETS.find((entry) => entry.url === url);
+    if (preset && !preset.kinds.includes(kind)) return [];
+    if (!preset?.deep) return [url];
+    return [url, ...preset.deep.filter((entry) => entry.kinds.includes(kind)).map((entry) => entry.url)];
+  }
+  function resolvePresetUrl(url, vars, kind) {
+    const preset = PRESETS.find((entry) => entry.url === url);
+    if (preset && !preset.kinds.includes(kind)) return null;
+    if (preset?.label === "Rotten Tomatoes" && vars.rottenTomatoesUrl) return vars.rottenTomatoesUrl;
+    if (!preset?.deep) return url;
+    const deep = preset.deep.find(
+      (entry) => entry.kinds.includes(kind) && missingPlaceholders(entry.url, vars).length === 0
+    );
+    return deep ? deep.url : url;
+  }
+
+  // src/features/custom-links/brand-paths.js
+  var BRAND_PATHS = {
+    imdb: "M22.3781 0H1.6218C.7411.0583.0587.7437.0018 1.5953l-.001 20.783c.0585.8761.7125 1.543 1.5559 1.6191A.337.337 0 0 0 1.6016 24h20.7971a.4579.4579 0 0 0 .0437-.002c.8727-.0768 1.5568-.8271 1.5568-1.7085V1.7098c0-.8914-.696-1.6416-1.584-1.7078A.3294.3294 0 0 0 22.3781 0zm0 .496a1.2144 1.2144 0 0 1 1.1252 1.2139v20.5797c0 .6377-.4875 1.1602-1.1045 1.2145H1.6016c-.5967-.0543-1.0645-.5297-1.1053-1.1258V1.6284C.5371 1.0185 1.0184.5364 1.6217.496h20.7564zM4.7954 8.2603v7.3636H2.8899V8.2603h1.9055zm6.5367 0v7.3636H9.6707v-4.9704l-.6711 4.9704H7.813l-.6986-4.8618-.0066 4.8618h-1.668V8.2603h2.468c.0748.4476.1492.9694.2307 1.5734l.2712 1.8713.4407-3.4447h2.4817zm2.9772 1.3289c.0742.0404.122.108.1417.2034.0279.0953.0345.3118.0345.6442v2.8548c0 .4881-.0345.7867-.0955.8954-.0609.1152-.2304.1695-.5018.1695V9.5211c.204 0 .3457.0205.4211.0681zm-.0211 6.0347c.4543 0 .8006-.0265 1.0245-.0742.2304-.0477.4204-.1357.5694-.2648.1556-.1218.2642-.298.3251-.5219.0611-.2238.1021-.6648.1021-1.3224v-2.5832c0-.6986-.0271-1.1668-.0742-1.4039-.041-.237-.1431-.4543-.3126-.6437-.1695-.1973-.4198-.3324-.7456-.421-.3191-.0808-.8542-.1285-1.7694-.1285h-1.4244v7.3636h2.3051zm5.14-1.7827c0 .3523-.0199.5762-.0544.6708-.033.0947-.1894.1424-.3046.1424-.1086 0-.19-.0477-.2238-.1351-.041-.0887-.0609-.2986-.0609-.6238v-1.9469c0-.3324.0199-.5423.0543-.6237.0338-.0808.1086-.122.2171-.122.1153 0 .2709.0412.3114.1425.041.0947.0609.2986.0609.6032v1.8926zm-2.4747-5.5809v7.3636h1.7157l.1152-.4675c.1556.1894.3251.3324.5152.4271.1828.0881.4608.1357.678.1357.3047 0 .5629-.0748.7802-.237.2165-.1562.3589-.3462.4198-.5628.0543-.2173.0887-.543.0887-.9841v-2.0675c0-.4409-.0139-.7324-.0344-.8681-.0199-.1357-.0742-.2781-.1695-.4204-.1021-.1425-.2437-.251-.4272-.3325-.1834-.0742-.3999-.1152-.6576-.1152-.2172 0-.4952.0477-.6846.1285-.1835.0887-.353.2238-.5086.4007V8.2603h-1.8309z",
+    letterboxd: "M8.224 14.352a4.447 4.447 0 0 1-3.775 2.092C1.992 16.444 0 14.454 0 12s1.992-4.444 4.45-4.444c1.592 0 2.988.836 3.774 2.092-.427.682-.673 1.488-.673 2.352s.246 1.67.673 2.352zM15.101 12c0-.864.247-1.67.674-2.352-.786-1.256-2.183-2.092-3.775-2.092s-2.989.836-3.775 2.092c.427.682.674 1.488.674 2.352s-.247 1.67-.674 2.352c.786 1.256 2.183 2.092 3.775 2.092s2.989-.836 3.775-2.092A4.42 4.42 0 0 1 15.1 12zm4.45-4.444a4.447 4.447 0 0 0-3.775 2.092c.427.682.673 1.488.673 2.352s-.246 1.67-.673 2.352a4.447 4.447 0 0 0 3.775 2.092C22.008 16.444 24 14.454 24 12s-1.992-4.444-4.45-4.444z",
+    rt: "M5.866 0L4.335 1.262l2.082 1.8c-2.629-.989-4.842 1.4-5.012 2.338 1.384-.323 2.24-.422 3.344-.335-7.042 4.634-4.978 13.148-1.434 16.094 5.784 4.612 13.77 3.202 17.91-1.316C27.26 13.363 22.993.65 10.86 2.766c.107-1.17.633-1.503 1.243-1.602-.89-1.493-3.67-.734-4.556 1.374C7.52 2.602 5.866 0 5.866 0zM4.422 7.217H6.9c2.673 0 2.898.012 3.55.202 1.06.307 1.868.973 2.313 1.904.05.106.092.206.13.305l7.623.008.027 2.912-2.745-.024v7.549l-2.982-.016v-7.522l-2.127.016a2.92 2.92 0 0 1-1.056 1.134c-.287.176-.3.19-.254.264.127.2 2.125 3.642 2.125 3.659l-3.39.019-2.013-3.376c-.034-.047-.122-.068-.344-.084l-.297-.02.037 3.48-3.075-.038zm3.016 2.288l.024.338c.014.186.024.729.024 1.206v.867l.582-.025c.32-.013.695-.049.833-.078.694-.146 1.048-.478 1.087-1.018.027-.378-.063-.636-.303-.87-.318-.309-.761-.416-1.733-.418Z",
+    wikipedia: "M12.09 13.119c-.936 1.932-2.217 4.548-2.853 5.728-.616 1.074-1.127.931-1.532.029-1.406-3.321-4.293-9.144-5.651-12.409-.251-.601-.441-.987-.619-1.139-.181-.15-.554-.24-1.122-.271C.103 5.033 0 4.982 0 4.898v-.455l.052-.045c.924-.005 5.401 0 5.401 0l.051.045v.434c0 .119-.075.176-.225.176l-.564.031c-.485.029-.727.164-.727.436 0 .135.053.33.166.601 1.082 2.646 4.818 10.521 4.818 10.521l.136.046 2.411-4.81-.482-1.067-1.658-3.264s-.318-.654-.428-.872c-.728-1.443-.712-1.518-1.447-1.617-.207-.023-.313-.05-.313-.149v-.468l.06-.045h4.292l.113.037v.451c0 .105-.076.15-.227.15l-.308.047c-.792.061-.661.381-.136 1.422l1.582 3.252 1.758-3.504c.293-.64.233-.801.111-.947-.07-.084-.305-.22-.812-.24l-.201-.021c-.052 0-.098-.015-.145-.051-.045-.031-.067-.076-.067-.129v-.427l.061-.045c1.247-.008 4.043 0 4.043 0l.059.045v.436c0 .121-.059.178-.193.178-.646.03-.782.095-1.023.439-.12.186-.375.589-.646 1.039l-2.301 4.273-.065.135 2.792 5.712.17.048 4.396-10.438c.154-.422.129-.722-.064-.895-.197-.172-.346-.273-.857-.295l-.42-.016c-.061 0-.105-.014-.152-.045-.043-.029-.072-.075-.072-.119v-.436l.059-.045h4.961l.041.045v.437c0 .119-.074.18-.209.18-.648.03-1.127.18-1.443.421-.314.255-.557.616-.736 1.067 0 0-4.043 9.258-5.426 12.339-.525 1.007-1.053.917-1.503-.031-.571-1.171-1.773-3.786-2.646-5.71l.053-.036z",
+    mal: "M14.921 6.479c-.82 0-3.683 0-4.947 3.156-.662 1.652-.986 4.812.876 7.886l1.934-1.41s-.767-1.095-1.083-3.191h2.897l.022 3.19h2.604V8.835h-2.581v2.043l-2.46-.023s.413-2.408 2.877-2.336h2.454l-.572-2.04ZM0 6.528v9.624h2.348v-5.84l2.031 2.664 2.047-2.652v5.828h2.336V6.528H6.437L4.368 9.474 2.31 6.528Zm18.447.022v9.583h5.022L24 14.09h-3.232V6.55Z",
+    metacritic: "M11.99 0A12 12 0 1 0 24 12v-.014A12 12 0 0 0 11.99 0Zm-.055 2.564a9.399 9.399 0 0 1 9.407 9.389v.01a9.399 9.399 0 1 1-9.408-9.399Zm-1.61 17.198 2.046-2.046-3.94-3.94c-.165-.166-.345-.373-.442-.608-.221-.47-.318-1.203.221-1.742.664-.664 1.548-.387 2.406.47l3.788 3.788 2.046-2.046-3.954-3.954a2.48 2.48 0 0 1-.456-.622c-.263-.539-.25-1.216.235-1.7.677-.678 1.562-.429 2.544.553l3.677 3.677 2.046-2.046-3.982-3.982c-2.018-2.018-3.912-1.949-5.212-.65-.498.499-.802 1.024-.954 1.618a4.026 4.026 0 0 0-.055 1.686l-.027.028c-.996-.414-2.13-.166-3 .705-1.162 1.161-1.12 2.392-.982 3.11l-.042.043-1.009-.816-1.77 1.77a64.1 64.1 0 0 1 2.213 2.1z",
+    stremio: "M12 0a1.2 1.2 0 0 0-.85.354L.353 11.15c-.47.47-.47 1.227 0 1.697L11.15 23.647a1.2 1.2 0 0 0 1.7 0l10.797-10.8c.47-.47.47-1.226 0-1.696L12.85.354A1.2 1.2 0 0 0 12 0zm-1.674 7.586a.2.2 0 0 1 .002 0 .2.2 0 0 1 .129.04l5.729 4.214a.2.2 0 0 1 0 .323l-5.73 4.213a.2.2 0 0 1-.317-.16v-8.43a.2.2 0 0 1 .187-.2z",
+    plex: "M3.987 8.409c-.96 0-1.587.28-2.12.933v-.72H0v8.88s.038.018.127.037c.138.03.821.187 1.331-.249.441-.377.542-.814.542-1.318v-1.283c.533.573 1.147.813 2 .813 1.84 0 3.253-1.493 3.253-3.48 0-2.12-1.36-3.613-3.266-3.613Zm16.748 5.595.406.591c.391.614.894.906 1.492.908.621-.012 1.064-.562 1.226-.755 0 0-.307-.27-.686-.72-.517-.614-1.214-1.755-1.24-1.803l-1.198 1.779Zm-3.205-1.955c0-2.08-1.52-3.64-3.52-3.64s-3.467 1.587-3.467 3.573a3.48 3.48 0 0 0 3.507 3.52c1.413 0 2.626-.84 3.253-2.293h-2.04l-.093.093c-.427.4-.72.533-1.227.533-.787 0-1.373-.506-1.453-1.266h4.986c.04-.214.054-.307.054-.52Zm-7.671-.219c0 .769.11 1.701.868 2.722l.056.069c-.306.526-.742.88-1.248.88-.399 0-.814-.211-1.138-.579a2.177 2.177 0 0 1-.538-1.441V6.409H9.86l-.001 5.421Zm9.283 3.46h-2.39l2.247-3.332-2.247-3.335h2.39l2.248 3.335-2.248 3.332Zm1.593-1.286Zm-17.162-.342c-.933 0-1.68-.773-1.68-1.72s.76-1.666 1.68-1.666c.92 0 1.68.733 1.68 1.68 0 .946-.733 1.706-1.68 1.706Zm18.361-1.974L24 8.622h-2.391l-.87 1.293 1.195 1.773Zm-9.404-.466c.16-.706.72-1.133 1.493-1.133.773 0 1.373.467 1.507 1.133h-3Z",
+    anilist: "M24 17.53v2.421c0 .71-.391 1.101-1.1 1.101h-5l-.057-.165L11.84 3.736c.106-.502.46-.788 1.053-.788h2.422c.71 0 1.1.391 1.1 1.1v12.38H22.9c.71 0 1.1.392 1.1 1.101zM11.034 2.947l6.337 18.104h-4.918l-1.052-3.131H6.019l-1.077 3.131H0L6.361 2.948h4.673zm-.66 10.96-1.69-5.014-1.541 5.015h3.23z",
+    jellyfin: "M12 .002C8.826.002-1.398 18.537.16 21.666c1.56 3.129 22.14 3.094 23.682 0C25.384 18.573 15.177 0 12 0zm7.76 18.949c-1.008 2.028-14.493 2.05-15.514 0C3.224 16.9 9.92 4.755 12.003 4.755c2.081 0 8.77 12.166 7.759 14.196zM12 9.198c-1.054 0-4.446 6.15-3.93 7.189.518 1.04 7.348 1.027 7.86 0 .511-1.027-2.874-7.19-3.93-7.19z",
+    emby: "M11.041 0c-.007 0-1.456 1.43-3.219 3.176L4.615 6.352l.512.513.512.512-2.819 2.791L0 12.961l1.83 1.848c1.006 1.016 2.438 2.46 3.182 3.209l1.351 1.359.508-.496c.28-.273.515-.498.524-.498.008 0 1.266 1.264 2.794 2.808L12.97 24l.187-.182c.23-.225 5.007-4.95 5.717-5.656l.52-.516-.502-.513c-.276-.282-.5-.52-.496-.53.003-.009 1.264-1.26 2.802-2.783 1.538-1.522 2.8-2.776 2.803-2.785.005-.012-3.617-3.684-6.107-6.193L17.65 4.6l-.505.505c-.279.278-.517.501-.53.497-.013-.005-1.27-1.267-2.793-2.805A449.655 449.655 0 0011.041 0zM9.223 7.367c.091.038 7.951 4.608 7.957 4.627.003.013-1.781 1.056-3.965 2.32a999.898 999.898 0 01-3.996 2.307c-.019.006-.026-1.266-.026-4.629 0-3.7.007-4.634.03-4.625Z",
+    radarr: "M5.274 0C3.189.039 1.19 1.547 1.19 4.705l.184 14.518c0 1.47 1.103 2.205 2.573 2.021L3.764 3.786c0-1.654.919-1.838 2.022-1.103l14.7 8.27c1.103.734 1.655 1.47 1.838 2.756.92-1.654.552-4.043-1.286-5.33L7.991.846A4.559 4.559 0 0 0 5.274.001zm1.982 6.91-.184 10.107 9.004-5.146Zm13.598 6.064-15.068 8.82c-.92.552-2.022.736-3.124.368.918 1.47 3.307 2.389 5.145 1.47l12.68-7.35c1.102-.736 1.286-2.022.367-3.308z",
+    sonarr: "M21.212 4.282c1.851 2.204 2.777 4.776 2.777 7.718 0 2.848-.867 5.344-2.602 7.489a934.355 934.355 0 0 1-2.101-2.095c-1.477-1.477-1.792-3.293-1.792-5.278 0-2.224.127-3.486 1.577-4.935l2.478-2.478a13.209 13.209 0 0 0-.337-.421Zm-17.7 16.193C1.708 18.678.6 16.59.188 14.213A11.84 11.84 0 0 1 .011 12c0-.28.006-.548.017-.802 0-.026.007-.052.022-.078.153-2.601 1.076-4.889 2.767-6.865-.108.127-.214.256-.316.387 0 0 1.351 1.346 2.329 2.323 1.408 1.409 1.726 3.215 1.726 5.151 0 1.985-.249 3.762-1.781 5.295-1.035 1.035-2.119 2.124-2.119 2.124.112.136.229.271.349.404.029-.027 1.297-1.348 2.123-2.175 1.638-1.637 1.928-3.528 1.928-5.648 0-2.072-.365-3.997-1.873-5.504a620.045 620.045 0 0 0-2.366-2.357c.168-.196.342-.388.523-.576l3.117 3.106-.194.195 1.903 1.898.547-.549L6.81 6.432l-.196.196L3.495 3.52c.01-.009.436-.416.643-.597.009.011 2.28 2.283 2.28 2.283 1.538 1.537 3.5 1.955 5.621 1.955 2.18 0 4.134-.442 5.731-2.038.907-.908 2.153-2.149 2.162-2.16.17.151.491.461.56.528l.013.013-3.111 3.028-.001.002-.197-.194-1.876 1.903.552.543 1.875-1.903-.197-.194 3.109-3.026c.193.203.377.41.553.619-.03.025-2.495 2.546-2.495 2.546-1.556 1.556-1.723 2.9-1.723 5.288 0 2.121.361 4.054 1.939 5.632a576.91 576.91 0 0 0 2.133 2.124c-.183.208-.599.645-.613.66l-3.066-3.174.195-.196-1.995-1.986-.546.549 1.995 1.986.195-.196 3.065 3.172c-.021.019-.385.362-.552.506-.01-.013-1.974-1.978-1.974-1.978-1.842-1.842-3.299-2.039-5.731-2.039-2.338 0-3.92.239-5.632 1.95-.944.944-2.078 2.085-2.089 2.099-.275-.23-.649-.594-.649-.594l3.019-3.024.199.192 1.854-1.925-.558-.538-1.854 1.926.199.191-3.016 3.022ZM12 8.672A3.33 3.33 0 0 0 8.672 12 3.33 3.33 0 0 0 12 15.328 3.33 3.33 0 0 0 15.328 12 3.33 3.33 0 0 0 12 8.672ZM4.52 2.6C6.665.867 9.162 0 12.011 0c2.88 0 5.394.88 7.541 2.639 0 0-1.215 1.209-2.136 2.13-1.496 1.496-3.334 1.892-5.377 1.892-1.985 0-3.829-.37-5.267-1.809L4.52 2.6Zm14.837 18.909a9.507 9.507 0 0 1-.342.256C16.994 23.255 14.659 24 12.011 24c-2.652 0-4.983-.745-6.993-2.235-.104-.074-.208-.15-.31-.227 0 0 1.096-1.101 2.053-2.058 1.602-1.602 3.09-1.804 5.278-1.804 2.28 0 3.651.166 5.377 1.892l1.941 1.941Z",
+    mdblist: "M1.928.029A2.47 2.47 0 0 0 .093 1.673c-.085.248-.09.629-.09 10.33s.005 10.08.09 10.33a2.51 2.51 0 0 0 1.512 1.558l.276.108h20.237l.277-.108a2.51 2.51 0 0 0 1.512-1.559c.085-.25.09-.63.09-10.33s-.005-10.08-.09-10.33A2.51 2.51 0 0 0 22.395.115l-.277-.109L12.117 0C6.615-.004 2.032.011 1.929.029m7.48 8.067 2.123 2.004v1.54c0 .897-.02 1.536-.043 1.527s-.92-.845-1.995-1.86c-1.071-1.01-1.962-1.84-1.977-1.84s-.024 1.91-.024 4.248v4.25H4.911V6.085h1.188l1.183.006zm9.729 3.93v5.94h-2.63l-.01-4.25-.013-4.25-1.907 1.795a367 367 0 0 1-1.98 1.864c-.076.056-.08-.047-.08-1.489v-1.555l2.127-1.995 2.122-1.995 1.187-.005h1.184z",
+    trakt: "m15.082 15.107-.73-.73 9.578-9.583a4.499 4.499 0 0 0-.115-.575L13.662 14.382l1.08 1.08-.73.73-1.81-1.81L23.422 3.144c-.075-.15-.155-.3-.25-.44L11.508 14.377l2.154 2.155-.73.73-7.193-7.199.73-.73 4.309 4.31L22.546 1.86A5.618 5.618 0 0 0 18.362 0H5.635A5.637 5.637 0 0 0 0 5.634V18.37A5.632 5.632 0 0 0 5.635 24h12.732C21.477 24 24 21.48 24 18.37V6.19l-8.913 8.918zm-4.314-2.155L6.814 8.988l.73-.73 3.954 3.96zm1.075-1.084-3.954-3.96.73-.73 3.959 3.96zm9.853 5.688a4.141 4.141 0 0 1-4.14 4.14H6.438a4.144 4.144 0 0 1-4.139-4.14V6.438A4.141 4.141 0 0 1 6.44 2.3h10.387v1.04H6.438c-1.71 0-3.099 1.39-3.099 3.1V17.55c0 1.71 1.39 3.105 3.1 3.105h11.117c1.71 0 3.1-1.395 3.1-3.105v-1.754h1.04v1.754z"
+  };
+
+  // src/features/custom-links/icons.js
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  var ICONS = {
+    imdb: { brand: "imdb", native: "IMDB", text: "IMDb", color: "var(--color-site-imdb, #f5c518)" },
+    tmdb: { native: "TMDB", text: "TMDb", color: "var(--color-site-tmdb, #01b4e4)" },
+    tvdb: { native: "TVDB", text: "TVDB", color: "var(--color-site-tvdb, #6cd591)" },
+    letterboxd: { brand: "letterboxd", text: "LB", color: "var(--color-site-letterboxd, #00e054)" },
+    rt: { brand: "rt", text: "RT", color: "var(--color-site-rotten-tomatoes, #fa320a)" },
+    wikipedia: { brand: "wikipedia", native: "Wikipedia", text: "W", color: "#ffffff" },
+    justwatch: { native: "JustWatch", text: "JW", color: "var(--color-site-justwatch, #fbd446)" },
+    mal: { brand: "mal", text: "MAL", color: "var(--color-site-mal, #2e51a2)" },
+    metacritic: { brand: "metacritic", text: "MC", color: "var(--color-site-metacritic, #ffcc34)" },
+    stremio: { brand: "stremio", text: "ST", color: "#8a7cf6" },
+    dmm: { text: "DMM", color: "#3fb6a8" },
+    mdblist: { brand: "mdblist", text: "MDB", color: "#4284ca" },
+    opensubtitles: { text: "OS", color: "#7aa7d8" },
+    plex: { brand: "plex", text: "PLEX", color: "var(--color-site-plex, #e5a00d)" },
+    anilist: { brand: "anilist", text: "AL", color: "#02a9ff" },
+    jellyfin: { brand: "jellyfin", text: "JF", color: "var(--color-site-jellyfin, #aa5cc3)" },
+    emby: { brand: "emby", text: "EMBY", color: "#52b54b" },
+    radarr: { brand: "radarr", text: "R", color: "#ffcb3d" },
+    sonarr: { brand: "sonarr", text: "S", color: "#35c5f4" },
+    seerr: { text: "SEER", color: "#8b5cf6" },
+    trakt: { brand: "trakt", text: "T", color: "var(--color-site-trakt, #ed1c24)" }
+  };
+  var LABEL_ICONS = {
+    imdb: "imdb",
+    tmdb: "tmdb",
+    tvdb: "tvdb",
+    letterboxd: "letterboxd",
+    "rotten tomatoes": "rt",
+    wikipedia: "wikipedia",
+    justwatch: "justwatch",
+    myanimelist: "mal",
+    "my anime list": "mal",
+    metacritic: "metacritic",
+    stremio: "stremio",
+    "debrid media manager": "dmm",
+    dmm: "dmm",
+    mdblist: "mdblist",
+    opensubtitles: "opensubtitles",
+    plex: "plex",
+    anilist: "anilist",
+    jellyfin: "jellyfin",
+    emby: "emby",
+    radarr: "radarr",
+    sonarr: "sonarr",
+    seerr: "seerr",
+    overseerr: "seerr",
+    jellyseerr: "seerr",
+    trakt: "trakt"
+  };
+  function iconKeyForLabel(label) {
+    const key = String(label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    return LABEL_ICONS[key] || null;
+  }
+  var WATCH_ICONS = /* @__PURE__ */ new Set(["plex", "stremio", "jellyfin", "emby", "dmm"]);
+  var LIBRARY_ICONS = /* @__PURE__ */ new Set(["radarr", "sonarr", "seerr"]);
+  function surfaceForLabel(label) {
+    const key = iconKeyForLabel(label);
+    if (WATCH_ICONS.has(key)) return "watch";
+    if (LIBRARY_ICONS.has(key)) return "library";
+    return "reference";
+  }
+  function serviceColor(key) {
+    return ICONS[key]?.color || null;
+  }
+  function hasServiceIcon(key) {
+    return Boolean(key && ICONS[key]);
+  }
+  function brandSvg(doc, d) {
+    const svg3 = doc.createElementNS(SVG_NS, "svg");
+    svg3.setAttribute("viewBox", "0 0 24 24");
+    svg3.setAttribute("aria-hidden", "true");
+    svg3.setAttribute("focusable", "false");
+    const path = doc.createElementNS(SVG_NS, "path");
+    path.setAttribute("fill", "currentColor");
+    path.setAttribute("d", d);
+    svg3.append(path);
+    return svg3;
+  }
+  function nativeSvg(doc, label) {
+    for (const link of doc.querySelectorAll("ul.external-links a[aria-label]")) {
+      if (link.getAttribute("aria-label") !== label) continue;
+      const svg3 = link.querySelector("svg");
+      if (!svg3) return null;
+      const copy = svg3.cloneNode(true);
+      copy.removeAttribute("class");
+      copy.setAttribute("aria-hidden", "true");
+      copy.setAttribute("focusable", "false");
+      return copy;
+    }
+    return null;
+  }
+  function serviceIcon(key, doc = document) {
+    const definition = ICONS[key];
+    if (!definition) return null;
+    const native = definition.native ? nativeSvg(doc, definition.native) : null;
+    const svg3 = native || (definition.brand && BRAND_PATHS[definition.brand] ? brandSvg(doc, BRAND_PATHS[definition.brand]) : null);
+    const mark = doc.createElement("span");
+    mark.className = "ogt-service-icon";
+    mark.setAttribute("aria-hidden", "true");
+    mark.dataset.ogtMark = native ? "native" : svg3 ? "brand" : "text";
+    mark.style.setProperty("--ogt-brand", definition.color);
+    if (svg3) mark.append(svg3);
+    else mark.textContent = definition.text;
+    return mark;
+  }
+
   // src/features/custom-links/data.js
   var TMDB_RE = /themoviedb\.org\/(movie|tv)\/(\d+)/;
   var IMDB_RE = /imdb\.com\/title\/(tt\d+)/;
@@ -1430,6 +2365,30 @@
       episode: selection.episode
     };
   }
+  function resolveCustomLinks(links, values, kind) {
+    const resolved = [];
+    for (const entry of Array.isArray(links) ? links : []) {
+      if (!entry || typeof entry.label !== "string" || typeof entry.url !== "string") continue;
+      if (!isCustomLinkUrl(entry.url)) continue;
+      const template = resolvePresetUrl(entry.url, values, kind);
+      if (!template || missingPlaceholders(template, values).length) continue;
+      const preset = findPreset(entry.url);
+      resolved.push({
+        label: entry.label,
+        source: entry.url,
+        template,
+        href: fillTemplate(template, values, SERVER_KEYS),
+        icon: preset?.icon || iconKeyForLabel(entry.label),
+        surface: preset?.surface || surfaceForLabel(entry.label)
+      });
+    }
+    return resolved;
+  }
+  function watchNowLinks(entries) {
+    return (Array.isArray(entries) ? entries : []).filter(
+      (entry) => entry.surface === "watch" || entry.surface === "library"
+    );
+  }
   function mergeSeasons(primary, fallback = []) {
     const rendered = new Map(fallback.map((season) => [season.number, season]));
     return primary.map((season) => ({
@@ -1473,210 +2432,6 @@
       }
     }
     return errors;
-  }
-
-  // src/features/custom-links/presets.js
-  var PRESETS = [
-    {
-      label: "IMDb",
-      url: "https://www.imdb.com/find/?q={title}",
-      kinds: ["movie", "show"],
-      deep: [
-        { url: "https://www.imdb.com/title/{episodeimdb}/", kinds: ["show"] },
-        { url: "https://www.imdb.com/title/{imdb}/episodes?season={season}", kinds: ["show"] },
-        { url: "https://www.imdb.com/title/{imdb}/", kinds: ["movie", "show"] }
-      ]
-    },
-    {
-      label: "TMDb",
-      url: "https://www.themoviedb.org/search?query={title}",
-      kinds: ["movie", "show"],
-      deep: [
-        { url: "https://www.themoviedb.org/tv/{tmdb}/season/{season}/episode/{episode}", kinds: ["show"] },
-        { url: "https://www.themoviedb.org/tv/{tmdb}/season/{season}", kinds: ["show"] },
-        { url: "https://www.themoviedb.org/movie/{tmdb}", kinds: ["movie"] },
-        { url: "https://www.themoviedb.org/tv/{tmdb}", kinds: ["show"] }
-      ]
-    },
-    {
-      label: "TVDB",
-      url: "https://thetvdb.com/search?query={title}",
-      kinds: ["show"],
-      deep: [
-        { url: "https://thetvdb.com/dereferrer/series/{tvdb}", kinds: ["show"] }
-      ]
-    },
-    {
-      label: "Letterboxd",
-      url: "https://letterboxd.com/search/{title}/",
-      kinds: ["movie"],
-      deep: [
-        { url: "https://letterboxd.com/imdb/{imdb}/", kinds: ["movie"] },
-        { url: "https://letterboxd.com/tmdb/{tmdb}/", kinds: ["movie"] }
-      ]
-    },
-    {
-      label: "Rotten Tomatoes",
-      url: "https://www.rottentomatoes.com/search?search={title}",
-      kinds: ["movie", "show"]
-    },
-    {
-      label: "Wikipedia",
-      url: "https://en.wikipedia.org/w/index.php?search={title}",
-      kinds: ["movie", "show"]
-    },
-    {
-      label: "JustWatch",
-      url: "https://www.justwatch.com/us/search?q={title}",
-      kinds: ["movie", "show"]
-    },
-    {
-      label: "MyAnimeList",
-      url: "https://myanimelist.net/search/all?q={title}",
-      kinds: ["movie", "show"]
-    },
-    {
-      label: "Metacritic",
-      url: "https://www.metacritic.com/search/{title}/",
-      kinds: ["movie", "show"]
-    },
-    {
-      label: "Stremio",
-      url: "https://web.stremio.com/#/search?search={title}",
-      kinds: ["movie", "show"],
-      /**
-       * Exact-item routes, most specific first. MetaDetails reads `type`, `id` and `videoId`
-       * from `useParams()`, and its episode search builds the video id as
-       * `<id>:<season>:<episode>`, so that shape opens one episode directly. With `videoId`
-       * unset, `useSeason` reads `?season=` from the same URL, so a season page opens that
-       * season's episode list.
-       */
-      deep: [
-        { url: "https://web.stremio.com/#/detail/series/{imdb}/{imdb}:{season}:{episode}", kinds: ["show"] },
-        { url: "https://web.stremio.com/#/detail/series/{imdb}?season={season}", kinds: ["show"] },
-        { url: "https://web.stremio.com/#/detail/movie/{imdb}", kinds: ["movie"] },
-        { url: "https://web.stremio.com/#/detail/series/{imdb}", kinds: ["show"] }
-      ]
-    },
-    {
-      label: "Debrid Media Manager",
-      url: "https://debridmediamanager.com/search?query={title}",
-      kinds: ["movie", "show"],
-      /**
-       * DMM routes by IMDb id: `movie/:imdbid` and `show/:imdbid/:seasonNum` (from its
-       * `src/pages/movie/[imdbid]/index.tsx` and `src/pages/show/[imdbid]/[seasonNum]/index.tsx`).
-       * It has no episode page, so an episode opens its season instead. Signed-out visits
-       * redirect to `/start`; the deep routes are for a signed-in DMM session.
-       */
-      deep: [
-        { url: "https://debridmediamanager.com/show/{imdb}/{season}", kinds: ["show"] },
-        { url: "https://debridmediamanager.com/movie/{imdb}", kinds: ["movie"] },
-        { url: "https://debridmediamanager.com/show/{imdb}", kinds: ["show"] }
-      ]
-    },
-    {
-      label: "MDBList",
-      // IMDb routes redirect to MDBList's canonical title slug; searches cover titles without an IMDb id.
-      url: "https://mdblist.com/movies/?q_title={title}",
-      kinds: ["movie", "show"],
-      deep: [
-        { url: "https://mdblist.com/movie/{imdb}", kinds: ["movie"] },
-        { url: "https://mdblist.com/show/{imdb}", kinds: ["show"] },
-        { url: "https://mdblist.com/shows/?q_title={title}", kinds: ["show"] }
-      ]
-    },
-    {
-      label: "OpenSubtitles",
-      /**
-       * OpenSubtitles' search takes an IMDb id without `tt` or leading zeroes:
-       * `imdbid` for a movie or episode, and `pimdbid` for a show. The episode
-       * page's own IMDb link supplies the episode id; without it the season route
-       * is the fallback. The stored URL is the movie route, while every show page
-       * resolves to one of the deep routes.
-       */
-      url: "https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{imdbnum}",
-      kinds: ["movie", "show"],
-      deep: [
-        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{episodeimdbnum}", kinds: ["show"] },
-        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-{imdbnum}/season-{season}", kinds: ["show"] },
-        { url: "https://www.opensubtitles.org/en/search/sublanguageid-all/pimdbid-{imdbnum}", kinds: ["show"] }
-      ]
-    },
-    {
-      label: "Plex",
-      url: "https://app.plex.tv/desktop/#!/search?query={title}",
-      kinds: ["movie", "show"]
-    },
-    {
-      label: "AniList",
-      url: "https://anilist.co/search/anime?search={title}",
-      kinds: ["movie", "show"]
-    },
-    {
-      label: "Jellyfin",
-      /**
-       * Current web search route; `jellyfin-web` defines `search` without `.html` and reads
-       * `?query=`. The server base URL comes from the Servers settings.
-       */
-      url: "{jellyfin}/web/#/search?query={title}",
-      kinds: ["movie", "show"],
-      requires: "jellyfin"
-    },
-    {
-      label: "Emby",
-      /**
-       * Current 4.9 web search page; its search field uses `searchtext`. Older Emby versions
-       * used `/web/search.html` directly, so this remains editable in the link editor.
-       */
-      url: "{emby}/web/index.html#!/list/list.html?type=search&searchtext={title}",
-      kinds: ["movie", "show"],
-      requires: "emby"
-    },
-    {
-      label: "Radarr",
-      url: "{radarr}/add/new?term={title}",
-      kinds: ["movie"],
-      requires: "radarr",
-      deep: [
-        { url: "{radarr}/add/new?term=imdb:{imdb}", kinds: ["movie"] },
-        { url: "{radarr}/add/new?term=tmdb:{tmdb}", kinds: ["movie"] }
-      ]
-    },
-    {
-      label: "Sonarr",
-      url: "{sonarr}/add/new?term={title}",
-      kinds: ["show"],
-      requires: "sonarr",
-      deep: [
-        { url: "{sonarr}/add/new?term=tvdb:{tvdb}", kinds: ["show"] }
-      ]
-    },
-    {
-      label: "Seerr",
-      url: "{seerr}/search?query={title}",
-      kinds: ["movie", "show"],
-      requires: "seerr",
-      deep: [
-        { url: "{seerr}/movie/{tmdb}", kinds: ["movie"] },
-        { url: "{seerr}/tv/{tmdb}", kinds: ["show"] }
-      ]
-    }
-  ];
-  function presetTemplateUrls(url, kind) {
-    const preset = PRESETS.find((entry) => entry.url === url);
-    if (preset && !preset.kinds.includes(kind)) return [];
-    if (!preset?.deep) return [url];
-    return [url, ...preset.deep.filter((entry) => entry.kinds.includes(kind)).map((entry) => entry.url)];
-  }
-  function resolvePresetUrl(url, vars, kind) {
-    const preset = PRESETS.find((entry) => entry.url === url);
-    if (preset && !preset.kinds.includes(kind)) return null;
-    if (preset?.label === "Rotten Tomatoes" && vars.rottenTomatoesUrl) return vars.rottenTomatoesUrl;
-    if (!preset?.deep) return url;
-    const deep = preset.deep.find(
-      (entry) => entry.kinds.includes(kind) && missingPlaceholders(entry.url, vars).length === 0
-    );
-    return deep ? deep.url : url;
   }
 
   // src/core/http.js
@@ -2253,10 +3008,16 @@
   function getShowDetails(id) {
     return apiGet(`/shows/${encodeURIComponent(id)}`);
   }
+  function getEpisode(id, season, episode) {
+    return apiGet(`/shows/${encodeURIComponent(id)}/seasons/${season}/episodes/${episode}`);
+  }
 
   // src/features/custom-links/index.js
   var PANEL_ID = "ogt-custom-links";
   var TITLE_ID = "ogt-custom-links-title";
+  var MANAGER_ID = "ogt-custom-links-manager";
+  var FALLBACK_ATTR = "data-ogt-watch-fallback";
+  var WATCH_ATTR = "data-ogt-watch-now";
   var SERVER_FIELDS = [
     { key: "jellyfin", label: "Jellyfin", placeholder: "http://192.168.1.20:8096" },
     { key: "emby", label: "Emby", placeholder: "http://192.168.1.20:8096" },
@@ -2264,28 +3025,108 @@
     { key: "sonarr", label: "Sonarr", placeholder: "http://192.168.1.20:8989" },
     { key: "seerr", label: "Seerr", placeholder: "http://192.168.1.20:5055" }
   ];
-  function findMountPoint() {
-    const top = document.querySelector(".summary-frame #overview .top") || document.querySelector("#overview .top");
+  function desktopTarget(aside) {
+    const external = aside.querySelector("ul.external-links");
+    if (external) return { parent: external.parentElement, before: external };
+    const watchNow = aside.querySelector(".watch-now");
+    if (watchNow) {
+      const next = watchNow.nextElementSibling;
+      return { parent: watchNow.parentElement, before: next?.tagName === "DIALOG" ? next.nextSibling : watchNow.nextSibling };
+    }
+    const poster = aside.querySelector(".summary-poster");
+    const holder = poster?.closest("a.poster-link") || poster;
+    if (holder?.parentElement) return { parent: holder.parentElement, before: holder.nextSibling };
+    return { parent: aside, before: null };
+  }
+  function findMountTarget() {
+    const aside = document.querySelector("aside.sidebar");
+    if (aside) return desktopTarget(aside);
+    const top = document.querySelector("#overview .top") || document.querySelector(".summary-frame .top");
     if (top?.parentElement) return { parent: top.parentElement, before: top.nextSibling };
-    const overview = document.querySelector("#overview");
-    if (overview) return { parent: overview, before: null };
-    const hero = document.querySelector(".fanart-header");
-    if (hero?.parentElement) return { parent: hero.parentElement, before: hero.nextSibling };
     return null;
   }
   function seasonLabel(number) {
     return number === 0 ? "Specials" : `Season ${number}`;
   }
-  function chip({ label, href, template }) {
-    const link = el("a", {
-      class: "ogt-chip",
-      href,
-      target: "_blank",
-      rel: "noopener noreferrer",
-      text: label
-    });
-    if (template) link.dataset.ogtTemplate = template;
-    return link;
+  var ICON_ADD = "M12 5v14M5 12h14";
+  var ICON_SERVER = "M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01";
+  var ICON_EDIT = "M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4";
+  function manageButton(name, text2, d) {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg3.setAttribute("viewBox", "0 0 24 24");
+    svg3.setAttribute("aria-hidden", "true");
+    svg3.setAttribute("focusable", "false");
+    const path = document.createElementNS(svg3.namespaceURI, "path");
+    for (const [key, value] of Object.entries({
+      d,
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    })) path.setAttribute(key, value);
+    svg3.append(path);
+    return el(
+      "button",
+      { class: "ogt-manage-button", type: "button", "aria-label": name, title: name },
+      svg3,
+      el("span", { text: text2 })
+    );
+  }
+  function compactLink(entry) {
+    const label = entry.label.trim() || "Custom link";
+    const icon3 = serviceIcon(entry.icon);
+    const variant = !icon3 ? "text" : entry.surface === "reference" ? "icon" : "tile";
+    return el(
+      "a",
+      {
+        class: `ogt-service-link ogt-service-link--${variant}`,
+        href: entry.href,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        "aria-label": label,
+        "data-ogt-tooltip": label,
+        "data-ogt-surface": entry.surface,
+        style: serviceColor(entry.icon) ? `--ogt-brand-tile:${serviceColor(entry.icon)}` : void 0
+      },
+      icon3,
+      variant === "icon" ? null : el("span", { class: "ogt-service-label", text: label })
+    );
+  }
+  var SURFACE_NOTES = { watch: "Your service", library: "Add to library" };
+  function watchLink(entry) {
+    const label = entry.label.trim() || "Custom link";
+    return el(
+      "a",
+      {
+        class: "ogt-watch-now-link",
+        href: entry.href,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        "aria-label": label,
+        "data-ogt-surface": entry.surface,
+        style: serviceColor(entry.icon) ? `--ogt-brand-tile:${serviceColor(entry.icon)}` : void 0
+      },
+      el("span", { class: "ogt-watch-now-card" }, serviceIcon(entry.icon), el("span", { class: "ogt-service-name", text: label })),
+      el("span", { class: "ogt-watch-now-note", text: SURFACE_NOTES[entry.surface] || "Your link" })
+    );
+  }
+  function signatureFor(entries) {
+    return JSON.stringify(entries.map(({ label, href, icon: icon3, surface }) => [label, href, icon3, surface]));
+  }
+  function watchNowContainers() {
+    const containers = [];
+    for (const watchNow of document.querySelectorAll(".watch-now")) {
+      const parent = watchNow.parentElement;
+      if (!parent) continue;
+      for (const child of parent.children) {
+        if (child.tagName !== "DIALOG") continue;
+        const links = child.querySelector(".streaming-links");
+        if (!links || !/watch now/i.test(child.textContent || "")) continue;
+        if (!containers.includes(links)) containers.push(links);
+      }
+    }
+    return containers;
   }
   function createPanel(meta, route) {
     let cancelled = false;
@@ -2293,84 +3134,88 @@
     const timers = [];
     const fixedSelection = route.name === "season" || route.name === "episode";
     let selection = selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
-    const linksRow = el("div", { class: "ogt-row ogt-links" });
-    const controlsRow = el("div", { class: "ogt-row", hidden: true });
-    const actionsRow = el("div", { class: "ogt-row ogt-link-actions" });
-    const tools = el("div", { class: "ogt-link-tools", hidden: true });
+    const linksRow = el("div", { class: "ogt-links" });
+    const controlsRow = el("div", { class: "ogt-row ogt-fields", hidden: true });
+    const watchFallback = el("div", { class: "ogt-watch-fallback", hidden: true, [FALLBACK_ATTR]: "" });
     const editor = el("div", { class: "ogt-editor", hidden: true });
     const presetChecklist = el("div", { class: "ogt-presets", hidden: true });
     const serversPanel = el("div", { class: "ogt-servers", hidden: true });
-    tools.append(editor, presetChecklist, serversPanel);
-    const presetsButton = el("button", { class: "ogt-chip", type: "button", text: "Add presets…" });
-    const serversButton = el("button", { class: "ogt-chip", type: "button", text: "Servers…" });
-    const editButton = el("button", { class: "ogt-chip", type: "button", text: "Edit links" });
-    actionsRow.append(presetsButton, serversButton, editButton);
-    const node = el(
-      "section",
-      { class: "ogt-panel", id: PANEL_ID, "aria-labelledby": TITLE_ID },
+    const presetsButton = manageButton("Add presets…", "Presets", ICON_ADD);
+    const serversButton = manageButton("Servers…", "Servers", ICON_SERVER);
+    const editButton = manageButton("Edit links", "Edit", ICON_EDIT);
+    const closeButton = el("button", { class: "ogt-manager-close", type: "button", text: "Close" });
+    const manager = el(
+      "dialog",
+      { class: "ogt-manager", id: MANAGER_ID, "aria-labelledby": `${MANAGER_ID}-title` },
       el(
         "div",
-        { class: "ogt-head" },
-        el("h2", { class: "ogt-title", id: TITLE_ID, text: "Custom links" }),
-        el("span", { class: "ogt-badge", text: "og toolkit" })
-      ),
-      linksRow,
-      controlsRow,
-      actionsRow,
-      tools
+        { class: "ogt-manager-panel" },
+        el(
+          "header",
+          { class: "ogt-manager-head" },
+          el("h2", { class: "ogt-manager-title", id: `${MANAGER_ID}-title`, text: "Custom links" }),
+          closeButton
+        ),
+        el("div", { class: "ogt-manager-body" }, editor, presetChecklist, serversPanel)
+      )
     );
-    const vars = () => templateVars(meta, selection, getServers());
-    function updateLinkHrefs() {
-      const values = vars();
-      for (const link of linksRow.querySelectorAll("[data-ogt-template]")) {
-        const template = resolvePresetUrl(link.dataset.ogtTemplate, values, meta.kind);
-        if (!template || missingPlaceholders(template, values).length) continue;
-        link.setAttribute("href", fillTemplate(template, values, SERVER_KEYS));
-      }
-    }
-    function renderLinks() {
-      const values = vars();
-      linksRow.replaceChildren();
-      const links = getCustomLinks();
-      if (!links.length) {
-        linksRow.append(
-          el("p", { class: "ogt-hint", text: "Add links to your own services: Plex, Jellyfin, Sonarr, or any URL." })
-        );
-      }
-      for (const entry of links) {
-        if (!isCustomLinkUrl(entry.url)) continue;
-        const template = resolvePresetUrl(entry.url, values, meta.kind);
-        if (!template || missingPlaceholders(template, values).length) continue;
-        linksRow.append(chip({ label: entry.label, href: fillTemplate(template, values, SERVER_KEYS), template: entry.url }));
-      }
-      lookUpShow(values);
-    }
-    let showRequested = false;
-    function lookUpShow(values) {
-      if (!fixedSelection || showRequested || !getClientId()) return;
-      const missing = ["year", "tmdb", "imdb", "tvdb"].filter((key) => meta[key] == null);
-      if (!missing.length) return;
-      const needed = missing.flatMap((key) => key === "imdb" ? ["{imdb}", "{imdbnum}"] : [`{${key}}`]);
-      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => needed.some((placeholder) => template.includes(placeholder))))) return;
-      showRequested = true;
-      getShowDetails(route.id).then((show) => setMeta(showTemplateData(show))).catch((error) => {
-        if (!cancelled) debugError("show lookup failed", error);
-      });
-    }
+    const node = el(
+      "section",
+      { class: "ogt-panel ogt-links-compact", id: PANEL_ID, "aria-labelledby": TITLE_ID },
+      el(
+        "div",
+        { class: "ogt-links-head" },
+        el("h2", { class: "ogt-visually-hidden", id: TITLE_ID, text: "Custom links" }),
+        linksRow
+      ),
+      watchFallback,
+      controlsRow,
+      el("div", { class: "ogt-links-manage" }, presetsButton, serversButton, editButton)
+    );
+    const episodeImdbs = /* @__PURE__ */ new Map();
+    const episodeKey = () => `${selection.season}:${selection.episode}`;
+    const vars = () => templateVars(
+      meta.episodeImdb ? meta : { ...meta, episodeImdb: episodeImdbs.get(episodeKey()) ?? null },
+      selection,
+      getServers()
+    );
     let currentView = null;
     let returnFocus = null;
     let draft = [];
     let nextDraftId = 0;
     let selectedPresets = /* @__PURE__ */ new Set();
+    let renderedEntries = [];
+    function restoreFocus(target) {
+      if (cancelled || !target?.isConnected) return;
+      target.focus?.();
+    }
     function closeTools() {
       currentView = null;
-      tools.hidden = true;
       editor.hidden = true;
       presetChecklist.hidden = true;
       serversPanel.hidden = true;
       const target = returnFocus;
       returnFocus = null;
-      target?.focus();
+      if (manager.open) {
+        manager.close();
+        restoreFocus(target);
+      } else {
+        manager.removeAttribute("open");
+        restoreFocus(target);
+      }
+    }
+    function openManager(view, opener, render) {
+      currentView = view;
+      returnFocus = opener;
+      editor.hidden = view !== "editor";
+      presetChecklist.hidden = view !== "presets";
+      serversPanel.hidden = view !== "servers";
+      if (typeof manager.showModal === "function") {
+        if (!manager.open) manager.showModal();
+      } else {
+        manager.setAttribute("open", "");
+      }
+      render();
     }
     function renderEditor(focusKey) {
       editor.replaceChildren();
@@ -2484,14 +3329,9 @@
       if (focusKey) editor.querySelector(`[data-focus="${focusKey}"]`)?.focus();
     }
     function openEditor() {
-      currentView = "editor";
       returnFocus = editButton;
       draft = getCustomLinks().map((link) => ({ ...link, id: nextDraftId++ }));
-      tools.hidden = false;
-      editor.hidden = false;
-      presetChecklist.hidden = true;
-      serversPanel.hidden = true;
-      renderEditor(draft.length ? `${draft[0].id}-label` : "add-link");
+      openManager("editor", editButton, () => renderEditor(draft.length ? `${draft[0].id}-label` : "add-link"));
     }
     function renderServers() {
       serversPanel.replaceChildren();
@@ -2544,13 +3384,8 @@
       serversPanel.querySelector("input")?.focus();
     }
     function openServers() {
-      currentView = "servers";
       returnFocus = serversButton;
-      tools.hidden = false;
-      editor.hidden = true;
-      presetChecklist.hidden = true;
-      serversPanel.hidden = false;
-      renderServers();
+      openManager("servers", serversButton, renderServers);
     }
     function renderPresetChecklist() {
       const links = getCustomLinks();
@@ -2573,12 +3408,12 @@
         });
         const label = el(
           "label",
-          { class: "ogt-preset-item", for: `ogt-preset-${index}` },
+          { class: "ogt-preset-item", for: `${MANAGER_ID}-preset-${index}` },
           checkbox,
           el("span", { text: preset.label }),
           added ? el("span", { class: "ogt-preset-added", text: "added" }) : needsServer ? el("span", { class: "ogt-preset-added", text: "set server URL" }) : null
         );
-        checkbox.id = `ogt-preset-${index}`;
+        checkbox.id = `${MANAGER_ID}-preset-${index}`;
         list.append(label);
       }
       const error = el("p", {
@@ -2603,15 +3438,12 @@
       );
     }
     function openPresets() {
-      currentView = "presets";
       returnFocus = presetsButton;
-      tools.hidden = false;
-      editor.hidden = true;
-      serversPanel.hidden = true;
-      presetChecklist.hidden = false;
-      renderPresetChecklist();
-      const firstChoice = presetChecklist.querySelector('input[type="checkbox"]:not(:disabled)');
-      (firstChoice || presetChecklist.querySelector("button"))?.focus();
+      openManager("presets", presetsButton, () => {
+        renderPresetChecklist();
+        const firstChoice = presetChecklist.querySelector('input[type="checkbox"]:not(:disabled)');
+        (firstChoice || presetChecklist.querySelector("button"))?.focus();
+      });
     }
     function onKeyDown(event) {
       if (event.key === "Escape" && currentView) {
@@ -2622,7 +3454,123 @@
     presetsButton.addEventListener("click", openPresets);
     serversButton.addEventListener("click", openServers);
     editButton.addEventListener("click", openEditor);
-    node.addEventListener("keydown", onKeyDown);
+    closeButton.addEventListener("click", closeTools);
+    manager.addEventListener("keydown", onKeyDown);
+    manager.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      closeTools();
+    });
+    manager.addEventListener("close", () => {
+      currentView = null;
+      editor.hidden = true;
+      presetChecklist.hidden = true;
+      serversPanel.hidden = true;
+      const target = returnFocus;
+      returnFocus = null;
+      restoreFocus(target);
+    });
+    function renderLinks() {
+      const values = vars();
+      const entries = resolveCustomLinks(getCustomLinks(), values, meta.kind);
+      renderedEntries = entries;
+      linksRow.replaceChildren();
+      if (!entries.length) {
+        linksRow.append(
+          el("p", { class: "ogt-hint", text: "Add links to your own services: Plex, Jellyfin, Sonarr, or any URL." })
+        );
+      }
+      const services = entries.filter((entry) => entry.surface !== "reference" && hasServiceIcon(entry.icon));
+      const logos = entries.filter((entry) => entry.surface === "reference" && hasServiceIcon(entry.icon));
+      const texts = entries.filter((entry) => !hasServiceIcon(entry.icon));
+      for (const [kind, group] of [["services", services], ["logos", logos], ["texts", texts]]) {
+        if (group.length) linksRow.append(el("div", { class: `ogt-links-group ogt-links-${kind}` }, group.map(compactLink)));
+      }
+      syncWatchNow(entries);
+      lookUpShow(values);
+      lookUpEpisode();
+    }
+    function syncWatchNow(entries = renderedEntries) {
+      const watch = watchNowLinks(entries);
+      const containers = watchNowContainers();
+      for (const section of document.querySelectorAll(`[${WATCH_ATTR}]`)) {
+        if (!containers.includes(section.parentElement)) section.remove();
+      }
+      if (!watch.length) {
+        watchFallback.hidden = true;
+        watchFallback.replaceChildren();
+        delete watchFallback.dataset.ogtSignature;
+        return;
+      }
+      const signature = signatureFor(watch);
+      for (const container of containers) {
+        const existing = container.querySelector(`:scope > [${WATCH_ATTR}]`);
+        if (existing?.dataset.ogtSignature === signature) continue;
+        existing?.remove();
+        container.append(
+          el(
+            "div",
+            { class: "ogt-watch-now-section", [WATCH_ATTR]: "", "data-ogt-signature": signature },
+            el(
+              "h3",
+              { class: "section-title" },
+              "Your services",
+              el("span", { class: "count", text: String(watch.length) })
+            ),
+            el("div", { class: "tiles ogt-watch-now-tiles" }, watch.map(watchLink))
+          )
+        );
+      }
+      if (!containers.length) {
+        if (watchFallback.dataset.ogtSignature !== signature) {
+          watchFallback.replaceChildren(
+            el(
+              "div",
+              { class: "ogt-watch-fallback-head" },
+              el("span", { class: "ogt-watch-fallback-title", text: "Watch Now" }),
+              el("span", { class: "ogt-watch-fallback-note", text: "your links" })
+            ),
+            el("div", { class: "ogt-watch-now-tiles" }, watch.map(watchLink))
+          );
+          watchFallback.dataset.ogtSignature = signature;
+        }
+        watchFallback.hidden = false;
+      } else {
+        watchFallback.hidden = true;
+      }
+    }
+    let showRequested = false;
+    function lookUpShow(values) {
+      if (!fixedSelection || showRequested || !getClientId()) return;
+      const missing = ["year", "tmdb", "imdb", "tvdb"].filter((key) => meta[key] == null);
+      if (!missing.length) return;
+      const needed = missing.flatMap((key) => key === "imdb" ? ["{imdb}", "{imdbnum}"] : [`{${key}}`]);
+      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => needed.some((placeholder) => template.includes(placeholder)))))
+        return;
+      showRequested = true;
+      getShowDetails(route.id).then((show) => setMeta(showTemplateData(show))).catch((error) => {
+        if (!cancelled) debugError("show lookup failed", error);
+      });
+    }
+    function lookUpEpisode() {
+      if (meta.kind !== "show" || meta.episodeImdb || !getClientId()) return;
+      const { season, episode } = selection;
+      if (season == null || episode == null) return;
+      const key = episodeKey();
+      if (episodeImdbs.has(key)) return;
+      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => /\{episodeimdb(?:num)?\}/.test(template))))
+        return;
+      episodeImdbs.set(key, null);
+      getEpisode(meta.id, season, episode).then((data) => {
+        if (cancelled) return;
+        const imdb = typeof data?.ids?.imdb === "string" && /^tt\d+$/.test(data.ids.imdb) ? data.ids.imdb : null;
+        episodeImdbs.set(key, imdb);
+        if (imdb && key === episodeKey()) renderLinks();
+      }).catch((error) => {
+        if (cancelled) return;
+        episodeImdbs.delete(key);
+        debugError("episode lookup failed", error);
+      });
+    }
     function needsSelection() {
       return !fixedSelection && getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => /\{(?:season|episode)\}/.test(template)));
     }
@@ -2631,8 +3579,8 @@
     }
     const seasonSelect = el("select", { class: "ogt-select", "aria-label": "Season" });
     const episodeSlot = el("span", { class: "ogt-episode" });
-    const seasonField = el("label", { class: "ogt-field" }, "Season", seasonSelect);
-    const episodeField = el("label", { class: "ogt-field" }, "Episode", episodeSlot);
+    const seasonField = el("label", { class: "ogt-field" }, el("span", { class: "ogt-visually-hidden", text: "Season" }), seasonSelect);
+    const episodeField = el("label", { class: "ogt-field" }, el("span", { class: "ogt-visually-hidden", text: "Episode" }), episodeSlot);
     let controlsBuilt = false;
     function ensureControls() {
       if (controlsBuilt) return;
@@ -2641,7 +3589,7 @@
         selection.episode = 1;
         persistSelection();
         renderEpisodeField();
-        updateLinkHrefs();
+        renderLinks();
       });
       controlsRow.replaceChildren(seasonField, episodeField);
       controlsBuilt = true;
@@ -2669,12 +3617,12 @@
           if (Number.isInteger(value) && value >= 1 && value <= count2) {
             selection.episode = value;
             persistSelection();
-            updateLinkHrefs();
+            renderLinks();
           } else {
             input.value = String(selection.episode);
           }
         });
-        episodeSlot.replaceChildren(input);
+        episodeSlot.replaceChildren(el("span", { class: "ogt-field-prefix", "aria-hidden": "true", text: "Ep." }), input);
         return;
       }
       const select = el("select", { class: "ogt-select", "aria-label": "Episode" });
@@ -2685,7 +3633,7 @@
       select.addEventListener("change", () => {
         selection.episode = Number(select.value);
         persistSelection();
-        updateLinkHrefs();
+        renderLinks();
       });
       episodeSlot.replaceChildren(select);
     }
@@ -2711,7 +3659,6 @@
       seasonSelect.value = String(selection.season);
       renderEpisodeField();
       renderLinks();
-      updateLinkHrefs();
     }
     function loadSeasons() {
       if (meta.kind !== "show" || fixedSelection) return;
@@ -2758,17 +3705,58 @@
       for (const [key, value] of Object.entries(next)) if (value != null) meta[key] = value;
       renderLinks();
     }
+    function place() {
+      const target = findMountTarget();
+      if (!target) return;
+      if (target.before) {
+        if (node.parentElement === target.parent && node.nextSibling === target.before) return;
+        target.parent.insertBefore(node, target.before);
+      } else {
+        if (node.parentElement === target.parent && !node.nextSibling) return;
+        target.parent.append(node);
+      }
+    }
+    let watchTimer = null;
+    const observer = new MutationObserver(() => {
+      if (cancelled || watchTimer) return;
+      watchTimer = setTimeout(() => {
+        watchTimer = null;
+        if (cancelled) return;
+        place();
+        syncWatchNow(renderedEntries);
+      }, 60);
+    });
+    function observeAreas() {
+      observer.disconnect();
+      const roots = /* @__PURE__ */ new Set();
+      const aside = document.querySelector("aside.sidebar");
+      const overview = document.querySelector("#overview");
+      if (aside) roots.add(aside);
+      if (overview) roots.add(overview);
+      if (!roots.size) roots.add(document.querySelector(".summary-frame") || document.body);
+      for (const root2 of roots) observer.observe(root2, { childList: true, subtree: true });
+    }
+    document.addEventListener("ogt:refresh", onRefresh);
+    observeAreas();
     renderLinks();
     if (meta.kind === "show" && needsSelection()) loadSeasons();
     else renderControls();
-    document.addEventListener("ogt:refresh", onRefresh);
     return {
       node,
+      manager,
+      place,
       destroy() {
         cancelled = true;
+        if (watchTimer) clearTimeout(watchTimer);
+        watchTimer = null;
         for (const timer of timers) clearTimeout(timer);
         timers.length = 0;
+        observer.disconnect();
         document.removeEventListener("ogt:refresh", onRefresh);
+        for (const section of document.querySelectorAll(`[${WATCH_ATTR}]`)) section.remove();
+        watchFallback.replaceChildren();
+        if (manager.open) manager.close();
+        manager.remove();
         node.remove();
       }
     };
@@ -2782,10 +3770,12 @@
       if (document.getElementById(PANEL_ID)) return null;
       const meta = readTitleData(document, route);
       if (!meta.id) return null;
-      const mount = findMountPoint();
-      if (!mount) return null;
+      const target = findMountTarget();
+      if (!target) return null;
       const panel = createPanel(meta, route);
-      mount.parent.insertBefore(panel.node, mount.before);
+      document.body.append(panel.manager);
+      target.parent.insertBefore(panel.node, target.before);
+      panel.place();
       return panel;
     }
   };
@@ -4008,12 +4998,12 @@
 
   // src/features/season-chart/index.js
   var PANEL_ID2 = "ogt-season-chart";
-  var SVG_NS = "http://www.w3.org/2000/svg";
+  var SVG_NS2 = "http://www.w3.org/2000/svg";
   var DEFAULT_WIDTH = 720;
   var MIN_WIDTH = 320;
   var MAX_BAR = 24;
   function svg2(tag, attributes = {}, content = "") {
-    const node = document.createElementNS(SVG_NS, tag);
+    const node = document.createElementNS(SVG_NS2, tag);
     for (const [name, value] of Object.entries(attributes)) node.setAttribute(name, value);
     if (content) node.textContent = content;
     return node;
@@ -5097,7 +6087,7 @@
   var HASH = "#ogt-all-lists";
   var ROUTES = ["lists", "smart-lists", "lists-collaborations", "liked-lists"];
   var posterRequests = /* @__PURE__ */ new Map();
-  var ICONS = {
+  var ICONS2 = {
     Private: ["--color-list-chip-private", "M5 10h14v11H5z M8 10V7a4 4 0 0 1 8 0v3"],
     Following: ["--color-list-chip-following", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20a7 7 0 0 1 14 0Z"],
     Link: ["--color-list-chip-link", "M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1 M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"],
@@ -5194,13 +6184,13 @@
       return el(
         "a",
         { class: `ogt-all-lists__count ${kind}`, href },
-        icon2(ICONS[kind], "ogt-all-lists__count-icon"),
+        icon2(ICONS2[kind], "ogt-all-lists__count-icon"),
         el("strong", { text: value.toLocaleString("en-US") }),
         el("span", { text: ` ${words}` })
       );
     }
     function tag(label) {
-      const [color, path] = ICONS[label];
+      const [color, path] = ICONS2[label];
       if (native?.tag) {
         return el("span", { class: native.tag.className, style: `--tone: var(${color})` }, ownIcon(path), label);
       }
@@ -5221,7 +6211,7 @@
       return el(
         "button",
         { type: "button", class: "action share", title: "Copy Link", "aria-label": "Copy Link", on: { click: copy } },
-        icon2(ICONS.share)
+        icon2(ICONS2.share)
       );
     }
     function progress(href) {
@@ -5237,7 +6227,7 @@
         "a",
         "action progress",
         { href, title: "View watched progress", "aria-label": "View watched progress" },
-        ownIcon(ICONS.progress)
+        ownIcon(ICONS2.progress)
       );
     }
     function fan(entry, posters, loading) {
