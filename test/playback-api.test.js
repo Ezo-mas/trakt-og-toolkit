@@ -73,6 +73,20 @@ test('setProgress sends start then pause, never stop, and invalidates cached pla
   assert.equal(writes.some((call) => call.path === '/scrobble/stop'), false);
   await api.load('movie'); assert.equal(gets, 2);
 });
+test('the completion pause ignores page teardown once start has run', async () => {
+  let active = true;
+  const writes = [];
+  const api = createPlaybackApi({ signedIn: () => true, auth: async (method, path, body, options, control) => {
+    writes.push({ path, control });
+    if (path.endsWith('/start')) active = false;
+    return {};
+  } });
+  await api.setProgress(movieItem, 10, undefined, { active: () => active });
+  assert.deepEqual(writes.map((write) => write.path), ['/scrobble/start', '/scrobble/pause']);
+  assert.equal(typeof writes[0].control.active, 'function', 'start still respects page teardown');
+  assert.equal(writes[1].control, undefined, 'pause is left to the authenticated session check');
+});
+
 test('episode progress reuses ids and only looks up a missing episode', async () => {
   const writes = []; const gets = [];
   const api = createPlaybackApi({ signedIn: () => true,

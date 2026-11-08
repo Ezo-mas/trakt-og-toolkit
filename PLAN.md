@@ -37,6 +37,11 @@ Each feature below is sized for one agent. Read "Rules for every feature" first.
 | 23 | Test suite review and cleanup | — | last |
 | 24 | More exact-title link presets | — | done |
 | 25 | Per-user server presets | — | done |
+| 26 | Custom links below the poster, with icons and Watch Now integration | check current OG markup | planned; first |
+| 27 | Resolve external site IDs for direct custom links | 26; public lookup services | planned; after 26 |
+| 28 | Conditional presets and person-page custom links | 26; genre/person metadata | planned; after 26; anime mapping after 27 |
+| 29 | Shared authenticated-write queue and rate-limit handling | existing OAuth | done |
+| 30 | Trakt onboarding without manual API setup | publisher-registered app; HTTPS callback for PKCE | planned; device flow first, PKCE later |
 
 **Released:** 0.3.0 on 2026-11-03 (features 6–8, 11–13, 15 and 16). Bump the version again whenever main should
 reach userscript managers; they only offer an update when `@version` changes.
@@ -488,7 +493,8 @@ previous click: read the first history page for `X-Pagination-Page-Count`, then 
 `#/detail/:type/:id/:videoId?`, with `?season=` selecting the season when no episode id is given (added 2026-11-05),
 and falls back to its existing search URL when the page lacks the IMDb id. Show and episode deep links were clicked
 through on 2026-11-05; the season shape follows `useSeason` in Stremio's source. Metacritic, Plex and AniList stay
-searches: Plex needs its own ids, and Metacritic and AniList have no episode pages. TMDb, IMDb, Letterboxd, Rotten
+searches: their destination identifiers are not available in the existing template data. Metacritic does have
+season/episode pages; feature 27 plans a verified identifier lookup rather than guessing slugs. TMDb, IMDb, Letterboxd, Rotten
 Tomatoes, Wikipedia and Trakt itself are already linked by og or are the same site, so feature 22 added no presets for
 them; feature 24 later added them as presets so they survive a missing external-link strip.
 
@@ -500,7 +506,8 @@ fills `{imdb}`, `{tmdb}`, `{season}` and `{episode}` with the show's values.
   `…/detail/series/{imdb}/{imdb}:{season}:{episode}` for an episode (movies: `#/detail/movie/{imdb}`). Open each by hand
   first; this shape is the usual one but unverified.
 - Look for others that take IMDb or TMDb ids plus season/episode in the URL (for example TMDb itself, Trakt classic,
-  subtitle sites); skip sites that need their own ids (Plex, Jellyfin) or have no episode pages (Metacritic, AniList).
+  subtitle sites); retain search when the destination needs ids we cannot resolve reliably. Feature 27 covers
+  explicit external-id lookups; do not assume Metacritic lacks episode pages.
 - A preset can be several templates; a link with a placeholder the page lacks already hides itself, so an episode
   template simply doesn't show on show or movie pages. Keep the search preset as the fallback.
 
@@ -546,6 +553,196 @@ raw, unlike the URL-encoded title and id placeholders.
 Jellyfin and Emby cannot deep-link a Trakt title without their own item ids, so they open the web search route;
 those paths vary by server version and the preset can be edited. Fanart.tv remains out of scope, and no public
 server hosts are shipped.
+
+## 26. Custom links below the poster, with icons and Watch Now integration
+
+**Status:** planned (2026-11-07). First priority for the custom-links improvements. Move the existing links out of
+its large panel in the main content column and into the sidebar below the title's poster/card, near the native
+external-link area. Use compact service icons and add relevant links to OG's Watch Now card/popover as well.
+On narrow screens, follow OG's actual poster/Watch Now layout rather than a fixed desktop position.
+
+**Reference:** Fenn3c401's **Custom Links (Watch-Now + External), v1.1.1**, supplied in this chat;
+[upstream script](https://github.com/Fenn3c401/Trakt.tv-Userscript-Collection/blob/main/userscripts/dist/wkt34fcz.user.js).
+Use its behavior and the user's screenshots as references. Implement for current OG from scratch; its jQuery,
+Turbo events, old Trakt selectors, inline JavaScript and styles are not an implementation base.
+
+- Check live OG and `trakt/trakt-og` for the summary poster, sidebar external links, mobile layout and Watch Now
+  surfaces on movie/show/season/episode pages before choosing anchors. Keep native controls, provider results and
+  existing external links intact. The custom-link action opens the destination; it must not trigger native playback.
+- Reuse `src/features/custom-links/`, `PRESETS`, `resolvePresetUrl`, the saved link order, template variables and
+  configured server URLs. One saved configuration feeds both placements; there is no second list to maintain.
+- Display recognizable service icons with accessible names, tooltips and visible keyboard focus. Prefer existing
+  local/native assets where usable; bundle only the small icons needed. Custom services without a known icon get
+  a readable label or generic icon with an accessible label. Do not fetch third-party favicons on every page load.
+- Distinguish external/reference destinations from watch/play/library services in the preset definitions. Show
+  relevant enabled links in Watch Now, including when there are no native providers; do not present external
+  ratings/reference sites as streaming providers or change OG's provider availability/counts.
+- Keep Add presets, Edit links and Servers accessible through compact management controls using the existing
+  editor/checklist/server forms. Forms need usable space rather than being squeezed into the narrow icon strip.
+  Preserve existing saved links and server settings without requiring users to re-add them.
+- Mount Watch Now additions when OG opens or replaces that surface; handle lazy content, SPA navigation, feature
+  toggles and teardown without duplicate links/listeners. Ordinary resolved URLs stay normal anchors, including
+  middle-click, Ctrl/Cmd-click, keyboard activation and the context menu.
+
+**Scope:** `src/features/custom-links/{index,presets,data}.js`, its CSS/shared `src/ui/styles.js` where needed,
+existing feature lifecycle, `test/fixtures.js`, custom-links integration tests, drift selectors and README/NOTES.
+Do not add runtime dependencies, a second feature framework, an embedded player or the reference script's whole
+preset catalog. Keep Fanart.tv outside scope unless requested separately.
+
+**Acceptance:** verify desktop and narrow layouts in Firefox and Chromium; links sit below the poster/card and
+in the correct Watch Now surface, with no large duplicate main-column panel. Check movies, shows, seasons,
+episodes, missing native providers, edited links, unknown icons, server presets, keyboard use, repeated modal
+opens and route/feature cleanup. Add trimmed current-OG fixtures and focused built-bundle regression tests.
+
+## 27. Resolve external site IDs for direct custom links
+
+**Status:** planned; after feature 26. Improve destinations that currently search because Trakt does not provide
+that site's identifier. Add only specific resolvers needed by enabled presets, reusing the existing custom-links
+resolution path rather than building a general API wrapper or executing JavaScript stored in templates.
+
+- **First: Metacritic and Rotten Tomatoes.** Prefer a valid direct URL already rendered by OG (Rotten Tomatoes
+  already does this). Otherwise query Wikidata by a validated movie/show TMDb or IMDb id for
+  [Metacritic P1712](https://www.wikidata.org/wiki/Property:P1712) and
+  [Rotten Tomatoes P1258](https://www.wikidata.org/wiki/Property:P1258). Match the media kind, validate the returned
+  identifier and destination host/path, and keep the existing search when no reliable match exists.
+- Resolve on demand when a user activates a link. Cache successful mappings and deduplicate in-flight requests
+  by service and title id. Use a bounded timeout and short-lived missing-result cache; transient failures must not
+  become permanent misses. Check service terms, CORS/GM transport requirements and request limits before wiring
+  endpoints into the existing HTTP layer; add only required `@connect` hosts.
+- Keep the search URL usable while resolution is pending or unavailable. Upgrade the anchor when an exact URL
+  resolves; preserve normal navigation where possible. Failed lookups remain retryable and must not leave
+  `javascript:void(0)` links or remove the only click handler. Ignore late results after navigation/teardown.
+- Verify Metacritic/Rotten Tomatoes season routes against actual site behavior. Resolve an exact episode id/URL
+  only when trustworthy mapping exists; do not manufacture an episode slug from the episode title. Fall back to
+  a verified season/show page or search when the specific episode cannot be resolved.
+- **Then: anime IDs.** Check a maintained mapping source for TMDb/IMDb → MAL/AniList before implementation.
+  Add direct links only for unambiguous anime/season matches; keep search for missing or ambiguous results.
+  Do not globally rewrite Trakt season/episode numbering using fuzzy title matches. Any necessary destination-
+  specific episode mapping stays local to that destination and must be verified.
+
+**Scope:** the existing custom-links data/API/preset modules plus the smallest lookup helper, shared public HTTP
+facilities, build metadata for required hosts, fixtures, targeted resolver/integration tests and README/NOTES.
+Preserve the existing direct routes and per-user server URLs; no lookup should be needed for links already exact.
+
+**Acceptance:** test correct movie/show matches, malformed/wrong-host results, missing/ambiguous mappings, timeouts,
+rate limits, concurrent clicks, retry after failure, cache reuse and navigation during lookup. Verify representative
+live destinations before shipping. Lookups must not block initial page rendering or all other custom links.
+
+## 28. Conditional presets and person-page custom links
+
+**Status:** planned; after feature 26. Anime direct destinations additionally depend on feature 27's ID mapping.
+Show relevant presets in the new placements without requiring users to manage separate movie/show/person lists.
+
+- Extend existing preset kind restrictions with only the context needed by concrete presets: e.g. anime-only
+  destinations when reliable genre metadata is available. Reuse DOM metadata or existing public API results;
+  do not fetch every title's full details merely to decide whether to draw an icon. Unknown metadata must not
+  silently delete saved links, and genre restrictions apply to known presets rather than arbitrary user templates.
+- Extend the existing custom-links feature to person pages using `parseRoute`'s existing person route. Read the
+  person's name and available identifiers; do not feed person ids into movie/show templates. Pick a small useful
+  starting set, such as YouTube interviews and verified external profile links; do not duplicate pronunciation UI.
+- Decide and document name/person-id template variables before exposing them in the editor. Unsupported
+  placeholders hide the affected link safely, with existing movie/show/season/episode variables unchanged.
+- Reuse the icon presentation, management UI, saved order and optional lookup behavior from 26–27. Check OG's
+  native person external links first and avoid adding destinations that already cover the same need without value.
+
+**Acceptance:** fixtures/tests cover anime versus non-anime/unknown genres, movie/show/person preset eligibility,
+person variable filling and navigation between kinds, with no irrelevant presets or lost saved configuration.
+
+## 29. Shared authenticated-write queue and rate-limit handling
+
+**Status:** done (2026-11-07). One FIFO queue in `src/core/trakt.js` serializes authenticated POST/PUT/DELETE
+across features at Trakt's documented one-per-second write limit. 429s honour the full `Retry-After` (or use bounded
+jittered backoff) before retrying or dispatching another write; only rejected 429/401 requests are resent. Queued
+work rechecks the originating session generation, token and optional cancellation immediately before dispatch, so
+sign-out or an account change cancels it and releases the queue. OAuth polling, refresh and revocation stay outside
+the queue, and the public transport no longer shortens `Retry-After` to 10 s. Mocked-time queue tests and the full
+suite pass; no live account writes were made for this change.
+
+**Current gap:** `src/core/http.js` limits requests to four concurrent operations, which is not write pacing.
+Authenticated resource requests go through `privateRequest(..., retries: 0)` in `src/core/oauth.js`, so rapid bulk
+batches can hit 429. The public transport also caps `Retry-After` waits at 10 seconds, which can retry too early.
+
+- Put one shared FIFO queue at the authenticated resource-write boundary in `src/core/trakt.js` for
+  `POST`/`PUT`/`DELETE`. All watchlist/library/playback writes and Undo use it; do not add separate per-feature
+  queues. Pace actual sends at least one second apart under the currently documented standard-app limit.
+  Recheck [Trakt's rate-limit guidance](https://developer.trakt.tv/docs/rate-limiting) before implementation.
+- On 429, honor the full valid `Retry-After` delay before retrying or dispatching another affected write. If absent,
+  use bounded exponential backoff with jitter and a limited retry count. Do not shorten a required wait to 10 seconds.
+  Preserve any required response headers internally while keeping user errors/logs free of tokens and raw bodies.
+- Recheck the originating session and operation cancellation after waiting, immediately before dispatch. Read/refresh
+  the current token then; a queued action must not write under a different account or revive after sign-out.
+  A rejected/cancelled task must release the queue so subsequent valid actions can proceed.
+- Preserve the single in-flight token refresh, explicit approval, token rotation/revocation and GM-private storage.
+  Keep OAuth/device polling and refresh/revoke requests separate from the resource-write queue so refresh cannot
+  deadlock behind the write that is waiting for it. Keep normal public/authenticated GET concurrency and caching.
+- Retry only responses that establish a rejected request, such as 429; do not blindly replay writes after network
+  timeouts or ambiguous server failures. This matters for history and playback/scrobble operations. Preserve
+  existing bulk partial-success reporting, cancellation, notice timing and Undo semantics.
+- Fix the shared public transport's shortened `Retry-After` handling too. Start with pacing within one running
+  userscript instance; other tabs/apps may share the user's server-side limit, so 429 handling remains necessary.
+  Do not add a cross-tab coordinator unless testing demonstrates a need.
+
+**Scope:** `src/core/{trakt,oauth,http}.js` and existing authenticated callers only where cancellation must be
+forwarded/rechecked, plus focused queue/auth regression tests and README/NOTES. Keep current function interfaces
+where possible, avoid endpoint catalogs/plugins and add no dependency.
+
+**Acceptance:** use mocked transport/time to verify FIFO order, send spacing, a `Retry-After` greater than 10 seconds,
+missing-header backoff, exhausted retries, queue recovery after failure, cancellation during a wait, sign-out/account
+switch, token refresh without deadlock, and unchanged GET behavior. Confirm ambiguous writes are not automatically
+replayed; rerun the existing OAuth and bulk add/Undo/playback checks, then verify a small authenticated batch live.
+
+## 30. Trakt onboarding without manual API setup
+
+**Status:** planned (2026-11-07). Remove application-registration work for ordinary users while retaining their
+explicit approval and private credentials. The publisher registers one Toolkit application; users connect their
+own Trakt account to it. This does not automate application creation, consent or reuse OG's session.
+
+**Stage A — preconfigured application and existing device flow (first release).**
+
+- Obtain the release application's public Client ID and registered redirect URI, and verify that its registration
+  permits the intended audience before enabling it by default. Recheck current
+  [application registration](https://developer.trakt.tv/docs/create-an-app) and
+  [authentication guidance](https://developer.trakt.tv/docs/authentication-oauth); do not assume an existing
+  personal/development registration accepts other users.
+- Ship those public application settings as defaults. A user installs the script, chooses **Connect Trakt**, opens
+  the official verification page, enters the automatically copied device code and explicitly approves access.
+  They do not create an app, paste API credentials or enter a redirect URI. Public features use the default Client ID
+  without requiring sign-in; protected features connect only when the user chooses them.
+- Reuse existing device polling, cancellation, token refresh, sign-out/revocation and sanitized errors. Keep access
+  and refresh tokens exclusively in GM-private storage, separate from OG's account and page scripts. Never bundle
+  a Client Secret, collect a Trakt password or expose the authenticated client on `window`.
+- Keep **Use your own application** under advanced settings, with its Client ID and matching redirect URI stored
+  together. Preserve existing custom configurations; never silently switch an authenticated session to a different
+  Client ID. Changing applications requires an explicit disconnect/reconnect and must invalidate queued work.
+- Retain one publisher application rather than generating replacement apps to evade restrictions. Respect shared
+  API limits, keep caching, and use feature 29's write pacing/recovery when available. Verify the default app with
+  a second authorized test account before publishing.
+
+**Stage B — browser OAuth with PKCE (later).**
+
+- Replace code copying with **Connect → approve on Trakt → return connected**, using Trakt's recommended
+  [PKCE flow](https://developer.trakt.tv/docs/pkce). This requires a registered HTTPS callback address controlled
+  by the publisher and a verified handoff to the originating userscript. Static callback hosting may suffice;
+  no token-handling backend is required by the proposed design.
+- Design and test the handoff before implementing it: generate a fresh S256 verifier/challenge and unpredictable
+  state per attempt; keep the verifier private to the userscript. Validate state, attempt expiry, callback origin
+  and the originating session, accept a code once, then exchange it from the userscript. The callback must not
+  receive/store access tokens or the verifier, load third-party scripts, or leak authorization parameters through
+  analytics/referrers. Remove callback parameters after the handoff and discard pending state on completion/cancel.
+- Support reloads, closed tabs, expired/denied consent and concurrent attempts without connecting the wrong
+  account. Keep the tested device flow as fallback until PKCE works in supported userscript managers on Firefox
+  and Chromium. No auto-clicking approval and no dependency on old Trakt account-page markup.
+
+**Scope:** `src/config.js`, `src/settings.js`, `src/oauth-menu.js`, `src/core/{oauth,store,trakt}.js` as needed,
+existing dialogs/menu labels, focused OAuth/menu tests and README/NOTES. Stage B additionally needs a minimal
+reviewable callback page, hosting/registered URI, and tightly scoped userscript matching/permissions for it.
+Correct README's outdated setup/application-access advice when implementation ships. No real release Client ID
+or callback is configured yet; publisher registration/hosting are prerequisites, not completed work.
+
+**Acceptance:** test a fresh install, preserved custom app settings, missing defaults, approval/denial/expiry,
+cancellation, reload, refresh, sign-out, app/account switches and isolation of credentials from the page. For PKCE,
+add wrong-state/origin, replay, expired-attempt and concurrent-tab checks. Verify real connect/refresh/disconnect
+with the release app and a second account. No user should need developer-portal setup in the default flow.
 
 ## 23. Test suite review and cleanup
 

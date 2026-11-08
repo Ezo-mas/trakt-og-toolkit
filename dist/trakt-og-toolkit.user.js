@@ -2487,16 +2487,19 @@
     });
   }
   var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  var MAX_RETRY_WAIT_MS = 6e4;
   async function request(options) {
     await acquire();
     try {
       let attempt = 0;
       for (; ; ) {
-        const response = await rawRequest(options);
+        const prepared = options.beforeSend ? await options.beforeSend() : null;
+        const response = await rawRequest(prepared ? { ...options, ...prepared } : options);
         const retryable = response.status === 429 || response.status >= 500;
         if (!retryable || attempt >= (options.retries ?? MAX_RETRIES)) return response;
         const retryAfter = Number(headerValue(response.headers, "retry-after"));
-        const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1e3, 1e4) : 1e3 * (attempt + 1);
+        const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1e3 : 1e3 * (attempt + 1);
+        if (delay > MAX_RETRY_WAIT_MS) return response;
         attempt += 1;
         await sleep(delay);
       }
@@ -2559,7 +2562,8 @@
     try {
       const r = await request({ ...options, url, retries: 0 });
       return r;
-    } catch {
+    } catch (error) {
+      if (error?.control) throw error;
       throw authError("Trakt request failed; check your connection.");
     }
   }
@@ -2576,6 +2580,9 @@
   function isSignedIn() {
     const t = readTokens();
     return Boolean(t?.access_token && t?.refresh_token);
+  }
+  function getSessionGeneration() {
+    return generation;
   }
   function saveTokens(text2, clientId) {
     let t;
@@ -2705,6 +2712,7 @@
         }
         if (result.status === 200) {
           saveTokens(result.text, clientId);
+          generation += 1;
           if (typeof document !== "undefined") document.dispatchEvent(new Event("ogt:authchange"));
           emit("Signed in to Trakt.");
           return;
@@ -2753,6 +2761,112 @@
       this.name = "MissingClientIdError";
     }
   };
+  var WRITE_INTERVAL_MS = 1e3;
+  var WRITE_RETRIES = 2;
+  var RETRY_BASE_MS = 1e3;
+  var RETRY_MAX_MS = 3e4;
+  var WAIT_SLICE_MS = 250;
+  var writeTail = Promise.resolve();
+  var nextWriteAt = 0;
+  var blockedUntil = 0;
+  var blockedGeneration = null;
+  function cancelledError() {
+    const error = authError("Trakt request cancelled.", 0);
+    error.control = true;
+    return error;
+  }
+  function signedOutError() {
+    const error = authError("Signed out; sign in to Trakt.");
+    error.control = true;
+    return error;
+  }
+  function rateLimitedError() {
+    return authError("Trakt rate limited this request; try again later.", 429);
+  }
+  function sessionChangedError() {
+    return authError("Trakt session changed; request abandoned.");
+  }
+  function sleep2(ms, signal) {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(cancelledError());
+        return;
+      }
+      const done = () => {
+        cleanup();
+        resolve();
+      };
+      const abort = () => {
+        cleanup();
+        reject(cancelledError());
+      };
+      const timer = setTimeout(done, Math.max(0, ms));
+      function cleanup() {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", abort);
+      }
+      signal?.addEventListener("abort", abort, { once: true });
+    });
+  }
+  function retryDelay(headers2, attempt) {
+    const raw = headerValue(headers2, "retry-after");
+    if (raw != null && raw !== "") {
+      const retryAfter = Number(raw);
+      if (Number.isFinite(retryAfter) && retryAfter >= 0) return retryAfter * 1e3;
+    }
+    const base = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS);
+    return Math.round(base * (0.5 + Math.random()));
+  }
+  function createWriteEntry(control = {}) {
+    const signal = control.signal ?? null;
+    const active2 = typeof control.active === "function" ? control.active : null;
+    const generation3 = getSessionGeneration();
+    const clientId = getClientId();
+    const current = () => generation3 === getSessionGeneration() && clientId === getClientId() && Boolean(readTokens());
+    return {
+      signal,
+      generation: generation3,
+      check() {
+        if (signal?.aborted) throw cancelledError();
+        if (active2 && active2() === false) throw cancelledError();
+        if (!current()) throw signedOutError();
+      }
+    };
+  }
+  function enqueueWrite(entry, task) {
+    const queued = writeTail.then(() => {
+      entry.check();
+      return task();
+    });
+    writeTail = queued.then(() => {
+    }, () => {
+    });
+    return queued;
+  }
+  async function waitForTurn(entry) {
+    for (; ; ) {
+      entry.check();
+      const blocked = blockedGeneration === entry.generation ? blockedUntil : 0;
+      if (blocked - Date.now() > MAX_RETRY_WAIT_MS) throw rateLimitedError();
+      const remaining = Math.max(nextWriteAt, blocked) - Date.now();
+      if (remaining <= 0) return;
+      await sleep2(Math.min(remaining, WAIT_SLICE_MS), entry.signal);
+    }
+  }
+  function blockWrites(ms, generation3) {
+    const until = Date.now() + ms;
+    if (blockedGeneration === generation3) blockedUntil = Math.max(blockedUntil, until);
+    else {
+      blockedGeneration = generation3;
+      blockedUntil = until;
+    }
+  }
+  async function ensureTokens() {
+    let tokens = readTokens();
+    if (!tokens) throw signedOutError();
+    if (tokens.expires_at <= Date.now() + 6e4) tokens = await refreshTokens();
+    return tokens;
+  }
   function apiGet(path, { ttl = CACHE_TTL } = {}) {
     const clientId = getClientId();
     if (!clientId) return Promise.reject(new MissingClientIdError());
@@ -2778,13 +2892,13 @@
     await apiGet("/shows/breaking-bad", { ttl: 0 });
     return Date.now() - started;
   }
-  function apiAuth(method, path, body, options = {}) {
-    return authenticated(method, path, body, options, false);
+  function apiAuth(method, path, body, options = {}, control = {}) {
+    return authenticated(method, path, body, options, false, control);
   }
   function apiAuthPage(path, options = {}) {
-    return authenticated("GET", path, void 0, options, true);
+    return authenticated("GET", path, void 0, options, true, {});
   }
-  async function authenticated(method, path, body, options, metadata) {
+  async function authenticated(method, path, body, options, metadata, control) {
     if (!/^\/(?!\/)/.test(path) || /[?#]/.test(path) || path.includes("://")) {
       throw authError("Authenticated API paths must be relative and contain no query.");
     }
@@ -2795,43 +2909,90 @@
       query.set(key, String(value));
     }
     const requestPath = query.size ? `${path}?${query}` : path;
-    let tokens = readTokens();
-    if (!tokens) throw authError("Signed out; sign in to Trakt.");
-    if (tokens.expires_at <= Date.now() + 6e4) {
-      tokens = await refreshTokens();
-    }
-    const send = (t) => privateRequest(`${API.base}${requestPath}`, {
-      method,
-      headers: {
+    const url = `${API.base}${requestPath}`;
+    const exchange = () => sendAuthenticated(method, url, body, metadata, method === "GET" ? null : control);
+    if (method === "GET") return exchange();
+    const entry = createWriteEntry(control);
+    entry.check();
+    return enqueueWrite(entry, () => sendAuthenticated(method, url, body, metadata, entry));
+  }
+  async function sendAuthenticated(method, url, body, metadata, entry) {
+    const origin = entry?.generation ?? getSessionGeneration();
+    const checkOrigin = () => {
+      if (getSessionGeneration() === origin) return;
+      if (entry) entry.check();
+      throw sessionChangedError();
+    };
+    let refreshed = false;
+    let rateRetries = 0;
+    for (; ; ) {
+      checkOrigin();
+      if (entry) await waitForTurn(entry);
+      const tokens = await ensureTokens();
+      if (entry) entry.check();
+      checkOrigin();
+      const authHeaders = (current) => ({
         "Content-Type": "application/json",
         "trakt-api-version": API.version,
-        "trakt-api-key": t.client_id,
-        Authorization: `Bearer ${t.access_token}`
-      },
-      body: body == null ? null : JSON.stringify(body)
-    });
-    let response = await send(tokens);
-    if (response.status === 401) {
-      const latest = readTokens();
-      if (!latest) throw authError("Signed out; sign in to Trakt.");
-      tokens = latest.access_token !== tokens.access_token ? latest : await refreshTokens();
-      response = await send(tokens);
-    }
-    if (response.status === 401) {
-      clearTokens();
-      throw authError("Trakt session expired; sign in again.", 401);
-    }
-    if (response.status < 200 || response.status >= 300) throw authError("Authenticated Trakt request failed.", response.status);
-    if (!response.text || response.status === 204) return null;
-    try {
-      const data = JSON.parse(response.text);
-      if (!metadata) return data;
-      const raw = headerValue(response.headers, "x-pagination-page-count");
-      const pages = raw == null ? null : Number(raw);
-      if (pages !== null && (!Number.isSafeInteger(pages) || pages < 0)) throw new Error();
-      return { data, pages };
-    } catch {
-      throw authError("Invalid Trakt response.");
+        "trakt-api-key": current.client_id,
+        Authorization: `Bearer ${current.access_token}`
+      });
+      let response;
+      let sentTokens = tokens;
+      try {
+        response = await privateRequest(url, {
+          method,
+          headers: authHeaders(tokens),
+          body: body == null ? null : JSON.stringify(body),
+          signal: entry?.signal ?? void 0,
+          ...entry ? {
+            beforeSend() {
+              entry.check();
+              const current = readTokens();
+              if (!current) throw signedOutError();
+              entry.check();
+              sentTokens = current;
+              nextWriteAt = Date.now() + WRITE_INTERVAL_MS;
+              return { headers: authHeaders(current) };
+            }
+          } : {}
+        });
+      } catch (error) {
+        if (entry?.signal?.aborted) throw cancelledError();
+        throw error;
+      }
+      if (response.status === 401) {
+        checkOrigin();
+        if (refreshed) {
+          clearTokens();
+          throw authError("Trakt session expired; sign in again.", 401);
+        }
+        const latest = readTokens();
+        if (!latest) throw signedOutError();
+        if (latest.access_token === sentTokens.access_token) await refreshTokens();
+        refreshed = true;
+        continue;
+      }
+      if (response.status === 429 && entry) {
+        const delay = retryDelay(response.headers, rateRetries);
+        blockWrites(delay, entry.generation);
+        if (rateRetries < WRITE_RETRIES && delay <= MAX_RETRY_WAIT_MS) {
+          rateRetries += 1;
+          continue;
+        }
+      }
+      if (response.status < 200 || response.status >= 300) throw authError("Authenticated Trakt request failed.", response.status);
+      if (!response.text || response.status === 204) return null;
+      try {
+        const data = JSON.parse(response.text);
+        if (!metadata) return data;
+        const raw = headerValue(response.headers, "x-pagination-page-count");
+        const pages = raw == null ? null : Number(raw);
+        if (pages !== null && (!Number.isSafeInteger(pages) || pages < 0)) throw new Error();
+        return { data, pages };
+      } catch {
+        throw authError("Invalid Trakt response.");
+      }
     }
   }
 
@@ -3668,6 +3829,11 @@
 
   // src/features/playback/api.js
   var TTL = 6e4;
+  function writeRequest(auth, method, path, body, control) {
+    const guard = control?.active || control?.signal ? { active: control.active, signal: control.signal } : void 0;
+    if (guard) return auth(method, path, body, void 0, guard);
+    return body === void 0 ? auth(method, path) : auth(method, path, body);
+  }
   function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isSignedIn, now = Date.now } = {}) {
     const cache3 = /* @__PURE__ */ new Map();
     const flights2 = /* @__PURE__ */ new Map();
@@ -3713,15 +3879,16 @@
       const [movies, episodes] = await Promise.all([load("movie"), load("episode")]);
       return sortPlayback([...movies, ...episodes]);
     }
-    async function clearItems(ids, confirm) {
+    async function clearItems(ids, confirm, control = {}) {
       const unique = [...new Set(ids)];
       if (unique.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new Error("Invalid playback ID.");
       if (!signedIn()) throw new Error("Sign in to Trakt first.");
+      const active2 = () => !control.active || control.active() !== false;
       const epoch = session;
       if (!unique.length || !await confirm(`Clear paused playback for ${unique.length} item${unique.length === 1 ? "" : "s"}? This cannot be undone.`)) {
         return { cancelled: true, cleared: [], failed: [] };
       }
-      if (session !== epoch || !signedIn()) return { cancelled: true, cleared: [], failed: [] };
+      if (session !== epoch || !signedIn() || !active2()) return { cancelled: true, cleared: [], failed: [] };
       let cursor = 0;
       const cleared = [];
       const failed = [];
@@ -3729,12 +3896,12 @@
         await Promise.all(Array.from({ length: Math.min(4, unique.length) }, async () => {
           while (cursor < unique.length) {
             const id = unique[cursor++];
-            if (session !== epoch || !signedIn()) {
+            if (session !== epoch || !signedIn() || !active2()) {
               failed.push(id);
               continue;
             }
             try {
-              await auth("DELETE", `/sync/playback/${id}`);
+              await writeRequest(auth, "DELETE", `/sync/playback/${id}`, void 0, control);
               cleared.push(id);
             } catch {
               failed.push(id);
@@ -3757,18 +3924,18 @@
       if (!pickIds(episode?.ids, EPISODE_IDS)) throw new Error("Could not identify this episode.");
       return episode.ids;
     }
-    async function setProgress(item, progress, epoch = session) {
+    async function setProgress(item, progress, epoch = session, control = {}) {
       if (!signedIn()) throw new Error("Sign in to Trakt first.");
       const value = normalizeProgress(progress);
       if (!item || value == null) throw new Error("Invalid progress.");
       const episodeIds = item.kind === "movie" ? null : await episodeIdsFor(item);
       if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
       const body = scrobbleBody(item, value, episodeIds);
-      await auth("POST", "/scrobble/start", body);
+      await writeRequest(auth, "POST", "/scrobble/start", body, control);
       invalidate();
       try {
         if (epoch !== session || !signedIn()) throw new Error("Playback session changed.");
-        await auth("POST", "/scrobble/pause", body);
+        await writeRequest(auth, "POST", "/scrobble/pause", body);
       } catch (error) {
         error.partial = true;
         throw error;
@@ -3777,7 +3944,7 @@
       }
       return { progress: value, body };
     }
-    async function setRouteProgress(route, progress) {
+    async function setRouteProgress(route, progress, control = {}) {
       if (!signedIn()) throw new Error("Sign in to Trakt first.");
       const value = normalizeProgress(progress);
       if (value == null) throw new Error("Invalid progress.");
@@ -3785,13 +3952,13 @@
       const epoch = session;
       if (route.kind === "movie") {
         const movie = await get(`/movies/${encodeURIComponent(route.id)}`);
-        return setProgress({ kind: "movie", ids: movie?.ids, title: movie?.title, year: movie?.year }, value, epoch);
+        return setProgress({ kind: "movie", ids: movie?.ids, title: movie?.title, year: movie?.year }, value, epoch, control);
       }
       if (route.name !== "episode" || !Number.isInteger(route.season) || !Number.isInteger(route.episode)) {
         throw new Error("Unsupported playback page.");
       }
       const episode = await get(`/shows/${encodeURIComponent(route.id)}/seasons/${route.season}/episodes/${route.episode}`);
-      return setProgress({ kind: "episode", episodeIds: episode?.ids, season: route.season, episode: route.episode }, value, epoch);
+      return setProgress({ kind: "episode", episodeIds: episode?.ids, season: route.season, episode: route.episode }, value, epoch, control);
     }
     return { load, loadAll, clearItems, setProgress, setRouteProgress, invalidate, resetSession };
   }
@@ -3926,7 +4093,11 @@
         status.textContent = "No paused items selected.";
         return;
       }
-      const result = await playbackApi.clearItems(ids, (message2) => confirmDialog(message2, { title: "Clear paused playback", ok: "Clear" }));
+      const result = await playbackApi.clearItems(ids, async (message2) => {
+        const ok = await confirmDialog(message2, { title: "Clear paused playback", ok: "Clear" });
+        if (ok && alive2()) status.textContent = `Clearing ${ids.length > 1 ? `${ids.length} items` : "1 item"}…`;
+        return ok;
+      }, { active: alive2 });
       if (result.cancelled || !alive2()) return;
       selected.clear();
       const summary2 = `${result.cleared.length} cleared${result.failed.length ? `; ${result.failed.length} failed — try again` : ""}.`;
@@ -3960,8 +4131,8 @@
       if (progress == null) return;
       status.textContent = "Saving progress…";
       try {
-        if (item) await playbackApi.setProgress(item, progress);
-        else await playbackApi.setRouteProgress(route, progress);
+        if (item) await playbackApi.setProgress(item, progress, void 0, { active: alive2 });
+        else await playbackApi.setRouteProgress(route, progress, { active: alive2 });
       } catch (error) {
         if (!error.partial) throw error;
         debugError("playback pause failed after start", error);
@@ -6555,10 +6726,14 @@
 
   // src/features/library/api.js
   var validId = (id) => Number.isSafeInteger(id) && id > 0;
+  function writeRequest2(auth, path, body, active2, signal) {
+    return active2 || signal ? auth("POST", path, body, void 0, { active: active2, signal }) : auth("POST", path, body);
+  }
   function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
     return {
-      async add(route, { confirm = () => true, active: active2 = () => true } = {}) {
+      async add(route, { confirm = () => true, active: active2, signal } = {}) {
         if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
+        const isActive = active2 ?? (() => true);
         const id = encodeURIComponent(route.id);
         const at = now();
         const collected_at = new Date(at).toISOString();
@@ -6572,7 +6747,7 @@
           if (!Array.isArray(seasons)) throw new Error("Could not load seasons.");
           const episodes = [];
           for (const season of seasons) {
-            if (!active2() || !signedIn()) return { cancelled: true };
+            if (!isActive() || !signedIn()) return { cancelled: true };
             if (!Number.isSafeInteger(season.number) || season.number < 0) continue;
             if (route.name === "title" && season.number === 0) continue;
             const path = `/shows/${id}/seasons/${season.number}`;
@@ -6586,14 +6761,14 @@
           }
           body = { episodes: [...new Map(episodes.map((ep) => [ep.ids.trakt, ep])).values()] };
           if (!body.episodes.length) throw new Error("No aired episodes to add.");
-          if (!active2() || !signedIn()) return { cancelled: true };
+          if (!isActive() || !signedIn()) return { cancelled: true };
           if (route.name !== "episode" && !await confirm(`Add ${body.episodes.length} aired episode${body.episodes.length === 1 ? "" : "s"} to your toolkit Trakt account’s library?${route.name === "title" ? " Specials are excluded." : ""}`)) {
             return { cancelled: true };
           }
-          if (!active2() || !signedIn()) return { cancelled: true };
+          if (!isActive() || !signedIn()) return { cancelled: true };
         } else throw new Error("Unsupported library page.");
-        if (!active2() || !signedIn()) return { cancelled: true };
-        const result = await auth("POST", "/sync/collection", body);
+        if (!isActive() || !signedIn()) return { cancelled: true };
+        const result = await writeRequest2(auth, "/sync/collection", body, active2, signal);
         if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
           throw new Error("Trakt could not find some items; the addition may be incomplete.");
         }
@@ -6604,10 +6779,11 @@
         return { cancelled: false, body, undoable };
       },
       /** Undo an addition with the exact body that was sent. */
-      async remove(body, { active: active2 = () => true } = {}) {
+      async remove(body, { active: active2, signal } = {}) {
         if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
-        if (!body || typeof body !== "object" || !active2()) return { cancelled: true };
-        const result = await auth("POST", "/sync/collection/remove", body);
+        const isActive = active2 ?? (() => true);
+        if (!body || typeof body !== "object" || !isActive()) return { cancelled: true };
+        const result = await writeRequest2(auth, "/sync/collection/remove", body, active2, signal);
         if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
           throw new Error("Trakt could not find some items.");
         }
@@ -6959,19 +7135,23 @@
 
   // src/features/watchlist/api.js
   var BULK_BATCH = 100;
+  function writeRequest3(auth, path, body, active2, signal) {
+    return active2 || signal ? auth("POST", path, body, void 0, { active: active2, signal }) : auth("POST", path, body);
+  }
   function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn } = {}) {
     return {
-      async add(route, { active: active2 = () => true } = {}) {
+      async add(route, { active: active2, signal } = {}) {
         if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
         const lookup = watchlistLookup(route);
         if (!lookup) throw new Error("Unsupported watchlist page.");
-        if (!active2()) return { cancelled: true };
+        const isActive = active2 ?? (() => true);
+        if (!isActive()) return { cancelled: true };
         const data = await get(lookup.path);
         const body = watchlistBody(lookup, data);
         const item = lookup.type === "seasons" ? data.find((season) => season?.number === lookup.season) : data;
         const title = typeof item?.title === "string" && item.title.trim() ? item.title.trim() : lookup.type === "seasons" ? `Season ${lookup.season}` : "this title";
-        if (!active2() || !signedIn()) return { cancelled: true };
-        const result = await auth("POST", "/sync/watchlist", body);
+        if (!isActive() || !signedIn()) return { cancelled: true };
+        const result = await writeRequest3(auth, "/sync/watchlist", body, active2, signal);
         if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
           throw new Error("Trakt could not find this title.");
         }
@@ -6982,16 +7162,17 @@
         return { cancelled: false, title, body, undoable: Number.isSafeInteger(result?.added?.[lookup.type]) && result.added[lookup.type] > 0 };
       },
       /** Report each confirmed batch so a later failure cannot erase completed work. */
-      async addMany(routes, { active: active2 = () => true, onProgress = () => {
+      async addMany(routes, { active: active2, signal, onProgress = () => {
       } } = {}) {
         if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
-        if (!active2()) return { cancelled: true };
+        const isActive = active2 ?? (() => true);
+        if (!isActive()) return { cancelled: true };
         const items = watchlistBulkItems(routes);
         const progress = { cancelled: false, sent: 0, added: 0, existing: 0, notFound: 0, succeededKeys: [] };
         for (let start2 = 0; start2 < items.length; start2 += BULK_BATCH) {
-          if (!active2() || !signedIn()) return { cancelled: true };
+          if (!isActive() || !signedIn()) return { cancelled: true };
           const batch = items.slice(start2, start2 + BULK_BATCH);
-          const result = await auth("POST", "/sync/watchlist", watchlistBulkBody(batch));
+          const result = await writeRequest3(auth, "/sync/watchlist", watchlistBulkBody(batch), active2, signal);
           const confirmed = { added: 0, existing: 0, notFound: 0, succeededKeys: [] };
           for (const type of ["movies", "shows"]) {
             const sent = batch.filter((item) => item.type === type);
@@ -7019,10 +7200,11 @@
         return progress;
       },
       /** Undo an addition with the exact body that was sent. */
-      async remove(body, { active: active2 = () => true } = {}) {
+      async remove(body, { active: active2, signal } = {}) {
         if (!signedIn()) throw new Error("Sign in through the toolkit menu first.");
-        if (!body || typeof body !== "object" || !active2()) return { cancelled: true };
-        const result = await auth("POST", "/sync/watchlist/remove", body);
+        const isActive = active2 ?? (() => true);
+        if (!body || typeof body !== "object" || !isActive()) return { cancelled: true };
+        const result = await writeRequest3(auth, "/sync/watchlist/remove", body, active2, signal);
         if (Object.values(result?.not_found ?? {}).some((items) => !Array.isArray(items) || items.length)) {
           throw new Error("Trakt could not find this title.");
         }

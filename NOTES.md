@@ -81,6 +81,58 @@ Working notes and known issues. Newest first.
   rather than any `dialog`, because the closed custom-links management dialog is intentionally present on title pages.
   The old assertion failed and Node tried to print a happy-dom node, which OOM-killed the file.
 
+## 2026-11-07: shared authenticated-write queue (feature 29)
+
+- Trakt's current rate-limit page (`developer.trakt.tv/docs/rate-limiting`, checked 2026-11-07) sets
+  `AUTHED_API_POST_LIMIT` to one call per second for POST/PUT/DELETE, and says to wait at least the full
+  `Retry-After` on 429 (otherwise use exponential backoff with jitter and limited retries). The queue follows that:
+  one FIFO chain in `src/core/trakt.js`, serial sends, at least 1000 ms between dispatches, two 429 retries, and the
+  final 429 also blocks later writes for its `Retry-After`. The pacing timestamp is recorded at actual dispatch inside
+  `beforeSend`, not while a write waits for a transport slot, so a delayed first write cannot consume the next write's
+  spacing.
+- `Retry-After` is used only when the header is present and a valid non-negative number. Missing headers use 1 s and
+  2 s base delays with ±50% jitter, bounded at 30 s. The parser checks for a non-empty header before `Number()`,
+  because `Number(null)` is `0` and would have skipped the fallback. A valid `Retry-After` is never shortened.
+- Only 429s and 401s are resent. A request records the session generation that started it and the token actually
+  handed to the transport (which can be newer than its pre-slot snapshot). A 401 refreshes and resends once through
+  the same pacing and cancellation checks; a second 401 for that session clears tokens. A 401 arriving after a
+  different account connected is abandoned without refreshing or clearing the replacement account's tokens. 5xx,
+  timeout and network failures surface without replay, since a write may already have been accepted.
+- A queued write captures OAuth's session generation and the client ID when it is enqueued. `clearTokens()` and a
+  successful sign-in bump the generation; the queue rechecks generation, client ID and the current token after every
+  wait and after a refresh. The final check runs in `http.js`'s `beforeSend`, after the request acquires one of the
+  transport's four slots and immediately before the send, so signing out while four GETs hold the slots still prevents
+  the old write. Sign-out or an account switch rejects queued work and releases the queue.
+- Features can also pass their own `{ active, signal }` operation guard as `apiAuth`'s optional fifth argument. The
+  Watchlist, Library and Playback callers forward guards when they have one; the final `beforeSend` rechecks `active`
+  too, so navigation or teardown cannot leave a delayed write running. Adds and Undos without a guard keep their old
+  request shape. Playback's start respects that page guard, but its completion pause is session-scoped: once
+  `/scrobble/start` has been sent, leaving the page must not suppress the pause that saves progress, since start has
+  already removed the old entry. A sign-out or account change still rejects the pause.
+- Device polling, token refresh and revoke still call the OAuth endpoints directly. A write holds only its queue
+  slot while refreshing, never a transport slot, so refresh cannot deadlock behind the write waiting for it. GETs are
+  unchanged: not queued or paced, with the same caching and four-way concurrency.
+- `src/core/http.js` no longer caps the public transport's `Retry-After` wait at 10 s. Its 429/5xx retries now wait
+  the server's full delay; missing headers keep the existing linear fallback.
+- Tests: `test/write-queue.test.js` mocks `Date`/`setTimeout` and `GM_xmlhttpRequest` for FIFO order, one-second
+  spacing, a 30 s `Retry-After`, missing-header backoff, exhausted retries, queue recovery after 5xx/network
+  failures, abort during a wait, sign-out and re-sign-in, refresh without deadlock, 401 resend pacing, unchanged
+  GETs, and the public transport's long `Retry-After`. It also covers a sign-out during a four-GET slot wait, pacing
+  stamped after a slot wait, and an inactive feature guard cancelling a queued write; it also covers a token rotated
+  while a write waited for a slot. The built-bundle credit test navigates after queueing a second addition and asserts
+  only the first was sent, while the playback test navigates after start and asserts the pause still completes. The
+  auth tests also cover a late 401 from an old session after another account connects. Existing built-bundle tests that
+  perform two or more writes now wait past the pacing interval (playback start+pause, Undo, bulk Watchlist all and
+  credit-row retries).
+- Review fixes: a `Retry-After` above 60 s (`MAX_RETRY_WAIT_MS` in `http.js`) is not waited through in place. A public
+  GET sleeps while holding one of the four transport slots, and a write blocks the whole queue with its button busy,
+  so a long block would freeze the page's API calls or leave Watchlist all spinning for minutes. Instead the 429 is
+  returned/thrown at once (never retried early), and later writes inside that block fail fast with status 429, which
+  the features already turn into "Trakt rate limited this request; try again later." Playback's bulk clear now shows
+  "Clearing N items…" after confirmation, since paced deletes take about a second each.
+- No live account writes were made while developing this. Limitation: pacing is per page instance; other tabs and
+  apps share the user's server-side limit, so 429 handling remains necessary and there is no cross-tab coordinator.
+
 ## 2026-11-07: preset review fix (PR 31)
 
 - Episode pages read `{episodeimdb}` only from an IMDb title link that is not a season list

@@ -68,19 +68,29 @@ function rawRequest({ method = 'GET', url, headers = {}, body = null, timeout = 
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Longest Retry-After worth waiting for in place; longer ones fail now rather than retry early. */
+export const MAX_RETRY_WAIT_MS = 60000;
 
-/** Ordered, concurrency-limited request. Retries 429/5xx twice. */
+/**
+ * Ordered, concurrency-limited request. Retries 429/5xx twice. `beforeSend` runs after a
+ * concurrency slot is acquired and immediately before each actual send; it may return fresh
+ * request options (for example headers) or throw to cancel without dispatching.
+ */
 export async function request(options) {
   await acquire();
   try {
     let attempt = 0;
     for (;;) {
-      const response = await rawRequest(options);
+      const prepared = options.beforeSend ? await options.beforeSend() : null;
+      const response = await rawRequest(prepared ? { ...options, ...prepared } : options);
       const retryable = response.status === 429 || response.status >= 500;
       if (!retryable || attempt >= (options.retries ?? MAX_RETRIES)) return response;
 
+      // Honour the server's full Retry-After delay; shortening it retries too early. A wait longer
+      // than MAX_RETRY_WAIT_MS gives up instead: sleeping here holds one of the four request slots.
       const retryAfter = Number(headerValue(response.headers, 'retry-after'));
-      const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 10000) : 1000 * (attempt + 1);
+      const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * (attempt + 1);
+      if (delay > MAX_RETRY_WAIT_MS) return response;
       attempt += 1;
       await sleep(delay);
     }

@@ -136,7 +136,7 @@ test('built watchlist Undo removes with the same body and restores the action', 
   assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, 'You added Spider-Man: Brand New Day to your watchlist.');
   const undo = b.document.querySelector('.ogt-watchlist-toast__undo');
   assert.ok(undo);
-  undo.click(); await wait();
+  undo.click(); await wait(1200);
   assert.equal(b.writes().length, 2);
   assert.equal(b.writes()[1].url, 'https://api.trakt.tv/sync/watchlist/remove');
   assert.deepEqual(JSON.parse(b.writes()[1].data), { movies: [{ ids: { trakt: 12 } }] });
@@ -154,7 +154,7 @@ test('built library Undo removes the collected items and restores the action', a
   assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, 'You added The Dark to your library.');
   const undo = b.document.querySelector('.ogt-watchlist-toast__undo');
   assert.ok(undo);
-  undo.click(); await wait();
+  undo.click(); await wait(1200);
   assert.equal(b.writes().length, 2);
   assert.equal(b.writes()[1].url, 'https://api.trakt.tv/sync/collection/remove');
   assert.deepEqual(JSON.parse(b.writes()[1].data), JSON.parse(b.writes()[0].data));
@@ -170,7 +170,7 @@ test('built card Undo restores the card shortcut', async t => {
   assert.equal(button().hidden, true);
   const undo = b.document.querySelector('.ogt-watchlist-toast__undo');
   assert.ok(undo);
-  undo.click(); await wait();
+  undo.click(); await wait(1200);
   assert.equal(b.writes().length, 2);
   assert.equal(b.writes()[1].url, 'https://api.trakt.tv/sync/watchlist/remove');
   assert.equal(button().hidden, false);

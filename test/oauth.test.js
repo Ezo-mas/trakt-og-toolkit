@@ -118,6 +118,31 @@ test('authenticated requests, refresh, sign-out and sanitized failures', async (
       client_id: 'client', refresh_token: 'private-refresh', grant_type: 'refresh_token', redirect_uri: 'https://example.com/callback',
     });
   });
+  await t.test('a late 401 from an old session cannot clear a newly connected account', async () => {
+    reset(); stored();
+    mock((r, n) => {
+      if (n === 1) return { status: 401 };
+      if (r.url.endsWith('/oauth/token')) return { status: 200, body: token('retry-access', 'retry-refresh') };
+      return null;
+    });
+    const auth = apiAuth('GET', '/users/me');
+    const rejected = assert.rejects(auth, /session changed|abandoned/i);
+    await settle();
+    assert.equal(calls.length, 3, 'the post-refresh retry is still in flight');
+
+    oauth.clearTokens();
+    storage.set(STORAGE.tokens, {
+      access_token: 'other-access', refresh_token: 'other-refresh', client_id: 'client',
+      expires_at: Date.now() + 3600000,
+    });
+    calls[2].onload({ status: 401, responseText: '{}', responseHeaders: '' });
+    await rejected;
+
+    assert.equal(oauth.isSignedIn(), true);
+    assert.equal(storage.get(STORAGE.tokens).access_token, 'other-access');
+    assert.equal(calls.filter((r) => r.url.endsWith('/oauth/token')).length, 1);
+  });
+
   await t.test('refresh before expiry, no caching, POST JSON and DELETE 204', async () => {
     reset(); stored(Date.now() + 1000);
     mock((r) => r.url.endsWith('/token') ? { status: 200, body: token('rotated', 'rotated-refresh') } : { status: r.method === 'DELETE' ? 204 : 200, body: { ok: true } });

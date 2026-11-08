@@ -2,6 +2,12 @@ import { apiAuth, apiGet, isSignedIn } from '../../core/trakt.js';
 import { EPISODE_IDS, mapPlayback, normalizeProgress, pickIds, scrobbleBody, sortPlayback } from './data.js';
 
 const TTL = 60000;
+/** Only pass a queue guard when the feature supplied one, so injected transports keep their old shape. */
+function writeRequest(auth, method, path, body, control) {
+  const guard = control?.active || control?.signal ? { active: control.active, signal: control.signal } : undefined;
+  if (guard) return auth(method, path, body, undefined, guard);
+  return body === undefined ? auth(method, path) : auth(method, path, body);
+}
 /** Injectable transport keeps tests at the authenticated API boundary. */
 export function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isSignedIn, now = Date.now } = {}) {
   const cache = new Map();
@@ -36,15 +42,16 @@ export function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isS
     return sortPlayback([...movies, ...episodes]);
   }
   /** A single batch confirmation includes its actual deduplicated count. */
-  async function clearItems(ids, confirm) {
+  async function clearItems(ids, confirm, control = {}) {
     const unique = [...new Set(ids)];
     if (unique.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new Error('Invalid playback ID.');
     if (!signedIn()) throw new Error('Sign in to Trakt first.');
+    const active = () => !control.active || control.active() !== false;
     const epoch = session;
     if (!unique.length || !(await confirm(`Clear paused playback for ${unique.length} item${unique.length === 1 ? '' : 's'}? This cannot be undone.`))) {
       return { cancelled: true, cleared: [], failed: [] };
     }
-    if (session !== epoch || !signedIn()) return { cancelled: true, cleared: [], failed: [] };
+    if (session !== epoch || !signedIn() || !active()) return { cancelled: true, cleared: [], failed: [] };
     let cursor = 0;
     const cleared = [];
     const failed = [];
@@ -52,8 +59,8 @@ export function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isS
       await Promise.all(Array.from({ length: Math.min(4, unique.length) }, async () => {
         while (cursor < unique.length) {
           const id = unique[cursor++];
-          if (session !== epoch || !signedIn()) { failed.push(id); continue; }
-          try { await auth('DELETE', `/sync/playback/${id}`); cleared.push(id); }
+          if (session !== epoch || !signedIn() || !active()) { failed.push(id); continue; }
+          try { await writeRequest(auth, 'DELETE', `/sync/playback/${id}`, undefined, control); cleared.push(id); }
           catch { failed.push(id); }
         }
       }));
@@ -75,25 +82,27 @@ export function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isS
    * Scrobble start then pause, never stop: stop can mark the title watched. Start removes any saved progress, so a
    * failed pause after it is flagged `partial`: the old progress is gone and nothing new was saved.
    */
-  async function setProgress(item, progress, epoch = session) {
+  async function setProgress(item, progress, epoch = session, control = {}) {
     if (!signedIn()) throw new Error('Sign in to Trakt first.');
     const value = normalizeProgress(progress);
     if (!item || value == null) throw new Error('Invalid progress.');
     const episodeIds = item.kind === 'movie' ? null : await episodeIdsFor(item);
     if (epoch !== session || !signedIn()) throw new Error('Playback session changed.');
     const body = scrobbleBody(item, value, episodeIds);
-    await auth('POST', '/scrobble/start', body);
+    await writeRequest(auth, 'POST', '/scrobble/start', body, control);
     invalidate();
     try {
       if (epoch !== session || !signedIn()) throw new Error('Playback session changed.');
-      await auth('POST', '/scrobble/pause', body);
+      // Start already removed any earlier saved progress. Finish the pause even after the panel is
+      // gone; the write queue still rejects it if the authenticated session changes.
+      await writeRequest(auth, 'POST', '/scrobble/pause', body);
     } catch (error) {
       error.partial = true;
       throw error;
     } finally { invalidate(); }
     return { progress: value, body };
   }
-  async function setRouteProgress(route, progress) {
+  async function setRouteProgress(route, progress, control = {}) {
     if (!signedIn()) throw new Error('Sign in to Trakt first.');
     const value = normalizeProgress(progress);
     if (value == null) throw new Error('Invalid progress.');
@@ -101,13 +110,13 @@ export function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isS
     const epoch = session;
     if (route.kind === 'movie') {
       const movie = await get(`/movies/${encodeURIComponent(route.id)}`);
-      return setProgress({ kind: 'movie', ids: movie?.ids, title: movie?.title, year: movie?.year }, value, epoch);
+      return setProgress({ kind: 'movie', ids: movie?.ids, title: movie?.title, year: movie?.year }, value, epoch, control);
     }
     if (route.name !== 'episode' || !Number.isInteger(route.season) || !Number.isInteger(route.episode)) {
       throw new Error('Unsupported playback page.');
     }
     const episode = await get(`/shows/${encodeURIComponent(route.id)}/seasons/${route.season}/episodes/${route.episode}`);
-    return setProgress({ kind: 'episode', episodeIds: episode?.ids, season: route.season, episode: route.episode }, value, epoch);
+    return setProgress({ kind: 'episode', episodeIds: episode?.ids, season: route.season, episode: route.episode }, value, epoch, control);
   }
   return { load, loadAll, clearItems, setProgress, setRouteProgress, invalidate, resetSession };
 }
