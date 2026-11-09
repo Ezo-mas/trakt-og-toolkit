@@ -20,6 +20,11 @@ Working notes and known issues. Newest first.
 - og's stats bars run from `#616161` (1) to `#b70a0a` (10) with matching hearts (measured 2026-11-09); the chart uses
   those values, its own markup and CSS. The Most given tile shows the score large and its name smaller, because
   "10 · Totally Ninja!" does not fit a ~130px tile.
+- Review fixes (2026-11-09): below 992px og stacks `.actions` under `.details` (one 535px column at 900px), so the
+  stack's height read as free space and the chart pushed the row down; it now needs the actions column to start right
+  of the details column. og names the rating from the truncated average (8.79 is "87% Great", not "Superb") and keeps
+  a watcher-share decimal only under 10% ("5.5%", but "21%"), checked on The Matrix's stats page. The header centres
+  its arrow instead of baseline-aligning it (an SVG has no baseline).
 - Live check (2026-11-09, 1366px, jsDelivr bundle): Dune: Prophecy show and S1E3 and The Matrix filled the gap
   (Matrix with tiles: 87% Superb, 61,907 votes, 20.5% of watchers, 10 most given, 93% liked); season 1 fit the chart
   only; season 2 (2 votes) stayed hidden; adding 180px of content to `.details` hid it with og's row unchanged.
