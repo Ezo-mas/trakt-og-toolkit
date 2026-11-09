@@ -268,6 +268,7 @@ function createView(profile, lists) {
   // og's own section and container classes give the view the page's background and width.
   const node = el('div', { id: ROOT_ID, class: `${lists.className} ogt-all-lists` });
   let cancelled = false;
+  let loadRevision = 0;
   let loading = null;
   let observer = null;
 
@@ -279,10 +280,13 @@ function createView(profile, lists) {
   }
 
   async function load() {
+    const revision = ++loadRevision;
+    observer?.disconnect();
+    observer = null;
     node.replaceChildren(el('p', { class: 'ogt-all-lists__loading', text: 'Loading collaborations and liked lists…' }));
     const results = await Promise.allSettled([getCollaborationLists(profile), getLikedLists(profile),
       isSignedIn() ? getViewer() : Promise.resolve(null)]);
-    if (cancelled) return;
+    if (cancelled || revision !== loadRevision) return;
     for (const result of results) if (result.status === 'rejected') debugError('all-lists lookup failed', result.reason);
     const [collaborations, liked, viewer] = results.map((result) => (result.status === 'fulfilled' ? result.value : null));
     const viewerSlug = viewer?.ids?.slug || viewer?.username || null;
@@ -294,7 +298,7 @@ function createView(profile, lists) {
     else if (viewerSlug) {
       try { likedIds = new Set(likedLists(await getLikedLists(viewerSlug)).map((entry) => entry.id)); }
       catch (error) { debugError('viewer liked lists lookup failed', error); }
-      if (cancelled) return;
+      if (cancelled || revision !== loadRevision) return;
     }
     const native = nativeParts(lists);
     node.classList.toggle('ogt-all-lists--fallback', !native);
@@ -339,10 +343,32 @@ function createView(profile, lists) {
     }
   }
 
+  function startLoad() {
+    loading ??= load().catch((error) => debugError('all-lists render failed', error));
+    return loading;
+  }
+  // A different account must not keep private rows; also discard the resolved load promise so a
+  // later open fetches instead of returning the old view.
+  function reset() {
+    loadRevision += 1;
+    loading = null;
+    observer?.disconnect();
+    observer = null;
+    node.replaceChildren();
+    if (node.isConnected) void startLoad();
+  }
+  document.addEventListener('ogt:authchange', reset);
   return {
     node,
-    load() { loading ??= load().catch((error) => debugError('all-lists render failed', error)); return loading; },
-    destroy() { cancelled = true; observer?.disconnect(); node.remove(); },
+    load: startLoad,
+    destroy() {
+      cancelled = true;
+      loadRevision += 1;
+      loading = null;
+      observer?.disconnect();
+      document.removeEventListener('ogt:authchange', reset);
+      node.remove();
+    },
   };
 }
 

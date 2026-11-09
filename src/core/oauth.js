@@ -2,6 +2,7 @@
 import { request, HttpError } from './http.js';
 import { getClientId } from '../settings.js';
 import { STORAGE, getPrivateValue, setPrivateValue, removePrivateValue } from './store.js';
+import { readOgSession, getOgSessionRevision } from './og-session.js';
 
 const AUTH = 'https://auth.trakt.tv';
 let generation = 0;
@@ -43,13 +44,18 @@ export function readTokens() {
   const t = getPrivateValue(STORAGE.tokens);
   return t?.client_id === getClientId() ? t : null;
 }
-export function isSignedIn() {
+export function hasOwnSession() {
   const t = readTokens();
   return Boolean(t?.access_token && t?.refresh_token);
 }
-/** Identifies the signed-in session without exposing credentials; changes on sign-out and sign-in. */
+/** Signed in through the toolkit's own app, or through og's session. */
+export function isSignedIn() {
+  return hasOwnSession() || Boolean(readOgSession());
+}
+/** Identifies the signed-in session without exposing credentials; changes on sign-in/out and observed
+ * og login, logout or account replacement, but not on a token renewal. */
 export function getSessionGeneration() {
-  return generation;
+  return `${generation}:${getOgSessionRevision()}`;
 }
 function saveTokens(text, clientId) {
   let t;

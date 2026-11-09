@@ -82,7 +82,7 @@ test('built bundle adds exactly once on all four page types, alongside the libra
 
 test('signed-out action gives menu guidance; sign-in clears the hint and enables saving', async t => {
   const b = boot(t, { signedIn: false }); await wait(); b.button().click();
-  assert.match(b.panel().textContent, /Sign in to Trakt through the toolkit menu/);
+  assert.match(b.panel().textContent, /Sign in to Trakt at og\.trakt\.tv/);
   assert.equal(b.calls.length, 0);
   b.signIn(); b.authChange();
   assert.doesNotMatch(b.panel().textContent, /Sign in/);

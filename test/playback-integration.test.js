@@ -131,6 +131,22 @@ test('sign-out removes private UI and discards the private cache', async (t) => 
   click(b.document, 'load'); await wait();
   assert.equal(b.calls.length, 4);
 });
+test('auth changes clear loaded playback and cancel a pending save', async (t) => {
+  const b = boot(t); await wait(); click(b.document, 'load'); await wait();
+  assert.equal(panel(b.document).querySelectorAll('li').length, 2);
+  b.setPrompt('70');
+  panel(b.document).querySelector('li [data-action="save"]').click();
+  // The test dialog helper answers on a timer; switch accounts before that happens.
+  b.store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'other-access',
+    refresh_token: 'other-refresh', expires_at: Date.now() + 3600000 });
+  b.document.dispatchEvent(new b.window.Event('ogt:authchange'));
+  assert.equal(panel(b.document).querySelectorAll('li').length, 0, 'old rows disappear immediately');
+  assert.match(panel(b.document).textContent, /Load paused playback/);
+  assert.equal(Boolean(b.document.querySelector('dialog[open]')), false, 'the old dialog is cancelled');
+  await wait();
+  assert.equal(b.scrobbles.length, 0, 'the pending save belongs to the old account');
+  assert.equal(b.prompts.length, 1);
+});
 test('leaving the progress page removes the overview and its column', async (t) => {
   const b = boot(t); await wait();
   assert.ok(b.document.querySelector('.ogt-playback__column'));

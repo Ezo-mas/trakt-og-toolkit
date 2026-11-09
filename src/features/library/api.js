@@ -12,7 +12,7 @@ function writeRequest(auth, path, body, active, signal) {
 export function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
   return {
     async add(route, { confirm = () => true, active, signal } = {}) {
-      if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
+      if (!signedIn()) throw new Error('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.');
       const isActive = active ?? (() => true);
       const id = encodeURIComponent(route.id);
       const at = now();
@@ -69,7 +69,7 @@ export function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSi
 
     /** Undo an addition with the exact body that was sent. */
     async remove(body, { active, signal } = {}) {
-      if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
+      if (!signedIn()) throw new Error('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.');
       const isActive = active ?? (() => true);
       if (!body || typeof body !== 'object' || !isActive()) return { cancelled: true };
       const result = await writeRequest(auth, '/sync/collection/remove', body, active, signal);

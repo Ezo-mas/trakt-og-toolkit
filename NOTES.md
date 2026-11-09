@@ -2,6 +2,47 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-09: og's session instead of a production app (feature 30)
+
+- Trakt's answer was that the toolkit may use og's existing session; no production app is available. Authenticated
+  calls now use og's access token with og's Client ID when the toolkit has no sign-in of its own. The toolkit's
+  per-user app and device sign-in stay as the fallback and take priority when connected.
+- Live og (2026-11-09): `lib/auth/userManager.ts` creates oidc-client-ts with `authority: https://auth.trakt.tv`,
+  the public client ID `WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI`, `automaticSilentRenew: false` and
+  `userStore: WebStorageStateStore({ store: localStorage })`. Its `_userStoreKey` is
+  `user:${authority}:${client_id}` and the store prefix is `oidc.`, so the entry is
+  `oidc.user:https://auth.trakt.tv:<client_id>`. The value carries the access token, refresh token, profile and
+  `expires_at` (seconds).
+- `src/core/og-session.js` reads only the entry for the pinned `OG_SESSION_CLIENT_ID` on every call, returns
+  `{ clientId, accessToken, expiresAt, accountKey }` and writes nothing. A leftover entry for an older client is
+  ignored even when it expires later. Refresh tokens and ID tokens stay unread; the profile is used only to derive
+  an in-memory `trakt:`/`sub:`/`user:` account key, which is never stored, logged or put in an error.
+- A token renewal keeps the same account key, so it does not invalidate anything. Observed og login, logout and
+  account replacement advance a session version; signing back into the same account therefore does not revive
+  queued work from before the gap. An account replacement also aborts in-flight work and a late 401 is never
+  retried as the new account. `ogt:authchange` clears personal caches (ratings, playback, month review), the
+  playback panel's rows/selections/open dialogs, and All lists' old load. `apiAuth` refreshes only the toolkit's own
+  tokens; og's token is never refreshed, because og rotates its refresh token and a second refresher would strand
+  og's session.
+- `apiGet` uses a configured client ID when present and otherwise sends public metadata through og's connection,
+  preserving the URL and query so `getJSON` caching still works. Watchlist, library and playback lookups therefore
+  work without manual setup. A public 401 retries once only when og rotated the token for the same account.
+- Expired `expires_at` is checked in `beforeSend` as well as before a request, so a write that waited for an HTTP
+  slot cannot dispatch after the token expired. Nothing from og's entry is cleared on failure. User-facing watchlist,
+  library, playback and sign-in hints mention og.trakt.tv; the menu's **sign out** leaves og's session alone.
+- `npm run drift` follows the root layout to og's user manager and fails if its client ID differs from
+  `OG_SESSION_CLIENT_ID`, then checks the authority and reads the oidc chunk for the
+  `user:${authority}:${client_id}` key and `oidc.` prefix. It reports drift instead of silently reading a renamed key.
+- Tests: `test/og-session.test.js` (key parsing, current-key choice over a longer-lived stale entry, account-change
+  events, blocked storage), `test/og-session-auth.test.js` (og client ID and bearer, no auth.trakt.tv call, own
+  sign-in priority, unchanged/rotated 401s, account-switch and same-account logout/login aborts, dispatch-time expiry,
+  public lookups and caching, sanitized errors) and `test/og-session-integration.test.js` (built bundle reads the page
+  entry, sends it, stores nothing and leaves sign-out to og). Built-bundle regressions cover playback and All lists
+  resets on account changes.
+- Limitations: no live authenticated write was made with an og session. The summary ratings chart still requires a
+  configured client ID; the season chart keeps its DOM fallback when no API lookup is possible. `isSignedIn()` stays
+  true for an expired og entry so actions can surface the reload message instead of disappearing.
+
 ## 2026-11-09: test suite review (feature 23)
 
 - **Element assertions:** a probe that wrapped `node:assert` for one full run found 25 equality checks with a

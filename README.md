@@ -1,14 +1,15 @@
 # Trakt OG Toolkit
 
 An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that brings back useful bits of classic Trakt that
-og doesn't have yet. It talks only to the documented Trakt API, with your own client ID and optional sign-in. Not
-affiliated with or endorsed by Trakt.
+og doesn't have yet. It talks only to the documented Trakt API, reusing og's own session or your client ID and optional
+sign-in. Not affiliated with or endorsed by Trakt.
 
 ## Install
 
 1. Install [Violentmonkey](https://violentmonkey.github.io/) or [Tampermonkey](https://www.tampermonkey.net/).
 2. Open [`dist/trakt-og-toolkit.user.js`](dist/trakt-og-toolkit.user.js), choose **Raw**, and confirm the install.
-3. Optional: set a Trakt client ID and sign in (see [Setup](#setup)). Features that need them say so below.
+3. No API setup is needed when you are signed into og.trakt.tv. Otherwise set a client ID and sign in (see
+   [Setup](#setup)).
 
 Every feature has its own **toggle** in the userscript menu. All are on by default, and switching one off removes it
 immediately.
@@ -83,7 +84,7 @@ Signed in:
 ### Profiles and lists
 
 - **All lists:** og's Lists dropdown on a profile gains **All lists**: personal, collaboration and liked lists in one
-  scroll. Needs a client ID.
+  scroll. Works with og's session or a configured client ID.
 - **List previews:** each poster in a list card's preview opens its title. Signed in, posters show your rating.
 
 ### Month in review and pronunciation
@@ -94,10 +95,28 @@ Signed in:
 
 ## Setup
 
+### Using og's sign-in
+
+The toolkit reuses the session og.trakt.tv already has, so a fresh install needs no API setup.
+
+- The access token is read in place from og's page and sent only to `api.trakt.tv` with og's client ID. It is never
+  refreshed, copied into userscript storage, or logged. Only the access token, its expiry and a stable account ID are
+  read; og's refresh token and the rest of its profile stay unread.
+- The toolkit reads only og's current client entry, not an older one left in the same browser. When og signs out or
+  changes account, queued writes, open playback controls, personal caches and All lists reset; signing back into the
+  same account does not revive old queued work. A token renewal for the same account is not a change.
+- When it expires, reload og.trakt.tv. The toolkit must never refresh og's token: og rotates the refresh token when
+  it renews, so a second refresher would strand og's session.
+- **Sign out** in the toolkit menu leaves og's session alone; sign out on og.trakt.tv for that.
+
+If og has no session, or you want a different Trakt account, use the toolkit's own app below. Its tokens take priority
+while it is signed in.
+
 ### Trakt client ID
 
-Custom links and the season chart work without one. Other features need a free client ID from
-<https://developer.trakt.tv/apps/new>:
+Custom links, the season chart, All lists and authenticated actions work through og's session, so no client ID is
+needed for them. A client ID is still needed for the toolkit's own sign-in and the summary ratings chart. Create a
+free app at <https://developer.trakt.tv/apps/new>:
 
 | Field | Value |
 | --- | --- |
@@ -153,9 +172,18 @@ from the native external-link strip, and missing genre metadata keeps anime pres
 
 ## Trakt API use
 
-- **Endpoints:** only documented Trakt API endpoints, with your client ID. Signed-in calls use your own OAuth
-  connection: playback, collection, watchlist, history, ratings, `users/me` and your comments.
-- **What it never touches:** it never fetches Trakt HTML, calls og's internal endpoints, or reads og's sign-in.
+- **Endpoints:** only documented Trakt API endpoints, with your client ID or og's. Signed-in calls use the toolkit's
+  own OAuth connection, or og's session when it has no tokens: playback, collection, watchlist, history, ratings,
+  `users/me` and your comments.
+- **og's session:** the access token in og's current `localStorage` entry is read in place and sent only to `api.trakt.tv`
+  with og's client ID. It is never refreshed, stored, or logged. A 401 retries once if og has already rotated the token
+  for the same account, and otherwise asks for a reload. Public metadata lookups use the same connection when no client
+  ID is set, with their query and cache behavior intact.
+- **Account changes:** the toolkit derives a non-secret account key from og's stored profile so it can tell a different
+  account from a renewed token. A change drops queued writes and personal caches; it does not retry old work as the new
+  account.
+- **What it never touches:** it never fetches Trakt HTML or calls og's internal endpoints; from og's session entry it
+  reads the access token, expiry and account key only.
 - **og integration:** it calls og's own notifier and its read-only collection refresh, so og updates its controls
   itself.
 - **Reads:** public GETs are cached (8 hours by default; an hour for the ratings chart), de-duplicated while in flight, and honour `Retry-After` on 429.

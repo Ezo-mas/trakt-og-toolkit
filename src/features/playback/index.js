@@ -15,6 +15,8 @@ function createPanel(route) {
   const overview = route.name === 'progress';
   const kind = route.kind === 'movie' ? 'movie' : 'episode';
   let destroyed = false;
+  let session = 0;
+  let dialogControl = null;
   let busy = false;
   let items = [];
   let loaded = false;
@@ -26,7 +28,31 @@ function createPanel(route) {
     ...(overview ? [el('p', { class: 'ogt-hint', text: 'Your paused movies and episodes from the toolkit’s Trakt account.' }),
       button('Load paused playback', 'load')] : []), status, content);
 
-  function alive() { return !destroyed && isSignedIn(); }
+  // Check the session after isSignedIn(): that read can detect an account change and reset the panel.
+  function alive(epoch = session) { return !destroyed && isSignedIn() && epoch === session; }
+  function closeDialog() { dialogControl?.abort(); dialogControl = null; }
+  function onAuthChange() {
+    if (destroyed) return;
+    session += 1;
+    closeDialog();
+    items = [];
+    selected.clear();
+    loaded = false;
+    busy = false;
+    status.textContent = '';
+    content.replaceChildren();
+    node.removeAttribute('aria-busy');
+    for (const control of node.querySelectorAll('button, input')) control.disabled = false;
+    if (!isSignedIn()) { node.hidden = true; return; }
+    node.hidden = false;
+    if (overview) {
+      const load = node.querySelector('[data-action="load"]');
+      if (load) load.textContent = 'Load paused playback';
+      return;
+    }
+    const epoch = session;
+    read().catch((error) => { if (alive(epoch)) debugError('playback badge lookup failed', error); });
+  }
   function lock(next) {
     busy = next;
     node.setAttribute('aria-busy', String(next));
@@ -75,20 +101,27 @@ function createPanel(route) {
     content.append(tools, list);
   }
   async function read(force = false) {
-    items = overview ? await playbackApi.loadAll({ force }) : await playbackApi.load(kind, { force });
-    if (!alive()) return;
+    const epoch = session;
+    const next = overview ? await playbackApi.loadAll({ force }) : await playbackApi.load(kind, { force });
+    if (!alive(epoch)) return;
+    items = next;
     loaded = true;
     render();
   }
   async function clear(ids) {
     if (!ids.length) { status.textContent = 'No paused items selected.'; return; }
+    const epoch = session;
+    const control = new AbortController();
+    dialogControl = control;
     const result = await playbackApi.clearItems(ids, async (message) => {
-      const ok = await confirmDialog(message, { title: 'Clear paused playback', ok: 'Clear' });
+      const ok = await confirmDialog(message, { title: 'Clear paused playback', ok: 'Clear', signal: control.signal });
+      if (dialogControl === control) dialogControl = null;
       // Writes are paced at one per second, so a large selection takes visible time.
-      if (ok && alive()) status.textContent = `Clearing ${ids.length > 1 ? `${ids.length} items` : '1 item'}…`;
-      return ok;
-    }, { active: alive });
-    if (result.cancelled || !alive()) return;
+      if (ok && alive(epoch)) status.textContent = `Clearing ${ids.length > 1 ? `${ids.length} items` : '1 item'}…`;
+      return ok && alive(epoch);
+    }, { active: () => alive(epoch) });
+    if (dialogControl === control) dialogControl = null;
+    if (result.cancelled || !alive(epoch)) return;
     selected.clear();
     const summary = `${result.cleared.length} cleared${result.failed.length ? `; ${result.failed.length} failed — try again` : ''}.`;
     // Never leave deleted rows displayed as if they were still current.
@@ -99,38 +132,42 @@ function createPanel(route) {
       debugError('playback refresh failed', error);
       message = `${summary} Could not refresh playback; try Refresh.`;
     }
-    if (!alive()) return;
+    if (!alive(epoch)) return;
     // A cleared badge hides its own panel, so its status line would never be seen.
     if (!overview && node.hidden) toast(`Paused playback: ${message}`);
     else status.textContent = message;
   }
   async function saveProgress(item) {
+    const epoch = session;
     status.textContent = '';
     const title = item?.title ?? 'this title';
+    const control = new AbortController();
+    dialogControl = control;
     // One dialog asks and warns; the field rejects anything outside 1–100 before it closes.
     const value = await promptDialog(`Set the saved progress for ${title}. Trakt saves it by starting and pausing ` +
       'playback, so your profile may briefly show it as watching.', {
       title: 'Save progress', label: 'Progress (%)', ok: 'Save progress', inputMode: 'decimal', placeholder: '1–100',
-      value: item ? String(Number(item.progress.toFixed(1))) : '',
+      value: item ? String(Number(item.progress.toFixed(1))) : '', signal: control.signal,
       validate: (text) => normalizeProgress(text) == null ? 'Enter a percentage from 1 to 100.' : null,
     });
-    if (value == null || !alive()) return;
+    if (dialogControl === control) dialogControl = null;
+    if (value == null || !alive(epoch)) return;
     const progress = normalizeProgress(value);
     if (progress == null) return;
     status.textContent = 'Saving progress…';
     try {
-      if (item) await playbackApi.setProgress(item, progress, undefined, { active: alive });
-      else await playbackApi.setRouteProgress(route, progress, { active: alive });
+      if (item) await playbackApi.setProgress(item, progress, undefined, { active: () => alive(epoch) });
+      else await playbackApi.setRouteProgress(route, progress, { active: () => alive(epoch) });
     } catch (error) {
       if (!error.partial) throw error;
       debugError('playback pause failed after start', error);
-      if (!alive()) return;
+      if (!alive(epoch)) return;
       items = []; render();
       await read(true).catch(() => {});
-      if (alive()) status.textContent = 'Trakt started playback but did not save the pause, so earlier progress for this title was removed; try again.';
+      if (alive(epoch)) status.textContent = 'Trakt started playback but did not save the pause, so earlier progress for this title was removed; try again.';
       return;
     }
-    if (!alive()) return;
+    if (!alive(epoch)) return;
     items = [];
     render();
     try { await read(true); }
@@ -139,18 +176,19 @@ function createPanel(route) {
       status.textContent = 'Progress saved, but playback could not be refreshed.';
       return;
     }
-    if (alive()) status.textContent = 'Progress saved.';
+    if (alive(epoch)) status.textContent = 'Progress saved.';
   }
   async function onClick(event) {
     const target = event.target.closest('button[data-action]');
     if (!target || !node.contains(target) || busy || !alive()) return;
+    const epoch = session;
     const action = target.dataset.action;
     lock(true);
     try {
       if (action === 'load') {
         status.textContent = 'Loading paused playback…';
         await read(true);
-        if (alive()) status.textContent = '';
+        if (alive(epoch)) status.textContent = '';
       } else if (action === 'save') {
         const item = target.dataset.id ? items.find((row) => row.id === Number(target.dataset.id)) : null;
         if (target.dataset.id && !item) return;
@@ -165,11 +203,13 @@ function createPanel(route) {
       }
     } catch (error) {
       debugError('playback request failed', error);
-      if (alive()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.'
-        : action === 'save' ? 'Could not save progress; try again.' : 'Could not load paused playback; try again.';
-    } finally { if (alive()) lock(false); }
+      if (alive(epoch)) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.'
+        : error.ogSession ? error.message
+          : action === 'save' ? 'Could not save progress; try again.' : 'Could not load paused playback; try again.';
+    } finally { if (alive(epoch)) lock(false); }
   }
   function onChange(event) {
+    if (!alive()) return;
     const input = event.target;
     if (input.dataset.action === 'all') {
       selected.clear();
@@ -183,13 +223,18 @@ function createPanel(route) {
   }
   node.addEventListener('click', onClick);
   node.addEventListener('change', onChange);
+  document.addEventListener('ogt:authchange', onAuthChange);
   if (!overview) {
-    read().catch((error) => { if (alive()) debugError('playback badge lookup failed', error); });
+    const epoch = session;
+    read().catch((error) => { if (alive(epoch)) debugError('playback badge lookup failed', error); });
   }
   return { node, destroy() {
     destroyed = true;
+    session += 1;
+    closeDialog();
     node.removeEventListener('click', onClick);
     node.removeEventListener('change', onChange);
+    document.removeEventListener('ogt:authchange', onAuthChange);
     node.remove();
   } };
 }

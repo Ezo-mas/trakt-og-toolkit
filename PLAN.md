@@ -9,7 +9,7 @@ behaviour, never its code. Finished features are listed at the end; their detail
 
 | # | Feature | Needs | Status |
 |---|---|---|---|
-| 30 | Trakt onboarding without manual API setup | Trakt's answer on app access | blocked on Trakt |
+| 30 | Trakt onboarding without manual API setup | Trakt's answer on app access | implemented (og session); production app still unavailable |
 | 27 | Resolve external site IDs for direct custom links | public lookup services | implemented; anime mapping deferred |
 | 28 | Conditional presets and person-page custom links | native genre/person metadata | implemented; anime destinations remain searches |
 | 31 | Trakt ratings distribution in the summary's empty space | client ID | implemented; compact chart, tiles when there is room |
@@ -79,8 +79,9 @@ site.
 
 ## 30. Trakt onboarding without manual API setup
 
-**Status:** blocked on Trakt (2026-11-08). Goal: a user installs the script and signs in, with no developer-portal
-steps.
+**Status:** implemented (2026-11-09) for Trakt's og-session answer; a shared production app is still unavailable.
+Goal: a user installs the script and signs in, with no developer-portal steps. Fresh installs on og.trakt.tv use
+og's existing session; the toolkit's own per-user app remains the fallback.
 
 **What we found**
 
@@ -100,7 +101,7 @@ steps.
 - **Production app granted.** Ship its public Client ID as the default with the existing device flow. Later add browser
   sign-in with [PKCE](https://developer.trakt.tv/docs/pkce) through the HTTPS callback page (below). Keep **Use your
   own application** under advanced settings and never switch a signed-in session to another Client ID silently.
-- **og session allowed.** Read og's access token on og.trakt.tv and send it with og's Client ID. Never refresh it
+- **og session allowed (implemented 2026-11-09).** Read og's access token on og.trakt.tv and send it with og's Client ID. Never refresh it
   ourselves: og rotates the refresh token on renewal, so a second refresher strands og's session. When it expires or
   a call returns 401, wait for og to renew it (or ask for a reload). Never copy it out of the page realm, store it, or
   log it. Add the storage key to `npm run drift`. Keep the toolkit's own sign-in as a fallback.

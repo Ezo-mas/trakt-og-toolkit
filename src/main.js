@@ -2,9 +2,9 @@
  * Trakt OG Toolkit — entry point.
  *
  * Adds the parts of classic Trakt that og.trakt.tv doesn't have (yet), without
- * reading og's session or calling internal endpoints. Manual API requests use
- * the user's own app and OAuth connection; native UI bridges let og show notices
- * and refresh its own signed-in state.
+ * calling internal endpoints. API requests use the user's own OAuth connection
+ * when present, or og's approved in-page session as a fallback; native UI bridges
+ * let og show notices and refresh its own signed-in state.
  */
 import { VERSION } from './meta.js';
 import { injectStyles } from './ui/shell.js';

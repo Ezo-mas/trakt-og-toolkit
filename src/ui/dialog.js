@@ -17,9 +17,11 @@ function supported() {
 /**
  * @param {{ kind: 'confirm' | 'prompt', title: string, message: string, ok: string, cancel: string,
  *   value?: string, label?: string, placeholder?: string, inputMode?: string, validate?: (value: string) => string | null,
+ *   signal?: AbortSignal,
  * }} options
  */
 function open(options) {
+  if (options.signal?.aborted) return Promise.resolve(options.kind === 'prompt' ? null : false);
   const id = `ogt-dialog-${++counter}`;
   const prompt = options.kind === 'prompt';
   const message = el('p', { class: 'ogt-dialog__message', id: `${id}-message`, text: options.message });
@@ -44,12 +46,21 @@ function open(options) {
 
   return new Promise((resolve) => {
     let result = prompt ? null : false;
+    let finished = false;
     const finish = (value) => {
+      if (finished) return;
+      finished = true;
       result = value;
       if (dialog.open) dialog.close();
       else done();
     };
-    const done = () => { dialog.remove(); resolve(result); };
+    const done = () => {
+      options.signal?.removeEventListener('abort', abort);
+      dialog.remove();
+      resolve(result);
+    };
+    const abort = () => finish(prompt ? null : false);
+    options.signal?.addEventListener('abort', abort, { once: true });
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       if (!prompt) { finish(true); return; }
@@ -75,9 +86,9 @@ function open(options) {
 }
 
 /** Resolves true for the primary button, false for Cancel, Esc or close. */
-export function confirmDialog(message, { title = 'Are you sure?', ok = 'OK', cancel = 'Cancel' } = {}) {
+export function confirmDialog(message, { title = 'Are you sure?', ok = 'OK', cancel = 'Cancel', signal } = {}) {
   if (!supported()) return Promise.resolve(window.confirm(message));
-  return open({ kind: 'confirm', title, message, ok, cancel });
+  return open({ kind: 'confirm', title, message, ok, cancel, signal });
 }
 
 /**
@@ -85,7 +96,7 @@ export function confirmDialog(message, { title = 'Are you sure?', ok = 'OK', can
  * and show it under the field, or null to accept.
  */
 export function promptDialog(message, { title = 'Enter a value', value = '', ok = 'Save', cancel = 'Cancel', label,
-  placeholder, inputMode, validate } = {}) {
+  placeholder, inputMode, validate, signal } = {}) {
   if (!supported()) {
     for (;;) {
       const answer = window.prompt(message, value);
@@ -96,7 +107,7 @@ export function promptDialog(message, { title = 'Enter a value', value = '', ok 
       value = answer;
     }
   }
-  return open({ kind: 'prompt', title, message, ok, cancel, value, label, placeholder, inputMode, validate });
+  return open({ kind: 'prompt', title, message, ok, cancel, value, label, placeholder, inputMode, validate, signal });
 }
 
 export const DIALOG_CSS = String.raw`

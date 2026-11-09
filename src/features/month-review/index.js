@@ -157,7 +157,28 @@ export const monthReview = {
         }
       }
     };
+    // A different og account must not keep the previous account's card or cached user.
+    const onAuthChange = () => {
+      if (destroyed) return;
+      token++;
+      busy = false;
+      review = null;
+      user = null;
+      earliest = undefined;
+      earliestFailed = false;
+      prevButton = nextButton = hideButton = null;
+      node.className = 'ogt-review';
+      node.hidden = true;
+      node.replaceChildren();
+      if (isSignedIn()) show(lastMonth(), true);
+    };
+    document.addEventListener('ogt:authchange', onAuthChange);
     show(lastMonth(), true);
-    return { node, destroy() { destroyed = true; token++; node.remove(); } };
+    return { node, destroy() {
+      destroyed = true;
+      token++;
+      document.removeEventListener('ogt:authchange', onAuthChange);
+      node.remove();
+    } };
   },
 };

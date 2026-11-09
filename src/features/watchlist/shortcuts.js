@@ -78,7 +78,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       }
       async function addAll() {
         if (bulkBusy) return;
-        if (!isSignedIn()) { toast('Sign in to Trakt through the toolkit menu first.'); return; }
+        if (!isSignedIn()) { toast('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'); return; }
         const list = bulkEntries();
         if (!list.length) return;
         const epoch = session;
@@ -168,7 +168,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       function failed(error, verb, active) {
         debugError(`${logLabel} watchlist ${verb} failed`, error);
         if (active()) toast(error.status === 429 ? 'Trakt rate limited this request; try again later.' :
-          error.status ? `Could not ${verb === 'undo' ? 'undo' : 'add to watchlist'}. Check your toolkit sign-in and try again.`
+          error.status && !error.ogSession ? `Could not ${verb === 'undo' ? 'undo' : 'add to watchlist'}. Check your toolkit sign-in and try again.`
             : error.message);
       }
       async function add(entry, event) {
@@ -176,7 +176,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         event.stopPropagation();
         const state = stateFor(entry.key);
         if (bulkBusy || state.busy || state.undoing || entry.button.hidden) return;
-        if (!isSignedIn()) { toast('Sign in to Trakt through the toolkit menu first.'); return; }
+        if (!isSignedIn()) { toast('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'); return; }
         const epoch = session;
         const operation = ++state.operation;
         const active = activeFor(entry);
@@ -205,7 +205,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       async function undo(entry, body) {
         const state = stateFor(entry.key);
         if (bulkBusy || state.busy || state.undoing || !body) return false;
-        if (!isSignedIn()) { toast('Sign in to Trakt through the toolkit menu first.'); return false; }
+        if (!isSignedIn()) { toast('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'); return false; }
         const epoch = session;
         const operation = ++state.operation;
         const active = activeFor(entry);

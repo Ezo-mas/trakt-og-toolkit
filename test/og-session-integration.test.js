@@ -1,0 +1,51 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { Window } from 'happy-dom';
+import { ogSessionKey } from '../src/core/og-session.js';
+
+const OG_CLIENT = 'WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI';
+const OG_KEY = ogSessionKey(OG_CLIENT);
+
+test('built bundle makes og-session calls without storing or printing the token', async (t) => {
+  const window = new Window({ url: 'https://og.trakt.tv/' });
+  t.after(() => window.close());
+  const menus = new Map();
+  const vault = new Map();
+  const requests = [];
+  window.localStorage.setItem(OG_KEY, JSON.stringify({
+    access_token: 'OG_SECRET_ACCESS', refresh_token: 'OG_SECRET_REFRESH', token_type: 'Bearer',
+    profile: { ids: { trakt: 7 }, username: 'og-tester' },
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+  }));
+  window.GM_getValue = (key, fallback) => vault.get(key) ?? fallback;
+  window.GM_setValue = (key, value) => vault.set(key, value);
+  window.GM_deleteValue = (key) => vault.delete(key);
+  window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+  window.GM_xmlhttpRequest = (request) => {
+    requests.push(request);
+    assert.ok(request.url.startsWith('https://api.trakt.tv/'), `unexpected request to ${request.url}`);
+    request.onload({
+      status: 200, responseHeaders: '', responseText: JSON.stringify({ username: 'og-tester' }),
+    });
+    return { abort: () => request.onabort() };
+  };
+  window.document.write('<html><head></head><body></body></html>');
+  window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
+  window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
+
+  await menus.get('show signed-in user')();
+  assert.match(window.document.body.textContent, /Signed in to Trakt as og-tester/);
+  assert.doesNotMatch(window.document.body.textContent, /OG_SECRET_/);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].headers.Authorization, 'Bearer OG_SECRET_ACCESS');
+  assert.equal(requests[0].headers['trakt-api-key'], OG_CLIENT);
+  assert.equal(vault.has('trakt.oauth.tokens'), false);
+  assert.equal(vault.has('trakt.clientId'), false);
+  assert.match(window.localStorage.getItem(OG_KEY), /OG_SECRET_ACCESS/);
+
+  await menus.get('sign out')();
+  assert.match(window.document.body.textContent, /Signed in through og\.trakt\.tv; sign out there/);
+  assert.match(window.localStorage.getItem(OG_KEY), /OG_SECRET_ACCESS/);
+  assert.equal(vault.has('trakt.oauth.tokens'), false);
+});

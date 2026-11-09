@@ -37,7 +37,7 @@ function boot({ url = 'https://og.trakt.tv/users/justin/lists', html = ALL_LISTS
     requests.push({ pathname, searchParams, auth: Boolean(request.headers?.Authorization) });
     let body = null;
     let headers = '';
-    if (pathname.endsWith('/lists/collaborations')) body = collaborations;
+    if (pathname.endsWith('/lists/collaborations')) body = typeof collaborations === 'function' ? collaborations() : collaborations;
     else if (pathname === `/users/${viewer}/likes/lists` && viewer !== 'justin') body = viewerLiked;
     else if (pathname.endsWith('/likes/lists')) {
       const page = Number(searchParams.get('page'));
@@ -118,6 +118,27 @@ test('choosing All lists appends collaborations and liked lists in og\'s own row
   assert.equal(triggerLabel(document), 'Lists: Personal');
   assert.equal(document.querySelector('a[href="/users/justin/lists"]').getAttribute('aria-current'), 'page');
   assert.equal(option(document).hasAttribute('aria-current'), false);
+});
+
+test('auth changes clear private rows and reload instead of reusing the old view', async (t) => {
+  let account = 'a';
+  const { window, document, requests } = boot({ signedIn: true,
+    collaborations: () => [list(account === 'a' ? 1 : 9, { name: `List ${account}`, privacy: 'private' })] });
+  t.after(() => window.close());
+  await wait();
+  option(document).click();
+  await wait();
+  assert.match(view(document).textContent, /List a/);
+  const before = requests.filter((request) => request.pathname.endsWith('/lists/collaborations')).length;
+
+  account = 'b';
+  document.dispatchEvent(new window.Event('ogt:authchange'));
+  assert.equal(view(document).querySelectorAll('.list-row').length, 0, 'old private rows disappear immediately');
+  await wait();
+  assert.match(view(document).textContent, /List b/);
+  assert.doesNotMatch(view(document).textContent, /List a/);
+  assert.ok(requests.filter((request) => request.pathname.endsWith('/lists/collaborations')).length > before,
+    'the resolved loading promise does not prevent a reload');
 });
 
 test('liked lists read every page, publicly or with the toolkit sign-in', async (t) => {

@@ -50,7 +50,7 @@ export const library = {
     }
     async function add() {
       if (busy || undoing || node.hidden) return;
-      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt through the toolkit menu first.'; return; }
+      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'; return; }
       busy = true;
       const epoch = session;
       const operationId = ++operation;
@@ -77,7 +77,7 @@ export const library = {
         }
       } catch (error) {
         if (active()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.' :
-          error.status ? 'Could not add to library. Check your toolkit sign-in and try again.' : error.message;
+          error.status && !error.ogSession ? 'Could not add to library. Check your toolkit sign-in and try again.' : error.message;
       } finally {
         if (active() && operation === operationId) {
           busy = false;
@@ -90,7 +90,7 @@ export const library = {
     }
     async function undo(body) {
       if (undoing || !body) return false;
-      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt through the toolkit menu first.'; return false; }
+      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'; return false; }
       undoing = true;
       busy = false;
       const epoch = session;
@@ -110,7 +110,7 @@ export const library = {
       } catch (error) {
         debugError('library undo failed', error);
         if (active()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.' :
-          error.status ? 'Could not undo. Check your toolkit sign-in and try again.' : error.message;
+          error.status && !error.ogSession ? 'Could not undo. Check your toolkit sign-in and try again.' : error.message;
         return false;
       } finally {
         if (active() && operation === operationId) {

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { checkSelectors, unreachableReason } from '../scripts/og-drift-checks.mjs';
-import { checkNativeModules } from '../scripts/og-drift-native.mjs';
+import { checkNativeModules, checkOgSessionStorage } from '../scripts/og-drift-native.mjs';
 import { MOVIE_HTML, SHOW_HTML, PERSON_HTML, PERSON_CREDITS_HTML, SEASON_PAGE_HTML, EPISODE_PAGE_HTML, WATCHLIST_HTML, watchlistCardHtml } from './fixtures.js';
 
 function documentFor(html) {
@@ -82,6 +82,46 @@ test('static native module check reports a missing root layout and missing store
     pageUrl,
     read: async () => 'export const x = 1;',
   }), ['native toast: import not found', 'native library refresh: import not found']);
+});
+
+const SESSION_CLIENT = 'WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI';
+
+function sessionSources({ authority = 'https://auth.trakt.tv', clientId = SESSION_CLIENT, userKey = true, prefix = true } = {}) {
+  const pageUrl = 'https://og.trakt.tv/movies/test';
+  const appUrl = 'https://og.trakt.tv/_app/immutable/entry/app.abc.js';
+  const layoutUrl = 'https://og.trakt.tv/_app/immutable/nodes/0.abc.js';
+  const authUrl = 'https://og.trakt.tv/_app/immutable/chunks/auth.js';
+  const oidcUrl = 'https://og.trakt.tv/_app/immutable/chunks/oidc.js';
+  const sources = new Map([
+    [appUrl, 'x(()=>import(`../nodes/0.abc.js`))'],
+    [layoutUrl, 'import{t as Y}from"../chunks/auth.js";Y.getUser();'],
+    [authUrl, `import{i as e}from"./oidc.js";var n=null;function r(){return n??=new t({authority:\`${authority}\`,client_id:\`${clientId}\`})}export{r as t};`],
+    [oidcUrl, `${prefix ? 'D=class{constructor({prefix:e=\`oidc.\`}={}){}};' : ''}${userKey ? 'q=class{get _userStoreKey(){return\`user:${this.settings.authority}:${this.settings.client_id}\`}};' : ''}`],
+  ]);
+  const read = async (url) => {
+    if (!sources.has(url)) throw new Error(`HTTP 404 for ${url}`);
+    return sources.get(url);
+  };
+  return { html: '<script>"/_app/immutable/entry/app.abc.js"</script>', pageUrl, read };
+}
+
+test('og session drift follows the oidc user key into localStorage', async () => {
+  assert.deepEqual(await checkOgSessionStorage(sessionSources()), []);
+  assert.deepEqual(await checkOgSessionStorage(sessionSources({ authority: 'https://other.trakt.tv' })), [
+    'og session: authority is https://other.trakt.tv',
+  ]);
+  assert.deepEqual(await checkOgSessionStorage(sessionSources({ clientId: 'AnotherClientId_1234567890' })), [
+    'og session: client ID is AnotherClientId_1234567890',
+  ]);
+  assert.deepEqual(await checkOgSessionStorage(sessionSources({ clientId: '' })), [
+    'og session: user manager not found',
+  ]);
+  assert.deepEqual(await checkOgSessionStorage(sessionSources({ userKey: false })), [
+    'og session: oidc user-store key not found',
+  ]);
+  assert.deepEqual(await checkOgSessionStorage({ ...sessionSources(), html: '<html></html>' }), [
+    'og session: root layout not found',
+  ]);
 });
 
 test('season and episode pages carry the show ids and the summary anchors custom links use', (t) => {

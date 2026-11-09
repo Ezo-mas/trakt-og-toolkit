@@ -2,7 +2,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { get } from 'node:https';
 import { Window } from 'happy-dom';
 import { LOGIN_CHECKS, checkSelectors, unreachableReason } from './og-drift-checks.mjs';
-import { checkNativeModules } from './og-drift-native.mjs';
+import { checkOgSessionStorage, checkNativeModules } from './og-drift-native.mjs';
 import { STORAGE } from '../src/core/store.js';
 
 // Live checks always use og.trakt.tv; never the classic trakt.tv site.
@@ -108,6 +108,8 @@ for (const [index, page] of pages.entries()) {
 if (sampleHtml) {
   const nativeDetails = await checkNativeModules({ html: sampleHtml, pageUrl: sampleUrl, read: fetchAsset });
   results.push({ page: 'native', status: nativeDetails.length ? 'drift' : 'ok', details: nativeDetails });
+  const sessionDetails = await checkOgSessionStorage({ html: sampleHtml, pageUrl: sampleUrl, read: fetchAsset });
+  results.push({ page: 'session', status: sessionDetails.length ? 'drift' : 'ok', details: sessionDetails });
 }
 
 console.log('Page     Status       Details');
