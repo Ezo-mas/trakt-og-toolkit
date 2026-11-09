@@ -120,18 +120,19 @@ export const summaryRatings = {
 
     let cancelled = false;
     let ready = false;
-    let frame = 0;
+    let timer = 0;
 
     /** Show the chart only while it fits beside the action stack; og's row height then never changes. */
     function fit() {
-      frame = 0;
+      timer = 0;
       if (cancelled || !ready) return;
       const show = fits({ contentBottom: contentBottom(details, node), columnBottom: pageBottom(actions) });
       if (node.hidden === show) node.hidden = !show;
     }
+    // A timer rather than requestAnimationFrame: background tabs barely run frames, and the check only reads layout.
     function scheduleFit() {
-      if (cancelled || frame) return;
-      frame = requestAnimationFrame(fit);
+      if (cancelled || timer) return;
+      timer = setTimeout(fit, 0);
     }
 
     // The action stack grows when toolkit and og buttons arrive, and the overview grows on "Read more".
@@ -156,7 +157,7 @@ export const summaryRatings = {
       node,
       destroy() {
         cancelled = true;
-        if (frame) cancelAnimationFrame(frame);
+        clearTimeout(timer);
         resize?.disconnect();
         mutation.disconnect();
         window.removeEventListener('resize', scheduleFit);

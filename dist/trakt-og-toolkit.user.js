@@ -5903,16 +5903,16 @@
       details.append(node);
       let cancelled = false;
       let ready = false;
-      let frame = 0;
+      let timer = 0;
       function fit() {
-        frame = 0;
+        timer = 0;
         if (cancelled || !ready) return;
         const show = fits({ contentBottom: contentBottom(details, node), columnBottom: pageBottom(actions) });
         if (node.hidden === show) node.hidden = !show;
       }
       function scheduleFit() {
-        if (cancelled || frame) return;
-        frame = requestAnimationFrame(fit);
+        if (cancelled || timer) return;
+        timer = setTimeout(fit, 0);
       }
       const resize2 = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleFit) : null;
       resize2?.observe(actions);
@@ -5933,7 +5933,7 @@
         node,
         destroy() {
           cancelled = true;
-          if (frame) cancelAnimationFrame(frame);
+          clearTimeout(timer);
           resize2?.disconnect();
           mutation.disconnect();
           window.removeEventListener("resize", scheduleFit);
