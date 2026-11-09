@@ -137,7 +137,8 @@ export function statTiles({ rating, votes, counts }, watchers = null) {
   const total = counts.reduce((sum, count) => sum + count, 0) || votes;
   const top = mostGiven(counts);
   const liked = counts.slice(6).reduce((sum, count) => sum + count, 0);
-  const share = (part, whole, digits = 0) => `${(Math.floor((part / whole) * 100 * 10 ** digits) / 10 ** digits).toFixed(digits)}%`;
+  // og rounds shares (5,029 of 91,913 watchers is "5.5%") but truncates the rating (7.45 is "74%").
+  const share = (part, whole, digits = 0) => `${(Math.round((part / whole) * 100 * 10 ** digits) / 10 ** digits).toFixed(digits)}%`;
   return [
     { name: 'Rating', value: `${Math.floor(rating * 10)}%`, note: RATING_NAMES[Math.min(10, Math.max(1, Math.round(rating))) - 1], accent: true },
     {
@@ -146,7 +147,7 @@ export function statTiles({ rating, votes, counts }, watchers = null) {
       note: Number.isFinite(watchers) && watchers >= votes && watchers > 0 ? `${share(votes, watchers, 1)} of watchers` : '',
       accent: false,
     },
-    { name: 'Most given', value: `${top} · ${RATING_NAMES[top - 1]}`, note: `${share(counts[top - 1], total)} of ${fullCount(total)} votes`, accent: true },
+    { name: 'Most given', value: String(top), suffix: RATING_NAMES[top - 1], note: `${share(counts[top - 1], total)} of ${fullCount(total)} votes`, accent: true },
     { name: 'Liked it', value: share(liked, total), note: 'gave it 7 or higher', accent: true },
   ];
 }

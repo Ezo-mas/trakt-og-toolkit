@@ -5662,7 +5662,7 @@
     const total = counts.reduce((sum, count2) => sum + count2, 0) || votes;
     const top = mostGiven(counts);
     const liked = counts.slice(6).reduce((sum, count2) => sum + count2, 0);
-    const share = (part, whole, digits = 0) => `${(Math.floor(part / whole * 100 * 10 ** digits) / 10 ** digits).toFixed(digits)}%`;
+    const share = (part, whole, digits = 0) => `${(Math.round(part / whole * 100 * 10 ** digits) / 10 ** digits).toFixed(digits)}%`;
     return [
       { name: "Rating", value: `${Math.floor(rating * 10)}%`, note: RATING_NAMES[Math.min(10, Math.max(1, Math.round(rating))) - 1], accent: true },
       {
@@ -5671,7 +5671,7 @@
         note: Number.isFinite(watchers) && watchers >= votes && watchers > 0 ? `${share(votes, watchers, 1)} of watchers` : "",
         accent: false
       },
-      { name: "Most given", value: `${top} · ${RATING_NAMES[top - 1]}`, note: `${share(counts[top - 1], total)} of ${fullCount(total)} votes`, accent: true },
+      { name: "Most given", value: String(top), suffix: RATING_NAMES[top - 1], note: `${share(counts[top - 1], total)} of ${fullCount(total)} votes`, accent: true },
       { name: "Liked it", value: share(liked, total), note: "gave it 7 or higher", accent: true }
     ];
   }
@@ -5900,6 +5900,12 @@
   white-space: nowrap;
 }
 
+/* The score stays large; its name ("Totally Ninja!") is smaller so it fits a ~130px tile. */
+.ogt-sr-tile-suffix {
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .ogt-sr-tile-note {
   overflow: hidden;
   color: var(--ogt-sr-muted);
@@ -5980,7 +5986,12 @@
         "li",
         { class: `ogt-sr-tile${tile.accent ? " ogt-sr-tile--accent" : ""}` },
         el("span", { class: "ogt-sr-tile-name", text: tile.name }),
-        el("span", { class: "ogt-sr-tile-value", text: tile.value }),
+        el(
+          "span",
+          { class: "ogt-sr-tile-value" },
+          tile.value,
+          tile.suffix ? el("span", { class: "ogt-sr-tile-suffix", text: ` · ${tile.suffix}` }) : null
+        ),
         el("span", { class: "ogt-sr-tile-note", text: tile.note })
       ))
     );

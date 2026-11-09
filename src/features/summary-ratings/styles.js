@@ -204,6 +204,12 @@ export const CSS = String.raw`
   white-space: nowrap;
 }
 
+/* The score stays large; its name ("Totally Ninja!") is smaller so it fits a ~130px tile. */
+.ogt-sr-tile-suffix {
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .ogt-sr-tile-note {
   overflow: hidden;
   color: var(--ogt-sr-muted);

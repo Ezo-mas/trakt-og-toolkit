@@ -95,7 +95,12 @@ export function renderTiles(ratings, watchers = null) {
       'li',
       { class: `ogt-sr-tile${tile.accent ? ' ogt-sr-tile--accent' : ''}` },
       el('span', { class: 'ogt-sr-tile-name', text: tile.name }),
-      el('span', { class: 'ogt-sr-tile-value', text: tile.value }),
+      el(
+        'span',
+        { class: 'ogt-sr-tile-value' },
+        tile.value,
+        tile.suffix ? el('span', { class: 'ogt-sr-tile-suffix', text: ` · ${tile.suffix}` }) : null,
+      ),
       el('span', { class: 'ogt-sr-tile-note', text: tile.note }),
     )),
   );

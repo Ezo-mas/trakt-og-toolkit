@@ -205,7 +205,11 @@ test('a title page with saved playback can replace it, prefilled with the curren
   b.setPrompt('70');
   click(b.document, 'save'); await wait(1300);
   assert.equal(b.prompts[0].value, '42');
-  assert.equal(b.calls.some((call) => new URL(call.url).pathname.startsWith('/movies/')), false, 'reuses the playback ids');
+  // The ratings chart (feature 31) reads /movies/:id/ratings and /stats on the same page; playback must not look the movie up.
+  assert.equal(b.calls.some((call) => {
+    const path = new URL(call.url).pathname;
+    return path.startsWith('/movies/') && !/\/(?:ratings|stats)$/.test(path);
+  }), false, 'reuses the playback ids');
   assert.deepEqual(b.scrobbles.map((call) => call.path), ['/scrobble/start', '/scrobble/pause']);
   assert.equal(b.scrobbles[0].payload.progress, 70);
   assert.match(panel(b.document).textContent, /Progress saved/);
