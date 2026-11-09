@@ -38,11 +38,11 @@ test('fallback success notification has native-position classes, close control a
   assert.ok(first.node.parentElement.classList.contains('ogt-watchlist-toasts'));
   assert.equal(window.document.querySelector('.toaster').innerHTML, native);
   const second = showSuccessToast(); handles.push(second);
-  assert.equal(second.node.parentElement.firstElementChild, second.node, 'newest first');
+  assert.ok(second.node.parentElement.firstElementChild === second.node, 'newest first');
   first.node.querySelector('button[aria-label="Close"]').click();
   assert.equal(first.node.isConnected, false);
   second.destroy();
-  assert.equal(window.document.querySelector('.ogt-watchlist-toasts'), null);
+  assert.equal(Boolean(window.document.querySelector('.ogt-watchlist-toasts')), false);
   assert.equal(window.document.querySelector('.toaster').innerHTML, native);
 });
 
@@ -59,5 +59,5 @@ test('fallback renders punctuation and markup-looking titles as text', t => {
     }
   });
   assert.equal(handle.node.querySelector('p').textContent, message);
-  assert.equal(handle.node.querySelector('img'), null);
+  assert.equal(Boolean(handle.node.querySelector('img')), false);
 });

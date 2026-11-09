@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { parseRoute } from '../src/core/router.js';
-import { watchlistLookup, watchlistBody, watchlistBulkItems, watchlistBulkBody, readWatchlisted, readCardRoute, readCreditRoute, readCreditControl, readCardWatchlisted } from '../src/features/watchlist/data.js';
+import { watchlistLookup, watchlistBody, watchlistBulkItems, watchlistBulkBody, readWatchlisted, readCardRoute, readCreditControl, readCardWatchlisted } from '../src/features/watchlist/data.js';
 import { createWatchlistApi } from '../src/features/watchlist/api.js';
 import { WATCHLIST_HTML, PERSON_CREDITS_HTML, watchlistCardHtml } from './fixtures.js';
 
@@ -111,14 +111,11 @@ test('person credit rows resolve whole movies/shows from their poster link and r
   const window = new Window({ url: 'https://og.trakt.tv/people/bryan-cranston' }); t.after(() => window.close());
   window.document.body.innerHTML = PERSON_CREDITS_HTML;
   const rows = [...window.document.querySelectorAll('article.credit-row')];
-  assert.deepEqual(rows.map(row => readCreditRoute(row)?.name), ['title', 'title']);
-  assert.deepEqual(rows.map(row => readCreditRoute(row)?.kind), ['movie', 'show']);
+  assert.deepEqual(rows.map(row => readCardRoute(row)?.name), ['title', 'title']);
+  assert.deepEqual(rows.map(row => readCardRoute(row)?.kind), ['movie', 'show']);
   assert.ok(rows.every(row => readCreditControl(row)?.matches('.list-control.card')));
   rows[0].querySelector('a.poster').setAttribute('href', '/shows/breaking-bad/seasons/1');
-  assert.equal(readCreditRoute(rows[0]), null, 'season rows have no shortcut even inside a credit row');
-  const stray = window.document.createElement('div');
-  stray.innerHTML = '<a class="poster" href="/movies/test"></a>';
-  assert.equal(readCreditRoute(stray), null, 'only og credit rows are eligible');
+  assert.equal(readCardRoute(rows[0]), null, 'season rows have no shortcut even inside a credit row');
 });
 
 test('bulk credit items use whole-title slugs, deduplicate routes and ignore seasons', () => {

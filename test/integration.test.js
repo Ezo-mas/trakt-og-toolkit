@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
+import { waitFor } from './wait.js';
 import {
   SHOW_HTML,
   ELEMENT_TITLE_SHOW_HTML,
@@ -93,7 +94,7 @@ test('mounts under the summary stats with preset and editor chips', async (t) =>
 
   const node = panel(document);
   assert.ok(node, 'panel is mounted');
-  assert.equal(node.parentElement, document.querySelector('aside.sidebar'), 'panel sits in the summary sidebar');
+  assert.ok(node.parentElement === document.querySelector('aside.sidebar'), 'panel sits in the summary sidebar');
   assert.ok(node.nextElementSibling?.matches('ul.external-links'), 'panel is directly above native external links');
 
   assert.ok(chip(document, 'Add presets…'), 'preset button exists');
@@ -128,7 +129,7 @@ test('compact links show local service marks with names and a text fallback', as
   assert.ok(links[1].querySelector('.ogt-service-icon'), 'a known service gets a local mark');
   assert.equal(links[1].getAttribute('data-ogt-tooltip'), 'IMDb');
   assert.ok(links[2].closest('.ogt-links-texts'), 'unknown labels come last');
-  assert.equal(links[2].querySelector('.ogt-service-icon'), null, 'an unknown service has no mark');
+  assert.equal(Boolean(links[2].querySelector('.ogt-service-icon')), false, 'an unknown service has no mark');
   assert.equal(links[2].querySelector('.ogt-service-label').textContent, 'My Cinema');
   const manage = [...document.querySelectorAll('#ogt-custom-links .ogt-links-manage button')];
   assert.deepEqual(manage.map((button) => button.getAttribute('aria-label')), ['Add presets…', 'Servers…', 'Edit links']);
@@ -207,8 +208,8 @@ test('watch and library links join only the summary Watch Now dialogs and keep n
     );
     assert.equal(dialog.querySelector('.section-title .count').textContent, '2', 'native availability count is untouched');
     assert.equal(dialog.querySelectorAll('a.service').length, 2, 'native provider links are untouched');
-    assert.equal(section.querySelector('[aria-label="IMDb"]'), null, 'reference links stay out of Watch Now');
-    assert.equal(section.querySelector('[aria-label="JustWatch"]'), null, 'JustWatch is a reference link, like og\'s own');
+    assert.equal(Boolean(section.querySelector('[aria-label="IMDb"]')), false, 'reference links stay out of Watch Now');
+    assert.equal(Boolean(section.querySelector('[aria-label="JustWatch"]')), false, 'JustWatch is a reference link, like og\'s own');
     for (const link of section.querySelectorAll('a')) {
       assert.equal(link.getAttribute('target'), '_blank');
       assert.match(link.getAttribute('rel'), /noopener/);
@@ -273,7 +274,7 @@ test('season and episode pages place the compact panel above native external lin
     t.after(() => window.close());
     await wait(50);
     const node = panel(document);
-    assert.equal(node.parentElement, document.querySelector('aside.sidebar'), url);
+    assert.ok(node.parentElement === document.querySelector('aside.sidebar'), url);
     assert.ok(node.nextElementSibling?.matches('ul.external-links'), `${url} sits above external links`);
   }
 });
@@ -302,11 +303,11 @@ test('the management dialog reopens without duplicating controls', async (t) => 
   open.click();
   const manager = () => document.getElementById('ogt-custom-links-manager');
   assert.equal(manager().open, true);
-  assert.equal(manager().parentElement, document.body, 'the modal lives outside the movable panel');
+  assert.ok(manager().parentElement === document.body, 'the modal lives outside the movable panel');
   assert.equal(document.querySelectorAll('.ogt-manager').length, 1);
   document.querySelector('.ogt-manager-close').click();
   assert.equal(manager().open, false);
-  assert.equal(document.activeElement, open, 'focus returns after closing');
+  assert.ok(document.activeElement === open, 'focus returns after closing');
 
   open.click();
   assert.equal(manager().open, true);
@@ -407,11 +408,11 @@ test('preset checklist marks existing URLs and adds selected presets to storage'
   open.click();
   const metacritic = document.querySelector('.ogt-presets input[aria-label="Metacritic"]');
   assert.ok(metacritic.disabled, 'a preset with the same URL is disabled');
-  assert.equal(document.activeElement, document.querySelector('.ogt-presets input[aria-label="IMDb"]'));
+  assert.ok(document.activeElement === document.querySelector('.ogt-presets input[aria-label="IMDb"]'));
   for (const label of ['IMDb', 'TMDb', 'TVDB', 'Rotten Tomatoes', 'Wikipedia', 'JustWatch', 'MyAnimeList']) {
     assert.ok(document.querySelector(`.ogt-presets input[aria-label="${label}"]`), `${label} preset exists`);
   }
-  assert.equal(document.querySelector('.ogt-presets input[aria-label="Letterboxd"]'), null, 'Letterboxd is movie-only');
+  assert.equal(Boolean(document.querySelector('.ogt-presets input[aria-label="Letterboxd"]')), false, 'Letterboxd is movie-only');
 
   const stremio = document.querySelector('.ogt-presets input[aria-label="Stremio"]');
   stremio.checked = true;
@@ -423,7 +424,7 @@ test('preset checklist marks existing URLs and adds selected presets to storage'
     ...oldLinks,
     { label: 'Stremio', url: 'https://web.stremio.com/#/search?search={title}' },
   ]);
-  assert.equal(document.activeElement, open, 'focus returns to the presets chip when closed');
+  assert.ok(document.activeElement === open, 'focus returns to the presets chip when closed');
 });
 
 test('server presets wait for their host and use it in the rendered link', async (t) => {
@@ -437,7 +438,7 @@ test('server presets wait for their host and use it in the rendered link', async
   const servers = chip(document, 'Servers…');
   servers.click();
   const jellyfin = document.querySelector('.ogt-servers input[aria-label="Jellyfin URL"]');
-  assert.equal(document.activeElement, jellyfin, 'the first server field gets focus');
+  assert.ok(document.activeElement === jellyfin, 'the first server field gets focus');
 
   jellyfin.value = 'ftp://media.test';
   [...document.querySelectorAll('.ogt-servers button')].find((button) => button.textContent === 'Save servers').click();
@@ -454,7 +455,7 @@ test('server presets wait for their host and use it in the rendered link', async
     emby: 'https://media.test/emby',
     seerr: 'https://requests.test/seerr',
   });
-  assert.equal(document.activeElement, servers, 'focus returns to the Servers chip');
+  assert.ok(document.activeElement === servers, 'focus returns to the Servers chip');
 
   chip(document, 'Add presets…').click();
   const jellyfinPreset = document.querySelector('.ogt-presets input[aria-label="Jellyfin"]');
@@ -506,9 +507,9 @@ test('og-service presets resolve to exact movie links', async (t) => {
   t.after(() => window.close());
   await wait(50);
 
-  assert.equal(chip(document, 'IMDb').getAttribute('href'), 'https://www.imdb.com/title/tt0465676/');
-  assert.equal(chip(document, 'TMDb').getAttribute('href'), 'https://www.themoviedb.org/movie/8967');
-  assert.equal(chip(document, 'Letterboxd').getAttribute('href'), 'https://letterboxd.com/imdb/tt0465676/');
+  assert.equal(chip(document, 'IMDb').getAttribute('href'), 'https://www.imdb.com/title/tt0411267/');
+  assert.equal(chip(document, 'TMDb').getAttribute('href'), 'https://www.themoviedb.org/movie/17');
+  assert.equal(chip(document, 'Letterboxd').getAttribute('href'), 'https://letterboxd.com/imdb/tt0411267/');
 });
 
 test('Stremio opens exact titles and the visible show selection, and falls back without an IMDb id', async (t) => {
@@ -525,7 +526,7 @@ test('Stremio opens exact titles and the visible show selection, and falls back 
   await wait(50);
   assert.equal(
     chip(movie.document, 'Stremio').getAttribute('href'),
-    'https://web.stremio.com/#/detail/movie/tt0465676',
+    'https://web.stremio.com/#/detail/movie/tt0411267',
   );
 
   const show = boot({
@@ -659,7 +660,7 @@ test('inline editor renames, reorders, deletes and saves links', async (t) => {
   const edit = chip(document, 'Edit links');
   edit.click();
   const editor = document.querySelector('.ogt-editor');
-  assert.equal(document.activeElement, editor.querySelector('input[aria-label="Link label"]'));
+  assert.ok(document.activeElement === editor.querySelector('input[aria-label="Link label"]'));
 
   let rows = [...editor.querySelectorAll('.ogt-editor-row')];
   const label = rows[0].querySelector('input[aria-label="Link label"]');
@@ -678,7 +679,7 @@ test('inline editor renames, reorders, deletes and saves links', async (t) => {
     [...document.querySelectorAll('#ogt-custom-links .ogt-links a.ogt-service-link')].map((link) => link.textContent),
     ['B', 'Renamed A'],
   );
-  assert.equal(document.activeElement, edit, 'focus returns to the editor chip when closed');
+  assert.ok(document.activeElement === edit, 'focus returns to the editor chip when closed');
 });
 
 test('inline editor adds a link and rejects invalid URLs before saving', async (t) => {
@@ -716,31 +717,28 @@ test('Escape closes the inline views and restores focus to their chips', async (
 
   const edit = chip(document, 'Edit links');
   edit.click();
-  assert.equal(document.activeElement, document.querySelector('.ogt-editor [data-focus="add-link"]'));
+  assert.ok(document.activeElement === document.querySelector('.ogt-editor [data-focus="add-link"]'));
   document.activeElement.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-  assert.equal(document.activeElement, edit);
+  assert.ok(document.activeElement === edit);
 
   const presets = chip(document, 'Add presets…');
   presets.click();
-  assert.equal(document.activeElement, document.querySelector('.ogt-presets input[type="checkbox"]'));
+  assert.ok(document.activeElement === document.querySelector('.ogt-presets input[type="checkbox"]'));
   document.activeElement.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-  assert.equal(document.activeElement, presets);
+  assert.ok(document.activeElement === presets);
 });
 
 test('remounts after the app re-renders the panel away', async (t) => {
   const { window, document } = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
   t.after(() => window.close());
-  await wait(500);
-  assert.ok(panel(document));
+  await waitFor(() => panel(document), { message: 'the panel' });
 
   panel(document).remove();
-  assert.equal(panel(document), null);
+  assert.equal(Boolean(panel(document)), false);
 
   await wait(100);
   document.body.append(document.createComment('render'));
-  await wait(700);
-
-  assert.ok(panel(document), 'panel comes back');
+  await waitFor(() => panel(document), { message: 'the panel to come back' });
   assert.ok(chip(document, 'Add presets…'));
 });
 
@@ -758,7 +756,7 @@ test('chart pages are left alone', async (t) => {
   const { window, document } = boot({ url: 'https://og.trakt.tv/shows/trending', html: SHOW_HTML });
   t.after(() => window.close());
   await wait(200);
-  assert.equal(panel(document), null);
+  assert.equal(Boolean(panel(document)), false);
 });
 
 test('leaving a title page removes the panel', async (t) => {
@@ -772,7 +770,7 @@ test('leaving a title page removes the panel', async (t) => {
   window.history.pushState({}, '', '/dashboard');
   await wait(300);
 
-  assert.equal(panel(document), null);
+  assert.equal(Boolean(panel(document)), false);
   assert.equal(Boolean(document.querySelector('.ogt-manager')), false, 'management dialog is removed with the panel');
   const escape = new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
   document.dispatchEvent(escape);
@@ -789,12 +787,12 @@ test('season pages mount the episode chart before the episode list and remove it
 
   const chart = document.getElementById('ogt-season-chart');
   assert.ok(chart, 'season chart is mounted');
-  assert.equal(document.querySelector('section.episodes').previousElementSibling, chart);
+  assert.ok(document.querySelector('section.episodes').previousElementSibling === chart);
   assert.equal(chart.querySelectorAll('svg a').length, 4, 'one chart link per rated episode');
 
   window.history.pushState({}, '', '/dashboard');
   await wait(300);
-  assert.equal(document.getElementById('ogt-season-chart'), null, 'chart is removed on navigation');
+  assert.equal(Boolean(document.getElementById('ogt-season-chart')), false, 'chart is removed on navigation');
 });
 
 test('show title pages do not mount the season chart', async (t) => {
@@ -802,7 +800,7 @@ test('show title pages do not mount the season chart', async (t) => {
   t.after(() => window.close());
   await wait(50);
 
-  assert.equal(document.getElementById('ogt-season-chart'), null);
+  assert.equal(Boolean(document.getElementById('ogt-season-chart')), false);
 });
 
 test('person pages fetch Forvo and play the recording in place', async (t) => {
@@ -848,7 +846,7 @@ test('person pages fetch Forvo and play the recording in place', async (t) => {
 
   window.history.pushState({}, '', '/dashboard');
   await wait(300);
-  assert.equal(document.querySelector('.ogt-pronounce__wrap'), null);
+  assert.equal(Boolean(document.querySelector('.ogt-pronounce__wrap')), false);
 });
 
 test('person pages try the next recording when playback fails', async (t) => {
@@ -915,7 +913,7 @@ test('person pages show the Forvo fallback when every recording fails', async (t
   await wait(50);
 
   assert.equal(attempts.length, 2, 'both cached recordings are tried');
-  assert.equal(document.querySelector('.ogt-pronounce__audio'), null);
+  assert.equal(Boolean(document.querySelector('.ogt-pronounce__audio')), false);
   assert.equal(document.querySelector('.ogt-pronounce').textContent, 'Pronounce');
   const status = document.querySelector('.ogt-pronounce__status');
   assert.match(status.textContent, /Audio unavailable/);
@@ -946,7 +944,7 @@ test('show pages do not mount pronunciation controls', async (t) => {
   const { window, document } = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
   t.after(() => window.close());
   await wait(50);
-  assert.equal(document.querySelector('.ogt-pronounce__wrap'), null);
+  assert.equal(Boolean(document.querySelector('.ogt-pronounce__wrap')), false);
 });
 
 test('season pages fill custom links from the show and preset the route season', async (t) => {
@@ -1063,10 +1061,10 @@ test('MDBList and OpenSubtitles presets follow the page kind and episode ids', a
   });
   windows.push(movie.window);
   await wait(50);
-  assert.equal(chip(movie.document, 'MDBList').getAttribute('href'), 'https://mdblist.com/movie/tt0465676');
+  assert.equal(chip(movie.document, 'MDBList').getAttribute('href'), 'https://mdblist.com/movie/tt0411267');
   assert.equal(
     chip(movie.document, 'OpenSubtitles').getAttribute('href'),
-    'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-465676',
+    'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-411267',
   );
 
   const show = boot({
@@ -1377,7 +1375,7 @@ test('Rotten Tomatoes resolves on hover and preserves cached hrefs across redraw
   assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/search?search=Breaking%20Bad');
   assert.equal(requests.length, 0, 'rendering does not start a lookup');
   link.dispatchEvent(new b.window.Event('pointerenter'));
-  await wait(40);
+  await waitFor(() => link.getAttribute('href') === 'https://www.rottentomatoes.com/tv/breaking_bad', { message: 'the hover lookup' });
 
   assert.equal(link.getAttribute('href'), 'https://www.rottentomatoes.com/tv/breaking_bad');
   assert.equal(requests.length, 1);
@@ -1387,7 +1385,7 @@ test('Rotten Tomatoes resolves on hover and preserves cached hrefs across redraw
 
   b.document.dispatchEvent(new b.window.CustomEvent('ogt:refresh'));
   const redrawn = chip(b.document, 'Rotten Tomatoes');
-  assert.notEqual(redrawn, link);
+  assert.ok(redrawn !== link);
   assert.equal(redrawn.getAttribute('href'), 'https://www.rottentomatoes.com/tv/breaking_bad',
     'cached href is direct before hover, copy-link, context-menu or click');
   activate(b.window, redrawn);
@@ -1416,7 +1414,7 @@ test('Metacritic resolves a movie mapping and keeps the search fallback on a mis
 
   const link = chip(b.document, 'Metacritic');
   link.dispatchEvent(new b.window.FocusEvent('focusin', { bubbles: true }));
-  await wait(40);
+  await waitFor(() => link.getAttribute('href') === 'https://www.metacritic.com/movie/the-dark/', { message: 'the focus lookup' });
   assert.equal(link.getAttribute('href'), 'https://www.metacritic.com/movie/the-dark/');
   assert.match(decodeURIComponent(requests[0].url), /wdt:P1712/);
 
@@ -1515,13 +1513,14 @@ test('concurrent activations share one lookup and both chips upgrade', async (t)
     },
   });
   t.after(() => b.window.close());
-  await wait(50);
+  await waitFor(() => chip(b.document, 'RT two'), { message: 'the custom links' });
 
   const first = chip(b.document, 'RT one');
   const second = chip(b.document, 'RT two');
   activate(b.window, first);
   activate(b.window, second);
-  await wait(60);
+  await waitFor(() => first.getAttribute('href') === 'https://www.rottentomatoes.com/tv/breaking_bad' && second.getAttribute('href') === 'https://www.rottentomatoes.com/tv/breaking_bad',
+    { message: 'both chips to upgrade' });
 
   assert.equal(first.getAttribute('href'), 'https://www.rottentomatoes.com/tv/breaking_bad');
   assert.equal(second.getAttribute('href'), 'https://www.rottentomatoes.com/tv/breaking_bad');
@@ -1626,7 +1625,7 @@ test('person pages use the current sidebar and offer only person presets', async
 
   const node = panel(b.document);
   assert.ok(node, 'person panel is mounted');
-  assert.equal(node.parentElement, b.document.querySelector('aside.sidebar'));
+  assert.ok(node.parentElement === b.document.querySelector('aside.sidebar'));
   assert.ok(node.nextElementSibling?.matches('ul.external-links'), 'panel sits above the native person links');
   assert.ok(chip(b.document, 'YouTube interviews').querySelector('svg path'), 'YouTube uses its bundled logo');
   assert.equal(
@@ -1644,8 +1643,8 @@ test('person pages use the current sidebar and offer only person presets', async
   chip(b.document, 'Add presets…').click();
   assert.ok(b.document.querySelector('.ogt-presets input[aria-label="YouTube interviews"]'));
   assert.equal(
-    b.document.querySelector('.ogt-presets input[aria-label="Wikipedia"]'),
-    null,
+    Boolean(b.document.querySelector('.ogt-presets input[aria-label="Wikipedia"]')),
+    false,
     'title presets are not offered on a person page',
   );
 });

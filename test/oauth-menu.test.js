@@ -32,7 +32,7 @@ test('built bundle registers OAuth menus and shows user without exposing tokens'
   await menus.get('sign out')();
   assert.equal(data.has('trakt.oauth.tokens'), false);
   assert.equal(window.localStorage.getItem('ogt:trakt.oauth.tokens'), null);
-  assert.equal(window.document.querySelector('[id*=playback]'), null);
+  assert.equal(Boolean(window.document.querySelector('[id*=playback]')), false);
 });
 
 test('private credentials never fall back to page localStorage', () => {

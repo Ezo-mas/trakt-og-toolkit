@@ -2,6 +2,43 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-09: test suite review (feature 23)
+
+- **Element assertions:** a probe that wrapped `node:assert` for one full run found 25 equality checks with a
+  happy-dom node as an argument (mostly `document.activeElement` and `parentElement` comparisons) plus about 70
+  `assert.equal(<query>, null)` checks that would print a node if they ever failed. All now use `assert.ok(a === b)`
+  or `assert.equal(Boolean(query), false)`, so a failing check reports a boolean instead of running Node out of
+  memory. PLAN.md's "Done means" carries the rule.
+- **Timing:** `test/wait.js` has `waitFor(condition, { message })`, which polls until the expected state appears,
+  and `wait()`, kept for checks that something does *not* happen. Six idle full runs passed; flakes only showed
+  with all eight cores busy (`node -e "for(;;){}"` per core): `summary-ratings` read the watchers tile before it
+  filled, the credits native-reload test counted reads before they finished, and a Rotten Tomatoes test read the
+  chips 60 ms after a 20 ms mocked lookup (its hover/focus siblings now wait for the upgraded href too). Those,
+  `library-feedback` (the 2026-11-08 flake) and every sleep sized to clear the one-second write pacing or the
+  one-second native-toast fallback (`wait(1200)`–`wait(1500)` in the watchlist, credits, cards, Undo and playback
+  tests) now wait on conditions; the two local `waitFor` copies use the shared one. The short settle sleeps after
+  boot remain and passed every loaded run; convert one when it flakes.
+- **Dead code:** `readCreditRoute` was used only by its tests since the grid-view change; the credits feature reads
+  rows with `readCardRoute` and picks them with its `article.credit-row` selector. The season-row check moved to
+  `readCardRoute`, and the stray-row check now runs on the built bundle (a `div` copy of a credit row gets no
+  shortcut).
+- **Overlap:** `library.test.js`'s built-bundle test repeated `library-feedback`'s; its only unique steps (sign-in
+  guidance, then a save after connecting, and removal on navigation) became one test there. The your-ratings
+  "fresh live markup" test and its 2026-10-31 `LIVE_RATINGS_*` strings went too: the default season and show
+  fixtures are live captures now, and its subtitle check joined the main test. No test only checked that removed
+  code stayed removed; those had already gone with features 15 and 26.
+- **Fixtures, re-captured live 2026-11-09 (trakt-og `3e65cd7`):** `npm run drift` passed on every page, but the
+  hand-written fixtures had drifted. The show fixture put TVDB in the ratings strip (og keeps it only in the sidebar
+  `ul.external-links`) and its season cards lacked og's `poster-grid`, `poster-wrapper` and `titles` wrappers. The
+  movie fixture used invented ids (`tt0465676`/TMDb `8967`; The Dark (2005) is `tt0411267`/`17`) and its sidebar
+  carried Breaking Bad's links, so one page held two IMDb ids. Season rows are now og's `fanart-card` with a
+  `button.rating-trigger.card`, season and episode sidebars carry their own links, the episode page lost a
+  `section.episodes` og does not render, and the person fixture's extra h1 is og's real splash heading. Forvo
+  answers scripted fetches with 403, so its fixtures were not re-captured.
+- Validation: `npm test` (446 tests) passes idle and in three full runs with every core busy; `npm run drift` all ok;
+  `npm run build` output is unchanged (the removed export was already tree-shaken). Breaking the credits selector on
+  purpose makes the new stray-row test fail.
+
 
 ## 2026-11-09: Trakt ratings chart in the summary gap (feature 31)
 

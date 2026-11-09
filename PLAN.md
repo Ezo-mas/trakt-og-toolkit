@@ -13,7 +13,6 @@ behaviour, never its code. Finished features are listed at the end; their detail
 | 27 | Resolve external site IDs for direct custom links | public lookup services | implemented; anime mapping deferred |
 | 28 | Conditional presets and person-page custom links | native genre/person metadata | implemented; anime destinations remain searches |
 | 31 | Trakt ratings distribution in the summary's empty space | client ID | implemented; compact chart, tiles when there is room |
-| 23 | Test suite review and cleanup | — | before 0.4.0 |
 
 Then live testing and the **0.4.0** release. Userscript managers only offer an update when `@version` changes, so bump
 it whenever main should reach users.
@@ -32,8 +31,9 @@ site.
 - Check the og route you target exists in [trakt/trakt-og](https://github.com/trakt/trakt-og)
   (`projects/client/src/routes/`) **and** is live on og.trakt.tv. Check that og doesn't already do what you are adding;
   og changes daily.
-- Save a real page for fixtures: `curl -sSL https://og.trakt.tv/<path> -o /tmp/page.html`, then trim it by hand into
-  `test/fixtures.js` like the existing `SHOW_HTML`.
+- Save a real page for fixtures: `curl -sSL https://og.trakt.tv/<path> -o /tmp/page.html` (or
+  `npm run drift -- --save <dir>` for the drift pages), then trim it into `test/fixtures.js` like the existing
+  `SHOW_HTML`. Say in a comment where it came from: the capture date and the trakt-og commit at that date.
 
 **Where code goes**
 
@@ -64,7 +64,12 @@ site.
 **Done means**
 
 - `npm test` passes with new unit tests for `data.js` and an integration test that boots the built bundle on your
-  fixture (see `test/integration.test.js`).
+  fixture (see `test/integration.test.js`). Run it with `NODE_OPTIONS=--max-old-space-size=512` so a runaway test
+  fails fast.
+- In tests, wait with `waitFor` from `test/wait.js` for anything that should happen; a fixed `wait()` is only for
+  proving that something does not. Never put a happy-dom node in an equality assertion (`assert.equal(node, null)`,
+  `assert.equal(a, b)`): a failure prints the node and runs Node out of memory. Use `Boolean(node)` or
+  `assert.ok(a === b)`.
 - `npm run build` succeeds, and the feature works in a real browser on og.trakt.tv (`npm run dev` + Violentmonkey, see
   NOTES.md). Check Firefox and a Chromium browser.
 - README gets a short user-facing section; NOTES.md gets anything surprising you found about og.
@@ -216,18 +221,6 @@ and menu toggle, trimmed live fixtures (summary pages plus a `/stats` capture), 
 **Acceptance:** movies, shows, seasons and episodes, short and long overviews, titles with few or no votes, with and
 without a client ID, Firefox and Chromium; the gap is filled without pushing og's content or the action stack.
 
-## 23. Test suite review and cleanup
-
-**Goal:** the suite grew feature by feature (about 390 tests in 40 files) and has leftovers: checks for removed
-behaviour, overlapping integration tests, and fixtures that no longer match og.
-
-- Remove checks that only confirm deleted code stays deleted, and merge integration tests that cover the same path.
-- Replace hand-written fixtures with trimmed live captures where og's markup has moved on; keep each fixture's source
-  and trakt-og commit in a comment.
-- Never compare a happy-dom element in an assertion (`assert.equal(node, null)`): if it fails, Node prints the element
-  and runs out of memory. Compare `Boolean(node)` or a count; there are about 30 to change.
-- Run the suite with `NODE_OPTIONS=--max-old-space-size=512` while reviewing, so a runaway test fails fast.
-
 ## Shipped
 
 Details for each are in NOTES.md and the merged PRs.
@@ -256,6 +249,7 @@ Details for each are in NOTES.md and the merged PRs.
 | 25 | Per-user server presets | done |
 | 26 | Custom links below the poster, with logos and Watch Now | done |
 | 29 | Shared authenticated-write queue and rate-limit handling | done |
+| 23 | Test suite review and cleanup | done |
 | 3, 14 | Metadata links; Add to library on poster cards | dropped (og ships it; cards too tight) |
 
 ## Running several agents at once

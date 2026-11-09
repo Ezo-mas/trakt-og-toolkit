@@ -17,9 +17,9 @@ import {
   statsHref,
   statsPath,
 } from '../src/features/summary-ratings/data.js';
+import { wait, waitFor } from './wait.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /* Live API responses, 2026-11-09 (api.trakt.tv, public client ID). */
 const SHOW_RATINGS = { rating: 7.45317, votes: 5029, distribution: { 1: 44, 2: 34, 3: 43, 4: 77, 5: 265, 6: 582, 7: 1513, 8: 1345, 9: 495, 10: 631 } };
@@ -170,9 +170,8 @@ test('the chart and tiles fill a tall gap and link to og\'s stats page', async (
     responses: { '/shows/breaking-bad/ratings': SHOW_RATINGS, '/shows/breaking-bad/stats': SHOW_STATS },
   });
   t.after(() => b.window.close());
-  await wait(80);
-
-  const node = chartOf(b.document);
+  const node = await waitFor(() => chartOf(b.document)?.querySelector('.ogt-sr-tile:nth-child(2) .ogt-sr-tile-note')?.textContent
+    && chartOf(b.document), { message: 'the chart and its watcher tile' });
   assert.ok(node, 'mounted in og\'s details column');
   assert.equal(node.parentElement.className, 'details');
   assert.equal(node.hidden, false);
@@ -197,8 +196,8 @@ test('a smaller gap shows the chart alone and makes no stats request; no gap hid
     space: { details: 300, actions: 300 + 150 },
   });
   t.after(() => b.window.close());
-  await wait(80);
-  const node = chartOf(b.document);
+  const node = await waitFor(() => chartOf(b.document)?.dataset.layout && chartOf(b.document), { message: 'the chart layout' });
+  await wait();
   assert.equal(node.hidden, false);
   assert.equal(node.dataset.layout, 'chart');
   assert.deepEqual(b.requests, ['/movies/the-dark-2005/ratings']);
@@ -206,13 +205,11 @@ test('a smaller gap shows the chart alone and makes no stats request; no gap hid
   // og's content grows (e.g. "Read more"): the chart steps aside instead of pushing og's row taller.
   b.space.details = 500;
   b.document.querySelector('#overview .details').prepend(b.document.createElement('p'));
-  await wait(30);
-  assert.equal(node.hidden, true);
+  await waitFor(() => node.hidden, { message: 'the chart to step aside' });
 
   b.space.details = 300;
   b.document.querySelector('#overview .details > p').remove();
-  await wait(30);
-  assert.equal(node.hidden, false);
+  await waitFor(() => !node.hidden, { message: 'the chart to return' });
 });
 
 test('when og stacks the actions under the details (below 992px) the chart stays hidden', async (t) => {
@@ -225,7 +222,8 @@ test('when og stacks the actions under the details (below 992px) the chart stays
     stacked: true,
   });
   t.after(() => b.window.close());
-  await wait(80);
+  await waitFor(() => b.requests.length && chartOf(b.document), { message: 'the ratings request' });
+  await wait();
   assert.equal(chartOf(b.document).hidden, true);
   assert.deepEqual(b.requests, ['/shows/breaking-bad/ratings'], 'no stats request while hidden');
 });
@@ -240,9 +238,10 @@ test('no client ID, too few votes or a failed request leave the page untouched',
   t.after(() => few.window.close());
   const failed = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML, storage: CLIENT });
   t.after(() => failed.window.close());
-  await wait(80);
+  await waitFor(() => few.requests.length && failed.requests.length, { message: 'the ratings requests' });
+  await wait();
 
-  assert.equal(chartOf(none.document), null);
+  assert.equal(Boolean(chartOf(none.document)), false);
   assert.deepEqual(none.requests, []);
   assert.equal(chartOf(few.document).hidden, true);
   assert.equal(chartOf(few.document).children.length, 0);
@@ -257,10 +256,8 @@ test('turning the feature off removes the chart', async (t) => {
     responses: { '/shows/breaking-bad/ratings': SHOW_RATINGS, '/shows/breaking-bad/stats': SHOW_STATS },
   });
   t.after(() => b.window.close());
-  await wait(80);
-  assert.ok(chartOf(b.document));
+  await waitFor(() => chartOf(b.document), { message: 'the chart' });
   b.store.set('features.disabled', ['summary-ratings']);
   b.document.dispatchEvent(new b.window.CustomEvent('ogt:featurechange', { detail: { id: 'summary-ratings', enabled: false } }));
-  await wait(30);
-  assert.equal(chartOf(b.document), null);
+  await waitFor(() => !chartOf(b.document), { message: 'the chart to be removed' });
 });

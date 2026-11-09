@@ -4,16 +4,10 @@ import { Window } from 'happy-dom';
 import { readFileSync } from 'node:fs';
 import { answerDialogs } from './dialogs.js';
 import { PERSON_CREDITS_HTML, personCreditRowHtml, personCreditCardHtml, watchlistCardHtml } from './fixtures.js';
+import { waitFor } from './wait.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 80) => new Promise(resolve => setTimeout(resolve, ms));
-async function waitFor(condition, timeout = 4000) {
-  const deadline = Date.now() + timeout;
-  while (!condition()) {
-    if (Date.now() >= deadline) throw new Error('Timed out waiting for the UI to settle');
-    await wait(50);
-  }
-}
 
 function boot(t, { signedIn = true } = {}) {
   const window = new Window({ url: 'https://og.trakt.tv/people/bryan-cranston' });
@@ -76,7 +70,8 @@ test('built bundle adds a watchlist shortcut beside the lists control on credit 
   assert.equal(buttons[0].hidden, true);
   assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, 'You added Jackpot to your watchlist.');
 
-  buttons[1].click(); await wait(1200);
+  buttons[1].click();
+  await waitFor(() => b.writes().length === 2 && buttons[1].hidden, { message: 'the paced second addition' });
   assert.deepEqual(JSON.parse(b.writes()[1].data), { shows: [{ ids: { trakt: 320413 } }] });
   assert.equal(buttons[1].hidden, true);
 });
@@ -111,13 +106,19 @@ test('credit shortcuts follow native watchlist membership, custom lists and late
   b.document.getElementById('credit-lazy').remove(); await wait();
   assert.equal(b.buttons().length, 2, 'removed rows lose their shortcut');
   assert.equal(b.document.querySelector('.ogt-watchlist-bulk').textContent, 'Watchlist all (2)');
+
+  const stray = personCreditRowHtml({ id: 'credit-stray', href: '/movies/verity-2026', title: 'Verity' });
+  b.document.querySelector('section.year').insertAdjacentHTML('beforeend',
+    stray.replace('<article', '<div').replace('</article>', '</div>'));
+  await wait();
+  assert.equal(b.buttons().length, 2, 'only og credit rows are eligible');
 });
 
 test('built bundle adds every visible credit from one Watchlist all action', async t => {
   const b = boot(t); await wait();
   const bulk = b.document.querySelector('.ogt-watchlist-bulk');
   assert.ok(bulk);
-  assert.equal(bulk.closest('.controls'), b.document.querySelector('#credits .toolbar .controls'));
+  assert.ok(bulk.closest('.controls') === b.document.querySelector('#credits .toolbar .controls'));
   assert.equal(bulk.textContent, 'Watchlist all (2)');
   assert.equal(b.calls.length, 0, 'no API requests per row on mount');
 
@@ -166,7 +167,7 @@ test('cancelled Watchlist all sends nothing and leaving removes the bulk action'
   assert.ok(b.buttons().every(button => !button.hidden));
 
   b.window.history.pushState({}, '', '/dashboard'); await wait(400);
-  assert.equal(b.document.querySelector('.ogt-watchlist-bulk'), null);
+  assert.equal(Boolean(b.document.querySelector('.ogt-watchlist-bulk')), false);
 });
 
 test('signed-out clicks guide and leaving the person page removes the shortcuts', async t => {
@@ -177,15 +178,15 @@ test('signed-out clicks guide and leaving the person page removes the shortcuts'
 
   b.window.history.pushState({}, '', '/dashboard'); await wait(400);
   assert.equal(b.buttons().length, 0);
-  assert.equal(b.document.getElementById('ogt-watchlist-credits'), null);
+  assert.equal(Boolean(b.document.getElementById('ogt-watchlist-credits')), false);
 });
 
 
 test('bulk Undo removes only confirmed new titles and restores shortcuts', async t => {
   const b = boot(t); await wait();
   b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
-  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait(1200);
-  assert.equal(b.writes().length, 2);
+  b.document.querySelector('.ogt-watchlist-toast__undo').click();
+  await waitFor(() => b.writes().length === 2 && b.buttons().every(button => !button.hidden), { message: 'the bulk Undo' });
   assert.equal(new URL(b.writes()[1].url).pathname, '/sync/watchlist/remove');
   assert.deepEqual(JSON.parse(b.writes()[1].data), JSON.parse(b.writes()[0].data));
   assert.ok(b.buttons().every(button => !button.hidden));
@@ -197,7 +198,7 @@ test('mixed new and existing bulk additions never offer destructive Undo', async
   b.setPostResult(() => ({ added: { movies: 1 }, existing: { shows: 1 } }));
   b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
   assert.ok(b.buttons().every(button => button.hidden));
-  assert.equal(b.document.querySelector('.ogt-watchlist-toast__undo'), null);
+  assert.equal(Boolean(b.document.querySelector('.ogt-watchlist-toast__undo')), false);
 });
 
 test('bulk confirm locks row actions and leaving before confirming sends nothing', async t => {
@@ -243,7 +244,8 @@ test('bulk Undo leaves not-found titles untouched', async t => {
   b.setPostResult((sent, path) => path.endsWith('/remove') ? { deleted: { movies: 1 } } :
     { added: { movies: 1 }, not_found: { shows: sent.shows } });
   b.document.querySelector('.ogt-watchlist-bulk').click(); await wait();
-  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait(1200);
+  b.document.querySelector('.ogt-watchlist-toast__undo').click();
+  await waitFor(() => b.writes().length === 2 && b.buttons().every(button => !button.hidden), { message: 'the bulk Undo' });
   assert.deepEqual(JSON.parse(b.writes()[1].data), { movies: [{ ids: { slug: 'jackpot-1115926' } }] });
   assert.ok(b.buttons().every(button => !button.hidden));
 });
@@ -280,7 +282,7 @@ test('bulk add and Undo reload native credit controls without opening or clickin
   b.document.body.insertAdjacentHTML('afterbegin', '<header class="top-nav"><div class="profile"></div></header>');
   b.document.querySelector('section.year').insertAdjacentHTML('beforeend',
     Array.from({ length: 5 }, (_, i) => personCreditRowHtml({ id: `native-${i}`, href: `/movies/native-${i}` })).join(''));
-  await wait();
+  await waitFor(() => b.buttons().length === 7, { message: 'shortcuts on the added rows' });
   let reads = 0, clicks = 0, popups = 0, loading = 0, peak = 0;
   for (const control of b.document.querySelectorAll('article.credit-row .list-control')) {
     const trigger = control.querySelector('button');
@@ -304,12 +306,12 @@ test('bulk add and Undo reload native credit controls without opening or clickin
       }, 5);
     });
   }
-  b.document.querySelector('.ogt-watchlist-bulk').click(); await wait(160);
-  assert.equal(reads, 7);
+  b.document.querySelector('.ogt-watchlist-bulk').click();
+  await waitFor(() => reads === 7 && loading === 0, { message: 'the native reloads after adding' });
   assert.ok(peak <= 4, 'native loads are bounded');
   assert.equal(b.document.querySelectorAll('.listed-tip a').length, 7);
-  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait(1300);
-  assert.equal(reads, 14);
+  b.document.querySelector('.ogt-watchlist-toast__undo').click();
+  await waitFor(() => reads === 14 && loading === 0, { message: 'the native reloads after Undo' });
   assert.equal(b.document.querySelectorAll('.listed-tip a').length, 0);
   assert.ok(b.buttons().every(button => !button.hidden));
   assert.equal(clicks, 0, 'native quick-add clicks are never sent');
@@ -326,7 +328,7 @@ test('Watchlist all stays in its toolbar spot and adds credits in grid view', as
     personCreditCardHtml({ id: 'grid-show', href: '/shows/after-hours-with-james-corden' }));
   b.document.body.insertAdjacentHTML('beforeend', personCreditCardHtml({ id: 'known-for', href: '/movies/unrelated' }));
   await wait();
-  assert.equal(bulk.parentElement, toolbar);
+  assert.ok(bulk.parentElement === toolbar);
   assert.equal(bulk.hidden, false);
   assert.equal(bulk.textContent, 'Watchlist all (2)');
   assert.equal(bulk.disabled, false);
@@ -336,10 +338,10 @@ test('Watchlist all stays in its toolbar spot and adds credits in grid view', as
   assert.equal(bulk.disabled, true);
   assert.equal(bulk.hidden, false);
   b.document.querySelector('section.year').replaceChildren(...rows); await wait();
-  assert.equal(bulk.parentElement, toolbar);
+  assert.ok(bulk.parentElement === toolbar);
   assert.ok(b.buttons().every(button => button.hidden), 'added grid titles stay added in list view');
-  b.document.querySelector('.ogt-watchlist-toast__undo').click(); await wait(1300);
-  assert.ok(b.buttons().every(button => !button.hidden));
+  b.document.querySelector('.ogt-watchlist-toast__undo').click();
+  await waitFor(() => b.buttons().every(button => !button.hidden), { message: 'the grid Undo' });
   assert.equal(bulk.textContent, 'Watchlist all (2)');
 });
 
@@ -354,9 +356,12 @@ test('grid bulk skips known watchlisted titles, hidden cards and duplicate credi
   await wait();
   const bulk = b.document.querySelector('.ogt-watchlist-bulk');
   assert.equal(bulk.textContent, 'Watchlist all (1)');
-  bulk.click(); await wait(1200);
+  bulk.click();
+  await waitFor(() => b.writes().length === 2 && b.document.querySelectorAll('.ogt-watchlist-toasts .ogt-watchlist-toast__undo').length === 2,
+    { message: 'the bulk addition and its notice' });
   assert.deepEqual(JSON.parse(b.writes()[1].data), { shows: [{ ids: { slug: 'after-hours-with-james-corden' } }] });
-  b.document.querySelector('.ogt-watchlist-toasts .ogt-watchlist-toast__undo').click(); await wait(1200);
+  b.document.querySelector('.ogt-watchlist-toasts .ogt-watchlist-toast__undo').click();
+  await waitFor(() => b.writes().length === 3 && !bulk.disabled, { message: 'the bulk Undo' });
   assert.equal(bulk.textContent, 'Watchlist all (1)', 'Undo restores the grid count without undoing the earlier individual add');
 });
 
@@ -382,8 +387,8 @@ test('grid bulk refreshes available native list controls after add and Undo', as
   bulk.click(); await wait();
   assert.equal(reads, 1);
   assert.ok(b.document.querySelector('#grid-native-tip .listed-tip'));
-  b.document.querySelector('.ogt-watchlist-toasts .ogt-watchlist-toast__undo').click(); await wait(1200);
-  assert.equal(reads, 2);
-  assert.equal(b.document.querySelector('#grid-native-tip .listed-tip'), null);
+  b.document.querySelector('.ogt-watchlist-toasts .ogt-watchlist-toast__undo').click();
+  await waitFor(() => reads === 2, { message: 'the native reload after Undo' });
+  assert.equal(Boolean(b.document.querySelector('#grid-native-tip .listed-tip')), false);
   assert.equal(bulk.textContent, 'Watchlist all (1)');
 });

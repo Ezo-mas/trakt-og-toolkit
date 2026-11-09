@@ -94,9 +94,9 @@ test('leaving the page removes previews and their listener', async (t) => {
   await wait();
   window.history.pushState({}, '', '/dashboard');
   await wait(300);
-  assert.equal(document.querySelector('.ogt-list-preview-titles'), null);
-  assert.equal(document.getElementById('ogt-list-preview'), null);
-  assert.equal(document.querySelector('.ogt-list-preview-slot'), null);
+  assert.equal(Boolean(document.querySelector('.ogt-list-preview-titles')), false);
+  assert.equal(Boolean(document.getElementById('ogt-list-preview')), false);
+  assert.equal(Boolean(document.querySelector('.ogt-list-preview-slot')), false);
 });
 
 test('signed in, your movie and show ratings sit in the poster corners and follow changes', async (t) => {
@@ -109,7 +109,7 @@ test('signed in, your movie and show ratings sit in the poster corners and follo
   const slots = [...document.querySelectorAll('.slot')];
   assert.equal(slots[0].querySelector('.ogt-corner-rating').getAttribute('aria-label'), 'Your rating: 8 of 10');
   assert.equal(slots[0].querySelector('.ogt-corner-rating-text').textContent, '8');
-  assert.equal(slots[1].querySelector('.ogt-corner-rating'), null, 'out-of-range ratings are ignored');
+  assert.equal(Boolean(slots[1].querySelector('.ogt-corner-rating')), false, 'out-of-range ratings are ignored');
   assert.equal(slots[0].getAttribute('style'), null, 'og\'s slot keeps its own styles');
 
   slots[0].querySelector('img').setAttribute('src', 'https://media.trakt.tv/images/movies/000/000/007/posters/x.jpg');
@@ -120,12 +120,12 @@ test('signed in, your movie and show ratings sit in the poster corners and follo
   store.delete('trakt.oauth.tokens');
   document.dispatchEvent(new window.Event('ogt:authchange'));
   await wait();
-  assert.equal(document.querySelector('.ogt-corner-rating'), null, 'signing out removes the corners');
+  assert.equal(Boolean(document.querySelector('.ogt-corner-rating')), false, 'signing out removes the corners');
 });
 
 test('signed out, no ratings are requested', async (t) => {
   const { document, calls } = boot(t);
   await wait();
   assert.deepEqual(calls, []);
-  assert.equal(document.querySelector('.ogt-corner-rating'), null);
+  assert.equal(Boolean(document.querySelector('.ogt-corner-rating')), false);
 });
