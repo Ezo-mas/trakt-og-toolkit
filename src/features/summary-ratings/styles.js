@@ -18,7 +18,8 @@ export const CSS = String.raw`
 
 
 .ogt-summary-ratings[data-layout="full"] {
-  grid-template-rows: 18px 78px 60px;
+  /* The tiles row holds their 8px top margin plus 60px of tile: 18 + 8 + 78 + 8 + 68 = 180. */
+  grid-template-rows: 18px 78px 68px;
   block-size: 180px;
 }
 
@@ -172,11 +173,12 @@ export const CSS = String.raw`
 
 .ogt-sr-tile {
   display: grid;
-  grid-template-rows: 13px 22px 12px;
+  /* 3px rule + 5px padding + 12 + 22 + 12 + two 3px gaps = 60px (TILES_HEIGHT). */
+  grid-template-rows: 12px 22px 12px;
   align-content: start;
-  gap: 4px;
+  gap: 3px;
   min-inline-size: 0;
-  padding-block-start: 7px;
+  padding-block-start: 5px;
   border-block-start: 3px solid light-dark(#bdbdbd, #555);
 }
 
