@@ -5651,7 +5651,8 @@
     "#b11010",
     "#b70a0a"
   ];
-  function layoutFor({ contentBottom: contentBottom2, columnBottom }) {
+  function layoutFor({ contentBottom: contentBottom2, columnBottom, sideBySide = true }) {
+    if (!sideBySide) return null;
     if (![contentBottom2, columnBottom].every(Number.isFinite)) return null;
     const space = columnBottom - contentBottom2;
     if (space >= CHART_GAP + CHART_HEIGHT2 + TILES_GAP + TILES_HEIGHT) return "full";
@@ -5663,12 +5664,13 @@
     const top = mostGiven(counts);
     const liked = counts.slice(6).reduce((sum, count2) => sum + count2, 0);
     const share = (part, whole, digits = 0) => `${(Math.round(part / whole * 100 * 10 ** digits) / 10 ** digits).toFixed(digits)}%`;
+    const watcherShare = (part, whole) => share(part, whole, part / whole * 100 < 9.95 ? 1 : 0);
     return [
-      { name: "Rating", value: `${Math.floor(rating * 10)}%`, note: RATING_NAMES[Math.min(10, Math.max(1, Math.round(rating))) - 1], accent: true },
+      { name: "Rating", value: `${Math.floor(rating * 10)}%`, note: RATING_NAMES[Math.min(10, Math.max(1, Math.trunc(rating))) - 1], accent: true },
       {
         name: "Votes",
         value: fullCount(votes),
-        note: Number.isFinite(watchers) && watchers >= votes && watchers > 0 ? `${share(votes, watchers, 1)} of watchers` : "",
+        note: Number.isFinite(watchers) && watchers >= votes && watchers > 0 ? `${watcherShare(votes, watchers)} of watchers` : "",
         accent: false
       },
       { name: "Most given", value: String(top), suffix: RATING_NAMES[top - 1], note: `${share(counts[top - 1], total)} of ${fullCount(total)} votes`, accent: true },
@@ -6027,7 +6029,11 @@
       function fit() {
         timer = 0;
         if (cancelled || !ratings) return;
-        const layout = layoutFor({ contentBottom: contentBottom(details, node), columnBottom: contentBottom(actions) });
+        const layout = layoutFor({
+          contentBottom: contentBottom(details, node),
+          columnBottom: contentBottom(actions),
+          sideBySide: actions.getBoundingClientRect().left >= details.getBoundingClientRect().right - 1
+        });
         if (node.hidden !== !layout) node.hidden = !layout;
         if (layout && node.dataset.layout !== layout) node.dataset.layout = layout;
         if (layout === "full") loadWatchers();

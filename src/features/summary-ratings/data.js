@@ -117,10 +117,12 @@ export const BAR_COLORS = [
 /**
  * How much of the section fits the empty space in og's details column: `'full'` (chart and stat tiles),
  * `'chart'`, or null. `contentBottom` is where og's own details content ends and `columnBottom` where the
- * action stack's content ends (both page px). Showing only what fits means og's grid row never grows, so
+ * action stack's content ends (both page px); `sideBySide` is false when og stacks the two columns. Showing only what fits means og's grid row never grows, so
  * nothing of og's moves.
  */
-export function layoutFor({ contentBottom, columnBottom }) {
+export function layoutFor({ contentBottom, columnBottom, sideBySide = true }) {
+  // Below 992px og stacks the action stack under the details column; its height is then no gap at all.
+  if (!sideBySide) return null;
   if (![contentBottom, columnBottom].every(Number.isFinite)) return null;
   const space = columnBottom - contentBottom;
   if (space >= CHART_GAP + CHART_HEIGHT + TILES_GAP + TILES_HEIGHT) return 'full';
@@ -137,14 +139,16 @@ export function statTiles({ rating, votes, counts }, watchers = null) {
   const total = counts.reduce((sum, count) => sum + count, 0) || votes;
   const top = mostGiven(counts);
   const liked = counts.slice(6).reduce((sum, count) => sum + count, 0);
-  // og rounds shares (5,029 of 91,913 watchers is "5.5%") but truncates the rating (7.45 is "74%").
+  // og rounds shares (3,984 of 5,029 is "79%") but truncates the rating: 8.79 is "87%", named for 8 ("Great").
   const share = (part, whole, digits = 0) => `${(Math.round((part / whole) * 100 * 10 ** digits) / 10 ** digits).toFixed(digits)}%`;
+  // Watcher shares keep a decimal only under 10%: "5.5% of watchers", but "21% of watchers".
+  const watcherShare = (part, whole) => share(part, whole, (part / whole) * 100 < 9.95 ? 1 : 0);
   return [
-    { name: 'Rating', value: `${Math.floor(rating * 10)}%`, note: RATING_NAMES[Math.min(10, Math.max(1, Math.round(rating))) - 1], accent: true },
+    { name: 'Rating', value: `${Math.floor(rating * 10)}%`, note: RATING_NAMES[Math.min(10, Math.max(1, Math.trunc(rating))) - 1], accent: true },
     {
       name: 'Votes',
       value: fullCount(votes),
-      note: Number.isFinite(watchers) && watchers >= votes && watchers > 0 ? `${share(votes, watchers, 1)} of watchers` : '',
+      note: Number.isFinite(watchers) && watchers >= votes && watchers > 0 ? `${watcherShare(votes, watchers)} of watchers` : '',
       accent: false,
     },
     { name: 'Most given', value: String(top), suffix: RATING_NAMES[top - 1], note: `${share(counts[top - 1], total)} of ${fullCount(total)} votes`, accent: true },

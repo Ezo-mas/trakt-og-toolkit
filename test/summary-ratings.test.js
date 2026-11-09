@@ -29,6 +29,8 @@ const SEASON_RATINGS = {
 };
 const FEW_VOTES = { trakt: { rating: 7, votes: 2, distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 1, 7: 0, 8: 1, 9: 0, 10: 0 } } };
 const SHOW_STATS = { watchers: 91913, plays: 500348, votes: 5029 };
+const MOVIE_RATINGS = { rating: 8.78741, votes: 61907, distribution: { 1: 156, 2: 144, 3: 130, 4: 364, 5: 536, 6: 2423, 7: 5002, 8: 13999, 9: 14042, 10: 25111 } };
+const MOVIE_STATS = { watchers: 300564, votes: 61907 };
 
 test('ratings and stats paths cover movies, shows, seasons and episodes only', () => {
   const cases = [
@@ -85,19 +87,34 @@ test('stat tiles match og\'s stats page for the same distribution', () => {
   assert.equal(statTiles(parseRatings(SHOW_RATINGS))[1].note, '', 'no watcher share without stats');
 });
 
+test('stat tiles truncate the rating for its name and drop the watcher decimal from 10% (og: The Matrix)', () => {
+  // og's /movies/the-matrix-1999/stats, 2026-11-09: "87% Great", "21% of watchers", "10 · Totally Ninja! 41%", "94%".
+  const tiles = statTiles(parseRatings(MOVIE_RATINGS), MOVIE_STATS.watchers);
+  assert.deepEqual(tiles.map(({ value, suffix, note }) => [value, suffix ?? null, note]), [
+    ['87%', null, 'Great'],
+    ['61,907', null, '21% of watchers'],
+    ['10', 'Totally Ninja!', '41% of 61,907 votes'],
+    ['94%', null, 'gave it 7 or higher'],
+  ]);
+  assert.equal(statTiles({ rating: 9.99, votes: 20, counts: [0, 0, 0, 0, 0, 0, 0, 0, 0, 20] })[0].note, 'Superb');
+  assert.equal(statTiles({ rating: 10, votes: 20, counts: [0, 0, 0, 0, 0, 0, 0, 0, 0, 20] })[0].note, 'Totally Ninja!');
+});
+
 test('layout shows chart and tiles, the chart alone, or nothing, by the space beside the actions', () => {
   assert.equal(layoutFor({ contentBottom: 300, columnBottom: 600 }), 'full');
   assert.equal(layoutFor({ contentBottom: 300, columnBottom: 300 + 124 + 75 }), 'chart');
   assert.equal(layoutFor({ contentBottom: 300, columnBottom: 300 + 124 }), 'chart');
   assert.equal(layoutFor({ contentBottom: 300, columnBottom: 300 + 123 }), null);
   assert.equal(layoutFor({ contentBottom: NaN, columnBottom: 600 }), null);
+  assert.equal(layoutFor({ contentBottom: 300, columnBottom: 900, sideBySide: false }), null,
+    'below 992px og stacks the actions under the details; their height is not free space');
 });
 
 /**
  * Boot the built bundle with GM shims and a fake layout: og's details content ends at `space.details` and the
  * action stack's content at `space.actions` (page px). happy-dom has no layout, so rects are stubbed per column.
  */
-function boot({ url, html, storage = {}, responses = {}, space = { details: 300, actions: 600 } }) {
+function boot({ url, html, storage = {}, responses = {}, space = { details: 300, actions: 600 }, stacked = false }) {
   const window = new Window({ url });
   const { document } = window;
   const store = new Map(Object.entries(storage));
@@ -122,15 +139,17 @@ function boot({ url, html, storage = {}, responses = {}, space = { details: 300,
     return { abort() {} };
   };
 
-  const rect = (top, bottom) => ({ top, bottom, left: 0, right: 100, width: 100, height: bottom - top, x: 0, y: top });
+  // Side by side, the actions column starts right of the details column; stacked (og below 992px) both share x.
+  const rect = (top, bottom, left = 0) => ({ top, bottom, left, right: left + 100, width: 100, height: bottom - top, x: left, y: top });
+  const actionsLeft = stacked ? 0 : 120;
   window.Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
     const parent = this.parentElement;
     if (this.id === 'ogt-summary-ratings') return rect(space.details, space.details + 124);
     // A column's own top: an empty details column (the movie fixture) then ends where its content would.
     if (this.matches?.('#overview .top > .details')) return rect(space.details, space.details);
-    if (this.matches?.('#overview .top > .actions')) return rect(100, 100);
+    if (this.matches?.('#overview .top > .actions')) return rect(100, 100, actionsLeft);
     if (parent?.matches?.('#overview .top > .details')) return rect(100, space.details);
-    if (parent?.matches?.('#overview .top > .actions')) return rect(100, space.actions);
+    if (parent?.matches?.('#overview .top > .actions')) return rect(100, space.actions, actionsLeft);
     return rect(0, 0);
   };
 
@@ -194,6 +213,21 @@ test('a smaller gap shows the chart alone and makes no stats request; no gap hid
   b.document.querySelector('#overview .details > p').remove();
   await wait(30);
   assert.equal(node.hidden, false);
+});
+
+test('when og stacks the actions under the details (below 992px) the chart stays hidden', async (t) => {
+  const b = boot({
+    url: 'https://og.trakt.tv/shows/breaking-bad',
+    html: SHOW_HTML,
+    storage: CLIENT,
+    responses: { '/shows/breaking-bad/ratings': SHOW_RATINGS, '/shows/breaking-bad/stats': SHOW_STATS },
+    space: { details: 300, actions: 900 },
+    stacked: true,
+  });
+  t.after(() => b.window.close());
+  await wait(80);
+  assert.equal(chartOf(b.document).hidden, true);
+  assert.deepEqual(b.requests, ['/shows/breaking-bad/ratings'], 'no stats request while hidden');
 });
 
 test('no client ID, too few votes or a failed request leave the page untouched', async (t) => {

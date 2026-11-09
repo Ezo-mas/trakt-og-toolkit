@@ -149,7 +149,11 @@ export const summaryRatings = {
     function fit() {
       timer = 0;
       if (cancelled || !ratings) return;
-      const layout = layoutFor({ contentBottom: contentBottom(details, node), columnBottom: contentBottom(actions) });
+      const layout = layoutFor({
+        contentBottom: contentBottom(details, node),
+        columnBottom: contentBottom(actions),
+        sideBySide: actions.getBoundingClientRect().left >= details.getBoundingClientRect().right - 1,
+      });
       if (node.hidden !== !layout) node.hidden = !layout;
       if (layout && node.dataset.layout !== layout) node.dataset.layout = layout;
       if (layout === 'full') loadWatchers();
