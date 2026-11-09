@@ -85,16 +85,14 @@ export function renderChart(ratings, href) {
   ];
 }
 
-function pageBottom(element) {
-  const rect = element.getBoundingClientRect();
-  return rect.bottom + window.scrollY;
-}
-
-/** Where og's own details content ends: the lowest visible child other than our chart. */
-function contentBottom(details, node) {
-  let bottom = details.getBoundingClientRect().top + window.scrollY;
-  for (const child of details.children) {
-    if (child === node) continue;
+/**
+ * Where a column's own content ends: its lowest visible child, skipping our chart. Both columns are grid items
+ * stretched to the row's height, so their boxes say nothing about the empty space; their children do.
+ */
+function contentBottom(column, skip = null) {
+  let bottom = column.getBoundingClientRect().top + window.scrollY;
+  for (const child of column.children) {
+    if (child === skip) continue;
     const rect = child.getBoundingClientRect();
     if (!rect.width && !rect.height) continue;
     bottom = Math.max(bottom, rect.bottom + window.scrollY);
@@ -126,7 +124,7 @@ export const summaryRatings = {
     function fit() {
       timer = 0;
       if (cancelled || !ready) return;
-      const show = fits({ contentBottom: contentBottom(details, node), columnBottom: pageBottom(actions) });
+      const show = fits({ contentBottom: contentBottom(details, node), columnBottom: contentBottom(actions) });
       if (node.hidden === show) node.hidden = !show;
     }
     // A timer rather than requestAnimationFrame: background tabs barely run frames, and the check only reads layout.
