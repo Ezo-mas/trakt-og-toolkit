@@ -12,6 +12,7 @@ const ATTRIBUTION = `${NAME} uses Trakt but is not endorsed or certified by Trak
 export const FEATURE_LABELS = {
   'custom-links': 'Custom links',
   'season-chart': 'Season chart',
+  'summary-ratings': 'Trakt ratings chart',
   'your-ratings': 'Your ratings',
   playback: 'Paused playback',
   pronunciation: 'Name pronunciation',

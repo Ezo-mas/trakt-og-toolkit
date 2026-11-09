@@ -12,7 +12,7 @@ behaviour, never its code. Finished features are listed at the end; their detail
 | 30 | Trakt onboarding without manual API setup | Trakt's answer on app access | blocked on Trakt |
 | 27 | Resolve external site IDs for direct custom links | public lookup services | implemented; anime mapping deferred |
 | 28 | Conditional presets and person-page custom links | native genre/person metadata | implemented; anime destinations remain searches |
-| 31 | Trakt ratings distribution in the summary's empty space | client ID optional | backlog |
+| 31 | Trakt ratings distribution in the summary's empty space | client ID | implemented; compact chart, tiles when there is room |
 | 23 | Test suite review and cleanup | — | before 0.4.0 |
 
 Then live testing and the **0.4.0** release. Userscript managers only offer an update when `@version` changes, so bump
@@ -184,7 +184,12 @@ person variable filling and navigation between kinds, with no irrelevant presets
 
 ## 31. Trakt ratings distribution in the summary's empty space
 
-**Status:** backlog (2026-11-08). The action stack grew with Add to watchlist and Add to library (features 12–13),
+**Status:** implemented (2026-11-09) as `src/features/summary-ratings/`, toggle **Trakt ratings chart**. Per the
+user, it is a compact chart rather than the full stats view: ten bars with counts, the average line and a header
+linking to `/stats`, plus og's four stat tiles when there is room for them too. It needs a client ID (no Trakt HTML
+is read) and hides under 10 votes. See NOTES.md (2026-11-09).
+
+Original plan (2026-11-08): the action stack grew with Add to watchlist and Add to library (features 12–13),
 so on movie, show, season and episode summaries the overview column under the tagline/overview text now ends well
 above the buttons and leaves an empty block. Fill it with the **Trakt** section of the title's stats page: the 1–10
 ratings distribution bars with the average marker, and the Rating / Votes / Most given / Liked it tiles. The user's

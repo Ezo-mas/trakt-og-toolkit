@@ -20,6 +20,9 @@ export const SELECTORS = [
   { feature: 'season chart', pages: ['season'], selector: '.titles .number', firstRow: true },
   { feature: 'season chart', pages: ['season'], selector: '.rating-trigger .value', firstRow: true },
   { feature: 'playback badge', pages: ['movie', 'episode'], selector: '.summary-frame #overview .top' },
+  // Feature 31 sits at the end of the details column and measures it against the action stack beside it.
+  { feature: 'ratings chart', pages: ['movie', 'show', 'season', 'episode'], selector: '.summary-frame #overview .top > .details' },
+  { feature: 'ratings chart', pages: ['movie', 'show', 'season', 'episode'], selector: '.summary-frame #overview .top > .actions' },
   { feature: 'pronunciation', pages: ['person'], selector: '.summary .summary-title h1', nonEmpty: true },
   // Features 12 and 13 mount here; the picker trigger is also used for native refreshes.
   { feature: 'title actions', pages: ['movie', 'show', 'season', 'episode'], selector: '.summary-frame #overview .top .actions' },

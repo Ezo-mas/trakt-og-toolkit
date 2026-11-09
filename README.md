@@ -48,6 +48,17 @@ See [Custom link templates](#custom-link-templates) for placeholders.
 - Signed in: your episode ratings as a second line, **Your average** in the summary, and your average on each season
   card.
 
+### Trakt ratings chart
+
+With a client ID, movie, show, season and episode pages get a compact Trakt ratings chart in the empty space under the
+overview, beside og's action buttons.
+
+- Ten bars, one per score, with vote counts and a line at the average. The header links to og's full stats page.
+- When there is more room, it adds og's stats tiles: Rating, Votes (with the share of watchers), Most given and
+  Liked it.
+- It only appears when it fits, so og's own layout never moves. It hides while a long overview or other content
+  fills the space, and for titles with fewer than 10 votes.
+
 ### Add to library and Add to watchlist
 
 Signed in, movie, show, season and episode pages get **Add to library** and **Add to watchlist** actions.
@@ -147,7 +158,7 @@ from the native external-link strip, and missing genre metadata keeps anime pres
 - **What it never touches:** it never fetches Trakt HTML, calls og's internal endpoints, or reads og's sign-in.
 - **og integration:** it calls og's own notifier and its read-only collection refresh, so og updates its controls
   itself.
-- **Reads:** public GETs are cached for 8 hours, de-duplicated while in flight, and honour `Retry-After` on 429.
+- **Reads:** public GETs are cached (8 hours by default; an hour for the ratings chart), de-duplicated while in flight, and honour `Retry-After` on 429.
 - **Writes:** they share one queue, sent at most once per second, Trakt's standard-app limit. A 429 pauses the
   queue for the full `Retry-After`. Failed writes are never replayed automatically, and queued writes are dropped on
   sign-out or when you leave the page.

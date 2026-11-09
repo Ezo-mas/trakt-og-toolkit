@@ -3387,8 +3387,8 @@
   }
   function compactLink(entry, attachResolver) {
     const label = entry.label.trim() || "Custom link";
-    const icon3 = serviceIcon(entry.icon);
-    const variant = !icon3 ? "text" : entry.surface === "reference" ? "icon" : "tile";
+    const icon4 = serviceIcon(entry.icon);
+    const variant = !icon4 ? "text" : entry.surface === "reference" ? "icon" : "tile";
     const link = el(
       "a",
       {
@@ -3401,7 +3401,7 @@
         "data-ogt-surface": entry.surface,
         style: serviceColor(entry.icon) ? `--ogt-brand-tile:${serviceColor(entry.icon)}` : void 0
       },
-      icon3,
+      icon4,
       variant === "icon" ? null : el("span", { class: "ogt-service-label", text: label })
     );
     attachResolver?.(link, entry.source);
@@ -3428,7 +3428,7 @@
     return link;
   }
   function signatureFor(entries) {
-    return JSON.stringify(entries.map(({ label, href, icon: icon3, surface }) => [label, href, icon3, surface]));
+    return JSON.stringify(entries.map(({ label, href, icon: icon4, surface }) => [label, href, icon4, surface]));
   }
   function watchNowContainers() {
     const containers = [];
@@ -5557,6 +5557,536 @@
     }
   };
 
+  // src/features/summary-ratings/data.js
+  var RATING_NAMES = [
+    "Weak Sauce :(",
+    "Terrible",
+    "Bad",
+    "Poor",
+    "Meh",
+    "Fair",
+    "Good",
+    "Great",
+    "Superb",
+    "Totally Ninja!"
+  ];
+  var MIN_VOTES = 10;
+  var CHART_HEIGHT2 = 104;
+  var CHART_GAP = 20;
+  var TILES_HEIGHT = 60;
+  var TILES_GAP = 16;
+  function apiBase(route) {
+    if (!route?.id) return null;
+    const id = encodeURIComponent(route.id);
+    if (route.kind === "movie" && route.name === "title") return `/movies/${id}`;
+    if (route.kind !== "show") return null;
+    if (route.name === "title") return `/shows/${id}`;
+    if (route.name === "season" && Number.isInteger(route.season)) return `/shows/${id}/seasons/${route.season}`;
+    if (route.name === "episode" && Number.isInteger(route.season) && Number.isInteger(route.episode)) {
+      return `/shows/${id}/seasons/${route.season}/episodes/${route.episode}`;
+    }
+    return null;
+  }
+  function ratingsPath(route) {
+    const base = apiBase(route);
+    return base ? `${base}/ratings` : null;
+  }
+  function statsPath(route) {
+    const base = apiBase(route);
+    return base ? `${base}/stats` : null;
+  }
+  function statsHref(route) {
+    return route?.path ? `${route.path.replace(/\/+$/, "")}/stats` : null;
+  }
+  function parseRatings(payload) {
+    const source = payload && typeof payload === "object" && payload.trakt && typeof payload.trakt === "object" ? payload.trakt : payload;
+    if (!source || typeof source !== "object") return null;
+    const distribution = source.distribution;
+    if (!distribution || typeof distribution !== "object") return null;
+    const counts = [];
+    for (let score = 1; score <= 10; score++) {
+      const value = Number(distribution[score] ?? distribution[String(score)] ?? 0);
+      counts.push(Number.isFinite(value) && value > 0 ? Math.round(value) : 0);
+    }
+    const total = counts.reduce((sum, count2) => sum + count2, 0);
+    const votes = Number.isFinite(Number(source.votes)) && Number(source.votes) > 0 ? Math.round(Number(source.votes)) : total;
+    if (votes < MIN_VOTES || total === 0) return null;
+    const fallbackAverage = counts.reduce((sum, count2, index) => sum + count2 * (index + 1), 0) / total;
+    const rating = Number(source.rating);
+    const average = Number.isFinite(rating) && rating >= 1 && rating <= 10 ? rating : fallbackAverage;
+    return { rating: average, votes, counts };
+  }
+  function mostGiven(counts) {
+    let best = 0;
+    counts.forEach((count2, index) => {
+      if (count2 >= counts[best]) best = index;
+    });
+    return best + 1;
+  }
+  function barHeights(counts, minimum = 0.04) {
+    const max = Math.max(...counts, 0);
+    return counts.map((count2) => count2 && max ? Math.max(count2 / max, minimum) : 0);
+  }
+  function averagePosition(rating) {
+    const clamped = Math.min(10, Math.max(1, rating));
+    return (clamped - 0.5) / 10;
+  }
+  var compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+  var full = new Intl.NumberFormat("en-US");
+  function shortCount(count2) {
+    return count2 >= 1e4 ? compact.format(count2) : full.format(count2);
+  }
+  function fullCount(count2) {
+    return full.format(count2);
+  }
+  var BAR_COLORS = [
+    "#616161",
+    "#675b5b",
+    "#705252",
+    "#7a4747",
+    "#863c3c",
+    "#922f30",
+    "#9e2424",
+    "#a81918",
+    "#b11010",
+    "#b70a0a"
+  ];
+  function layoutFor({ contentBottom: contentBottom2, columnBottom, sideBySide = true }) {
+    if (!sideBySide) return null;
+    if (![contentBottom2, columnBottom].every(Number.isFinite)) return null;
+    const space = columnBottom - contentBottom2;
+    if (space >= CHART_GAP + CHART_HEIGHT2 + TILES_GAP + TILES_HEIGHT) return "full";
+    if (space >= CHART_GAP + CHART_HEIGHT2) return "chart";
+    return null;
+  }
+  function statTiles({ rating, votes, counts }, watchers = null) {
+    const total = counts.reduce((sum, count2) => sum + count2, 0) || votes;
+    const top = mostGiven(counts);
+    const liked = counts.slice(6).reduce((sum, count2) => sum + count2, 0);
+    const share = (part, whole, digits = 0) => `${(Math.round(part / whole * 100 * 10 ** digits) / 10 ** digits).toFixed(digits)}%`;
+    const watcherShare = (part, whole) => share(part, whole, part / whole * 100 < 9.95 ? 1 : 0);
+    return [
+      { name: "Rating", value: `${Math.floor(rating * 10)}%`, note: RATING_NAMES[Math.min(10, Math.max(1, Math.trunc(rating))) - 1], accent: true },
+      {
+        name: "Votes",
+        value: fullCount(votes),
+        note: Number.isFinite(watchers) && watchers >= votes && watchers > 0 ? `${watcherShare(votes, watchers)} of watchers` : "",
+        accent: false
+      },
+      { name: "Most given", value: String(top), suffix: RATING_NAMES[top - 1], note: `${share(counts[top - 1], total)} of ${fullCount(total)} votes`, accent: true },
+      { name: "Liked it", value: share(liked, total), note: "gave it 7 or higher", accent: true }
+    ];
+  }
+  function chartLabel({ rating, votes }) {
+    return `Trakt ratings: ${rating.toFixed(2)} average from ${fullCount(votes)} votes. Open the full stats.`;
+  }
+
+  // src/features/summary-ratings/api.js
+  var TTL3 = 60 * 60 * 1e3;
+  async function getSummaryRatings(route) {
+    const path = ratingsPath(route);
+    if (!path) return null;
+    return parseRatings(await apiGet(path, { ttl: TTL3 }));
+  }
+  async function getSummaryWatchers(route) {
+    const path = statsPath(route);
+    if (!path) return null;
+    const stats = await apiGet(path, { ttl: TTL3 });
+    const watchers = Number(stats?.watchers);
+    return Number.isFinite(watchers) && watchers > 0 ? watchers : null;
+  }
+
+  // src/features/summary-ratings/styles.js
+  var CSS6 = String.raw`
+.ogt-summary-ratings {
+  --ogt-sr-fg: light-dark(#333, #ddd);
+  --ogt-sr-muted: light-dark(#767676, #999);
+  --ogt-sr-faint: light-dark(#a3a3a3, #777);
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: 18px 1fr;
+  gap: 8px;
+  block-size: 104px;
+  margin-block-start: 20px;
+  max-inline-size: 560px;
+  color: var(--ogt-sr-fg);
+  font-size: 11px;
+  line-height: 1;
+}
+
+
+.ogt-summary-ratings[data-layout="full"] {
+  /* The tiles row holds their 8px top margin plus 60px of tile: 18 + 8 + 78 + 8 + 68 = 180. */
+  grid-template-rows: 18px 78px 68px;
+  block-size: 180px;
+}
+
+.ogt-summary-ratings[hidden] {
+  display: none;
+}
+
+.ogt-summary-ratings:not([data-layout="full"]) .ogt-sr-tiles {
+  display: none;
+}
+
+.ogt-summary-ratings *,
+.ogt-summary-ratings *::before,
+.ogt-summary-ratings *::after {
+  box-sizing: inherit;
+}
+
+.ogt-sr-head {
+  display: inline-flex;
+  /* Centre, not baseline: an SVG has no text baseline, so the arrow sat low beside the text. */
+  align-items: center;
+  justify-self: start;
+  gap: 8px;
+  color: var(--ogt-sr-fg);
+  text-decoration: none;
+}
+
+.ogt-sr-head:hover,
+.ogt-sr-head:focus,
+.ogt-sr-head:focus-visible {
+  color: var(--ogt-sr-fg);
+  text-decoration: none;
+}
+
+.ogt-sr-head:focus-visible {
+  outline: 2px solid var(--brand-primary, #ed1c24);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.ogt-sr-title,
+.ogt-sr-meta {
+  line-height: 13px;
+}
+
+.ogt-sr-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ogt-sr-meta {
+  color: var(--ogt-sr-muted);
+  font-size: 12px;
+}
+
+.ogt-sr-arrow {
+  flex: none;
+  inline-size: 13px;
+  block-size: 13px;
+  color: var(--ogt-sr-muted);
+  transition: transform 120ms ease, color 120ms ease;
+}
+
+.ogt-sr-head:hover .ogt-sr-arrow,
+.ogt-sr-head:focus-visible .ogt-sr-arrow {
+  color: var(--ogt-sr-fg);
+  transform: translateX(2px);
+}
+
+.ogt-sr-plot {
+  position: relative;
+  min-block-size: 0;
+}
+
+.ogt-sr-bars {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
+  block-size: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ogt-sr-column {
+  display: grid;
+  grid-template-rows: 12px 1fr 14px;
+  gap: 3px;
+  min-inline-size: 0;
+  text-align: center;
+}
+
+.ogt-sr-count {
+  overflow: hidden;
+  color: var(--ogt-sr-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ogt-sr-track {
+  display: flex;
+  align-items: flex-end;
+  min-block-size: 0;
+  border-block-end: 1px solid light-dark(#d6d6d6, #3a3a3a);
+}
+
+.ogt-sr-bar {
+  inline-size: 100%;
+  block-size: var(--ogt-sr-height);
+  border-radius: 3px 3px 0 0;
+  background: var(--ogt-sr-color);
+}
+
+.ogt-sr-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--ogt-sr-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ogt-sr-heart {
+  inline-size: 10px;
+  block-size: 10px;
+  color: var(--ogt-sr-color);
+}
+
+.ogt-sr-column--top .ogt-sr-count,
+.ogt-sr-column--top .ogt-sr-score {
+  color: var(--ogt-sr-fg);
+  font-weight: 700;
+}
+
+/* The average sits across the bar tracks only: below the counts row, above the score row. */
+.ogt-sr-average {
+  position: absolute;
+  inset-block: 15px 17px;
+  inset-inline-start: var(--ogt-sr-average);
+  border-inline-start: 1px dashed var(--ogt-sr-faint);
+  pointer-events: none;
+}
+
+/* Shaped like og's stats keys: a coloured rule, the name, a large value and a muted note. */
+.ogt-sr-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ogt-sr-tile {
+  display: grid;
+  /* 3px rule + 5px padding + 12 + 22 + 12 + two 3px gaps = 60px (TILES_HEIGHT). */
+  grid-template-rows: 12px 22px 12px;
+  align-content: start;
+  gap: 3px;
+  min-inline-size: 0;
+  padding-block-start: 5px;
+  border-block-start: 3px solid light-dark(#bdbdbd, #555);
+}
+
+.ogt-sr-tile--accent {
+  border-block-start-color: #9e2424;
+}
+
+.ogt-sr-tile-name {
+  color: var(--ogt-sr-fg);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ogt-sr-tile-value {
+  overflow: hidden;
+  color: var(--ogt-sr-fg);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The score stays large; its name ("Totally Ninja!") is smaller so it fits a ~130px tile. */
+.ogt-sr-tile-suffix {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ogt-sr-tile-note {
+  overflow: hidden;
+  color: var(--ogt-sr-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+`;
+
+  // src/features/summary-ratings/index.js
+  var NODE_ID = "ogt-summary-ratings";
+  var HEART2 = "M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 5.3 3 1.7-1.9 3.2-3 5.3-3 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z";
+  var ARROW = "M5 12h14M13 6l6 6-6 6";
+  function icon(d, className, { stroke = false } = {}) {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg3.setAttribute("viewBox", "0 0 24 24");
+    svg3.setAttribute("aria-hidden", "true");
+    svg3.setAttribute("class", className);
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", d);
+    if (stroke) {
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", "currentColor");
+      path.setAttribute("stroke-width", "2");
+      path.setAttribute("stroke-linecap", "round");
+      path.setAttribute("stroke-linejoin", "round");
+    } else {
+      path.setAttribute("fill", "currentColor");
+    }
+    svg3.append(path);
+    return svg3;
+  }
+  function renderChart(ratings, href) {
+    const top = mostGiven(ratings.counts);
+    const heights = barHeights(ratings.counts);
+    const columns = ratings.counts.map((count2, index) => {
+      const score = index + 1;
+      return el(
+        "li",
+        {
+          class: `ogt-sr-column${score === top ? " ogt-sr-column--top" : ""}`,
+          style: `--ogt-sr-height:${(heights[index] * 100).toFixed(1)}%;--ogt-sr-color:${BAR_COLORS[index]}`
+        },
+        el("span", { class: "ogt-sr-count", "aria-hidden": "true", text: shortCount(count2) }),
+        el("span", { class: "ogt-sr-track", "aria-hidden": "true" }, el("span", { class: "ogt-sr-bar" })),
+        el("span", { class: "ogt-sr-score", "aria-hidden": "true" }, icon(HEART2, "ogt-sr-heart"), String(score)),
+        el("span", {
+          class: "ogt-visually-hidden",
+          text: `${score}, ${RATING_NAMES[index]}: ${fullCount(count2)} ${count2 === 1 ? "vote" : "votes"}`
+        })
+      );
+    });
+    return [
+      el(
+        "a",
+        { class: "ogt-sr-head", href, "aria-label": chartLabel(ratings) },
+        el("span", { class: "ogt-sr-title", text: "Trakt ratings" }),
+        el("span", { class: "ogt-sr-meta", text: `${ratings.rating.toFixed(2)} average · ${fullCount(ratings.votes)} votes` }),
+        icon(ARROW, "ogt-sr-arrow", { stroke: true })
+      ),
+      el(
+        "div",
+        { class: "ogt-sr-plot" },
+        el("ol", { class: "ogt-sr-bars", "aria-label": "Votes for each score" }, columns),
+        el("span", {
+          class: "ogt-sr-average",
+          "aria-hidden": "true",
+          style: `--ogt-sr-average:${(averagePosition(ratings.rating) * 100).toFixed(2)}%`
+        })
+      )
+    ];
+  }
+  function renderTiles(ratings, watchers = null) {
+    return el(
+      "ul",
+      { class: "ogt-sr-tiles", "aria-label": "Ratings summary" },
+      statTiles(ratings, watchers).map((tile) => el(
+        "li",
+        { class: `ogt-sr-tile${tile.accent ? " ogt-sr-tile--accent" : ""}` },
+        el("span", { class: "ogt-sr-tile-name", text: tile.name }),
+        el(
+          "span",
+          { class: "ogt-sr-tile-value" },
+          tile.value,
+          tile.suffix ? el("span", { class: "ogt-sr-tile-suffix", text: ` · ${tile.suffix}` }) : null
+        ),
+        el("span", { class: "ogt-sr-tile-note", text: tile.note })
+      ))
+    );
+  }
+  function contentBottom(column, skip = null) {
+    let bottom = column.getBoundingClientRect().top + window.scrollY;
+    for (const child of column.children) {
+      if (child === skip) continue;
+      const rect = child.getBoundingClientRect();
+      if (!rect.width && !rect.height) continue;
+      bottom = Math.max(bottom, rect.bottom + window.scrollY);
+    }
+    return bottom;
+  }
+  var summaryRatings = {
+    id: "summary-ratings",
+    css: CSS6,
+    match(route) {
+      return Boolean(ratingsPath(route)) && Boolean(getClientId());
+    },
+    mount(route) {
+      if (document.getElementById(NODE_ID)) return null;
+      const top = document.querySelector(".summary-frame #overview .top") || document.querySelector("#overview .top");
+      const details = top?.querySelector(":scope > .details");
+      const actions = top?.querySelector(":scope > .actions");
+      if (!details || !actions) return null;
+      const node = el("section", { id: NODE_ID, class: "ogt-summary-ratings", hidden: true, "aria-label": "Trakt ratings" });
+      details.append(node);
+      let cancelled = false;
+      let ratings = null;
+      let timer = 0;
+      let watchersRequested = false;
+      function fit() {
+        timer = 0;
+        if (cancelled || !ratings) return;
+        const layout = layoutFor({
+          contentBottom: contentBottom(details, node),
+          columnBottom: contentBottom(actions),
+          sideBySide: actions.getBoundingClientRect().left >= details.getBoundingClientRect().right - 1
+        });
+        if (node.hidden !== !layout) node.hidden = !layout;
+        if (layout && node.dataset.layout !== layout) node.dataset.layout = layout;
+        if (layout === "full") loadWatchers();
+      }
+      function loadWatchers() {
+        if (watchersRequested) return;
+        watchersRequested = true;
+        getSummaryWatchers(route).then((watchers) => {
+          if (cancelled || !watchers) return;
+          node.querySelector(".ogt-sr-tiles")?.replaceWith(renderTiles(ratings, watchers));
+        }).catch((error) => {
+          if (!cancelled) debugError("summary watchers lookup failed", error);
+        });
+      }
+      function scheduleFit() {
+        if (cancelled || timer) return;
+        timer = setTimeout(fit, 0);
+      }
+      const resize2 = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleFit) : null;
+      resize2?.observe(actions);
+      resize2?.observe(details);
+      for (const child of details.children) if (child !== node) resize2?.observe(child);
+      const mutation = new MutationObserver(scheduleFit);
+      mutation.observe(top, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "hidden"] });
+      window.addEventListener("resize", scheduleFit);
+      getSummaryRatings(route).then((result) => {
+        if (cancelled || !result) return;
+        ratings = result;
+        node.replaceChildren(...renderChart(ratings, statsHref(route)), renderTiles(ratings));
+        fit();
+      }).catch((error) => {
+        if (!cancelled) debugError("summary ratings lookup failed", error);
+      });
+      return {
+        node,
+        destroy() {
+          cancelled = true;
+          clearTimeout(timer);
+          resize2?.disconnect();
+          mutation.disconnect();
+          window.removeEventListener("resize", scheduleFit);
+          node.remove();
+        }
+      };
+    }
+  };
+
   // src/features/month-review/data.js
   function monthSpan(year, month) {
     const start2 = new Date(year, month - 1, 1);
@@ -5714,7 +6244,7 @@
   }
 
   // src/features/month-review/styles.js
-  var CSS6 = `
+  var CSS7 = `
 .ogt-review { position:relative; isolation:isolate; color:white; background:#181012; font-family:var(--font-body, "Helvetica Neue", Helvetica, Arial, sans-serif); overflow:hidden; }
 .ogt-review[hidden] { display:none; }
 .ogt-review__art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:-2; }
@@ -5810,7 +6340,7 @@
   }
   var monthReview = {
     id: "month-review",
-    css: CSS6,
+    css: CSS7,
     match: (route) => route.name === "dashboard" && isSignedIn(),
     mount() {
       const anchor = document.querySelector("nav.ribbon");
@@ -6084,7 +6614,7 @@
   var observed;
   var resize;
   var notices = [];
-  function icon(path, circle = false) {
+  function icon2(path, circle = false) {
     const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg3.setAttribute("viewBox", "0 0 24 24");
     svg3.setAttribute("aria-hidden", "true");
@@ -6118,7 +6648,7 @@
       }
     }
     position();
-    const close = el("button", { type: "button", class: "ogt-watchlist-toast__close", "aria-label": "Close" }, icon("M6 6l12 12M18 6 6 18"));
+    const close = el("button", { type: "button", class: "ogt-watchlist-toast__close", "aria-label": "Close" }, icon2("M6 6l12 12M18 6 6 18"));
     const line = el("span", { class: "ogt-watchlist-toast__timer", "aria-hidden": "true" });
     const actions = el("div", { class: "ogt-watchlist-toast__actions" });
     const undo = typeof onUndo === "function" ? el("button", { type: "button", class: "ogt-watchlist-toast__undo", text: "Undo" }) : null;
@@ -6128,7 +6658,7 @@
     const node = el(
       "div",
       { class: "ogt-watchlist-toast", role: "status", "aria-atomic": "true" },
-      el("span", { class: "ogt-watchlist-toast__icon" }, icon("m7 12 3 3 7-7", true)),
+      el("span", { class: "ogt-watchlist-toast__icon" }, icon2("m7 12 3 3 7-7", true)),
       el("p", { class: "ogt-watchlist-toast__message", text: message }),
       actions,
       error,
@@ -6330,7 +6860,7 @@
   }
 
   // src/features/all-lists/styles.js
-  var CSS7 = String.raw`
+  var CSS8 = String.raw`
 /* The view takes section.lists' own classes; rows take og's ListRow classes when the page has a native row.
    The --fallback rules copy ListRow.svelte for a profile with no personal lists to borrow from. */
 /* og paints every section with --color-surface; the view is a div, so it needs the same, or the darker page shows
@@ -6456,7 +6986,7 @@
   };
   var VIP_MARK = "M104 363Q133 394 172 412Q211 430 256 430Q279 430 300.50 425Q322 420 342 411L199 269L104 363M198 182L90 290L76 276L323 29Q307 24 290 21Q273 18 256 18Q213 18 176 34Q138 50 110 78Q82 106 66 144Q50 181 50 224Q50 259 61 290.50Q72 322 91 348L199 240L206 247L361 401Q363 400 365.50 398.50Q368 397 370 396L199 225L95 329L81 314L199 196L206 203L387 383Q389 382 391 380Q393 378 395 377L200 182L198 182M360 64L242 182L228 167L346 49L360 64M263 204L249 190L351 88L366 102L263 204M409 362Q434 335 448 299.50Q462 264 462 224Q462 162 429 112Q396 62 343 37L214 167L409 362M256-6Q208-6 166 12Q124 30 93 61Q62 92 44 134Q26 176 26 224Q26 272 44 314Q62 356 93 387Q124 418 166 436Q208 454 256 454Q304 454 346 436Q388 418 419 387Q450 356 468 314Q486 272 486 224Q486 176 468 134Q450 92 419 61Q388 30 346 12Q304-6 256-6M256 480Q203 480 156 460Q110 440 75 405Q40 370 20 324Q0 277 0 224Q0 171 20 124Q40 78 75 43Q110 8 156-12Q203-32 256-32Q309-32 356-12Q402 8 437 43Q472 78 492 124Q512 171 512 224Q512 277 492 324Q472 370 437 405Q402 440 356 460Q309 480 256 480";
   var LIKED_ICON = ["0 0 512 512", "M313 33Q333 37 344 53Q355 69 351 89L349 101Q341 141 320 176L464 176Q484 177 498 190Q511 204 512 224Q511 253 486 267Q503 281 504 304Q504 322 493 335Q482 348 465 351Q472 362 472 376Q470 410 439 422Q440 427 440 432Q439 452 426 466Q412 479 392 480L295 480Q265 480 241 464L203 438Q161 409 160 358L160 320L160 272L160 247Q161 201 196 172L203 166Q244 133 255 82L257 71Q261 51 277 40Q293 29 313 33M32 192L96 192L32 192L96 192Q110 192 119 201Q128 210 128 224L128 448Q128 462 119 471Q110 480 96 480L32 480Q18 480 9 471Q0 462 0 448L0 224Q0 210 9 201Q18 192 32 192"];
-  function icon2(pathData, className = "ogt-all-lists__icon") {
+  function icon3(pathData, className = "ogt-all-lists__icon") {
     const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg3.setAttribute("viewBox", "0 0 24 24");
     svg3.setAttribute("class", className);
@@ -6501,7 +7031,7 @@
   }
   function createRows(native) {
     const part = (tag2, name, props = {}, ...children) => el(tag2, { ...props, class: [name, native?.row].filter(Boolean).join(" ") }, ...children);
-    const ownIcon = (path) => icon2(path, ["icon", native?.icon].filter(Boolean).join(" "));
+    const ownIcon = (path) => icon3(path, ["icon", native?.icon].filter(Boolean).join(" "));
     function count2(kind, value, href, word, liked = false) {
       if (value == null) return null;
       const words = value === 1 ? word : `${word}s`;
@@ -6540,7 +7070,7 @@
       return el(
         "a",
         { class: `ogt-all-lists__count ${kind}`, href },
-        icon2(ICONS2[kind], "ogt-all-lists__count-icon"),
+        icon3(ICONS2[kind], "ogt-all-lists__count-icon"),
         el("strong", { text: value.toLocaleString("en-US") }),
         el("span", { text: ` ${words}` })
       );
@@ -6550,7 +7080,7 @@
       if (native?.tag) {
         return el("span", { class: native.tag.className, style: `--tone: var(${color})` }, ownIcon(path), label);
       }
-      return el("span", { class: "ogt-all-lists__tag", style: `--ogt-list-tag-color: var(${color}, #888)` }, icon2(path), label);
+      return el("span", { class: "ogt-all-lists__tag", style: `--ogt-list-tag-color: var(${color}, #888)` }, icon3(path), label);
     }
     function share(entry) {
       const url = new URL(listHref(entry), location.origin).href;
@@ -6567,7 +7097,7 @@
       return el(
         "button",
         { type: "button", class: "action share", title: "Copy Link", "aria-label": "Copy Link", on: { click: copy } },
-        icon2(ICONS2.share)
+        icon3(ICONS2.share)
       );
     }
     function progress(href) {
@@ -6826,7 +7356,7 @@
   }
   var allLists = {
     id: "all-lists",
-    css: CSS7,
+    css: CSS8,
     match: (route) => ROUTES.includes(route.name),
     mount(route) {
       const dropdown = findDropdown();
@@ -8376,6 +8906,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
   var FEATURE_LABELS = {
     "custom-links": "Custom links",
     "season-chart": "Season chart",
+    "summary-ratings": "Trakt ratings chart",
     "your-ratings": "Your ratings",
     playback: "Paused playback",
     pronunciation: "Name pronunciation",
@@ -8440,7 +8971,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, monthReview, allLists, listPreview];
+  var FEATURES = [customLinks, seasonChart, summaryRatings, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, monthReview, allLists, listPreview];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))
