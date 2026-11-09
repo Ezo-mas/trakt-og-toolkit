@@ -5737,7 +5737,8 @@
 
 .ogt-sr-head {
   display: inline-flex;
-  align-items: baseline;
+  /* Centre, not baseline: an SVG has no text baseline, so the arrow sat low beside the text. */
+  align-items: center;
   justify-self: start;
   gap: 8px;
   color: var(--ogt-sr-fg);
@@ -5757,6 +5758,11 @@
   border-radius: 3px;
 }
 
+.ogt-sr-title,
+.ogt-sr-meta {
+  line-height: 13px;
+}
+
 .ogt-sr-title {
   font-size: 12px;
   font-weight: 700;
@@ -5770,7 +5776,7 @@
 }
 
 .ogt-sr-arrow {
-  align-self: center;
+  flex: none;
   inline-size: 13px;
   block-size: 13px;
   color: var(--ogt-sr-muted);
