@@ -105,6 +105,8 @@ The toolkit reuses the session og.trakt.tv already has, so a fresh install needs
 - The toolkit reads only og's current client entry, not an older one left in the same browser. When og signs out or
   changes account, queued writes, open playback controls, personal caches and All lists reset; signing back into the
   same account does not revive old queued work. A token renewal for the same account is not a change.
+- Changes in another tab are handled through the browser's storage notifications, including a quick logout/login
+  and clearing local storage.
 - When it expires, reload og.trakt.tv. The toolkit must never refresh og's token: og rotates the refresh token when
   it renews, so a second refresher would strand og's session.
 - **Sign out** in the toolkit menu leaves og's session alone; sign out on og.trakt.tv for that.

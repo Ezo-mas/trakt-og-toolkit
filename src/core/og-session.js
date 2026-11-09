@@ -111,3 +111,15 @@ export function readOgSession() {
   noteAccount(session?.accountKey);
   return session;
 }
+
+if (typeof window !== 'undefined') window.addEventListener('storage', (event) => {
+  const storage = pageStorage();
+  if (!storage || event.storageArea !== storage) return;
+  const key = ogSessionKey(OG_SESSION_CLIENT_ID);
+  if (event.key !== null && event.key !== key) return;
+  if (!watchingAccounts && event.key !== null) {
+    noteAccount(parseOgSession(event.oldValue, OG_SESSION_CLIENT_ID)?.accountKey);
+  }
+  // Notifications may arrive after a quick logout/login; reading storage here would miss the gap.
+  noteAccount(event.key === null ? null : parseOgSession(event.newValue, OG_SESSION_CLIENT_ID)?.accountKey);
+});

@@ -11,6 +11,7 @@ class MemoryStorage {
 }
 
 globalThis.localStorage = new MemoryStorage();
+globalThis.window = new EventTarget();
 const { ogSessionKey, ogClientIdFromKey, parseOgSession, readOgSession, getOgSessionRevision,
   OG_SESSION_PREFIX, OG_SESSION_CLIENT_ID } = await import('../src/core/og-session.js');
 
@@ -109,5 +110,51 @@ test('treats missing, blocked or malformed page storage as signed out', () => {
   globalThis.localStorage = new MemoryStorage();
   assert.equal(readOgSession(), null);
   globalThis.localStorage.setItem(ogSessionKey(OG_CLIENT), entry({ access_token: '' }));
+  assert.equal(readOgSession(), null);
+});
+
+function storageChange(key, oldValue, newValue, storageArea = globalThis.localStorage) {
+  const event = new Event('storage');
+  Object.assign(event, { key, oldValue, newValue, storageArea });
+  window.dispatchEvent(event);
+}
+
+test('storage notifications preserve a rapid logout/login even when storage already holds the new session', () => {
+  reset();
+  const key = ogSessionKey(OG_CLIENT);
+  const original = entry();
+  const renewed = entry({ access_token: 'RENEWED' });
+  localStorage.setItem(key, original);
+  readOgSession();
+  const revision = getOgSessionRevision();
+  // Both notifications can arrive after the other tab has already signed back in.
+  localStorage.setItem(key, renewed);
+  storageChange(key, original, null);
+  storageChange(key, null, renewed);
+  assert.equal(getOgSessionRevision(), revision + 2);
+  assert.equal(readOgSession().accessToken, 'RENEWED');
+});
+
+test('storage notifications ignore renewal and unrelated storage, but detect account replacement and clear', () => {
+  reset();
+  const key = ogSessionKey(OG_CLIENT);
+  const original = entry();
+  const renewed = entry({ access_token: 'RENEWED' });
+  localStorage.setItem(key, original);
+  readOgSession();
+  const revision = getOgSessionRevision();
+  storageChange(key, original, renewed);
+  storageChange('unrelated', original, null);
+  storageChange(ogSessionKey('oldClientId1234'), original, null);
+  storageChange(key, original, null, new MemoryStorage());
+  storageChange(null, null, null, new MemoryStorage());
+  assert.equal(getOgSessionRevision(), revision);
+  const other = entry({ profile: { sub: 'other-account' } });
+  localStorage.setItem(key, other);
+  storageChange(key, renewed, other);
+  assert.equal(getOgSessionRevision(), revision + 1);
+  localStorage.removeItem(key);
+  storageChange(null, null, null);
+  assert.equal(getOgSessionRevision(), revision + 2);
   assert.equal(readOgSession(), null);
 });

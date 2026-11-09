@@ -15,6 +15,7 @@ globalThis.GM_getValue = (key, fallback) => storage.get(key) ?? fallback;
 globalThis.GM_setValue = (key, value) => storage.set(key, value);
 globalThis.GM_deleteValue = (key) => storage.delete(key);
 globalThis.localStorage = new MemoryStorage();
+globalThis.window = new EventTarget();
 
 const { STORAGE } = await import('../src/core/store.js');
 const { setClientId } = await import('../src/settings.js');
@@ -216,6 +217,34 @@ test('a queued write never revives after logout and the same account signs back 
   await settle();
   await rejected;
   assert.equal(calls.length, 1, 'the same account signing back in must not revive old work');
+});
+
+for (const cleared of [false, true]) test(`cross-tab ${cleared ? 'storage clear' : 'logout'}/login cancels queued writes without an auth read`, async (t) => {
+  reset();
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 4_500_000_000_000 + Number(cleared) * 10000 });
+  ogSession({ account: 1 });
+  mock(() => ({ status: 200, body: {} }));
+  await apiAuth('POST', '/sync/first', {});
+  const queued = apiAuth('POST', '/sync/second', {});
+  const rejected = assert.rejects(queued, /Signed out|session changed/);
+  await settle();
+
+  const oldValue = localStorage.getItem(OG_KEY);
+  ogSession({ access: 'NEW_LOGIN', account: 1 });
+  const newValue = localStorage.getItem(OG_KEY);
+  for (const change of [
+    { key: cleared ? null : OG_KEY, oldValue: cleared ? null : oldValue, newValue: null },
+    { key: OG_KEY, oldValue: null, newValue },
+  ]) {
+    const event = new Event('storage');
+    Object.assign(event, change, { storageArea: localStorage });
+    window.dispatchEvent(event);
+  }
+
+  t.mock.timers.tick(1000);
+  await settle();
+  await rejected;
+  assert.equal(calls.length, 1, 'neither a rapid login nor delayed notifications may revive the old write');
 });
 
 test('a late 401 from og account A is not retried as account B', async () => {

@@ -48,4 +48,25 @@ test('built bundle makes og-session calls without storing or printing the token'
   assert.match(window.document.body.textContent, /Signed in through og\.trakt\.tv; sign out there/);
   assert.match(window.localStorage.getItem(OG_KEY), /OG_SECRET_ACCESS/);
   assert.equal(vault.has('trakt.oauth.tokens'), false);
+
+  const changes = [];
+  window.document.addEventListener('ogt:authchange', () => changes.push(true));
+  const original = window.localStorage.getItem(OG_KEY);
+  const renewed = JSON.stringify({ ...JSON.parse(original), access_token: 'OG_SECRET_RENEWED' });
+  window.localStorage.setItem(OG_KEY, renewed);
+  window.dispatchEvent(new window.StorageEvent('storage', {
+    key: OG_KEY, oldValue: original, newValue: renewed, storageArea: window.localStorage,
+  }));
+  assert.equal(changes.length, 0, 'a token renewal keeps the existing session');
+
+  const replacement = JSON.stringify({ ...JSON.parse(renewed), profile: { sub: 'another-account' } });
+  window.localStorage.setItem(OG_KEY, replacement);
+  window.dispatchEvent(new window.StorageEvent('storage', {
+    key: OG_KEY, oldValue: renewed, newValue: replacement, storageArea: window.localStorage,
+  }));
+  assert.equal(changes.length, 1, 'the built script observes another tab switching accounts');
+  window.localStorage.clear();
+  window.dispatchEvent(new window.StorageEvent('storage', { key: null, storageArea: window.localStorage }));
+  assert.equal(changes.length, 2, 'clearing localStorage announces sign-out');
+  assert.equal(vault.has('trakt.oauth.tokens'), false);
 });

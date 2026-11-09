@@ -24,6 +24,10 @@ Working notes and known issues. Newest first.
   playback panel's rows/selections/open dialogs, and All lists' old load. `apiAuth` refreshes only the toolkit's own
   tokens; og's token is never refreshed, because og rotates its refresh token and a second refresher would strand
   og's session.
+- Cross-tab `storage` notifications also feed the session revision. Only localStorage changes for the pinned og key
+  (or `clear()`) count; unrelated keys, sessionStorage and same-account token renewals are ignored. The handler uses
+  each notification's value, so a logout/login that finishes before notifications arrive still cancels old queued
+  work. Regression tests cover both removal and `clear()` followed by a rapid same-account login.
 - `apiGet` uses a configured client ID when present and otherwise sends public metadata through og's connection,
   preserving the URL and query so `getJSON` caching still works. Watchlist, library and playback lookups therefore
   work without manual setup. A public 401 retries once only when og rotated the token for the same account.
