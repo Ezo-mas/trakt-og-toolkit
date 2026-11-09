@@ -3,6 +3,27 @@
 Working notes and known issues. Newest first.
 
 
+## 2026-11-09: Trakt ratings chart in the summary gap (feature 31)
+
+- og's summary is `#overview .top`, a two-column grid: `.details` (stats list, tagline, overview) and `.actions` (the
+  action stack). Both are grid items stretched to the row height, so neither box says where its content ends; the
+  first live build measured the stretched `.actions` box, which already included our chart, and never hid. The chart
+  now compares the lowest visible child of each column.
+- Sizes are fixed so the fit is exact: chart 104px (+20px gap), tiles 60px (+16px). `layoutFor()` picks `full`,
+  `chart` or nothing; showing only what fits means og's row never grows. Re-checked on a zero-delay timer from a
+  MutationObserver on `.top` (buttons arriving, "Read more" class changes), a ResizeObserver on both columns, and
+  window resize. The in-app browser pane renders nothing while in the background, so neither ResizeObserver nor
+  `requestAnimationFrame` fired there; the timer keeps the check independent of painting.
+- Data: `GET {movie|show|season|episode}/ratings` (seasons wrap it in `trakt`), an hour's cache, hidden under 10 votes.
+  The votes tile's "% of watchers" uses the matching `/stats` `watchers`, requested only once the tiles are showing.
+  og rounds shares (5,029 of 91,913 is "5.5%") but truncates the rating percentage (7.45 is "74%"); the tiles follow.
+- og's stats bars run from `#616161` (1) to `#b70a0a` (10) with matching hearts (measured 2026-11-09); the chart uses
+  those values, its own markup and CSS. The Most given tile shows the score large and its name smaller, because
+  "10 · Totally Ninja!" does not fit a ~130px tile.
+- Live check (2026-11-09, 1366px, jsDelivr bundle): Dune: Prophecy show and S1E3 and The Matrix filled the gap
+  (Matrix with tiles: 87% Superb, 61,907 votes, 20.5% of watchers, 10 most given, 93% liked); season 1 fit the chart
+  only; season 2 (2 votes) stayed hidden; adding 180px of content to `.details` hid it with og's row unchanged.
+
 ## 2026-11-09: decorated summary titles (Breaking Bad's element tiles)
 
 - After hydration, og redraws Breaking Bad's show-page `h1` as periodic-table tiles: `span.element-title` holds a
