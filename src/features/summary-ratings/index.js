@@ -1,18 +1,19 @@
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
 import { getClientId } from '../../settings.js';
-import { getSummaryRatings } from './api.js';
+import { getSummaryRatings, getSummaryWatchers } from './api.js';
 import {
   BAR_COLORS,
   RATING_NAMES,
   averagePosition,
   barHeights,
   chartLabel,
-  fits,
   fullCount,
+  layoutFor,
   mostGiven,
   ratingsPath,
   shortCount,
+  statTiles,
   statsHref,
 } from './data.js';
 import { CSS } from './styles.js';
@@ -85,6 +86,21 @@ export function renderChart(ratings, href) {
   ];
 }
 
+/** The stat tiles under the chart, shown only when there is room for them as well. */
+export function renderTiles(ratings, watchers = null) {
+  return el(
+    'ul',
+    { class: 'ogt-sr-tiles', 'aria-label': 'Ratings summary' },
+    statTiles(ratings, watchers).map((tile) => el(
+      'li',
+      { class: `ogt-sr-tile${tile.accent ? ' ogt-sr-tile--accent' : ''}` },
+      el('span', { class: 'ogt-sr-tile-name', text: tile.name }),
+      el('span', { class: 'ogt-sr-tile-value', text: tile.value }),
+      el('span', { class: 'ogt-sr-tile-note', text: tile.note }),
+    )),
+  );
+}
+
 /**
  * Where a column's own content ends: its lowest visible child, skipping our chart. Both columns are grid items
  * stretched to the row's height, so their boxes say nothing about the empty space; their children do.
@@ -117,15 +133,33 @@ export const summaryRatings = {
     details.append(node);
 
     let cancelled = false;
-    let ready = false;
+    let ratings = null;
     let timer = 0;
+    let watchersRequested = false;
 
-    /** Show the chart only while it fits beside the action stack; og's row height then never changes. */
+    /**
+     * Show as much as fits beside the action stack (chart and tiles, the chart alone, or nothing); og's row
+     * height then never changes.
+     */
     function fit() {
       timer = 0;
-      if (cancelled || !ready) return;
-      const show = fits({ contentBottom: contentBottom(details, node), columnBottom: contentBottom(actions) });
-      if (node.hidden === show) node.hidden = !show;
+      if (cancelled || !ratings) return;
+      const layout = layoutFor({ contentBottom: contentBottom(details, node), columnBottom: contentBottom(actions) });
+      if (node.hidden !== !layout) node.hidden = !layout;
+      if (layout && node.dataset.layout !== layout) node.dataset.layout = layout;
+      if (layout === 'full') loadWatchers();
+    }
+
+    /** The votes tile's "% of watchers" needs one more request; make it only once the tiles are on screen. */
+    function loadWatchers() {
+      if (watchersRequested) return;
+      watchersRequested = true;
+      getSummaryWatchers(route)
+        .then((watchers) => {
+          if (cancelled || !watchers) return;
+          node.querySelector('.ogt-sr-tiles')?.replaceWith(renderTiles(ratings, watchers));
+        })
+        .catch((error) => { if (!cancelled) debugError('summary watchers lookup failed', error); });
     }
     // A timer rather than requestAnimationFrame: background tabs barely run frames, and the check only reads layout.
     function scheduleFit() {
@@ -143,10 +177,10 @@ export const summaryRatings = {
     window.addEventListener('resize', scheduleFit);
 
     getSummaryRatings(route)
-      .then((ratings) => {
-        if (cancelled || !ratings) return;
-        node.replaceChildren(...renderChart(ratings, statsHref(route)));
-        ready = true;
+      .then((result) => {
+        if (cancelled || !result) return;
+        ratings = result;
+        node.replaceChildren(...renderChart(ratings, statsHref(route)), renderTiles(ratings));
         fit();
       })
       .catch((error) => { if (!cancelled) debugError('summary ratings lookup failed', error); });

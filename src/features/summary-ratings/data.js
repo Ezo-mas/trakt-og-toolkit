@@ -13,22 +13,36 @@ export const RATING_NAMES = [
 /** Below this, a distribution says more about who happened to vote than about the title. */
 export const MIN_VOTES = 10;
 
-/** Fixed chart height (px, CSS `block-size`) plus the gap above it; `fits()` reserves both. */
+/** Fixed heights (px, CSS `block-size`): the chart, the gap above it, and the stat tiles with their gap. */
 export const CHART_HEIGHT = 104;
 export const CHART_GAP = 20;
+export const TILES_HEIGHT = 60;
+export const TILES_GAP = 16;
+
+/** The API path of a summary route (`/movies/:id`, `/shows/:id/seasons/:s/episodes/:e`, …), or null. */
+function apiBase(route) {
+  if (!route?.id) return null;
+  const id = encodeURIComponent(route.id);
+  if (route.kind === 'movie' && route.name === 'title') return `/movies/${id}`;
+  if (route.kind !== 'show') return null;
+  if (route.name === 'title') return `/shows/${id}`;
+  if (route.name === 'season' && Number.isInteger(route.season)) return `/shows/${id}/seasons/${route.season}`;
+  if (route.name === 'episode' && Number.isInteger(route.season) && Number.isInteger(route.episode)) {
+    return `/shows/${id}/seasons/${route.season}/episodes/${route.episode}`;
+  }
+  return null;
+}
 
 /** The ratings endpoint for a summary route, or null when the route has none. */
 export function ratingsPath(route) {
-  if (!route?.id) return null;
-  const id = encodeURIComponent(route.id);
-  if (route.kind === 'movie' && route.name === 'title') return `/movies/${id}/ratings`;
-  if (route.kind !== 'show') return null;
-  if (route.name === 'title') return `/shows/${id}/ratings`;
-  if (route.name === 'season' && Number.isInteger(route.season)) return `/shows/${id}/seasons/${route.season}/ratings`;
-  if (route.name === 'episode' && Number.isInteger(route.season) && Number.isInteger(route.episode)) {
-    return `/shows/${id}/seasons/${route.season}/episodes/${route.episode}/ratings`;
-  }
-  return null;
+  const base = apiBase(route);
+  return base ? `${base}/ratings` : null;
+}
+
+/** The matching stats endpoint (watchers, plays, …), used only for the votes tile's watcher share. */
+export function statsPath(route) {
+  const base = apiBase(route);
+  return base ? `${base}/stats` : null;
 }
 
 /** og's stats page for the same title, season or episode. */
@@ -101,13 +115,40 @@ export const BAR_COLORS = [
 ];
 
 /**
- * Whether the chart fits the empty space in og's details column. `contentBottom` is where og's own details
- * content ends and `columnBottom` where the action stack ends (both page px). Showing it only when it fits
- * means og's grid row never grows, so nothing of og's moves.
+ * How much of the section fits the empty space in og's details column: `'full'` (chart and stat tiles),
+ * `'chart'`, or null. `contentBottom` is where og's own details content ends and `columnBottom` where the
+ * action stack's content ends (both page px). Showing only what fits means og's grid row never grows, so
+ * nothing of og's moves.
  */
-export function fits({ contentBottom, columnBottom }, needed = CHART_HEIGHT + CHART_GAP) {
-  if (![contentBottom, columnBottom].every(Number.isFinite)) return false;
-  return columnBottom - contentBottom >= needed;
+export function layoutFor({ contentBottom, columnBottom }) {
+  if (![contentBottom, columnBottom].every(Number.isFinite)) return null;
+  const space = columnBottom - contentBottom;
+  if (space >= CHART_GAP + CHART_HEIGHT + TILES_GAP + TILES_HEIGHT) return 'full';
+  if (space >= CHART_GAP + CHART_HEIGHT) return 'chart';
+  return null;
+}
+
+/**
+ * The four tiles og's stats page shows under its chart, worked out from the distribution:
+ * Rating (the average as a percentage and its name), Votes (with the watcher share when known),
+ * Most given, and Liked it (share of 7 or higher).
+ */
+export function statTiles({ rating, votes, counts }, watchers = null) {
+  const total = counts.reduce((sum, count) => sum + count, 0) || votes;
+  const top = mostGiven(counts);
+  const liked = counts.slice(6).reduce((sum, count) => sum + count, 0);
+  const share = (part, whole, digits = 0) => `${(Math.floor((part / whole) * 100 * 10 ** digits) / 10 ** digits).toFixed(digits)}%`;
+  return [
+    { name: 'Rating', value: `${Math.floor(rating * 10)}%`, note: RATING_NAMES[Math.min(10, Math.max(1, Math.round(rating))) - 1], accent: true },
+    {
+      name: 'Votes',
+      value: fullCount(votes),
+      note: Number.isFinite(watchers) && watchers >= votes && watchers > 0 ? `${share(votes, watchers, 1)} of watchers` : '',
+      accent: false,
+    },
+    { name: 'Most given', value: `${top} · ${RATING_NAMES[top - 1]}`, note: `${share(counts[top - 1], total)} of ${fullCount(total)} votes`, accent: true },
+    { name: 'Liked it', value: share(liked, total), note: 'gave it 7 or higher', accent: true },
+  ];
 }
 
 /** One line for screen readers and the link's name. */

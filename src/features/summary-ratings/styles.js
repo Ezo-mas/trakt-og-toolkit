@@ -1,4 +1,4 @@
-/* Sized to CHART_HEIGHT (104px) in data.js; fits() reserves that plus the 20px gap above. */
+/* Heights match data.js: chart 104px (+20px gap above); full adds 16px + 60px of tiles = 180px. layoutFor() reserves them. */
 export const CSS = String.raw`
 .ogt-summary-ratings {
   --ogt-sr-fg: light-dark(#333, #ddd);
@@ -16,7 +16,17 @@ export const CSS = String.raw`
   line-height: 1;
 }
 
+
+.ogt-summary-ratings[data-layout="full"] {
+  grid-template-rows: 18px 78px 60px;
+  block-size: 180px;
+}
+
 .ogt-summary-ratings[hidden] {
+  display: none;
+}
+
+.ogt-summary-ratings:not([data-layout="full"]) .ogt-sr-tiles {
   display: none;
 }
 
@@ -148,5 +158,55 @@ export const CSS = String.raw`
   inset-inline-start: var(--ogt-sr-average);
   border-inline-start: 1px dashed var(--ogt-sr-faint);
   pointer-events: none;
+}
+
+/* Shaped like og's stats keys: a coloured rule, the name, a large value and a muted note. */
+.ogt-sr-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ogt-sr-tile {
+  display: grid;
+  grid-template-rows: 13px 22px 12px;
+  align-content: start;
+  gap: 4px;
+  min-inline-size: 0;
+  padding-block-start: 7px;
+  border-block-start: 3px solid light-dark(#bdbdbd, #555);
+}
+
+.ogt-sr-tile--accent {
+  border-block-start-color: #9e2424;
+}
+
+.ogt-sr-tile-name {
+  color: var(--ogt-sr-fg);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ogt-sr-tile-value {
+  overflow: hidden;
+  color: var(--ogt-sr-fg);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ogt-sr-tile-note {
+  overflow: hidden;
+  color: var(--ogt-sr-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 `;

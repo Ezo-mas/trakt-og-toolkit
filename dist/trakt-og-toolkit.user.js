@@ -5573,17 +5573,27 @@
   var MIN_VOTES = 10;
   var CHART_HEIGHT2 = 104;
   var CHART_GAP = 20;
-  function ratingsPath(route) {
+  var TILES_HEIGHT = 60;
+  var TILES_GAP = 16;
+  function apiBase(route) {
     if (!route?.id) return null;
     const id = encodeURIComponent(route.id);
-    if (route.kind === "movie" && route.name === "title") return `/movies/${id}/ratings`;
+    if (route.kind === "movie" && route.name === "title") return `/movies/${id}`;
     if (route.kind !== "show") return null;
-    if (route.name === "title") return `/shows/${id}/ratings`;
-    if (route.name === "season" && Number.isInteger(route.season)) return `/shows/${id}/seasons/${route.season}/ratings`;
+    if (route.name === "title") return `/shows/${id}`;
+    if (route.name === "season" && Number.isInteger(route.season)) return `/shows/${id}/seasons/${route.season}`;
     if (route.name === "episode" && Number.isInteger(route.season) && Number.isInteger(route.episode)) {
-      return `/shows/${id}/seasons/${route.season}/episodes/${route.episode}/ratings`;
+      return `/shows/${id}/seasons/${route.season}/episodes/${route.episode}`;
     }
     return null;
+  }
+  function ratingsPath(route) {
+    const base = apiBase(route);
+    return base ? `${base}/ratings` : null;
+  }
+  function statsPath(route) {
+    const base = apiBase(route);
+    return base ? `${base}/stats` : null;
   }
   function statsHref(route) {
     return route?.path ? `${route.path.replace(/\/+$/, "")}/stats` : null;
@@ -5641,9 +5651,29 @@
     "#b11010",
     "#b70a0a"
   ];
-  function fits({ contentBottom: contentBottom2, columnBottom }, needed = CHART_HEIGHT2 + CHART_GAP) {
-    if (![contentBottom2, columnBottom].every(Number.isFinite)) return false;
-    return columnBottom - contentBottom2 >= needed;
+  function layoutFor({ contentBottom: contentBottom2, columnBottom }) {
+    if (![contentBottom2, columnBottom].every(Number.isFinite)) return null;
+    const space = columnBottom - contentBottom2;
+    if (space >= CHART_GAP + CHART_HEIGHT2 + TILES_GAP + TILES_HEIGHT) return "full";
+    if (space >= CHART_GAP + CHART_HEIGHT2) return "chart";
+    return null;
+  }
+  function statTiles({ rating, votes, counts }, watchers = null) {
+    const total = counts.reduce((sum, count2) => sum + count2, 0) || votes;
+    const top = mostGiven(counts);
+    const liked = counts.slice(6).reduce((sum, count2) => sum + count2, 0);
+    const share = (part, whole, digits = 0) => `${(Math.floor(part / whole * 100 * 10 ** digits) / 10 ** digits).toFixed(digits)}%`;
+    return [
+      { name: "Rating", value: `${Math.floor(rating * 10)}%`, note: RATING_NAMES[Math.min(10, Math.max(1, Math.round(rating))) - 1], accent: true },
+      {
+        name: "Votes",
+        value: fullCount(votes),
+        note: Number.isFinite(watchers) && watchers >= votes && watchers > 0 ? `${share(votes, watchers, 1)} of watchers` : "",
+        accent: false
+      },
+      { name: "Most given", value: `${top} · ${RATING_NAMES[top - 1]}`, note: `${share(counts[top - 1], total)} of ${fullCount(total)} votes`, accent: true },
+      { name: "Liked it", value: share(liked, total), note: "gave it 7 or higher", accent: true }
+    ];
   }
   function chartLabel({ rating, votes }) {
     return `Trakt ratings: ${rating.toFixed(2)} average from ${fullCount(votes)} votes. Open the full stats.`;
@@ -5655,6 +5685,13 @@
     const path = ratingsPath(route);
     if (!path) return null;
     return parseRatings(await apiGet(path, { ttl: TTL3 }));
+  }
+  async function getSummaryWatchers(route) {
+    const path = statsPath(route);
+    if (!path) return null;
+    const stats = await apiGet(path, { ttl: TTL3 });
+    const watchers = Number(stats?.watchers);
+    return Number.isFinite(watchers) && watchers > 0 ? watchers : null;
   }
 
   // src/features/summary-ratings/styles.js
@@ -5675,7 +5712,17 @@
   line-height: 1;
 }
 
+
+.ogt-summary-ratings[data-layout="full"] {
+  grid-template-rows: 18px 78px 60px;
+  block-size: 180px;
+}
+
 .ogt-summary-ratings[hidden] {
+  display: none;
+}
+
+.ogt-summary-ratings:not([data-layout="full"]) .ogt-sr-tiles {
   display: none;
 }
 
@@ -5808,6 +5855,56 @@
   border-inline-start: 1px dashed var(--ogt-sr-faint);
   pointer-events: none;
 }
+
+/* Shaped like og's stats keys: a coloured rule, the name, a large value and a muted note. */
+.ogt-sr-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ogt-sr-tile {
+  display: grid;
+  grid-template-rows: 13px 22px 12px;
+  align-content: start;
+  gap: 4px;
+  min-inline-size: 0;
+  padding-block-start: 7px;
+  border-block-start: 3px solid light-dark(#bdbdbd, #555);
+}
+
+.ogt-sr-tile--accent {
+  border-block-start-color: #9e2424;
+}
+
+.ogt-sr-tile-name {
+  color: var(--ogt-sr-fg);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ogt-sr-tile-value {
+  overflow: hidden;
+  color: var(--ogt-sr-fg);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ogt-sr-tile-note {
+  overflow: hidden;
+  color: var(--ogt-sr-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 `;
 
   // src/features/summary-ratings/index.js
@@ -5873,6 +5970,19 @@
       )
     ];
   }
+  function renderTiles(ratings, watchers = null) {
+    return el(
+      "ul",
+      { class: "ogt-sr-tiles", "aria-label": "Ratings summary" },
+      statTiles(ratings, watchers).map((tile) => el(
+        "li",
+        { class: `ogt-sr-tile${tile.accent ? " ogt-sr-tile--accent" : ""}` },
+        el("span", { class: "ogt-sr-tile-name", text: tile.name }),
+        el("span", { class: "ogt-sr-tile-value", text: tile.value }),
+        el("span", { class: "ogt-sr-tile-note", text: tile.note })
+      ))
+    );
+  }
   function contentBottom(column, skip = null) {
     let bottom = column.getBoundingClientRect().top + window.scrollY;
     for (const child of column.children) {
@@ -5898,13 +6008,26 @@
       const node = el("section", { id: NODE_ID, class: "ogt-summary-ratings", hidden: true, "aria-label": "Trakt ratings" });
       details.append(node);
       let cancelled = false;
-      let ready = false;
+      let ratings = null;
       let timer = 0;
+      let watchersRequested = false;
       function fit() {
         timer = 0;
-        if (cancelled || !ready) return;
-        const show = fits({ contentBottom: contentBottom(details, node), columnBottom: contentBottom(actions) });
-        if (node.hidden === show) node.hidden = !show;
+        if (cancelled || !ratings) return;
+        const layout = layoutFor({ contentBottom: contentBottom(details, node), columnBottom: contentBottom(actions) });
+        if (node.hidden !== !layout) node.hidden = !layout;
+        if (layout && node.dataset.layout !== layout) node.dataset.layout = layout;
+        if (layout === "full") loadWatchers();
+      }
+      function loadWatchers() {
+        if (watchersRequested) return;
+        watchersRequested = true;
+        getSummaryWatchers(route).then((watchers) => {
+          if (cancelled || !watchers) return;
+          node.querySelector(".ogt-sr-tiles")?.replaceWith(renderTiles(ratings, watchers));
+        }).catch((error) => {
+          if (!cancelled) debugError("summary watchers lookup failed", error);
+        });
       }
       function scheduleFit() {
         if (cancelled || timer) return;
@@ -5917,10 +6040,10 @@
       const mutation = new MutationObserver(scheduleFit);
       mutation.observe(top, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "hidden"] });
       window.addEventListener("resize", scheduleFit);
-      getSummaryRatings(route).then((ratings) => {
-        if (cancelled || !ratings) return;
-        node.replaceChildren(...renderChart(ratings, statsHref(route)));
-        ready = true;
+      getSummaryRatings(route).then((result) => {
+        if (cancelled || !result) return;
+        ratings = result;
+        node.replaceChildren(...renderChart(ratings, statsHref(route)), renderTiles(ratings));
         fit();
       }).catch((error) => {
         if (!cancelled) debugError("summary ratings lookup failed", error);
