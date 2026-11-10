@@ -22,6 +22,8 @@ test('the built header links the project and its issue tracker', () => {
   assert.equal(field('supportURL'), 'https://github.com/Ezo-mas/trakt-og-toolkit/issues');
 });
 
-test('the built header keeps @version in sync with src/meta.js', () => {
+test('the built header keeps @version in sync with src/meta.js and package.json', () => {
   assert.equal(field('version'), VERSION);
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(pkg.version, VERSION, 'package.json must not drift from src/meta.js');
 });
