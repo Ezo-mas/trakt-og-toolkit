@@ -19,6 +19,8 @@ Release of everything since v0.3.0, so userscript managers offer the update:
 - **Features can be turned on and off** from the menu (20).
 - Writes share one rate-limited queue that follows Trakt's limits (29). Test suite review (23) and wider
   `npm run drift` coverage (18), now with signed-in page checks via `--signed-in <dir>`.
+- Removed the `site/` OAuth callback page and its GitHub Pages workflow: Trakt won't grant the production app it was
+  for, so browser (PKCE) sign-in is not coming.
 
 The user verified the og-session features, expiry, sign-out, account switching and cross-tab changes on real accounts
 in Zen with Violentmonkey.

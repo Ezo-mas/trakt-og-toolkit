@@ -76,7 +76,7 @@ site.
   maintained TMDb/IMDb → MAL/AniList mapping source, and link only unambiguous anime or season matches.
 - **A shared production Trakt app (from 30): not happening.** Trakt doesn't grant production apps for tools that add
   features to its own product, so the toolkit reuses og's session instead, with a per-user app as the fallback. The
-  PKCE browser sign-in and the `site/` callback page it was meant for have no use without one.
+  PKCE browser sign-in was dropped, and the `site/` callback page and its Pages workflow were removed in 0.4.0.
 
 ## Shipped
 
