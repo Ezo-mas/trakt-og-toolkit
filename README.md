@@ -89,6 +89,8 @@ Signed in:
 - **All lists:** og's Lists dropdown on a profile gains **All lists**: personal, collaboration and liked lists in one
   scroll. Works with og's session or a configured client ID.
 - **List previews:** each poster in a list card's preview opens its title. Signed in, posters show your rating.
+- **Pick something:** on a watchlist, picks a random title from the page's current All/Movies/Shows/Seasons/Episodes
+  filter and links to it, with **Pick again**. The whole list is read through the API, not just the loaded rows.
 
 ### Month in review and pronunciation
 

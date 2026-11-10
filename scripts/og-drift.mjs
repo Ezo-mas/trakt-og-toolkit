@@ -14,6 +14,7 @@ const pages = [
   { name: 'episode', path: '/shows/breaking-bad/seasons/1/episodes/1' },
   { name: 'person', path: '/people/bryan-cranston', panel: '.ogt-pronounce', feature: 'pronunciation' },
   { name: 'listing', path: '/movies/trending' },
+  { name: 'watchlist', path: '/users/justin/watchlist', panel: '#ogt-watchlist-pick', feature: 'watchlist-pick' },
 ];
 const options = {};
 const args = process.argv.slice(2);

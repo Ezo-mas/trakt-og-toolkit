@@ -20,6 +20,7 @@ export const FEATURE_LABELS = {
   watchlist: 'Add to watchlist',
   'watchlist-cards': 'Watchlist card shortcuts',
   'watchlist-credits': 'Watchlist credit shortcuts',
+  'watchlist-pick': 'Watchlist pick',
   'month-review': 'Last month in review',
   'all-lists': 'All lists',
   'list-preview': 'List preview titles',

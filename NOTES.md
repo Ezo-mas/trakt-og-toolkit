@@ -10,6 +10,28 @@ Working notes and known issues. Newest first.
 - `test/userscript-header.test.js` reads the committed bundle, so it fails when the header was changed without
   `npm run build`. Version bumps still happen at release, when `src/meta.js` and `dist/` are rebuilt together.
 
+## 2026-11-11: random watchlist pick (feature 33)
+
+- Live og (2026-11-11, trakt-og `d320877`): the watchlist filter is `?display=movie|show|season|episode` on
+  `/users/:id/watchlist`; `/watchlist/movies` and the other type paths answer 301 to the bare page. The picker reads
+  `display` when a pick starts, so og's in-place filter changes need no remount.
+- The stable insertion point is `section.title-row .title-bar .actions`, before og's `.share` control. The list's
+  heading is `h2#list-title` and the filters sit in a separate section above it.
+- API entries are `{ type, movie|show|season|episode, show? }`. Seasons wrap `{ number, ids }` and episodes
+  `{ title, season, number }`; both link through `show.ids.slug`. Reads use `/users/:id/watchlist[/movies|shows|
+  seasons|episodes]` with 100 per page. Authenticated responses carry `x-pagination-page-count`; the public transport
+  drops headers, so public reads walk pages until a short one (capped at 50). og's session or the toolkit sign-in is
+  used for private profiles; without either the button shows a one-line hint.
+- The picker reads the media filter again after every page load; if it changed during the read, it re-reads for
+  the current feed and never shows a result from the old one. Filter changes after a result hide it again. Loaded
+  entries are kept for five minutes so **Pick again** does not repeat the whole list fetch.
+- An expired og session gets og's reload message; missing credentials, private lists and 404s keep their one-line
+  hints. Results carry the full label in `title` and announce the pick through a visually hidden live region.
+- Fixture `WATCHLIST_PAGE_HTML` is the live `/users/justin/watchlist` (323 items) trimmed to the filter links, title
+  bar and items section. Tests cover normalization, filter mapping, mid-read and post-pick filter changes, seasons and
+  episodes, empty lists, expired og sessions, both paging paths, repeat avoidance, private-list hints and teardown.
+  The watched-title filter remains out of scope.
+
 ## v0.4.0 (2026-11-10)
 
 Release of everything since v0.3.0, so userscript managers offer the update:
