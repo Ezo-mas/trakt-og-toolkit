@@ -7,8 +7,54 @@ behaviour, never its code. Finished features are listed at the end; their detail
 
 ## Up next
 
-Nothing is queued; v0.4.0 released everything shipped since v0.3.0. Userscript managers only offer an update when `@version`
-changes, so bump it whenever main should reach users.
+| # | Item | Needs | Status |
+|---|---|---|---|
+| 32 | Auto-update URLs in the userscript header | nothing | planned |
+| 33 | Random pick from your watchlist | public API or og's session | planned |
+| 34 | Export a list or watchlist to CSV | public API or og's session | planned |
+| 35 | Refactor: simpler code, more reuse | tests and drift as the safety net | after 32–34 |
+| 36 | Shorter README with a screenshot of every feature | a signed-in og browser | after 35 |
+
+After that, maintenance: the daily drift workflow, `npm run drift -- --signed-in <dir>` now and then, and fixes when og
+changes. v0.4.0 released everything shipped before this list. Userscript managers only offer an update when `@version`
+changes, so bump it whenever main should reach users. Re-check og before starting each feature: on 2026-11-10
+og's watchlist page had no random pick and its source had no list export.
+
+## 32. Auto-update URLs
+
+Add `@updateURL` and `@downloadURL` (raw `dist/trakt-og-toolkit.user.js` on `main`), plus `@homepageURL` and
+`@supportURL`, to the header in `build.mjs`. Managers usually fall back to the install URL, but installs from a saved
+file or with "Track external edits" never see an update. A manager only learns the new URLs once it has installed a
+version that carries them, so ship this in a version bump. Test that the built header keeps `@version` in sync and
+that the URLs point at `main`.
+
+## 33. Random pick from your watchlist
+
+A **Pick something** button on og's watchlist page (`/users/:id/watchlist/[[type]]`) that picks one title at random
+and links to it, with **Pick again**. Respect the page's movies/shows filter. Read the watchlist through the API
+(paged; og's session or the toolkit sign-in for a private profile, the public API otherwise) rather than og's
+rendered rows, which are lazy-loaded. Nice to have: skip titles already watched. Toggleable from the menu like every
+feature.
+
+## 34. Export a list or watchlist to CSV
+
+An **Export CSV** action on personal list pages, collaborations and liked lists, and the watchlist. Build the file in
+the browser from the API (all pages) and download it as a Blob; nothing leaves the browser. Columns: rank, type,
+title, year, season/episode where relevant, Trakt, IMDb and TMDb ids, listed date and notes. Quote fields per RFC 4180
+and guard against spreadsheet formula injection (prefix cells starting with `=`, `+`, `-`, `@`). Unlike the
+"scheduled e-mail exports" ruled out below, this is a one-off, client-side download.
+
+## 35. Refactor
+
+Behavior-preserving cleanup, one area per PR, with tests and `npm run drift` unchanged before and after. Largest
+targets: `src/features/custom-links/index.js` (~985 lines, grew through features 16 and 22–28), `all-lists/index.js`
+and `core/trakt.js` (two sign-in paths; keep every edge case its tests cover). Look for repeated DOM and preset logic
+to share, and dead code.
+
+## 36. README with screenshots
+
+Shorter README: one screenshot per feature, taken signed in on og.trakt.tv after the refactor so they stay current.
+Move setup, security and API detail into a collapsible section or a separate doc.
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages; feature 31 only mirrors it into
 the summary), trailers and videos, external links and ratings strip, profile cover images, list pages, header
