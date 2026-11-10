@@ -4,16 +4,10 @@ import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { answerDialogs } from './dialogs.js';
 import { MOVIE_HTML, PLAYBACK_EPISODE_HTML, PLAYBACK_PROGRESS_HTML } from './fixtures.js';
+import { waitFor } from './wait.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 60) => new Promise((r) => setTimeout(r, ms));
-async function waitFor(condition, timeout = 3000) {
-  const deadline = Date.now() + timeout;
-  while (!condition()) {
-    if (Date.now() >= deadline) throw new Error('Timed out waiting for playback to settle');
-    await wait(25);
-  }
-}
 const samples = () => ({
   movies: [{ id: 101, progress: 42, paused_at: new Date(Date.now() - 60 * 86400000).toISOString(),
     movie: { title: 'The Dark', ids: { slug: 'the-dark-2005', trakt: 1 }, images: { poster: ['media.trakt.tv/images/poster.jpg'] } } }],
@@ -71,7 +65,7 @@ const click = (doc, action) => panel(doc).querySelector(`[data-action="${action}
 
 test('signed out: no badges, overview or authenticated requests', async (t) => {
   const b = boot(t, { signedIn: false }); await wait();
-  assert.equal(panel(b.document), null); assert.equal(b.calls.length, 0);
+  assert.equal(Boolean(panel(b.document)), false); assert.equal(b.calls.length, 0);
 });
 test('overview is on demand and includes posters, titles, percentages and dates', async (t) => {
   const b = boot(t); await wait();
@@ -79,7 +73,7 @@ test('overview is on demand and includes posters, titles, percentages and dates'
   const column = panel(b.document).parentElement;
   assert.equal(column.className, 'ogt-playback__column', 'the overview sits in a column matching og\'s container');
   assert.equal(column.parentElement.className, 'progress watched', 'inside og\'s progress section');
-  assert.equal(column.parentElement.firstElementChild, column, 'before og\'s own content');
+  assert.ok(column.parentElement.firstElementChild === column, 'before og\'s own content');
   click(b.document, 'load'); await wait();
   assert.equal(b.calls.length, 2);
   assert.ok(b.calls.every((r) => r.url.endsWith('?extended=images')));
@@ -112,7 +106,9 @@ test('cancelled deletion sends nothing and retains rows', async (t) => {
 test('multi-select clear reports partial failures and refreshes both lists', async (t) => {
   const b = boot(t, { failed: [102] }); await wait(); click(b.document, 'load'); await wait();
   const all = panel(b.document).querySelector('[data-action="all"]'); all.checked = true; all.dispatchEvent(new b.window.Event('change', { bubbles: true }));
-  click(b.document, 'selected'); await wait(1300);
+  click(b.document, 'selected');
+  await waitFor(() => /1 failed/.test(panel(b.document).textContent) && panel(b.document).querySelectorAll('li').length === 1,
+    { message: 'the partial clear and refreshed lists' });
   assert.match(b.confirmations[0], /2 items/);
   assert.match(panel(b.document).textContent, /1 cleared; 1 failed/);
   assert.equal(panel(b.document).querySelectorAll('li').length, 1);
@@ -128,7 +124,7 @@ test('age clear confirms only entries older than the selected age', async (t) =>
 test('sign-out removes private UI and discards the private cache', async (t) => {
   const b = boot(t); await wait(); click(b.document, 'load'); await wait();
   b.store.delete('trakt.oauth.tokens'); b.document.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
-  assert.equal(panel(b.document), null);
+  assert.equal(Boolean(panel(b.document)), false);
   b.store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'other-access', refresh_token: 'other-refresh', expires_at: Date.now() + 3600000 });
   b.document.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
   assert.ok(panel(b.document)); assert.equal(panel(b.document).querySelectorAll('li').length, 0);
@@ -139,22 +135,23 @@ test('leaving the progress page removes the overview and its column', async (t) 
   const b = boot(t); await wait();
   assert.ok(b.document.querySelector('.ogt-playback__column'));
   b.window.history.pushState({}, '', '/'); await wait(250);
-  assert.equal(panel(b.document), null);
-  assert.equal(b.document.querySelector('.ogt-playback__column'), null);
+  assert.equal(Boolean(panel(b.document)), false);
+  assert.equal(Boolean(b.document.querySelector('.ogt-playback__column')), false);
 });
 test('navigation destroys the panel and late responses cannot mount it again', async (t) => {
   const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML, deferred: true }); await wait();
   b.window.history.pushState({}, '', '/'); await wait(250);
-  assert.equal(panel(b.document), null);
+  assert.equal(Boolean(panel(b.document)), false);
   for (const respond of b.pending) respond(); await wait();
-  assert.equal(panel(b.document), null);
+  assert.equal(Boolean(panel(b.document)), false);
 });
 test('a title page with no saved playback saves progress with start then pause', async (t) => {
   const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML, empty: true }); await wait();
   assert.equal(panel(b.document).hidden, false);
   assert.match(panel(b.document).textContent, /No saved playback/);
   b.setPrompt('35');
-  click(b.document, 'save'); await wait(1300);
+  click(b.document, 'save');
+  await waitFor(() => /Progress saved/.test(panel(b.document).textContent), { message: 'the saved progress' });
   assert.equal(b.prompts.length, 1, 'one dialog asks and warns');
   assert.equal(b.confirmations.length, 0);
   assert.equal(b.prompts[0].value, '');
@@ -173,9 +170,9 @@ test('navigating after start still completes the pause for the same session', as
   await waitFor(() => b.scrobbles.length === 1);
   await wait();
   b.window.history.pushState({}, '', '/');
-  await wait(1200);
+  await waitFor(() => b.scrobbles.length === 2, { message: 'the pause after navigation' });
   assert.deepEqual(b.scrobbles.map((call) => call.path), ['/scrobble/start', '/scrobble/pause']);
-  assert.equal(panel(b.document), null);
+  assert.equal(Boolean(panel(b.document)), false);
 });
 
 test('an overview row saves episode progress after resolving episode ids', async (t) => {
@@ -183,7 +180,8 @@ test('an overview row saves episode progress after resolving episode ids', async
   const row = panel(b.document).querySelector('li');
   assert.match(row.textContent, /Pilot/);
   b.setPrompt('60');
-  row.querySelector('[data-action="save"]').click(); await wait(1300);
+  row.querySelector('[data-action="save"]').click();
+  await waitFor(() => b.scrobbles.length === 2, { message: 'the episode start and pause' });
   assert.match(b.prompts[0].message, /for Breaking Bad · 1×01 · Pilot/);
   assert.equal(b.prompts[0].value, '73.5');
   assert.ok(b.calls.find((call) => call.method === 'GET' && new URL(call.url).pathname === '/shows/breaking-bad/seasons/1/episodes/1'));
@@ -197,13 +195,14 @@ test('cancelled or invalid progress sends nothing', async (t) => {
   b.setPrompt('0'); click(b.document, 'save'); await wait();
   assert.equal(b.errors[0], 'Enter a percentage from 1 to 100.', 'the dialog keeps itself open with the error');
   assert.equal(b.scrobbles.length, 0);
-  assert.equal(b.document.querySelector('dialog[open]'), null, 'closed dialogs are removed');
+  assert.equal(Boolean(b.document.querySelector('dialog[open]')), false, 'closed dialogs are removed');
 });
 test('a title page with saved playback can replace it, prefilled with the current value', async (t) => {
   const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML }); await wait();
   assert.match(panel(b.document).textContent, /42% paused/);
   b.setPrompt('70');
-  click(b.document, 'save'); await wait(1300);
+  click(b.document, 'save');
+  await waitFor(() => /Progress saved/.test(panel(b.document).textContent), { message: 'the replaced progress' });
   assert.equal(b.prompts[0].value, '42');
   // The ratings chart (feature 31) reads /movies/:id/ratings and /stats on the same page; playback must not look the movie up.
   assert.equal(b.calls.some((call) => {
@@ -217,7 +216,8 @@ test('a title page with saved playback can replace it, prefilled with the curren
 test('a pause that fails after start says the earlier progress was removed', async (t) => {
   const b = boot(t, { path: '/movies/the-dark-2005', html: MOVIE_HTML, failPause: true }); await wait();
   b.setPrompt('70');
-  click(b.document, 'save'); await wait(1500);
+  click(b.document, 'save');
+  await waitFor(() => /did not save the pause/.test(panel(b.document).textContent), { message: 'the failed-pause message' });
   assert.deepEqual(b.scrobbles.map((call) => call.path).slice(0, 2), ['/scrobble/start', '/scrobble/pause']);
   assert.match(panel(b.document).textContent, /did not save the pause, so earlier progress for this title was removed/);
 });

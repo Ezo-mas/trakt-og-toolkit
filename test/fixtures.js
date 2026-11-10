@@ -1,4 +1,17 @@
-/** Trimmed, hand-written mirrors of the real og markup these selectors rely on. */
+/**
+ * Trimmed mirrors of the og markup the selectors rely on. Each fixture says where it came from: a dated live
+ * og.trakt.tv capture (and the public trakt/trakt-og commit at that date), or the source files it was derived
+ * from when a live capture needs an account. Svelte hashes, comments, SVG paths and unrelated controls are omitted.
+ */
+
+/** Breaking Bad's sidebar `ul.external-links` (live, 2026-11-09). og draws marks only, with the name in aria-label. */
+const SHOW_EXTERNAL_LINKS = [
+  ['IMDB', 'https://www.imdb.com/title/tt0903747'],
+  ['TMDB', 'https://www.themoviedb.org/tv/1396'],
+  ['TVDB', 'https://www.thetvdb.com/dereferrer/series/81189'],
+  ['JustWatch', 'https://www.justwatch.com/us/tv-show/breaking-bad'],
+  ['Wikipedia', 'https://en.wikipedia.org/wiki/Breaking_Bad'],
+];
 
 /** Current Watch Now block and its dialog; og renders one in the sidebar and a `.phone` copy in the actions/details.
  * `empty` mirrors a live title with no providers: the button still says 0 services and the dialog carries og's
@@ -42,15 +55,15 @@ export function summarySidebarHtml({
   nativeServices = 8,
   emptyWatchNow = false,
   external = true,
+  externalLinks = SHOW_EXTERNAL_LINKS,
   backHref = null,
 } = {}) {
   const posterHtml = `<div class="summary-poster"><img src="https://media.trakt.tv/${poster}" alt="${posterAlt}"></div>`;
   return `<aside class="sidebar" aria-label="${label}">
     ${backHref ? `<a class="poster-link" href="${backHref}" aria-label="Back to ${label}">${posterHtml}</a>` : posterHtml}
     ${watchNow ? watchNowHtml({ nativeServices, empty: emptyWatchNow }) : ''}
-    ${external ? `<ul class="external-links">
-      <li><a class="glass-action" href="https://www.imdb.com/title/tt0903747" target="_blank" rel="noopener" aria-label="IMDB">IMDB</a></li>
-      <li><a class="glass-action" href="https://www.themoviedb.org/tv/1396" target="_blank" rel="noopener" aria-label="TMDB">TMDB</a></li>
+    ${external ? `<ul class="external-links">${externalLinks.map(([name, href]) => `
+      <li><a class="glass-action glass card square ghost" href="${href}" target="_blank" rel="noopener" aria-label="${name}"><span class="icon"></span></a></li>`).join('')}
     </ul>` : ''}
   </aside>`;
 }
@@ -101,6 +114,21 @@ export function watchlistCardHtml({ id = 'card-movie', href = '/movies/verity-20
   </article>`;
 }
 
+/** Season poster card from the live show page (2026-11-09): poster, og's card-sized quick icons, then the titles. */
+function seasonCardHtml(number, episodes) {
+  const href = `/shows/breaking-bad/seasons/${number}`;
+  return `<article class="poster-card framed with-icons">
+        <div class="poster-wrapper"><a class="poster" href="${href}" tabindex="-1" aria-hidden="true"><img class="image" alt=""></a></div>
+        <div class="quick-icons small"><button type="button" class="rating-trigger card" aria-label="Rate Season ${number}"><span class="percentage"><span class="heart"></span><span class="value">90%</span></span></button></div>
+        <div class="titles">
+          <a class="titles-link" href="${href}"><h3>Season ${number}</h3></a>
+          <a class="titles-link" href="${href}"><span class="subtitle">${episodes} episodes</span></a>
+        </div>
+      </article>`;
+}
+
+/** Live `/shows/breaking-bad` (2026-11-09, trakt-og 3e65cd7): the heading, the ratings strip's Trakt/IMDb/TMDB
+ * stats, the sidebar and the seasons grid, trimmed to two seasons. og keeps TVDB in the sidebar, not the strip. */
 export const SHOW_HTML = `
 <main id="content">
   <section class="fanart-header with-stats">
@@ -110,10 +138,11 @@ export const SHOW_HTML = `
         <h1>Breaking Bad <span class="year">2008</span> <span class="certification">TV-MA</span></h1>
       </div>
       <div class="stats"><div class="stats-inner"><div class="ratings-strip"><ul>
-        <li><a class="stat" href="/shows/breaking-bad/stats" aria-label="Trakt Rating 93%"><span class="glyph heart"></span></a></li>
-        <li><a class="stat" href="https://www.imdb.com/title/tt0903747/ratings"><img class="logo imdb" alt="IMDb"></a></li>
-        <li><a class="stat" href="https://www.themoviedb.org/tv/1396"><img class="logo tmdb" alt="TMDb"></a></li>
-        <li><a class="stat" href="https://www.thetvdb.com/dereferrer/series/81189">TVDB</a></li>
+        <li><a class="stat" href="/shows/breaking-bad/stats" aria-label="Trakt Rating 93%, 74,922 votes"><span class="glyph heart"></span><span class="number">93%</span></a></li>
+        <li class="divider"></li>
+        <li><a class="stat" href="https://www.imdb.com/title/tt0903747/ratings" target="_blank" rel="noopener" aria-label="IMDb 9.5, 2,545,451 votes"><img class="logo imdb" alt=""><span class="number">9.5</span></a></li>
+        <li><a class="stat" href="https://www.themoviedb.org/tv/1396" target="_blank" rel="noopener" aria-label="TMDB 89%, 19,067 votes"><img class="logo tmdb" alt=""><span class="number">89%</span></a></li>
+        <li class="all-stats"><a class="glass-action glass" href="/shows/breaking-bad/stats">All Stats</a></li>
       </ul></div></div></div>
     </div>
   </section>
@@ -123,7 +152,7 @@ export const SHOW_HTML = `
       ${summarySidebarHtml({ label: 'Breaking Bad', poster: 'shows/1388/medium/poster.webp', posterAlt: 'Breaking Bad (2008)', nativeServices: 6 })}
       <div class="info" id="overview">
         <div class="top">
-          <div class="details"><p class="overview">A chemistry teacher turns to crime.</p></div>
+          <div class="details"><div class="overview collapsed">A chemistry teacher turns to crime.</div></div>
           <div class="actions">${watchNowHtml({ phone: true, nativeServices: 6 })}</div>
         </div>
         <div class="phone-tools"></div>
@@ -133,36 +162,39 @@ export const SHOW_HTML = `
 
   <section class="seasons" aria-labelledby="seasons">
     <div class="heading"><h2 id="seasons"><strong>2</strong> Seasons</h2></div>
-    <div class="poster-grid-frame">
-      <article class="poster-card">
-        <a class="poster" href="/shows/breaking-bad/seasons/1"><img alt=""></a>
-        <a class="titles-link" href="/shows/breaking-bad/seasons/1"><h3>Season 1</h3></a>
-        <a class="titles-link" href="/shows/breaking-bad/seasons/1"><span class="subtitle">7 episodes</span></a>
-      </article>
-      <article class="poster-card">
-        <a class="poster" href="/shows/breaking-bad/seasons/2"><img alt=""></a>
-        <a class="titles-link" href="/shows/breaking-bad/seasons/2"><h3>Season 2</h3></a>
-        <a class="titles-link" href="/shows/breaking-bad/seasons/2"><span class="subtitle">13 episodes</span></a>
-      </article>
-    </div>
+    <div class="poster-grid-frame"><div class="poster-grid">
+      ${seasonCardHtml(1, 7)}
+      ${seasonCardHtml(2, 13)}
+    </div></div>
   </section>
 </main>`;
 
+/** Live `/movies/the-dark-2005` (2026-11-09, trakt-og 3e65cd7): the heading, the ratings strip's Trakt/IMDb/TMDB
+ * stats and the sidebar with the movie's own external links. The overview text is left out. */
 function moviePageHtml({ watchNow = true, emptyWatchNow = false } = {}) {
   return `
 <main id="content">
   <section class="fanart-header with-stats">
     <div class="summary">
-      <div class="summary-title"><h1>The Dark <span class="year">2005</span></h1></div>
+      <div class="summary-title"><h1>The Dark <span class="year">2005</span> <span class="certification">R</span></h1></div>
       <div class="stats"><div class="stats-inner"><div class="ratings-strip"><ul>
-        <li><a class="stat" href="https://www.imdb.com/title/tt0465676/ratings"><img class="logo imdb" alt="IMDb"></a></li>
-        <li><a class="stat" href="https://www.themoviedb.org/movie/8967"><img class="logo tmdb" alt="TMDb"></a></li>
+        <li><a class="stat" href="/movies/the-dark-2005/stats" aria-label="Trakt Rating 55%, 261 votes"><span class="glyph heart"></span><span class="number">55%</span></a></li>
+        <li class="divider"></li>
+        <li><a class="stat" href="https://www.imdb.com/title/tt0411267/ratings" target="_blank" rel="noopener" aria-label="IMDb 5.3, 11,821 votes"><img class="logo imdb" alt=""><span class="number">5.3</span></a></li>
+        <li><a class="stat" href="https://www.themoviedb.org/movie/17" target="_blank" rel="noopener" aria-label="TMDB 57%, 301 votes"><img class="logo tmdb" alt=""><span class="number">57%</span></a></li>
+        <li class="all-stats"><a class="glass-action glass" href="/movies/the-dark-2005/stats">All Stats</a></li>
       </ul></div></div></div>
     </div>
   </section>
   <section class="summary-frame">
     <div class="container"><div class="columns">
-      ${summarySidebarHtml({ label: 'The Dark', poster: 'movies/8967/medium/poster.webp', posterAlt: 'The Dark (2005)', watchNow, nativeServices: emptyWatchNow ? 0 : 8, emptyWatchNow })}
+      ${summarySidebarHtml({ label: 'The Dark', poster: 'movies/17/medium/poster.webp', posterAlt: 'The Dark (2005)', watchNow,
+        nativeServices: emptyWatchNow ? 0 : 8, emptyWatchNow, externalLinks: [
+          ['IMDB', 'https://www.imdb.com/title/tt0411267'],
+          ['TMDB', 'https://www.themoviedb.org/movie/17'],
+          ['JustWatch', 'https://www.justwatch.com/us/movie/the-dark-2006'],
+          ['Wikipedia', 'https://en.wikipedia.org/wiki/The_Dark_(2005_film)'],
+        ] })}
       <div class="info" id="overview">
         <div class="top"><div class="details"></div><div class="actions">${watchNow ? watchNowHtml({ phone: true, nativeServices: emptyWatchNow ? 0 : 8, empty: emptyWatchNow }) : ''}</div></div>
         <div class="phone-tools"></div>
@@ -182,38 +214,32 @@ export function withGenres(html, genres, plural = 'shows') {
   return html.replace('<div class="details">', `<div class="details">${field}`);
 }
 
+/** One episode row from the live `/shows/breaking-bad/seasons/1` (2026-11-09, trakt-og 3e65cd7): og's fanart card
+ * (image link and quick icons with the rating trigger) beside the titles. Watch and list controls are omitted. */
+function episodeRowHtml({ number, id, title, rating }) {
+  const href = `/shows/breaking-bad/seasons/1/episodes/${number}`;
+  return `<article class="row" aria-labelledby="episode-${id}">
+      <article class="fanart-card framed with-icons">
+        <div class="fanart"><a class="image-link" href="${href}" tabindex="-1" aria-hidden="true"><img class="image" alt=""><span class="shadow-base"></span></a></div>
+        <div class="quick-icons"><button type="button" class="rating-trigger card" aria-label="Rate ${title}"><span class="percentage"><span class="heart"></span><span class="value">${rating}%</span></span></button></div>
+      </article>
+      <div class="info"><div class="titles"><h3 id="episode-${id}">
+        <a href="${href}"><span class="number">1x0${number}</span></a>
+        <a href="${href}">${title}</a>
+      </h3></div></div>
+    </article>`;
+}
+
+/** Season 1's episode list, trimmed to four rows. The order is shuffled on purpose (og can re-sort the list) and
+ * the ratings are fixed test values. */
 export const SEASON_HTML = `
 <main id="content">
   <section class="episodes" aria-labelledby="episodes">
     <div class="heading"><h2 id="episodes"><strong>7</strong> Episodes</h2></div>
-    <article class="row" aria-labelledby="episode-73484">
-      <div class="rating-trigger"><span class="value">80%</span></div>
-      <div class="info"><div class="titles"><h3 id="episode-73484">
-        <a href="/shows/breaking-bad/seasons/1/episodes/3"><span class="number">1x03</span></a>
-        <a href="/shows/breaking-bad/seasons/1/episodes/3">…And the Bag's in the River</a>
-      </h3></div></div>
-    </article>
-    <article class="row" aria-labelledby="episode-73482">
-      <div class="rating-trigger"><span class="value">83%</span></div>
-      <div class="info"><div class="titles"><h3 id="episode-73482">
-        <a href="/shows/breaking-bad/seasons/1/episodes/1"><span class="number">1x01</span></a>
-        <a href="/shows/breaking-bad/seasons/1/episodes/1">Pilot</a>
-      </h3></div></div>
-    </article>
-    <article class="row" aria-labelledby="episode-73485">
-      <div class="rating-trigger"><span class="value">79%</span></div>
-      <div class="info"><div class="titles"><h3 id="episode-73485">
-        <a href="/shows/breaking-bad/seasons/1/episodes/4"><span class="number">1x04</span></a>
-        <a href="/shows/breaking-bad/seasons/1/episodes/4">Cancer Man</a>
-      </h3></div></div>
-    </article>
-    <article class="row" aria-labelledby="episode-73483">
-      <div class="rating-trigger"><span class="value">81%</span></div>
-      <div class="info"><div class="titles"><h3 id="episode-73483">
-        <a href="/shows/breaking-bad/seasons/1/episodes/2"><span class="number">1x02</span></a>
-        <a href="/shows/breaking-bad/seasons/1/episodes/2">Cat's in the Bag...</a>
-      </h3></div></div>
-    </article>
+    ${episodeRowHtml({ number: 3, id: 73484, title: '...And the Bag\'s in the River', rating: 80 })}
+    ${episodeRowHtml({ number: 1, id: 73482, title: 'Pilot', rating: 83 })}
+    ${episodeRowHtml({ number: 4, id: 73485, title: 'Cancer Man', rating: 79 })}
+    ${episodeRowHtml({ number: 2, id: 73483, title: 'Cat\'s in the Bag...', rating: 81 })}
   </section>
 </main>`;
 
@@ -235,8 +261,10 @@ export const PLAYBACK_PROGRESS_HTML = `
   <section class="progress watched" aria-label="Watching" aria-busy="false"><div class="empty">No shows.</div></section>
 </main>`;
 
+/** Live `/people/bryan-cranston` (2026-11-09, trakt-og 3e65cd7): og's splash section renders its own h1 before the
+ * person's, so readers must take the summary heading, not the first h1. */
 export const PERSON_HTML = `
-<h1>Watch Trakt on your phone</h1>
+<section class="splash"><h1 id="s1"><span class="phone"><span class="visually-hidden">OG Redux</span></span></h1></section>
 <div class="summary"><div><div class="summary-title"><h1>Bryan Cranston <!----></h1></div></div></div>`;
 
 /** Live `/people/bryan-cranston` structure, trimmed to the summary heading, sidebar native links and overview. */
@@ -329,8 +357,9 @@ export const FORVO_MULTI_HTML = `
 </div></div>
 <script>var _AUDIO_HTTP_HOST='audio12.forvo.com';</script>`;
 
-/** Live `/shows/breaking-bad/seasons/1` capture, 2026-11-02; trimmed to the show link, season heading,
- * external-id strip and summary mount anchors. The IMDb/TMDb links here are the show's. */
+/** Live `/shows/breaking-bad/seasons/1` capture, 2026-11-02, re-checked 2026-11-09 (trakt-og 3e65cd7); trimmed to the
+ * show link, season heading, external-id strip and summary mount anchors. The IMDb link here is the show's season list;
+ * the sidebar links are the season's own. */
 export const SEASON_PAGE_HTML = `
 <main id="content">
   <section class="fanart-header with-stats">
@@ -349,15 +378,22 @@ export const SEASON_PAGE_HTML = `
   </section>
   <section class="summary-frame">
     <div class="container"><div class="columns">
-      ${summarySidebarHtml({ label: 'Breaking Bad', poster: 'images/seasons/000/003/950/posters/medium/season.webp', posterAlt: 'Breaking Bad: Season 1', nativeServices: 6, backHref: '/shows/breaking-bad' })}
+      ${summarySidebarHtml({ label: 'Breaking Bad', poster: 'images/seasons/000/003/950/posters/medium/season.webp', posterAlt: 'Breaking Bad: Season 1', nativeServices: 6, backHref: '/shows/breaking-bad', externalLinks: [
+        ['IMDB', 'https://www.imdb.com/title/tt0903747/episodes?season=1'],
+        ['TMDB', 'https://www.themoviedb.org/tv/1396/season/1'],
+        ['Wikipedia', 'https://duckduckgo.com/?q=!wikipedia%20Breaking%20Bad%202008'],
+      ] })}
       <div class="info" id="overview"><div class="top"><div class="details">${watchNowHtml({ phone: true, nativeServices: 6 })}</div><div class="actions"></div></div><div class="phone-tools"></div></div>
     </div></div>
   </section>
-  <section class="episodes"><article class="row"><span class="rating-trigger"><span class="value">83%</span></span><div class="titles"><h3><span class="number">1x01</span> Pilot</h3></div></article></section>
+  <section class="episodes">
+    ${episodeRowHtml({ number: 1, id: 73482, title: 'Pilot', rating: 83 })}
+  </section>
 </main>`;
 
-/** Live `/shows/breaking-bad/seasons/1/episodes/1` capture, 2026-11-02; trimmed to the show/season
- * links, episode heading, external-id strip and summary mount anchors. IMDb here is the episode's. */
+/** Live `/shows/breaking-bad/seasons/1/episodes/1` capture, 2026-11-02, re-checked 2026-11-09 (trakt-og 3e65cd7);
+ * trimmed to the show/season links, episode heading, external-id strip and summary mount anchors. IMDb here, in the
+ * strip and the sidebar, is the episode's. */
 export const EPISODE_PAGE_HTML = `
 <main id="content">
   <section class="fanart-header with-stats">
@@ -377,18 +413,16 @@ export const EPISODE_PAGE_HTML = `
   </section>
   <section class="summary-frame">
     <div class="container"><div class="columns">
-      ${summarySidebarHtml({ label: 'Breaking Bad', poster: 'images/seasons/000/003/950/posters/medium/season.webp', posterAlt: 'Breaking Bad: Season 1', nativeServices: 6, backHref: '/shows/breaking-bad' })}
+      ${summarySidebarHtml({ label: 'Breaking Bad', poster: 'images/seasons/000/003/950/posters/medium/season.webp', posterAlt: 'Breaking Bad: Season 1', nativeServices: 6, backHref: '/shows/breaking-bad', externalLinks: [
+        ['IMDB', 'https://www.imdb.com/title/tt0959621'],
+        ['TMDB', 'https://www.themoviedb.org/tv/1396/season/1/episode/1'],
+        ['Wikipedia', 'https://duckduckgo.com/?q=!wikipedia%20Breaking%20Bad%202008'],
+      ] })}
       <div class="info" id="overview"><div class="top"><div class="details">${watchNowHtml({ phone: true, nativeServices: 6 })}</div><div class="actions"></div></div><div class="phone-tools"></div></div>
     </div></div>
   </section>
-  <section class="episodes"><article class="row"><span class="rating-trigger"><span class="value">83%</span></span></article></section>
+
 </main>`;
-
-// Live og.trakt.tv Breaking Bad capture, 2026-10-31; trimmed to semantic mount anchors.
-export const LIVE_RATINGS_SEASON_HTML = "<section class=\"episodes\"><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">83%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/1\" class=\"\"><span class=\"number\">1x01</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/1\" class=\"\">Pilot</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->January 21, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->59m<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill colored\"><!--[-1--><!--]--><!--[-1-->Series Premiere<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">83%</span></span></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">81%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/2\" class=\"\"><span class=\"number\">1x02</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/2\" class=\"\">Cat's in the Bag...</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->January 28, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->49m<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">81%</span></span></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">80%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/3\" class=\"\"><span class=\"number\">1x03</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/3\" class=\"\">...And the Bag's in the River</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->February 11, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->49m<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">80%</span></span></article><article class=\"row\"><span class=\"rating-trigger\"><span class=\"value\">79%</span></span><div class=\"titles\"><h3 class=\"\"><a href=\"/shows/breaking-bad/seasons/1/episodes/4\" class=\"\"><span class=\"number\">1x04</span></a> <!----><!--[-1--><a href=\"/shows/breaking-bad/seasons/1/episodes/4\" class=\"\">Cancer Man</a><!----><!----><!--]--><!----><!----></h3> <div class=\"meta\"><span class=\"tag-pills\"><!--[--><!--[-1--><!----><span class=\"pill primary\"><!--[-1--><!--]--><!--[-1-->February 18, 2008 2:00 AM<!--]--><!----></span><!----><!--]--><!--[-1--><!----><span class=\"pill\"><!--[-1--><!--]--><!--[-1-->49m<!--]--><!----></span><!----><!--]--><!--]--></span><!----></div></div></article></section>";
-
-// Live og.trakt.tv Breaking Bad capture, 2026-10-31; trimmed to semantic mount anchors.
-export const LIVE_RATINGS_SHOW_HTML = "<section class=\"seasons\"><article class=\"poster-card\"><a class=\"poster poster\" href=\"/shows/breaking-bad/seasons/5\"> <!--[-1--><!--]--> <!--[-1--><!--]--> <!--[-1--><!--]--> <!----></a><div class=\"quick-icons small\"><div class=\"actions\"><div class=\"tools\"></div></div> <button type=\"button\" class=\"rating-trigger card\" aria-label=\"Rate Season 5\"><span class=\"percentage\"><span class=\"value\">85%</span></span></button></div><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/5\"><h3 class=\"\"><!--[-1-->Season 5<!--]--></h3></a><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/5\"><span class=\"subtitle\"><!--[0-->16 episodes<!--]--></span></a></article><article class=\"poster-card\"><a class=\"poster poster\" href=\"/shows/breaking-bad/seasons/4\"> <!--[-1--><!--]--> <!--[-1--><!--]--> <!--[-1--><!--]--> <!----></a><div class=\"quick-icons small\"><div class=\"actions\"><div class=\"tools\"></div></div> <button type=\"button\" class=\"rating-trigger card\" aria-label=\"Rate Season 4\"><span class=\"percentage\"><span class=\"value\">85%</span></span></button></div><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/4\"><h3 class=\"\"><!--[-1-->Season 4<!--]--></h3></a><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/4\"><span class=\"subtitle\"><!--[0-->13 episodes<!--]--></span></a></article><article class=\"poster-card\"><a class=\"poster poster\" href=\"/shows/breaking-bad/seasons/3\"> <!--[-1--><!--]--> <!--[-1--><!--]--> <!--[-1--><!--]--> <!----></a><div class=\"quick-icons small\"><div class=\"actions\"><div class=\"tools\"></div></div> <button type=\"button\" class=\"rating-trigger card\" aria-label=\"Rate Season 3\"><span class=\"percentage\"><span class=\"value\">85%</span></span></button></div><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/3\"><h3 class=\"\"><!--[-1-->Season 3<!--]--></h3></a><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/3\"><span class=\"subtitle\"><!--[0-->13 episodes<!--]--></span></a></article><article class=\"poster-card\"><a class=\"poster poster\" href=\"/shows/breaking-bad/seasons/2\"> <!--[-1--><!--]--> <!--[-1--><!--]--> <!--[-1--><!--]--> <!----></a><div class=\"quick-icons small\"><div class=\"actions\"><div class=\"tools\"></div></div> <button type=\"button\" class=\"rating-trigger card\" aria-label=\"Rate Season 2\"><span class=\"percentage\"><span class=\"value\">85%</span></span></button></div><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/2\"><h3 class=\"\"><!--[-1-->Season 2<!--]--></h3></a><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/2\"><span class=\"subtitle\"><!--[0-->13 episodes<!--]--></span></a></article><article class=\"poster-card\"><a class=\"poster poster\" href=\"/shows/breaking-bad/seasons/1\"> <!--[-1--><!--]--> <!--[-1--><!--]--> <!--[-1--><!--]--> <!----></a><div class=\"quick-icons small\"><div class=\"actions\"><div class=\"tools\"></div></div> <button type=\"button\" class=\"rating-trigger card\" aria-label=\"Rate Season 1\"><span class=\"percentage\"><span class=\"value\">85%</span></span></button></div><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/1\"><h3 class=\"\"><!--[-1-->Season 1<!--]--></h3></a><a class=\"titles-link\" href=\"/shows/breaking-bad/seasons/1\"><span class=\"subtitle\"><!--[0-->7 episodes<!--]--></span></a></article></section>";
 
 /** og.trakt.tv/users/justin/lists, signed out (trakt-og d41f511): the Lists dropdown, the Watchlist row and one personal list row. */
 export const ALL_LISTS_HTML = `<div class="dropdown svelte-121basj" style="anchor-name: --dropdown-s13;"><button type="button" class="trigger default svelte-121basj" popovertarget="dropdown-s13"><span class="section svelte-121basj">Lists:</span> Personal <span class="caret svelte-1qkvb7r"><svg class="icon svelte-v7nk5l" viewBox="0 0 320 512" aria-hidden="true" focusable="false"><path fill="currentColor" d="M137 375Q147 384 160 384Q173 384 183 375L311 247Q325 231 318 212Q309 193 288 192L32 192Q11 193 2 212Q-5 231 9 247"></path></svg></span></button> <div id="dropdown-s13" class="menu svelte-121basj" popover="auto" role="presentation" style="position-anchor: --dropdown-s13; --check: url(&quot;data:image/svg+xml,%3csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20512%20512'%3e%3cpath%20fill='currentColor'%20d='M457%2078L440%2061Q427%2048%20409.50%2048Q392%2048%20380%2061L218%20223L133%20137Q120%20125%20102.50%20125Q85%20125%2073%20137L56%20154Q44%20167%2044%20184.50Q44%20202%2056%20214L218%20376L457%20137Q469%20125%20469%20107.50Q469%2090%20457%2078'/%3e%3c/svg%3e&quot;);"><ul><li class="header" role="presentation">Lists</li> <li><a href="/users/justin/lists" aria-current="page">Personal</a></li> <li><a href="/users/justin/smart-lists" aria-label="Smart lists">Smart</a></li> <li><a href="/users/justin/lists/collaborations">Collaborations</a></li></ul> <hr/> <ul><li class="header" role="presentation">Liked</li> <li><a href="/users/justin/lists/liked" aria-label="Liked personal lists">Personal</a></li> <li><a href="/users/justin/lists/liked/official" aria-label="Liked official lists">Official</a></li></ul></div></div>

@@ -8,6 +8,7 @@ import { createLibraryApi } from '../src/features/library/api.js';
 import { showSuccessToast } from '../src/ui/success-notification.js';
 import { MOVIE_HTML, WATCHLIST_HTML, watchlistCardHtml } from './fixtures.js';
 import { answerDialogs } from './dialogs.js';
+import { waitFor } from './wait.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 100) => new Promise(resolve => setTimeout(resolve, ms));
@@ -90,11 +91,11 @@ test('fallback success notice offers Undo and keeps a failed removal retryable',
   stale.node.querySelector('.ogt-watchlist-toast__undo').click();
   await wait(0);
   assert.equal(undos, 2, 'a stale Undo never writes');
-  assert.equal(stale.node.querySelector('.ogt-watchlist-toast__undo'), null);
+  assert.equal(Boolean(stale.node.querySelector('.ogt-watchlist-toast__undo')), false);
   assert.match(stale.node.querySelector('.ogt-watchlist-toast__error').textContent, /page you saved from/);
   const plain = showSuccessToast('No undo');
   handles.push(plain);
-  assert.equal(plain.node.querySelector('.ogt-watchlist-toast__undo'), null);
+  assert.equal(Boolean(plain.node.querySelector('.ogt-watchlist-toast__undo')), false);
 });
 
 function boot(t, { path = '/movies/fight-club-1999', html = WATCHLIST_HTML, library = false } = {}) {
@@ -136,11 +137,11 @@ test('built watchlist Undo removes with the same body and restores the action', 
   assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, 'You added Spider-Man: Brand New Day to your watchlist.');
   const undo = b.document.querySelector('.ogt-watchlist-toast__undo');
   assert.ok(undo);
-  undo.click(); await wait(1200);
-  assert.equal(b.writes().length, 2);
+  undo.click();
+  await waitFor(() => b.writes().length === 2 && !panel().hidden, { message: 'the watchlist Undo' });
   assert.equal(b.writes()[1].url, 'https://api.trakt.tv/sync/watchlist/remove');
   assert.deepEqual(JSON.parse(b.writes()[1].data), { movies: [{ ids: { trakt: 12 } }] });
-  assert.equal(b.document.querySelector('.ogt-watchlist-toast'), null);
+  assert.equal(Boolean(b.document.querySelector('.ogt-watchlist-toast')), false);
   assert.equal(panel().hidden, false);
   assert.equal(button().textContent, 'Add to watchlist');
 });
@@ -154,11 +155,11 @@ test('built library Undo removes the collected items and restores the action', a
   assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, 'You added The Dark to your library.');
   const undo = b.document.querySelector('.ogt-watchlist-toast__undo');
   assert.ok(undo);
-  undo.click(); await wait(1200);
-  assert.equal(b.writes().length, 2);
+  undo.click();
+  await waitFor(() => b.writes().length === 2 && !panel().hidden, { message: 'the library Undo' });
   assert.equal(b.writes()[1].url, 'https://api.trakt.tv/sync/collection/remove');
   assert.deepEqual(JSON.parse(b.writes()[1].data), JSON.parse(b.writes()[0].data));
-  assert.equal(b.document.querySelector('.ogt-watchlist-toast'), null);
+  assert.equal(Boolean(b.document.querySelector('.ogt-watchlist-toast')), false);
   assert.equal(panel().hidden, false);
   assert.equal(button().textContent, 'Add to library');
 });
@@ -170,9 +171,8 @@ test('built card Undo restores the card shortcut', async t => {
   assert.equal(button().hidden, true);
   const undo = b.document.querySelector('.ogt-watchlist-toast__undo');
   assert.ok(undo);
-  undo.click(); await wait(1200);
-  assert.equal(b.writes().length, 2);
+  undo.click();
+  await waitFor(() => b.writes().length === 2 && !button().hidden, { message: 'the card Undo' });
   assert.equal(b.writes()[1].url, 'https://api.trakt.tv/sync/watchlist/remove');
-  assert.equal(button().hidden, false);
   assert.equal(button().getAttribute('aria-label'), 'Add to watchlist');
 });

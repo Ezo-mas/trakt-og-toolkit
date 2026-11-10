@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { readFileSync } from 'node:fs';
 import { watchlistCardHtml } from './fixtures.js';
+import { waitFor } from './wait.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 80) => new Promise(resolve => setTimeout(resolve, ms));
@@ -134,7 +135,8 @@ test('signed-out and failed card additions stay available with guidance and retr
   assert.equal(b.buttons()[0].hidden, false);
   assert.equal(b.buttons()[0].disabled, false);
   assert.match(b.document.querySelector('.ogt-toast').textContent, /could not find/);
-  b.buttons()[0].click(); await wait(1200); assert.equal(b.writes().length, 2);
+  b.buttons()[0].click();
+  await waitFor(() => b.writes().length === 2, { message: 'the retried addition' });
 });
 
 test('account changes, card removal and navigation cancel lookups and ignore late saves', async t => {
@@ -152,5 +154,5 @@ test('account changes, card removal and navigation cancel lookups and ignore lat
   b.store.delete('trakt.oauth.tokens'); b.authChange();
   for (const respond of b.pending) respond(); await wait();
   assert.equal(b.buttons()[0].hidden, false);
-  assert.equal(b.document.querySelector('.ogt-toast'), null);
+  assert.equal(Boolean(b.document.querySelector('.ogt-toast')), false);
 });

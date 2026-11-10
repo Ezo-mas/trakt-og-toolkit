@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import { createLibraryApi } from '../src/features/library/api.js';
 import { parseRoute } from '../src/core/router.js';
-import { readFileSync } from 'node:fs';
 import { MOVIE_HTML } from './fixtures.js';
 import { library } from '../src/features/library/index.js';
 
@@ -58,57 +57,6 @@ test('empty or partially unsuccessful API results are not presented as success',
   }
 });
 
-test('built script mounts button, guides sign-in, saves once, and removes it after navigation', async t => {
-  const window = new Window({ url: 'https://og.trakt.tv/movies/the-dark-2005' });
-  t.after(() => window.close());
-  const store = new Map(), writes = [];
-  window.GM_getValue = (key, fallback) => store.get(key) ?? fallback;
-  window.GM_setValue = (key, value) => store.set(key, value);
-  window.GM_deleteValue = key => store.delete(key);
-  window.GM_registerMenuCommand = () => {};
-  window.GM_addStyle = () => {};
-  window.GM_xmlhttpRequest = r => {
-    if (r.method === 'POST') writes.push(r);
-    const body = r.method === 'POST' ? { added: { movies: 1 } } :
-      new URL(r.url).pathname.startsWith('/sync/playback') ? [] : { ids: { trakt: 12 } };
-    queueMicrotask(() => r.onload({ status: 200, responseText: JSON.stringify(body), responseHeaders: '' }));
-    return { abort() {} };
-  };
-  const wait = () => new Promise(resolve => setTimeout(resolve, 250));
-  window.document.write(`<!doctype html><html><head></head><body>${MOVIE_HTML}</body></html>`);
-  window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
-  window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
-  await wait();
-  const button = window.document.querySelector('#ogt-library button');
-  assert.ok(button);
-  button.click();
-  assert.match(window.document.querySelector('#ogt-library').textContent, /Sign in/);
-  assert.equal(writes.length, 0);
-  store.set('trakt.clientId', 'client');
-  store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 });
-  window.document.dispatchEvent(new window.Event('ogt:authchange'));
-  button.click(); button.click();
-  await wait();
-  assert.equal(writes.length, 1);
-  assert.equal(writes[0].url, 'https://api.trakt.tv/sync/collection');
-  assert.equal(window.document.getElementById('ogt-library').hidden, true);
-  assert.equal(window.document.querySelector('.ogt-watchlist-toast__message').textContent, 'You added The Dark to your library.');
-  // OG eventually learns about the addition, then the user removes it natively.
-  const nativeCollection = window.document.createElement('div');
-  nativeCollection.className = 'summary-action selected';
-  nativeCollection.innerHTML = '<span class="title">In library</span>';
-  window.document.querySelector('.actions').append(nativeCollection);
-  await wait();
-  assert.equal(window.document.getElementById('ogt-library').hidden, true);
-  nativeCollection.remove();
-  await wait();
-  assert.equal(window.document.getElementById('ogt-library').hidden, false);
-  assert.equal(writes.length, 1, 'removing via OG does not trigger a toolkit write');
-  window.history.pushState({}, '', '/');
-  await wait();
-  assert.equal(window.document.getElementById('ogt-library'), null);
-});
-
 test('library action has independent classes and follows native collection changes without leaving a gap', async t => {
   const window = new Window();
   const saved = {};
@@ -137,5 +85,5 @@ test('library action has independent classes and follows native collection chang
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(handle.node.hidden, true);
   handle.destroy();
-  assert.equal(window.document.getElementById('ogt-library'), null);
+  assert.equal(Boolean(window.document.getElementById('ogt-library')), false);
 });

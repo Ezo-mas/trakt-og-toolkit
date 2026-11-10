@@ -6,9 +6,9 @@ import { ELEMENT_TITLE_SHOW_HTML, MOVIE_HTML, SHOW_HTML } from './fixtures.js';
 import { readLibraryTitle } from '../src/features/library/data.js';
 import { nativeLibraryImports, isNativeLibraryStore } from '../src/features/library/native-refresh.js';
 import { answerDialogs } from './dialogs.js';
+import { wait, waitFor } from './wait.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
-const wait = (ms = 100) => new Promise(resolve => setTimeout(resolve, ms));
 const rootUrl = 'https://og.trakt.tv/_app/immutable/nodes/0.new.js';
 const overlayUrl = 'https://og.trakt.tv/_app/immutable/chunks/new-overlay.js';
 const rootSource = 'import{a as o}from"../chunks/new-overlay.js";o.start(user);o.stop();o.recheck();';
@@ -42,16 +42,18 @@ test('library module discovery follows only loaded root imports with the native 
   assert.equal(isNativeLibraryStore(overlaySource.replace('refresh:', 'reset:')), false);
 });
 
-function boot(t, { show = false, nativeSignedIn = true, differentAccount = false, failRefresh = false,
+function boot(t, { show = false, signedIn = true, nativeSignedIn = true, differentAccount = false, failRefresh = false,
   blocked = false, result, deferLookup = false, deferRefresh = false } = {}) {
   const path = show ? '/shows/breaking-bad' : '/movies/the-dark-2005';
   const window = new Window({ url: `https://og.trakt.tv${path}` });
   t.after(() => window.close());
   const { document } = window;
-  const store = new Map([
-    ['trakt.clientId', 'client'],
-    ['trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 }],
-  ]);
+  const store = new Map();
+  const signIn = () => {
+    store.set('trakt.clientId', 'client');
+    store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 });
+  };
+  if (signedIn) signIn();
   const calls = [], assets = [], bridges = [], pending = [];
   let refreshes = 0;
   window.GM_getValue = (key, fallback) => store.get(key) ?? fallback;
@@ -97,90 +99,124 @@ function boot(t, { show = false, nativeSignedIn = true, differentAccount = false
   };
   window.eval(bundle);
   document.dispatchEvent(new window.Event('DOMContentLoaded'));
-  return { window, document, calls, assets, bridges, pending, store,
+  const b = { window, document, calls, assets, bridges, pending, store,
     refreshes: () => refreshes, writes: () => calls.filter(r => r.method === 'POST'),
-    button: () => document.querySelector('#ogt-library button') };
+    library: () => document.querySelector('#ogt-library'),
+    button: () => document.querySelector('#ogt-library button'),
+    signIn: () => { signIn(); document.dispatchEvent(new window.Event('ogt:authchange')); },
+    /** An addition has finished (saved or failed) once the button is enabled again after the write. */
+    settled: () => waitFor(() => b.writes().length && !b.button().disabled, { message: 'the library addition to settle' }),
+  };
+  return b;
 }
 
+/** Boots and waits for the library action to mount. */
+async function mounted(t, options) {
+  const b = boot(t, options);
+  await waitFor(() => b.button(), { message: 'the library action' });
+  return b;
+}
+
+test('built library guides sign-in, then saves once after the account connects, and leaves on navigation', async t => {
+  const b = await mounted(t, { signedIn: false });
+  b.button().click();
+  assert.match(b.library().textContent, /Sign in/);
+  b.signIn();
+  b.button().click(); b.button().click();
+  await b.settled();
+  assert.equal(b.writes().length, 1);
+  b.window.history.pushState({}, '', '/');
+  await waitFor(() => !b.library(), { message: 'the action to leave with the page' });
+});
+
 for (const show of [false, true]) test(`built library ${show ? 'show' : 'movie'} uses title notification, one write and a read-only native refresh`, async t => {
-  const b = boot(t, { show }); await wait();
-  assert.equal(b.document.querySelector('.ogt-library-card'), null);
-  b.button().click(); b.button().click(); await wait();
+  const b = await mounted(t, { show });
+  assert.equal(Boolean(b.document.querySelector('.ogt-library-card')), false);
+  b.button().click(); b.button().click();
+  await b.settled();
+  await waitFor(() => b.document.querySelector('.ogt-watchlist-toast__message'), { message: 'the success notice' });
   assert.equal(b.writes().length, 1);
   assert.equal(b.writes()[0].url, 'https://api.trakt.tv/sync/collection');
   assert.equal(b.refreshes(), 1);
   assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent,
     `You added ${show ? 'Breaking Bad' : 'The Dark'} to your library.`);
-  assert.equal(b.document.querySelector('#ogt-library').hidden, true);
+  assert.equal(b.library().hidden, true);
   assert.ok(b.document.querySelector('#native-collected'));
   assert.equal(b.assets.length, 2);
   assert.ok(b.assets.every(({ options }) => options.credentials === 'omit' && options.cache === 'force-cache'));
   assert.ok(b.bridges.every(script => !script.isConnected));
-  b.document.querySelector('#native-collected').remove(); await wait();
-  assert.equal(b.document.querySelector('#ogt-library').hidden, false);
+  b.document.querySelector('#native-collected').remove();
+  await waitFor(() => !b.library().hidden, { message: 'the action to return after a native removal' });
   assert.equal(b.writes().length, 1, 'native removal does not write');
 });
 
 for (const mode of ['signed-out', 'different-account', 'failed-read', 'blocked']) test(`library native ${mode} keeps the successful addition and one notification`, async t => {
-  const b = boot(t, { nativeSignedIn: mode !== 'signed-out', differentAccount: mode === 'different-account',
-    failRefresh: mode === 'failed-read', blocked: mode === 'blocked' }); await wait();
-  b.button().click(); await wait();
+  const b = await mounted(t, { nativeSignedIn: mode !== 'signed-out', differentAccount: mode === 'different-account',
+    failRefresh: mode === 'failed-read', blocked: mode === 'blocked' });
+  b.button().click();
+  await b.settled();
+  await waitFor(() => b.document.querySelector('.ogt-watchlist-toast'), { message: 'the success notice' });
   assert.equal(b.writes().length, 1);
-  assert.equal(b.document.querySelector('#ogt-library').hidden, true);
+  assert.equal(b.library().hidden, true);
   assert.equal(b.document.querySelectorAll('.ogt-watchlist-toast').length, 1);
-  assert.equal(b.document.querySelector('#native-collected'), null);
+  assert.equal(Boolean(b.document.querySelector('#native-collected')), false);
   assert.ok(b.bridges.every(script => !script.isConnected));
   if (mode === 'signed-out') assert.equal(b.assets.length, 0);
 });
 
 test('failed API writes never refresh native state or show success', async t => {
-  const b = boot(t, { result: { added: { movies: 1 }, not_found: { movies: [{}] } } }); await wait();
-  b.button().click(); await wait();
+  const b = await mounted(t, { result: { added: { movies: 1 }, not_found: { movies: [{}] } } });
+  b.button().click();
+  await b.settled();
+  await wait();
   assert.equal(b.refreshes(), 0);
-  assert.equal(b.document.querySelector('.ogt-watchlist-toast'), null);
-  assert.equal(b.document.querySelector('#ogt-library').hidden, false);
+  assert.equal(Boolean(b.document.querySelector('.ogt-watchlist-toast')), false);
+  assert.equal(b.library().hidden, false);
 });
 
 for (const change of ['auth', 'navigate']) test(`library ${change} during lookup prevents a late save`, async t => {
-  const b = boot(t, { deferLookup: true }); await wait(); b.button().click(); await wait();
+  const b = await mounted(t, { deferLookup: true });
+  b.button().click();
+  await waitFor(() => b.pending.length, { message: 'the title lookup' });
   if (change === 'auth') { b.store.delete('trakt.oauth.tokens'); b.document.dispatchEvent(new b.window.Event('ogt:authchange')); }
   else b.window.history.pushState({}, '', '/movies/another-title');
-  for (const resume of b.pending) resume(); await wait();
+  for (const resume of b.pending) resume();
+  await wait();
   assert.equal(b.writes().length, 0);
   assert.equal(b.refreshes(), 0);
-  assert.equal(b.document.querySelector('.ogt-watchlist-toast'), null);
+  assert.equal(Boolean(b.document.querySelector('.ogt-watchlist-toast')), false);
 });
 
 test('an account change while native refresh runs removes the bridge and ignores its late acknowledgement', async t => {
-  const b = boot(t, { deferRefresh: true, differentAccount: true }); await wait();
-  b.button().click(); await wait();
-  assert.equal(b.refreshes(), 1);
-  assert.equal(b.bridges[0].isConnected, true);
-  assert.equal(b.document.querySelector('#ogt-library').hidden, false);
+  const b = await mounted(t, { deferRefresh: true, differentAccount: true });
+  b.button().click();
+  await waitFor(() => b.refreshes() === 1 && b.bridges[0]?.isConnected, { message: 'the native refresh bridge' });
+  assert.equal(b.library().hidden, false);
   assert.equal(b.button().disabled, true);
   assert.match(b.button().textContent, /Updating library/);
-  b.document.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
-  assert.equal(b.bridges[0].isConnected, false);
-  for (const resume of b.pending) resume(); await wait();
-  assert.equal(b.document.querySelector('#ogt-library').hidden, false);
+  b.document.dispatchEvent(new b.window.Event('ogt:authchange'));
+  await waitFor(() => !b.bridges[0].isConnected, { message: 'the bridge to be removed' });
+  for (const resume of b.pending) resume();
+  await wait();
+  assert.equal(b.library().hidden, false);
   assert.equal(b.writes().length, 1);
 });
 
 test('public module preparation overlaps the save and the pending row hands off to native library UI', async t => {
-  const b = boot(t, { deferLookup: true, deferRefresh: true }); await wait();
-  b.button().click(); await wait();
-  assert.equal(b.assets.length, 2, 'discovery already finished while the API lookup is pending');
+  const b = await mounted(t, { deferLookup: true, deferRefresh: true });
+  b.button().click();
+  await waitFor(() => b.pending.length && b.assets.length === 2, { message: 'module discovery during the lookup' });
   assert.equal(b.refreshes(), 0, 'preparation never reads native account state');
   assert.equal(b.writes().length, 0);
-  for (const resume of b.pending.splice(0)) resume(); await wait();
+  for (const resume of b.pending.splice(0)) resume();
+  await waitFor(() => b.refreshes() === 1, { message: 'the native refresh' });
   assert.equal(b.writes().length, 1);
-  assert.equal(b.refreshes(), 1);
-  assert.equal(b.document.querySelector('#ogt-library').hidden, false);
+  assert.equal(b.library().hidden, false);
   assert.equal(b.button().disabled, true);
   assert.match(b.button().textContent, /Updating library/);
   assert.equal(b.assets.length, 2, 'refresh reuses the prepared module');
-  b.pending.shift()(); await wait();
-  assert.ok(b.document.querySelector('#native-collected'));
-  assert.equal(b.document.querySelector('#ogt-library').hidden, true);
+  await waitFor(() => b.pending.length, { message: 'the deferred refresh' });
+  b.pending.shift()();
+  await waitFor(() => b.document.querySelector('#native-collected') && b.library().hidden, { message: 'the native hand-off' });
   assert.equal(b.writes().length, 1);
 });

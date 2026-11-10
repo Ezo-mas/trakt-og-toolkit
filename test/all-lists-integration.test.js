@@ -68,7 +68,7 @@ test('All lists joins og\'s Lists menu after Collaborations and loads nothing un
   assert.equal(link.textContent, 'All lists');
   assert.equal(link.getAttribute('href'), '/users/justin/lists#ogt-all-lists');
   assert.equal(link.closest('li').previousElementSibling.querySelector('a').textContent, 'Collaborations');
-  assert.equal(view(document), null);
+  assert.equal(Boolean(view(document)), false);
   assert.equal(requests.length, 0);
 });
 
@@ -86,7 +86,7 @@ test('choosing All lists appends collaborations and liked lists in og\'s own row
   assert.equal(document.querySelector('a[href="/users/justin/lists"]').hasAttribute('aria-current'), false);
   assert.equal(document.querySelector('.ogt-all-lists__personal-heading').textContent, 'Personal');
   const root = view(document);
-  assert.equal(document.querySelector('section.lists').nextElementSibling, root);
+  assert.ok(document.querySelector('section.lists').nextElementSibling === root);
   assert.ok(root.classList.contains('svelte-wj9vv6'), 'takes the section\'s own classes');
   assert.equal(root.classList.contains('ogt-all-lists--fallback'), false);
 
@@ -103,9 +103,9 @@ test('choosing All lists appends collaborations and liked lists in og\'s own row
   assert.equal(counts[2].getAttribute('href'), '/users/owner/lists/list-1/comments');
   assert.ok(counts[1].classList.contains('svelte-1c8x1ot'), 'og\'s count classes and icon');
   assert.equal(collab.querySelector('.tools .share button').getAttribute('title'), 'Copy Link');
-  assert.equal(collab.querySelector('.tools [popover]'), null, 'no copied tooltip');
-  assert.equal(collab.querySelector('.tools .progress'), null, 'progress needs a signed-in viewer');
-  assert.equal(collab.querySelector('.leave'), null);
+  assert.equal(Boolean(collab.querySelector('.tools [popover]')), false, 'no copied tooltip');
+  assert.equal(Boolean(collab.querySelector('.tools .progress')), false, 'progress needs a signed-in viewer');
+  assert.equal(Boolean(collab.querySelector('.leave')), false);
 
   // Liked lists come without posters; each row's are read from the list summary.
   assert.equal(liked.querySelectorAll('.fan img.poster').length, 1);
@@ -113,8 +113,8 @@ test('choosing All lists appends collaborations and liked lists in og\'s own row
   assert.equal(liked.querySelectorAll('.poster.loading').length, 0);
 
   document.querySelector('a[href="/users/justin/lists"]').click();
-  assert.equal(view(document), null);
-  assert.equal(document.querySelector('.ogt-all-lists__personal-heading'), null);
+  assert.equal(Boolean(view(document)), false);
+  assert.equal(Boolean(document.querySelector('.ogt-all-lists__personal-heading')), false);
   assert.equal(triggerLabel(document), 'Lists: Personal');
   assert.equal(document.querySelector('a[href="/users/justin/lists"]').getAttribute('aria-current'), 'page');
   assert.equal(option(document).hasAttribute('aria-current'), false);
@@ -149,7 +149,7 @@ test('other list pages link to the personal page, which opens All lists from the
   const click = new liked.window.MouseEvent('click', { bubbles: true, cancelable: true });
   option(liked.document).dispatchEvent(click);
   assert.equal(click.defaultPrevented, false, 'og\'s router follows the link');
-  assert.equal(view(liked.document), null);
+  assert.equal(Boolean(view(liked.document)), false);
 
   const arrived = boot({ url: 'https://og.trakt.tv/users/justin/lists#ogt-all-lists' });
   t.after(() => arrived.window.close());
@@ -163,7 +163,7 @@ test('single lists and smart lists pages are left alone', async (t) => {
     const { window, document } = boot({ url: `https://og.trakt.tv${path}` });
     t.after(() => window.close());
     await wait();
-    assert.equal(option(document), null, path);
+    assert.equal(Boolean(option(document)), false, path);
   }
 });
 
@@ -211,7 +211,7 @@ test('rows show the viewer\'s likes, owners\' VIP labels and description line br
     assert.ok(label.classList.contains('svelte-lytdbn'), 'og\'s own VIP label');
     assert.equal(label.querySelector('.name').textContent, 'VIP');
     assert.equal(label.querySelector('abbr.tag').textContent, 'EP');
-    assert.equal(liked[1].querySelector('.label-vip'), null);
+    assert.equal(Boolean(liked[1].querySelector('.label-vip')), false);
     const paragraphs = [...liked[0].querySelectorAll('.overview p')];
     assert.deepEqual(paragraphs.map((p) => p.textContent), ['Maintained by mdblist.comCreate your own', 'Updated daily']);
     assert.equal(paragraphs[0].querySelectorAll('br').length, 1);
@@ -226,7 +226,7 @@ test('VIP owners get og\'s label even when no native row on the page has one to 
   });
   t.after(() => window.close());
   await wait();
-  assert.equal(document.querySelector('section.lists .label-vip'), null, 'fixture has no native label');
+  assert.equal(Boolean(document.querySelector('section.lists .label-vip')), false, 'fixture has no native label');
   option(document).click();
   await wait();
   const label = view(document).querySelector('.ogt-all-lists__group--liked .by .ogt-vip');

@@ -57,11 +57,11 @@ test('built bundle renders under ribbon, links review, remembers hide and signs 
   const ratings = b.calls.filter((r) => new URL(r.url).pathname === '/sync/ratings');
   assert.equal(ratings.length, 1); assert.equal(new URL(ratings[0].url).search, '', 'ratings load in one unpaginated request');
   node.querySelector('img').dispatchEvent(new b.window.Event('error'));
-  assert.equal(node.querySelector('img'), null, 'a failed fanart leaves no broken image');
+  assert.equal(Boolean(node.querySelector('img')), false, 'a failed fanart leaves no broken image');
   node.querySelector('.ogt-review__hide').click(); assert.equal(node.hidden, true);
   assert.equal(b.store.get('review.dismissed.tester'), lastMonth().key);
   b.store.delete('trakt.oauth.tokens'); b.doc.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
-  assert.equal(b.doc.querySelector('#ogt-month-review'), null);
+  assert.equal(Boolean(b.doc.querySelector('#ogt-month-review')), false);
 });
 test('signed out, dismissed, zero plays and failures are quiet', async (t) => {
   for (const options of [{ signedIn: false }, { dismissed: true }, { zero: true }, { failed: true }]) {
@@ -78,7 +78,7 @@ test('returning to the dashboard reuses the account/month cache', async (t) => {
   assert.equal(b.calls.filter((r) => new URL(r.url).pathname === '/sync/history').length, 1);
   b.window.history.pushState({}, '', '/search');
   await new Promise((r) => setTimeout(r, 500));
-  assert.equal(b.doc.querySelector('#ogt-month-review'), null);
+  assert.equal(Boolean(b.doc.querySelector('#ogt-month-review')), false);
   b.window.history.pushState({}, '', '/dashboard');
   await new Promise((r) => setTimeout(r, 500));
   assert.equal(b.doc.querySelector('#ogt-month-review').hidden, false);

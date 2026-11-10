@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { SHOW_HTML, SEASON_HTML } from './fixtures.js';
+import { waitFor } from './wait.js';
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 function boot(t, { signed = true, defer = false, html = SEASON_HTML } = {}) {
@@ -39,17 +40,21 @@ test('bundle: personal chart gaps, average, shared navigation cache and account 
   assert.equal((chart(b).querySelector('.ogt-season-chart__personal').getAttribute('d').match(/M/g) || []).length, 2);
   assert.match(chart(b).querySelector('svg').textContent, /20%/);
   b.window.history.pushState({}, '', '/shows/breaking-bad');
-  b.document.body.innerHTML = SHOW_HTML; await wait(600);
+  b.document.body.innerHTML = SHOW_HTML;
+  await waitFor(() => b.document.querySelector('article.poster-card .ogt-your-average'), { message: 'the season card badge' });
   assert.equal(b.document.getElementById('ogt-your-ratings').textContent, '', 'no show-wide average line');
   const badges = b.document.querySelectorAll('article.poster-card .ogt-your-average');
   assert.equal(badges.length, 1);
   assert.equal(badges[0].textContent, '6.0');
+  assert.ok(badges[0].parentElement.classList.contains('subtitle'), 'badge joins the card subtitle, outside og\'s clipped quick icons');
   assert.match(badges[0].getAttribute('title'), /Your average: 6.0 \(3 episodes rated\)/);
   assert.equal(b.calls.filter((r) => r.url.endsWith('/sync/ratings/episodes')).length, 1);
-  b.window.history.pushState({}, '', '/shows/breaking-bad/seasons'); await wait(600);
+  b.window.history.pushState({}, '', '/shows/breaking-bad/seasons');
+  await wait();
+  await waitFor(() => b.document.querySelector('article.poster-card .ogt-your-average'), { message: 'the badge on the seasons page' });
   assert.match(b.document.querySelector('article.poster-card .ogt-your-average').getAttribute('title'), /3 episodes rated/);
   b.store.delete('trakt.oauth.tokens'); b.document.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
-  assert.equal(b.document.querySelector('.ogt-your-average'), null);
+  assert.equal(Boolean(b.document.querySelector('.ogt-your-average')), false);
 });
 test('bundle: signed out has community chart without private fetch or personal legend', async (t) => {
   const b = boot(t, { signed: false }); await wait();
@@ -62,16 +67,4 @@ test('bundle: late private results cannot survive sign-out', async (t) => {
   b.store.delete('trakt.oauth.tokens'); b.document.dispatchEvent(new b.window.Event('ogt:authchange'));
   b.pending.forEach((respond) => respond()); await wait();
   assert.equal(chart(b).querySelectorAll('.ogt-season-chart__personal-dot').length, 0);
-});
-
-test('bundle mounts on fresh live OG season and show markup', async (t) => {
-  const { LIVE_RATINGS_SEASON_HTML, LIVE_RATINGS_SHOW_HTML } = await import('./fixtures.js');
-  const b = boot(t, { html: LIVE_RATINGS_SEASON_HTML }); await wait(600);
-  assert.ok(chart(b));
-  assert.ok(chart(b).querySelector('.ogt-season-chart__personal-dot'));
-  b.window.history.pushState({}, '', '/shows/breaking-bad');
-  b.document.body.innerHTML = LIVE_RATINGS_SHOW_HTML; await wait(600);
-  const badge = b.document.querySelector('article.poster-card .ogt-your-average');
-  assert.ok(badge);
-  assert.ok(badge.parentElement.classList.contains('subtitle'), 'badge joins the card subtitle, outside og\'s clipped quick icons');
 });

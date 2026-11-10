@@ -79,7 +79,7 @@ test('a menu toggle removes the panel immediately, persists, and restores it', a
   await wait();
   b.toggle('Custom links');
   await wait();
-  assert.equal(b.panel(), null);
+  assert.equal(Boolean(b.panel()), false);
   assert.deepEqual([...b.data.get('features.disabled')], ['custom-links']);
 
   b.toggle('Custom links');
@@ -91,7 +91,7 @@ test('a menu toggle removes the panel immediately, persists, and restores it', a
 test('stored disabled features load off and malformed storage keeps features on', async t => {
   const off = boot(t, { storage: { 'features.disabled': ['custom-links'] } });
   await wait();
-  assert.equal(off.panel(), null);
+  assert.equal(Boolean(off.panel()), false);
   off.toggle('Custom links');
   await wait();
   assert.ok(off.panel());

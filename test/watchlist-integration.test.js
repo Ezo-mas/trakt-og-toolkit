@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { WATCHLIST_HTML } from './fixtures.js';
+import { waitFor } from './wait.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 80) => new Promise(resolve => setTimeout(resolve, ms));
@@ -61,7 +62,7 @@ test('built bundle adds exactly once on all four page types, alongside the libra
     assert.ok(b.document.getElementById('ogt-library'));
     assert.equal(b.panel().parentElement.className, 'action-buttons');
     assert.equal(b.panel().previousElementSibling.className, 'stacked');
-    assert.equal(b.panel().querySelector('.summary-action'), null, 'independent toolkit styling');
+    assert.equal(Boolean(b.panel().querySelector('.summary-action')), false, 'independent toolkit styling');
     assert.ok(b.button().querySelector('svg'));
     assert.equal(b.calls.some(r => r.url.endsWith('/sync/watchlist')), false, 'no watchlist fetch on mount');
     b.button().click(); b.button().click(); await wait();
@@ -75,7 +76,7 @@ test('built bundle adds exactly once on all four page types, alongside the libra
     assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, `You added ${type === 'seasons' ? 'Season 1' : 'Spider-Man: Brand New Day'} to your watchlist.`);
     assert.equal(b.document.getElementById('ogt-library').hidden, false);
     b.window.history.pushState({}, '', '/'); await wait(250);
-    assert.equal(b.panel(), null);
+    assert.equal(Boolean(b.panel()), false);
   });
 });
 
@@ -110,8 +111,9 @@ test('built bundle leaves failed additions visible and retryable', async t => {
       assert.equal(b.panel().hidden, false);
       assert.equal(b.button().disabled, false);
       assert.match(b.panel().querySelector('[role="status"]').textContent, /Trakt/);
-      assert.equal(b.document.querySelector('.ogt-toast'), null);
-      b.button().click(); await wait(1200); assert.equal(b.writes().length, 2);
+      assert.equal(Boolean(b.document.querySelector('.ogt-toast')), false);
+      b.button().click();
+      await waitFor(() => b.writes().length === 2, { message: 'the retried addition' });
     });
   }
 });
@@ -124,7 +126,7 @@ test('auth changes and navigation during lookup prevent writes; late POSTs canno
     await wait(250);
     for (const respond of b.pending) respond(); await wait();
     assert.equal(b.writes().length, 0);
-    if (change === 'navigation') assert.equal(b.panel(), null);
+    if (change === 'navigation') assert.equal(Boolean(b.panel()), false);
     else assert.equal(b.button().disabled, false);
   });
   const b = boot(t, { deferred: 'POST' }); await wait(); b.button().click(); await wait();
@@ -132,5 +134,5 @@ test('auth changes and navigation during lookup prevent writes; late POSTs canno
   b.store.delete('trakt.oauth.tokens'); b.authChange();
   for (const respond of b.pending) respond(); await wait();
   assert.equal(b.panel().hidden, false);
-  assert.equal(b.document.querySelector('.ogt-toast'), null);
+  assert.equal(Boolean(b.document.querySelector('.ogt-toast')), false);
 });

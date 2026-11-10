@@ -21,11 +21,11 @@ test('confirm opens a labelled modal dialog and resolves from its buttons, Esc a
   assert.equal(dialog.open, true);
   assert.equal(document.getElementById(dialog.getAttribute('aria-labelledby')).textContent, 'Clear paused playback');
   assert.match(document.getElementById(dialog.getAttribute('aria-describedby')).textContent, /cannot be undone/);
-  assert.equal(document.activeElement, dialog.querySelector('.ogt-dialog__ok'));
+  assert.ok(document.activeElement === dialog.querySelector('.ogt-dialog__ok'));
   assert.equal(dialog.querySelector('.ogt-dialog__ok').textContent, 'Clear');
   dialog.querySelector('.ogt-dialog__ok').click();
   assert.equal(await answer, true);
-  assert.equal(document.querySelector('dialog'), null);
+  assert.equal(Boolean(document.querySelector('dialog')), false);
 
   const cancelled = confirmDialog('Sure?');
   document.querySelector('.ogt-dialog__cancel').click();
@@ -46,7 +46,7 @@ test('prompt prefills and focuses its field, keeps itself open on invalid input 
     validate: (text) => Number(text) >= 1 ? null : 'Enter a percentage from 1 to 100.' });
   const input = document.querySelector('.ogt-dialog__input');
   assert.equal(input.value, '42');
-  assert.equal(document.activeElement, input);
+  assert.ok(document.activeElement === input);
   assert.equal(document.querySelector(`label[for="${input.id}"]`).textContent, 'Progress (%)');
   input.value = '0';
   document.querySelector('.ogt-dialog__ok').click();
@@ -65,5 +65,5 @@ test('prompt prefills and focuses its field, keeps itself open on invalid input 
   const cancelled = promptDialog('Anything?');
   document.querySelector('.ogt-dialog__cancel').click();
   assert.equal(await cancelled, null);
-  assert.equal(document.querySelector('dialog'), null);
+  assert.equal(Boolean(document.querySelector('dialog')), false);
 });
