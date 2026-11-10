@@ -14,7 +14,7 @@ function writeRequest(auth, path, body, active, signal) {
 export function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn } = {}) {
   return {
     async add(route, { active, signal } = {}) {
-      if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
+      if (!signedIn()) throw new Error('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.');
       const lookup = watchlistLookup(route);
       if (!lookup) throw new Error('Unsupported watchlist page.');
       const isActive = active ?? (() => true);
@@ -40,7 +40,7 @@ export function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = is
 
     /** Report each confirmed batch so a later failure cannot erase completed work. */
     async addMany(routes, { active, signal, onProgress = () => {} } = {}) {
-      if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
+      if (!signedIn()) throw new Error('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.');
       const isActive = active ?? (() => true);
       if (!isActive()) return { cancelled: true };
       const items = watchlistBulkItems(routes);
@@ -80,7 +80,7 @@ export function createWatchlistApi({ get = apiGet, auth = apiAuth, signedIn = is
 
     /** Undo an addition with the exact body that was sent. */
     async remove(body, { active, signal } = {}) {
-      if (!signedIn()) throw new Error('Sign in through the toolkit menu first.');
+      if (!signedIn()) throw new Error('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.');
       const isActive = active ?? (() => true);
       if (!body || typeof body !== 'object' || !isActive()) return { cancelled: true };
       const result = await writeRequest(auth, '/sync/watchlist/remove', body, active, signal);

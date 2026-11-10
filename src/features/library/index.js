@@ -11,6 +11,7 @@ import { actionButtonCss, findActionStack } from '../../ui/action-button.js';
 const ID = 'ogt-library';
 export const library = {
   id: 'library',
+  authScoped: true,
   css: actionButtonCss('ogt-library', 'var(--brand-quaternary, #129982)'),
   match: route => route.kind === 'movie' && route.name === 'title' || route.kind === 'show' && ['title', 'season', 'episode'].includes(route.name),
   mount(route) {
@@ -50,7 +51,7 @@ export const library = {
     }
     async function add() {
       if (busy || undoing || node.hidden) return;
-      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt through the toolkit menu first.'; return; }
+      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'; return; }
       busy = true;
       const epoch = session;
       const operationId = ++operation;
@@ -77,7 +78,7 @@ export const library = {
         }
       } catch (error) {
         if (active()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.' :
-          error.status ? 'Could not add to library. Check your toolkit sign-in and try again.' : error.message;
+          error.status && !error.ogSession ? 'Could not add to library. Check your toolkit sign-in and try again.' : error.message;
       } finally {
         if (active() && operation === operationId) {
           busy = false;
@@ -90,7 +91,7 @@ export const library = {
     }
     async function undo(body) {
       if (undoing || !body) return false;
-      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt through the toolkit menu first.'; return false; }
+      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'; return false; }
       undoing = true;
       busy = false;
       const epoch = session;
@@ -110,7 +111,7 @@ export const library = {
       } catch (error) {
         debugError('library undo failed', error);
         if (active()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.' :
-          error.status ? 'Could not undo. Check your toolkit sign-in and try again.' : error.message;
+          error.status && !error.ogSession ? 'Could not undo. Check your toolkit sign-in and try again.' : error.message;
         return false;
       } finally {
         if (active() && operation === operationId) {
@@ -123,22 +124,7 @@ export const library = {
         }
       }
     }
-    function authChanged() {
-      session++;
-      operation++;
-      nativeRefresh.destroy();
-      busy = false;
-      undoing = false;
-      refreshing = false;
-      button.disabled = false;
-      added = false;
-      wasCollected = false;
-      label.textContent = 'Add to library';
-      status.textContent = '';
-      syncVisibility();
-    }
     button.addEventListener('click', add);
-    document.addEventListener('ogt:authchange', authChanged);
     // Keep OG's own controls intact; this is a separate manual-add action.
     const history = anchor.querySelector('.stacked');
     if (history) history.after(node);
@@ -151,7 +137,6 @@ export const library = {
       nativeRefresh.destroy();
       observer.disconnect();
       button.removeEventListener('click', add);
-      document.removeEventListener('ogt:authchange', authChanged);
       node.remove();
     } };
   },

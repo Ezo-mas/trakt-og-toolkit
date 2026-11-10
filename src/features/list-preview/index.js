@@ -20,6 +20,7 @@ const FAN = '.list-row .fan';
 export const listPreview = {
   id: 'list-preview',
   css: css + cornerRatingStyles,
+  authScoped: true,
   match(route) {
     return ['lists', 'lists-collaborations', 'liked-lists', 'smart-lists'].includes(route.name) ||
       /^\/users\/[^/]+\/(?:lists|smart-lists)(?:\/|$)/.test(route.path) || /^\/lists(?:\/|$)/.test(route.path);
@@ -139,7 +140,6 @@ export const listPreview = {
       attributes: true, attributeFilter: ['src', 'aria-describedby'] });
     document.addEventListener('click', navigate, true);
     document.addEventListener('auxclick', navigate, true);
-    document.addEventListener('ogt:authchange', loadRatings);
     loadRatings();
     scan();
 
@@ -150,7 +150,6 @@ export const listPreview = {
         observer.disconnect();
         document.removeEventListener('click', navigate, true);
         document.removeEventListener('auxclick', navigate, true);
-        document.removeEventListener('ogt:authchange', loadRatings);
         for (const slot of slots.keys()) slot.classList.remove('ogt-list-preview-slot');
         for (const { node } of corners.values()) node.remove();
         for (const { nav } of navs.values()) nav.remove();

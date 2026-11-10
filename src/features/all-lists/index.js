@@ -19,6 +19,19 @@ const OPTION_ID = 'ogt-all-lists-option';
 const HASH = '#ogt-all-lists';
 const ROUTES = ['lists', 'smart-lists', 'lists-collaborations', 'liked-lists'];
 const posterRequests = new Map();
+// The open All lists view reopens after the host rebuilds features on an account change.
+let resumeProfile = null;
+// That request belongs only to the profile's lists page where the account changed. If the first
+// remount fails, the host has no mounted feature to tear down, so watch the route itself and drop
+// the request once the user leaves that page. og may rewrite the URL while it handles the switch;
+// staying on the same profile's lists page keeps the request.
+if (typeof document !== 'undefined') {
+  document.addEventListener('ogt:routechange', (event) => {
+    const route = event.detail?.route;
+    if (route?.name === 'lists' && route.id != null && decodeURIComponent(route.id) === resumeProfile) return;
+    resumeProfile = null;
+  });
+}
 
 const ICONS = {
   Private: ['--color-list-chip-private', 'M5 10h14v11H5z M8 10V7a4 4 0 0 1 8 0v3'],
@@ -268,6 +281,7 @@ function createView(profile, lists) {
   // og's own section and container classes give the view the page's background and width.
   const node = el('div', { id: ROOT_ID, class: `${lists.className} ogt-all-lists` });
   let cancelled = false;
+  let loadRevision = 0;
   let loading = null;
   let observer = null;
 
@@ -279,10 +293,13 @@ function createView(profile, lists) {
   }
 
   async function load() {
+    const revision = ++loadRevision;
+    observer?.disconnect();
+    observer = null;
     node.replaceChildren(el('p', { class: 'ogt-all-lists__loading', text: 'Loading collaborations and liked lists…' }));
     const results = await Promise.allSettled([getCollaborationLists(profile), getLikedLists(profile),
       isSignedIn() ? getViewer() : Promise.resolve(null)]);
-    if (cancelled) return;
+    if (cancelled || revision !== loadRevision) return;
     for (const result of results) if (result.status === 'rejected') debugError('all-lists lookup failed', result.reason);
     const [collaborations, liked, viewer] = results.map((result) => (result.status === 'fulfilled' ? result.value : null));
     const viewerSlug = viewer?.ids?.slug || viewer?.username || null;
@@ -294,7 +311,7 @@ function createView(profile, lists) {
     else if (viewerSlug) {
       try { likedIds = new Set(likedLists(await getLikedLists(viewerSlug)).map((entry) => entry.id)); }
       catch (error) { debugError('viewer liked lists lookup failed', error); }
-      if (cancelled) return;
+      if (cancelled || revision !== loadRevision) return;
     }
     const native = nativeParts(lists);
     node.classList.toggle('ogt-all-lists--fallback', !native);
@@ -313,10 +330,10 @@ function createView(profile, lists) {
 
     const failed = results.slice(0, 2).filter((result) => result.status === 'rejected');
     if (failed.length) {
-      const missingId = failed.some((result) => result.reason instanceof MissingClientIdError);
-      node.prepend(el('p', { class: 'ogt-all-lists__error', role: 'status', text: missingId
-        ? 'Set a Trakt API client ID in the toolkit menu to load collaborations and liked lists.'
-        : 'Some lists could not be loaded. Try again later.' }));
+      const missing = failed.find((result) => result.reason instanceof MissingClientIdError)?.reason;
+      node.prepend(el('p', { class: 'ogt-all-lists__error', role: 'status', text: missing?.ogSession ? missing.message
+        : missing ? 'Set a Trakt API client ID in the toolkit menu to load collaborations and liked lists.'
+          : 'Some lists could not be loaded. Try again later.' }));
     }
 
     // Liked lists arrive without posters: read each list's summary as its row nears the screen.
@@ -339,16 +356,27 @@ function createView(profile, lists) {
     }
   }
 
+  function startLoad() {
+    loading ??= load().catch((error) => debugError('all-lists render failed', error));
+    return loading;
+  }
   return {
     node,
-    load() { loading ??= load().catch((error) => debugError('all-lists render failed', error)); return loading; },
-    destroy() { cancelled = true; observer?.disconnect(); node.remove(); },
+    load: startLoad,
+    destroy() {
+      cancelled = true;
+      loadRevision += 1;
+      loading = null;
+      observer?.disconnect();
+      node.remove();
+    },
   };
 }
 
 export const allLists = {
   id: 'all-lists',
   css: CSS,
+  authScoped: true,
   match: (route) => ROUTES.includes(route.name),
   mount(route) {
     const dropdown = findDropdown();
@@ -406,14 +434,20 @@ export const allLists = {
     }
     option.addEventListener('click', choose);
     menu.addEventListener('click', chooseNative);
-    if (route.name === 'lists' && location.hash === HASH) {
-      history.replaceState(history.state, '', location.pathname + location.search);
+    const resume = resumeProfile === profile;
+    resumeProfile = null;
+    if (route.name === 'lists' && (resume || location.hash === HASH)) {
+      if (!resume) history.replaceState(history.state, '', location.pathname + location.search);
       show();
     }
 
     return {
       node: item,
-      destroy() {
+      destroy(reason) {
+        // The host rebuilds features on an account change; reopen an active view then. Any
+        // other teardown (navigation) drops a pending resume.
+        if (reason === 'authchange' && active) resumeProfile = profile;
+        else resumeProfile = null;
         menu.removeEventListener('click', chooseNative);
         hide();
         view.destroy();

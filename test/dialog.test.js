@@ -40,6 +40,22 @@ test('confirm opens a labelled modal dialog and resolves from its buttons, Esc a
   assert.equal(await closed, false);
 });
 
+test('an aborted dialog signal closes it and resolves cancellation', async (t) => {
+  const { document, confirmDialog, promptDialog } = await setup(t);
+  const confirmControl = new AbortController();
+  const answer = confirmDialog('Cancel me?', { signal: confirmControl.signal });
+  assert.equal(document.querySelector('dialog').open, true);
+  confirmControl.abort();
+  assert.equal(await answer, false);
+  assert.equal(Boolean(document.querySelector('dialog')), false);
+
+  const promptControl = new AbortController();
+  const promptAnswer = promptDialog('Cancel me too?', { signal: promptControl.signal });
+  promptControl.abort();
+  assert.equal(await promptAnswer, null);
+  assert.equal(Boolean(document.querySelector('dialog')), false);
+});
+
 test('prompt prefills and focuses its field, keeps itself open on invalid input and resolves text or null', async (t) => {
   const { document, window, promptDialog } = await setup(t);
   const answer = promptDialog('Set the saved progress.', { title: 'Save progress', label: 'Progress (%)', value: '42',

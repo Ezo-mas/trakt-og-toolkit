@@ -36,7 +36,7 @@ function chevron(dir) {
   return svg;
 }
 export const monthReview = {
-  id: 'month-review', css: CSS,
+  id: 'month-review', css: CSS, authScoped: true,
   match: (route) => route.name === 'dashboard' && isSignedIn(),
   mount() {
     const anchor = document.querySelector('nav.ribbon');
@@ -158,6 +158,10 @@ export const monthReview = {
       }
     };
     show(lastMonth(), true);
-    return { node, destroy() { destroyed = true; token++; node.remove(); } };
+    return { node, destroy() {
+      destroyed = true;
+      token++;
+      node.remove();
+    } };
   },
 };

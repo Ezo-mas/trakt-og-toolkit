@@ -23,6 +23,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
     id,
     match,
     css,
+    authScoped: true,
     mount() {
       if (!document.body || document.getElementById(markerId)) return null;
       // A host-owned marker keeps this page-wide feature alive when the first card or row is replaced.
@@ -78,7 +79,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       }
       async function addAll() {
         if (bulkBusy) return;
-        if (!isSignedIn()) { toast('Sign in to Trakt through the toolkit menu first.'); return; }
+        if (!isSignedIn()) { toast('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'); return; }
         const list = bulkEntries();
         if (!list.length) return;
         const epoch = session;
@@ -168,7 +169,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       function failed(error, verb, active) {
         debugError(`${logLabel} watchlist ${verb} failed`, error);
         if (active()) toast(error.status === 429 ? 'Trakt rate limited this request; try again later.' :
-          error.status ? `Could not ${verb === 'undo' ? 'undo' : 'add to watchlist'}. Check your toolkit sign-in and try again.`
+          error.status && !error.ogSession ? `Could not ${verb === 'undo' ? 'undo' : 'add to watchlist'}. Check your toolkit sign-in and try again.`
             : error.message);
       }
       async function add(entry, event) {
@@ -176,7 +177,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         event.stopPropagation();
         const state = stateFor(entry.key);
         if (bulkBusy || state.busy || state.undoing || entry.button.hidden) return;
-        if (!isSignedIn()) { toast('Sign in to Trakt through the toolkit menu first.'); return; }
+        if (!isSignedIn()) { toast('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'); return; }
         const epoch = session;
         const operation = ++state.operation;
         const active = activeFor(entry);
@@ -205,7 +206,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       async function undo(entry, body) {
         const state = stateFor(entry.key);
         if (bulkBusy || state.busy || state.undoing || !body) return false;
-        if (!isSignedIn()) { toast('Sign in to Trakt through the toolkit menu first.'); return false; }
+        if (!isSignedIn()) { toast('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'); return false; }
         const epoch = session;
         const operation = ++state.operation;
         const active = activeFor(entry);
@@ -265,24 +266,15 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         scheduled = true;
         queueMicrotask(() => { scheduled = false; scan(); });
       }
-      function authChanged() {
-        session++;
-        bulkBusy = false;
-        nativeRefresh.destroy();
-        states.clear();
-        scan();
-      }
       if (bulkButton) bulkButton.addEventListener('click', addAll);
       const observer = new MutationObserver(schedule);
       observer.observe(document.body, { childList: true, subtree: true, characterData: true,
         attributes: true, attributeFilter: ['href', 'aria-describedby', 'hidden'] });
-      document.addEventListener('ogt:authchange', authChanged);
       scan();
       return { node, destroy() {
         destroyed = true;
         nativeRefresh.destroy();
         observer.disconnect();
-        document.removeEventListener('ogt:authchange', authChanged);
         for (const entry of entries.values()) remove(entry);
         states.clear();
         if (bulkButton) { bulkButton.removeEventListener('click', addAll); bulkButton.remove(); }

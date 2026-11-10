@@ -5,6 +5,7 @@ import {
 import { API, CACHE_TTL } from '../config.js';
 import { getJSON, headerValue, MAX_RETRY_WAIT_MS } from './http.js';
 import { getClientId } from '../settings.js';
+import { readOgSession } from './og-session.js';
 
 export class MissingClientIdError extends Error {
   constructor() {
@@ -52,6 +53,78 @@ function sessionChangedError() {
   return authError('Trakt session changed; request abandoned.');
 }
 
+/** og owns its own renewal; a rejected or expired token only ever asks for a reload. */
+function ogSessionExpiredError() {
+  const error = authError('Your og.trakt.tv session expired; reload the page to renew it.', 401);
+  error.ogSession = true;
+  // This can be thrown from beforeSend after an HTTP slot is acquired; keep the reload message.
+  error.control = true;
+  return error;
+}
+
+/**
+ * og's entry exists but can no longer authorize a public lookup. It is still a missing client ID, so
+ * metadata fallbacks keep working, but it carries og's reload message: an action whose first step is
+ * a lookup must tell the user to reload, not to set up a client ID they never needed.
+ */
+function ogLookupExpiredError() {
+  const error = new MissingClientIdError();
+  error.message = 'Your og.trakt.tv session expired; reload the page to renew it.';
+  error.ogSession = true;
+  return error;
+}
+
+/** og's token, read fresh each time because og rotates it on its own schedule. */
+function ogAuth() {
+  const session = readOgSession();
+  return session ? {
+    kind: 'og', clientId: session.clientId, accessToken: session.accessToken,
+    expiresAt: session.expiresAt, accountKey: session.accountKey,
+  } : null;
+}
+
+/** The toolkit's own sign-in wins when present; og's session is the automatic fallback. */
+function currentAuth() {
+  const tokens = readTokens();
+  if (tokens) return {
+    kind: 'own', clientId: tokens.client_id, accessToken: tokens.access_token,
+    expiresAt: tokens.expires_at, accountKey: null,
+  };
+  return ogAuth();
+}
+
+/**
+ * Freeze the live session's version before a request. og's revision only advances when its entry
+ * is read, so read it first; otherwise the first request after a same-tab account switch captures
+ * the old version and then rejects its own new session as a replacement.
+ */
+function observedGeneration() {
+  currentAuth();
+  return getSessionGeneration();
+}
+
+/** A toolkit refresh changes its token but not the session; an og account change is different. */
+function sameAuth(a, b) {
+  return Boolean(a && b) && a.kind === b.kind && a.clientId === b.clientId && a.accountKey === b.accountKey;
+}
+
+function assertOgFresh(auth) {
+  if (auth.kind === 'og' && auth.expiresAt != null && auth.expiresAt <= Date.now()) throw ogSessionExpiredError();
+  return auth;
+}
+
+function apiHeaders(clientId, accessToken = null) {
+  const headers = {
+    'Content-Type': 'application/json', 'trakt-api-version': API.version, 'trakt-api-key': clientId,
+  };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  return headers;
+}
+
+function authHeaders(auth) {
+  return apiHeaders(auth.clientId, auth.accessToken);
+}
+
 /** Abortable sleep. Timers are read from the global scope so tests can mock them. */
 function sleep(ms, signal) {
   return new Promise((resolve, reject) => {
@@ -86,16 +159,19 @@ function retryDelay(headers, attempt) {
 function createWriteEntry(control = {}) {
   const signal = control.signal ?? null;
   const active = typeof control.active === 'function' ? control.active : null;
+  // Read the account before capturing its version: observing a new og session can itself advance it.
+  const source = currentAuth();
   const generation = getSessionGeneration();
-  const clientId = getClientId();
-  const current = () => generation === getSessionGeneration() && clientId === getClientId() && Boolean(readTokens());
   return {
     signal,
     generation,
     check() {
       if (signal?.aborted) throw cancelledError();
       if (active && active() === false) throw cancelledError();
-      if (!current()) throw signedOutError();
+      if (generation !== getSessionGeneration()) throw signedOutError();
+      const now = currentAuth();
+      if (!now || !source) throw signedOutError();
+      if (!sameAuth(now, source)) throw sessionChangedError();
     },
   };
 }
@@ -129,27 +205,56 @@ function blockWrites(ms, generation) {
   else { blockedGeneration = generation; blockedUntil = until; }
 }
 
-/** Read the token at send time, refreshing it (outside the write queue) only when it is near expiry. */
-async function ensureTokens() {
-  let tokens = readTokens();
-  if (!tokens) throw signedOutError();
-  if (tokens.expires_at <= Date.now() + 60000) tokens = await refreshTokens();
-  return tokens;
+/**
+ * Read the credential at send time. The toolkit's own token is refreshed outside the write
+ * queue when near expiry; og's token is never refreshed, because og rotates its refresh token.
+ */
+async function ensureAuth() {
+  const tokens = readTokens();
+  if (tokens) {
+    const next = tokens.expires_at <= Date.now() + 60000 ? await refreshTokens() : tokens;
+    return { kind: 'own', clientId: next.client_id, accessToken: next.access_token, accountKey: null };
+  }
+  const og = ogAuth();
+  if (!og) throw signedOutError();
+  return assertOgFresh(og);
+}
+
+/**
+ * Public metadata through og's approved session. The response is still public data, so the
+ * existing URL cache is safe. A 401 retries once only when og rotated the token for the same account.
+ */
+async function ogGet(path, ttl) {
+  const first = ogAuth();
+  if (!first) throw new MissingClientIdError();
+  // An expired og token cannot authorize even a public lookup.
+  if (first.expiresAt != null && first.expiresAt <= Date.now()) throw ogLookupExpiredError();
+  const url = `${API.base}${path}`;
+  try {
+    return await getJSON(url, { ttl, headers: authHeaders(first) });
+  } catch (error) {
+    if (error?.status !== 401) throw error;
+    const latest = ogAuth();
+    // No entry at all means there is no client ID to fall back to; an expired one needs a reload.
+    if (!latest) throw new MissingClientIdError();
+    if (latest.expiresAt != null && latest.expiresAt <= Date.now()) throw ogLookupExpiredError();
+    if (!sameAuth(latest, first)) throw sessionChangedError();
+    // Rejected before its expiry: og's session was revoked, and only a reload can renew it.
+    if (latest.accessToken === first.accessToken) throw ogLookupExpiredError();
+    try {
+      return await getJSON(url, { ttl, headers: authHeaders(latest) });
+    } catch (retryError) {
+      if (retryError?.status === 401) throw ogLookupExpiredError();
+      throw retryError;
+    }
+  }
 }
 
 /** GET a public Trakt API path (e.g. `/shows/1388/seasons`), cached for `ttl` ms. */
 export function apiGet(path, { ttl = CACHE_TTL } = {}) {
   const clientId = getClientId();
-  if (!clientId) return Promise.reject(new MissingClientIdError());
-
-  return getJSON(`${API.base}${path}`, {
-    ttl,
-    headers: {
-      'Content-Type': 'application/json',
-      'trakt-api-version': API.version,
-      'trakt-api-key': clientId,
-    },
-  });
+  if (clientId) return getJSON(`${API.base}${path}`, { ttl, headers: apiHeaders(clientId) });
+  return ogGet(path, ttl);
 }
 
 /** Seasons with their episode counts (season 0 is specials). `extended=full` is what adds the counts. */
@@ -212,32 +317,32 @@ async function authenticated(method, path, body, options, metadata, control) {
 }
 
 async function sendAuthenticated(method, url, body, metadata, entry) {
-  // A response belongs to the session that started the request. A late 401 must never refresh
-  // or clear a replacement session's tokens.
-  const origin = entry?.generation ?? getSessionGeneration();
+  // A response belongs to the session that started the request. Capture the origin before any
+  // await: ensureAuth() can refresh tokens or observe a session change while it runs, and that
+  // replacement must not be adopted as the origin. A late 401 must never refresh or clear a
+  // replacement session's tokens.
+  const origin = entry?.generation ?? observedGeneration();
   const checkOrigin = () => {
     if (getSessionGeneration() === origin) return;
     if (entry) entry.check();
     throw sessionChangedError();
   };
   let refreshed = false;
+  let renewed = false;
   let rateRetries = 0;
   for (;;) {
     checkOrigin();
     if (entry) await waitForTurn(entry);
-    const tokens = await ensureTokens();
+    const auth = await ensureAuth();
     if (entry) entry.check();
     checkOrigin();
-    const authHeaders = (current) => ({
-      'Content-Type': 'application/json', 'trakt-api-version': API.version,
-      'trakt-api-key': current.client_id, Authorization: `Bearer ${current.access_token}`,
-    });
+    if (!sameAuth(currentAuth(), auth)) throw sessionChangedError();
     let response;
-    let sentTokens = tokens;
+    let sent = auth;
     try {
       response = await privateRequest(url, {
         method,
-        headers: authHeaders(tokens),
+        headers: authHeaders(auth),
         body: body == null ? null : JSON.stringify(body),
         signal: entry?.signal ?? undefined,
         ...(entry ? {
@@ -245,10 +350,11 @@ async function sendAuthenticated(method, url, body, metadata, entry) {
             // This runs after the HTTP concurrency slot is acquired, immediately before the send.
             // Sign-out or teardown while waiting for that slot must prevent the old write.
             entry.check();
-            const current = readTokens();
+            const current = currentAuth();
             if (!current) throw signedOutError();
+            assertOgFresh(current);
             entry.check();
-            sentTokens = current;
+            sent = current;
             // Pacing starts at the actual transport dispatch, not while waiting for a slot.
             nextWriteAt = Date.now() + WRITE_INTERVAL_MS;
             return { headers: authHeaders(current) };
@@ -261,6 +367,20 @@ async function sendAuthenticated(method, url, body, metadata, entry) {
     }
     if (response.status === 401) {
       checkOrigin();
+      if (sent.kind === 'og') {
+        // Never refresh og's token: a second refresher would strand og's session. If og has
+        // already rotated it for this account (in another tab, or on its own), retry once with
+        // the new token; otherwise ask the user to reload so og can renew it. A different
+        // account is a replacement, never a renewal, and must not receive old work.
+        if (renewed) throw ogSessionExpiredError();
+        const latest = ogAuth();
+        if (!latest) throw ogSessionExpiredError();
+        if (!sameAuth(latest, sent)) throw sessionChangedError();
+        assertOgFresh(latest);
+        if (latest.accessToken === sent.accessToken) throw ogSessionExpiredError();
+        renewed = true;
+        continue;
+      }
       if (refreshed) {
         clearTokens();
         throw authError('Trakt session expired; sign in again.', 401);
@@ -269,10 +389,14 @@ async function sendAuthenticated(method, url, body, metadata, entry) {
       // tokens while this one waited for an HTTP slot, after the earlier snapshot was read.
       const latest = readTokens();
       if (!latest) throw signedOutError();
-      if (latest.access_token === sentTokens.access_token) await refreshTokens();
+      if (latest.access_token === sent.accessToken) await refreshTokens();
       refreshed = true;
       continue;
     }
+    // A response belongs to the account that sent it. An og account switch during the request
+    // must not return the old account's data or success to the replacement session's UI.
+    checkOrigin();
+    if (!sameAuth(currentAuth(), sent)) throw sessionChangedError();
     if (response.status === 429 && entry) {
       // Trakt says the request was rejected by the limiter; block every write in this session for
       // the full Retry-After (or the fallback backoff) before retrying it and dispatching others.

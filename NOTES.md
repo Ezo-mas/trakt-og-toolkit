@@ -2,6 +2,108 @@
 
 Working notes and known issues. Newest first.
 
+## v0.4.0 (2026-11-10)
+
+Release of everything since v0.3.0, so userscript managers offer the update:
+
+- **No API setup when signed into og.trakt.tv:** watchlist, library, playback, ratings, All lists and month review use
+  og's own session (30). The toolkit's own app sign-in still works and wins while it is signed in. Account changes in
+  og or in another tab rebuild the toolkit's personal features; an expired og session asks for a reload.
+- **Custom links:** shown below the poster with service logos and inside Watch Now (26); presets open the exact title,
+  season or episode (22, 24), with per-user server presets (25), direct links resolved from external ids (27), and
+  genre-conditional presets plus links on person pages (28).
+- **Trakt ratings chart** in the empty space of the summary (31).
+- **Playback:** set saved progress (9). **Month review:** browse earlier months (21).
+- **Watchlist** shortcuts and **Watchlist all** on a person's credits (17); **Undo** on success notices (19).
+- **List previews** link posters to their titles (10). og-styled dialogs replace the browser's.
+- **Features can be turned on and off** from the menu (20).
+- Writes share one rate-limited queue that follows Trakt's limits (29). Test suite review (23) and wider
+  `npm run drift` coverage (18), now with signed-in page checks via `--signed-in <dir>`.
+- Removed the `site/` OAuth callback page and its GitHub Pages workflow: Trakt won't grant the production app it was
+  for, so browser (PKCE) sign-in is not coming.
+
+The user verified the og-session features, expiry, sign-out, account switching and cross-tab changes on real accounts
+in Zen with Violentmonkey.
+
+## 2026-11-09: og's session instead of a production app (feature 30)
+
+- Trakt's answer was that the toolkit may use og's existing session; no production app is available. Authenticated
+  calls now use og's access token with og's Client ID when the toolkit has no sign-in of its own. The toolkit's
+  per-user app and device sign-in stay as the fallback and take priority when connected.
+- Live og (2026-11-09): `lib/auth/userManager.ts` creates oidc-client-ts with `authority: https://auth.trakt.tv`,
+  the public client ID `WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI`, `automaticSilentRenew: false` and
+  `userStore: WebStorageStateStore({ store: localStorage })`. Its `_userStoreKey` is
+  `user:${authority}:${client_id}` and the store prefix is `oidc.`, so the entry is
+  `oidc.user:https://auth.trakt.tv:<client_id>`. The value carries the access token, refresh token, profile and
+  `expires_at` (seconds).
+- `src/core/og-session.js` reads only the entry for the pinned `OG_SESSION_CLIENT_ID` on every call, returns
+  `{ clientId, accessToken, expiresAt, accountKey }` and writes nothing. A leftover entry for an older client is
+  ignored even when it expires later. Refresh tokens and ID tokens stay unread; the profile is used only to derive
+  an in-memory `trakt:`/`sub:`/`user:` account key, which is never stored, logged or put in an error.
+- A token renewal keeps the same account key, so it does not invalidate anything. Observed og login, logout and
+  account replacement advance a session version; signing back into the same account therefore does not revive
+  queued work from before the gap. An account replacement also aborts in-flight work and a late 401 is never
+  retried as the new account. og's observed login/logout/account replacement emits the internal
+  `ogt:ogsessionchange` on a microtask; `oauth.js` promotes it to `ogt:authchange` only while og is the active
+  credential, so an og switch in another tab cannot cancel or reset work under the toolkit's own tokens. The host
+  rebuilds every `authScoped` feature from its mount state, so personal rows, selections, dialogs and listeners
+  cannot survive an account change; All lists reopens its active view on that remount. Module-level
+  ratings/playback/month-review caches still reset on the same notification. `apiAuth` refreshes only the
+  toolkit's own tokens; og's token is never refreshed, because og rotates its refresh token and a second refresher
+  would strand og's session.
+- Cross-tab `storage` notifications also feed the session revision. Only localStorage changes for the pinned og key
+  (or `clear()`) count; unrelated keys, sessionStorage and same-account token renewals are ignored. The handler orders
+  each notification against the entry this tab last read: a logout/login that finishes before notifications arrive
+  still cancels old queued work, while a delayed notification cannot regress an account a direct read already
+  observed. Storage areas are compared by their pinned entry because Firefox/Violentmonkey Xray wrappers need not be
+  identical objects.
+- `apiGet` uses a configured client ID when present and otherwise sends public metadata through og's connection,
+  preserving the URL and query so `getJSON` caching still works. Watchlist, library and playback lookups therefore
+  work without manual setup. A public 401 retries once only when og rotated the token for the same account.
+- `getSessionGeneration()` includes og's revision only while og's session is the active credential, so an og change
+  in another tab cannot abort queued work under the toolkit's own tokens. og entry parsing is cached by raw value
+  (`isSignedIn()` runs from every `match()` and per-row `alive()`), a non-write request reads and freezes the live
+  session before `ensureAuth()` can await a refresh, and an expired og entry makes public metadata lookups fall back
+  to `MissingClientIdError`, while a token the API rejects before its expiry keeps og's reload message.
+- Editing or clearing the API client ID dispatches `ogt:authchange`: it can switch the active credential from the
+  toolkit's own tokens to og's session, which may be a different account, so features and caches must rebuild.
+- Changes to the client ID or the toolkit's tokens made in another tab do the same through
+  `GM_addValueChangeListener`, so background tabs do not keep the previous account's data until a reload. The header
+  must `@grant` it: managers hide ungranted GM APIs, and the guard would silently skip the listener. A token refresh
+  in another tab rewrites the tokens for the same session and is ignored; only a sign-in, sign-out or a different
+  `client_id` rebuilds. Browser-checked with two same-origin tabs of a saved og lists page and Violentmonkey-like
+  shims (the pane blocks og.trakt.tv from loading a localhost bundle, and a real manager was not available).
+- A failed All lists remount keeps its reopen request until the route leaves that profile's lists page; leaving it
+  drops the request, so coming back later does not reopen the view by itself.
+- Expired `expires_at` is checked in `beforeSend` as well as before a request, so a write that waited for an HTTP
+  slot cannot dispatch after the token expired. Nothing from og's entry is cleared on failure. User-facing watchlist,
+  library, playback and sign-in hints mention og.trakt.tv; the menu's **sign out** leaves og's session alone.
+- `npm run drift` follows the root layout to og's user manager and fails if its client ID differs from
+  `OG_SESSION_CLIENT_ID`, then checks the authority and reads the oidc chunk for the
+  `user:${authority}:${client_id}` key and `oidc.` prefix. It reports drift instead of silently reading a renamed key.
+- Tests: `test/og-session.test.js` (key parsing, current-key choice over a longer-lived stale entry, account-change
+  events, blocked storage), `test/og-session-auth.test.js` (og client ID and bearer, no auth.trakt.tv call, own
+  sign-in priority, unchanged/rotated 401s, account-switch and same-account logout/login aborts, dispatch-time expiry,
+  public lookups and caching, sanitized errors) and `test/og-session-integration.test.js` (built bundle reads the page
+  entry, sends it, stores nothing and leaves sign-out to og). Built-bundle regressions cover playback and All lists
+  resets on account changes.
+- Expired og session (user live test, 2026-11-10): Add to watchlist/library start with a public lookup, which used to
+  throw a plain `MissingClientIdError` and read like a missing client ID. Lookups with an expired or rejected og token
+  now throw a `MissingClientIdError` that carries og's reload message and `ogSession`, so metadata fallbacks still
+  work while actions and All lists say to reload. To hold an entry past expiry in testing, block og's auth requests
+  in the network tab, or og renews it first.
+- Live (2026-11-10, Zen + Violentmonkey, two accounts): writes, signed-in reads, playback, sign-out and account
+  switching work through og's session. Trakt keeps a replaced session usable for about a minute, so a write right
+  after switching accounts can still land on the previous one; that is Trakt's session lifetime, not the toolkit.
+- Signed-in drift: og redirects `/users/<you>/progress` and `/dashboard` to sign-in without its httpOnly session
+  cookie, and the drift script never handles that cookie. Save those pages' rendered DOM from a signed-in browser
+  (`document.documentElement.outerHTML` once loaded; og draws the dashboard's `nav.ribbon` client-side, so server HTML
+  lacks it) as `progress.html` and `dashboard.html`, then run `npm run drift -- --signed-in <dir>`. Checked
+  2026-11-10 in the browser pane: `section.progress` and `nav.ribbon` both present.
+- The summary ratings chart still requires a configured client ID; the season chart keeps its DOM fallback when no
+  API lookup is possible. `isSignedIn()` stays true for an expired og entry so actions can surface the reload message
+  instead of disappearing.
+
 ## 2026-11-09: test suite review (feature 23)
 
 - **Element assertions:** a probe that wrapped `node:assert` for one full run found 25 equality checks with a
@@ -699,7 +801,7 @@ The user verified the watchlist, library and all-lists features on a real accoun
 - Tests: `all-lists.test.js` (data) and `all-lists-integration.test.js` (built bundle on a trimmed live page fixture,
   `ALL_LISTS_HTML`): menu placement, in-place switch and restore, native classes, liked paging signed in and out,
   the link from other pages, pages left alone, error messages and the fallback.
-- Pending: live check in a userscript manager, signed in and out.
+- Live check in a userscript manager, signed in and out: done by the user (2026-11-10).
 
 ## 2026-11-02: season chart cleanup and show-aware custom links (features 15 and 16)
 
@@ -806,7 +908,7 @@ The user verified the watchlist, library and all-lists features on a real accoun
   cover a clipped rating whose outer bar reports no overflow. Full tests/build pass. Chromium and Firefox
   verified the CSS fallback on captured real poster markup across 150/180/182/183/200px outer widths,
   deliberately overriding JS dimensions to report spare room; CSS hid/restored correctly, with a mocked
-  save at the wider width. Actual Zen signed-in zoom remains unverified.
+  save at the wider width. Zen signed-in zoom was later verified by the user (2026-11-10).
 
 - Poster-card shortcuts now hide when their action bar/rating would overflow, measured with the shortcut
   present. A ResizeObserver, window resize and font-load updates restore the shortcut when space returns.
@@ -814,7 +916,7 @@ The user verified the watchlist, library and all-lists features on a real accoun
   cards retain their existing layout. Cleanup disconnects observers and removes listeners.
   Full tests/build pass. Captured OG markup/CSS in Chromium and Firefox verified wide → narrow → wide
   transitions: shortcut visible → hidden → visible, no action-bar overflow, and a successful mocked save.
-  Actual browser zoom on the signed-in history page remains a live check.
+  Browser zoom on the signed-in history page was later verified by the user (2026-11-10).
 
 - Restricted card shortcuts to movies and whole shows at the user’s request. Up Next episode cards and season
   cards have no bookmark action, even when their subtitles link to the parent show. Recycled cards lose the
@@ -1055,7 +1157,7 @@ flips the flag back, og's "Add to library" button appears and the toolkit's hide
 - If a recording's audio fails, the next cached recording is tried before showing `Audio unavailable.`; later clicks
   toggle pause. A Forvo search link is shown when lookup fails, nothing matches or every recording fails.
 - curl to Forvo's search returned Cloudflare 403 in this environment, while an audio HEAD returned 200. Parsing was
-  tested against a trimmed fixture; live in-browser playback in a userscript manager is still unverified.
+  tested against a trimmed fixture; live playback in a userscript manager was later verified by the user (2026-11-10).
 
 ## 2026-10-29
 

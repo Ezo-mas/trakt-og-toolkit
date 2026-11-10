@@ -64,6 +64,61 @@ function boot(t, { storage = {} } = {}) {
   };
 }
 
+test('feature host reruns a sync requested from match instead of re-entering', () => {
+  const window = new Window();
+  let host;
+  let mounts = 0;
+  let requested = false;
+  const feature = {
+    id: 'demo',
+    match() {
+      if (!requested) {
+        requested = true;
+        // An auth read inside match can dispatch while the host is mid-iteration.
+        host({ key: '/' });
+      }
+      return true;
+    },
+    mount() {
+      mounts++;
+      const node = window.document.createElement('p');
+      window.document.body.append(node);
+      return { node, destroy() { node.remove(); } };
+    },
+  };
+  host = createFeatureHost([feature]);
+  host({ key: '/' });
+  assert.equal(mounts, 1, 'the nested sync is deferred, not mounted twice');
+  assert.equal(window.document.querySelectorAll('p').length, 1);
+  window.close();
+});
+
+test('auth reset rebuilds only account-scoped features', () => {
+  const window = new Window();
+  const counts = { personal: 0, shared: 0 };
+  const make = (id, authScoped) => ({
+    id,
+    authScoped,
+    match: () => true,
+    mount() {
+      counts[id]++;
+      const node = window.document.createElement('p');
+      node.dataset.id = id;
+      window.document.body.append(node);
+      return { node, destroy() { node.remove(); } };
+    },
+  });
+  const host = createFeatureHost([make('personal', true), make('shared', false)]);
+  host({ key: '/' });
+  assert.deepEqual(counts, { personal: 1, shared: 1 });
+
+  host.reset();
+  host({ key: '/' });
+  assert.deepEqual(counts, { personal: 2, shared: 1 }, 'a feature without personal state keeps its instance');
+  assert.equal(window.document.querySelectorAll('p').length, 2);
+  window.close();
+});
+
 test('every feature gets a menu toggle and all are on by default', async t => {
   const b = boot(t);
   await wait();
