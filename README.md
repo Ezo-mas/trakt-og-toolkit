@@ -11,6 +11,9 @@ sign-in. Not affiliated with or endorsed by Trakt.
 3. No API setup is needed when you are signed into og.trakt.tv. Otherwise set a client ID and sign in (see
    [Setup](#setup)).
 
+Installed copies update themselves from `main` when a new version is released. A copy installed from a saved file, or
+from before these update URLs existed, needs one reinstall from the link above.
+
 Every feature has its own **toggle** in the userscript menu. All are on by default, and switching one off removes it
 immediately.
 

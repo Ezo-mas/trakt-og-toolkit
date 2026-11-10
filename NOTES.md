@@ -2,6 +2,14 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-11: auto-update URLs (feature 32)
+
+- The built header carries `@updateURL` and `@downloadURL` for `dist/trakt-og-toolkit.user.js` on `main`, plus
+  `@homepageURL` and `@supportURL`. A manager only learns these from an installed header that already has them, so
+  installs made before this change (or from a saved file) need one reinstall; after that they follow `@version`.
+- `test/userscript-header.test.js` reads the committed bundle, so it fails when the header was changed without
+  `npm run build`. Version bumps still happen at release, when `src/meta.js` and `dist/` are rebuilt together.
+
 ## v0.4.0 (2026-11-10)
 
 Release of everything since v0.3.0, so userscript managers offer the update:
