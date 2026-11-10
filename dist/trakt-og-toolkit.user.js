@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Trakt OG Toolkit
 // @namespace    https://github.com/trakt-og-toolkit
-// @version      0.3.0
+// @version      0.4.0
 // @description  Brings back the useful classic-Trakt extras on og.trakt.tv.
 // @author       Ezo-mas
 // @license      MIT
@@ -28,7 +28,7 @@
 (() => {
   // src/meta.js
   var NAME = "Trakt OG Toolkit";
-  var VERSION = "0.3.0";
+  var VERSION = "0.4.0";
 
   // src/ui/styles.js
   var CSS = String.raw`
@@ -3301,6 +3301,12 @@
     error.control = true;
     return error;
   }
+  function ogLookupExpiredError() {
+    const error = new MissingClientIdError();
+    error.message = "Your og.trakt.tv session expired; reload the page to renew it.";
+    error.ogSession = true;
+    return error;
+  }
   function ogAuth() {
     const session = readOgSession();
     return session ? {
@@ -3435,20 +3441,21 @@
   async function ogGet(path, ttl) {
     const first = ogAuth();
     if (!first) throw new MissingClientIdError();
-    if (first.expiresAt != null && first.expiresAt <= Date.now()) throw new MissingClientIdError();
+    if (first.expiresAt != null && first.expiresAt <= Date.now()) throw ogLookupExpiredError();
     const url = `${API.base}${path}`;
     try {
       return await getJSON(url, { ttl, headers: authHeaders(first) });
     } catch (error) {
       if (error?.status !== 401) throw error;
       const latest = ogAuth();
-      if (!latest || latest.expiresAt != null && latest.expiresAt <= Date.now()) throw new MissingClientIdError();
+      if (!latest) throw new MissingClientIdError();
+      if (latest.expiresAt != null && latest.expiresAt <= Date.now()) throw ogLookupExpiredError();
       if (!sameAuth(latest, first)) throw sessionChangedError();
-      if (latest.accessToken === first.accessToken) throw ogSessionExpiredError();
+      if (latest.accessToken === first.accessToken) throw ogLookupExpiredError();
       try {
         return await getJSON(url, { ttl, headers: authHeaders(latest) });
       } catch (retryError) {
-        if (retryError?.status === 401) throw ogSessionExpiredError();
+        if (retryError?.status === 401) throw ogLookupExpiredError();
         throw retryError;
       }
     }
@@ -7621,8 +7628,8 @@
       );
       const failed = results.slice(0, 2).filter((result) => result.status === "rejected");
       if (failed.length) {
-        const missingId = failed.some((result) => result.reason instanceof MissingClientIdError);
-        node.prepend(el("p", { class: "ogt-all-lists__error", role: "status", text: missingId ? "Set a Trakt API client ID in the toolkit menu to load collaborations and liked lists." : "Some lists could not be loaded. Try again later." }));
+        const missing = failed.find((result) => result.reason instanceof MissingClientIdError)?.reason;
+        node.prepend(el("p", { class: "ogt-all-lists__error", role: "status", text: missing?.ogSession ? missing.message : missing ? "Set a Trakt API client ID in the toolkit menu to load collaborations and liked lists." : "Some lists could not be loaded. Try again later." }));
       }
       const fill = (rowNode) => {
         const entry = waiting2.get(rowNode);

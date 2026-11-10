@@ -7,7 +7,7 @@ import { waitFor } from './wait.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms = 80) => new Promise(resolve => setTimeout(resolve, ms));
-function boot(t, { path = '/movies/fight-club-1999', signedIn = true, result = { added: { movies: 1 } }, deferred = '' } = {}) {
+function boot(t, { path = '/movies/fight-club-1999', signedIn = true, result = { added: { movies: 1 } }, deferred = '', ogEntry = null } = {}) {
   const window = new Window({ url: `https://og.trakt.tv${path}` });
   t.after(() => window.close());
   const { document } = window;
@@ -34,6 +34,7 @@ function boot(t, { path = '/movies/fight-club-1999', signedIn = true, result = {
     else queueMicrotask(respond);
     return { abort() {} };
   };
+  if (ogEntry) window.localStorage.setItem('oidc.user:https://auth.trakt.tv:WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI', JSON.stringify(ogEntry));
   document.write(`<!doctype html><html><head></head><body>${WATCHLIST_HTML}</body></html>`);
   window.eval(bundle);
   document.dispatchEvent(new window.Event('DOMContentLoaded'));
@@ -50,6 +51,19 @@ function nativeState(b, detail) {
     ? `<span class="title">Listed On</span><span class="detail">${detail}</span>`
     : '<span class="title">Add to list</span>';
 }
+
+test('an expired og session asks for a reload instead of a client ID', async t => {
+  // No client ID and no toolkit sign-in: the lookup before the write runs through og's expired session.
+  const b = boot(t, { signedIn: false, ogEntry: {
+    access_token: 'og-access', token_type: 'Bearer', profile: { ids: { trakt: 7 } },
+    expires_at: Math.floor(Date.now() / 1000) - 60,
+  } });
+  await wait(); b.button().click(); await wait();
+  const status = b.panel().querySelector('[role="status"]').textContent;
+  assert.match(status, /og\.trakt\.tv session expired; reload the page/);
+  assert.doesNotMatch(status, /client ID/i);
+  assert.equal(b.calls.length, 0, 'nothing is sent with an expired token');
+});
 
 test('built bundle adds exactly once on all four page types, alongside the library action', async t => {
   for (const [path, type, lookup] of [

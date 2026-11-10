@@ -180,13 +180,16 @@ test('public lookups use og without a client ID, preserving query and caching', 
   assert.match(calls[1].url, /\/shows\/1388\/seasons\?extended=full$/);
 });
 
-test('public lookups degrade to a missing client ID when og is expired', async () => {
+test('an expired og session keeps lookup fallbacks but asks actions for a reload', async () => {
   reset();
   ogSession({ expires: expiring(-60) });
   mock(() => ({ status: 200 }));
 
   const error = await apiGet('/movies/the-matrix-1999').catch((failure) => failure);
   assert.ok(error instanceof MissingClientIdError, 'metadata lookups keep their setup/fallback path');
+  // Add to watchlist/library start with this lookup; it must not read as a missing client ID.
+  assert.match(error.message, /og\.trakt\.tv session expired; reload the page/);
+  assert.equal(error.ogSession, true);
   assert.equal(calls.length, 0);
 });
 
@@ -198,6 +201,7 @@ test('a revoked og token on a public lookup asks for a reload', async () => {
   const error = await apiGet('/movies/the-matrix-1999').catch((failure) => failure);
   assert.match(error.message, /reload the page/);
   assert.equal(error.ogSession, true);
+  assert.ok(error instanceof MissingClientIdError, 'a revoked token keeps the same fallback path as an expired one');
   assert.equal(calls.length, 1, 'the rejected token is not retried');
 });
 

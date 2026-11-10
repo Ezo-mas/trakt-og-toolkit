@@ -62,6 +62,18 @@ function ogSessionExpiredError() {
   return error;
 }
 
+/**
+ * og's entry exists but can no longer authorize a public lookup. It is still a missing client ID, so
+ * metadata fallbacks keep working, but it carries og's reload message: an action whose first step is
+ * a lookup must tell the user to reload, not to set up a client ID they never needed.
+ */
+function ogLookupExpiredError() {
+  const error = new MissingClientIdError();
+  error.message = 'Your og.trakt.tv session expired; reload the page to renew it.';
+  error.ogSession = true;
+  return error;
+}
+
 /** og's token, read fresh each time because og rotates it on its own schedule. */
 function ogAuth() {
   const session = readOgSession();
@@ -215,25 +227,24 @@ async function ensureAuth() {
 async function ogGet(path, ttl) {
   const first = ogAuth();
   if (!first) throw new MissingClientIdError();
-  // An expired og token cannot authorize even a public lookup. Degrade like a missing client
-  // ID so callers keep their setup/fallback path instead of showing og's reload message.
-  if (first.expiresAt != null && first.expiresAt <= Date.now()) throw new MissingClientIdError();
+  // An expired og token cannot authorize even a public lookup.
+  if (first.expiresAt != null && first.expiresAt <= Date.now()) throw ogLookupExpiredError();
   const url = `${API.base}${path}`;
   try {
     return await getJSON(url, { ttl, headers: authHeaders(first) });
   } catch (error) {
     if (error?.status !== 401) throw error;
     const latest = ogAuth();
-    // No entry at all means there is no client ID to fall back to. An entry whose clock has
-    // passed is a stale tab, which callers already handle as missing setup rather than reload.
-    if (!latest || (latest.expiresAt != null && latest.expiresAt <= Date.now())) throw new MissingClientIdError();
+    // No entry at all means there is no client ID to fall back to; an expired one needs a reload.
+    if (!latest) throw new MissingClientIdError();
+    if (latest.expiresAt != null && latest.expiresAt <= Date.now()) throw ogLookupExpiredError();
     if (!sameAuth(latest, first)) throw sessionChangedError();
     // Rejected before its expiry: og's session was revoked, and only a reload can renew it.
-    if (latest.accessToken === first.accessToken) throw ogSessionExpiredError();
+    if (latest.accessToken === first.accessToken) throw ogLookupExpiredError();
     try {
       return await getJSON(url, { ttl, headers: authHeaders(latest) });
     } catch (retryError) {
-      if (retryError?.status === 401) throw ogSessionExpiredError();
+      if (retryError?.status === 401) throw ogLookupExpiredError();
       throw retryError;
     }
   }

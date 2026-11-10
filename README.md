@@ -208,6 +208,7 @@ npm run build     # dist/trakt-og-toolkit.user.js
 npm run dev       # watch + localhost:8787 for Violentmonkey "Track external edits"
 npm test          # unit + happy-dom integration tests
 npm run drift     # check live og.trakt.tv still has the selectors we rely on (needs a build)
+                  # add `-- --signed-in <dir>`: progress.html and dashboard.html, rendered DOM saved while signed in
 ```
 
 Each feature lives in `src/features/<name>/`. [PLAN.md](PLAN.md) has the roadmap and the rules for new features, and

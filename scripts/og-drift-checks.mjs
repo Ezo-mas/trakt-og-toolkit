@@ -32,6 +32,9 @@ export const SELECTORS = [
   { feature: 'watchlist credit toolbar', pages: ['person'], selector: '#credits .toolbar .controls' },
   { feature: 'watchlist credit rows', pages: ['person'], selector: 'article.credit-row a.poster[href^="/movies/"], article.credit-row a.poster[href^="/shows/"]' },
   { feature: 'watchlist credit list controls', pages: ['person'], selector: 'article.credit-row .quick-icons .list-control.card, article.credit-row .quick-icons button.action.list' },
+  // Signed-in pages: og redirects these to sign-in without a session, so they come from `--signed-in <dir>`.
+  { feature: 'playback overview', pages: ['progress'], selector: 'section.progress' },
+  { feature: 'month review', pages: ['dashboard'], selector: 'nav.ribbon' },
 ];
 
 /** Return each applicable check and whether it matched. */
@@ -57,4 +60,12 @@ export function unreachableReason({ status, url, html }) {
   return null;
 }
 
-export const LOGIN_CHECKS = [{ feature: 'month review', selector: 'nav.ribbon', status: 'not checked (needs login)' }];
+/**
+ * Pages that need og's session. Open each in a signed-in browser, let it finish loading, save the rendered DOM
+ * (`document.documentElement.outerHTML`; og draws `nav.ribbon` client-side) as `<dir>/<name>.html` and pass
+ * `--signed-in <dir>`.
+ */
+export const LOGIN_PAGES = [
+  { name: 'progress', path: '/users/<you>/progress' },
+  { name: 'dashboard', path: '/dashboard' },
+];

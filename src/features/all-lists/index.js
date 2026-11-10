@@ -330,10 +330,10 @@ function createView(profile, lists) {
 
     const failed = results.slice(0, 2).filter((result) => result.status === 'rejected');
     if (failed.length) {
-      const missingId = failed.some((result) => result.reason instanceof MissingClientIdError);
-      node.prepend(el('p', { class: 'ogt-all-lists__error', role: 'status', text: missingId
-        ? 'Set a Trakt API client ID in the toolkit menu to load collaborations and liked lists.'
-        : 'Some lists could not be loaded. Try again later.' }));
+      const missing = failed.find((result) => result.reason instanceof MissingClientIdError)?.reason;
+      node.prepend(el('p', { class: 'ogt-all-lists__error', role: 'status', text: missing?.ogSession ? missing.message
+        : missing ? 'Set a Trakt API client ID in the toolkit menu to load collaborations and liked lists.'
+          : 'Some lists could not be loaded. Try again later.' }));
     }
 
     // Liked lists arrive without posters: read each list's summary as its row nears the screen.

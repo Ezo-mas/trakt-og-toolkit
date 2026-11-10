@@ -2,6 +2,27 @@
 
 Working notes and known issues. Newest first.
 
+## v0.4.0 (2026-11-10)
+
+Release of everything since v0.3.0, so userscript managers offer the update:
+
+- **No API setup when signed into og.trakt.tv:** watchlist, library, playback, ratings, All lists and month review use
+  og's own session (30). The toolkit's own app sign-in still works and wins while it is signed in. Account changes in
+  og or in another tab rebuild the toolkit's personal features; an expired og session asks for a reload.
+- **Custom links:** shown below the poster with service logos and inside Watch Now (26); presets open the exact title,
+  season or episode (22, 24), with per-user server presets (25), direct links resolved from external ids (27), and
+  genre-conditional presets plus links on person pages (28).
+- **Trakt ratings chart** in the empty space of the summary (31).
+- **Playback:** set saved progress (9). **Month review:** browse earlier months (21).
+- **Watchlist** shortcuts and **Watchlist all** on a person's credits (17); **Undo** on success notices (19).
+- **List previews** link posters to their titles (10). og-styled dialogs replace the browser's.
+- **Features can be turned on and off** from the menu (20).
+- Writes share one rate-limited queue that follows Trakt's limits (29). Test suite review (23) and wider
+  `npm run drift` coverage (18), now with signed-in page checks via `--signed-in <dir>`.
+
+The user verified the og-session features, expiry, sign-out, account switching and cross-tab changes on real accounts
+in Zen with Violentmonkey.
+
 ## 2026-11-09: og's session instead of a production app (feature 30)
 
 - Trakt's answer was that the toolkit may use og's existing session; no production app is available. Authenticated
@@ -64,9 +85,22 @@ Working notes and known issues. Newest first.
   public lookups and caching, sanitized errors) and `test/og-session-integration.test.js` (built bundle reads the page
   entry, sends it, stores nothing and leaves sign-out to og). Built-bundle regressions cover playback and All lists
   resets on account changes.
-- Limitations: no live authenticated write was made with an og session. The summary ratings chart still requires a
-  configured client ID; the season chart keeps its DOM fallback when no API lookup is possible. `isSignedIn()` stays
-  true for an expired og entry so actions can surface the reload message instead of disappearing.
+- Expired og session (user live test, 2026-11-10): Add to watchlist/library start with a public lookup, which used to
+  throw a plain `MissingClientIdError` and read like a missing client ID. Lookups with an expired or rejected og token
+  now throw a `MissingClientIdError` that carries og's reload message and `ogSession`, so metadata fallbacks still
+  work while actions and All lists say to reload. To hold an entry past expiry in testing, block og's auth requests
+  in the network tab, or og renews it first.
+- Live (2026-11-10, Zen + Violentmonkey, two accounts): writes, signed-in reads, playback, sign-out and account
+  switching work through og's session. Trakt keeps a replaced session usable for about a minute, so a write right
+  after switching accounts can still land on the previous one; that is Trakt's session lifetime, not the toolkit.
+- Signed-in drift: og redirects `/users/<you>/progress` and `/dashboard` to sign-in without its httpOnly session
+  cookie, and the drift script never handles that cookie. Save those pages' rendered DOM from a signed-in browser
+  (`document.documentElement.outerHTML` once loaded; og draws the dashboard's `nav.ribbon` client-side, so server HTML
+  lacks it) as `progress.html` and `dashboard.html`, then run `npm run drift -- --signed-in <dir>`. Checked
+  2026-11-10 in the browser pane: `section.progress` and `nav.ribbon` both present.
+- The summary ratings chart still requires a configured client ID; the season chart keeps its DOM fallback when no
+  API lookup is possible. `isSignedIn()` stays true for an expired og entry so actions can surface the reload message
+  instead of disappearing.
 
 ## 2026-11-09: test suite review (feature 23)
 
@@ -765,7 +799,7 @@ The user verified the watchlist, library and all-lists features on a real accoun
 - Tests: `all-lists.test.js` (data) and `all-lists-integration.test.js` (built bundle on a trimmed live page fixture,
   `ALL_LISTS_HTML`): menu placement, in-place switch and restore, native classes, liked paging signed in and out,
   the link from other pages, pages left alone, error messages and the fallback.
-- Pending: live check in a userscript manager, signed in and out.
+- Live check in a userscript manager, signed in and out: done by the user (2026-11-10).
 
 ## 2026-11-02: season chart cleanup and show-aware custom links (features 15 and 16)
 
@@ -872,7 +906,7 @@ The user verified the watchlist, library and all-lists features on a real accoun
   cover a clipped rating whose outer bar reports no overflow. Full tests/build pass. Chromium and Firefox
   verified the CSS fallback on captured real poster markup across 150/180/182/183/200px outer widths,
   deliberately overriding JS dimensions to report spare room; CSS hid/restored correctly, with a mocked
-  save at the wider width. Actual Zen signed-in zoom remains unverified.
+  save at the wider width. Zen signed-in zoom was later verified by the user (2026-11-10).
 
 - Poster-card shortcuts now hide when their action bar/rating would overflow, measured with the shortcut
   present. A ResizeObserver, window resize and font-load updates restore the shortcut when space returns.
@@ -880,7 +914,7 @@ The user verified the watchlist, library and all-lists features on a real accoun
   cards retain their existing layout. Cleanup disconnects observers and removes listeners.
   Full tests/build pass. Captured OG markup/CSS in Chromium and Firefox verified wide → narrow → wide
   transitions: shortcut visible → hidden → visible, no action-bar overflow, and a successful mocked save.
-  Actual browser zoom on the signed-in history page remains a live check.
+  Browser zoom on the signed-in history page was later verified by the user (2026-11-10).
 
 - Restricted card shortcuts to movies and whole shows at the user’s request. Up Next episode cards and season
   cards have no bookmark action, even when their subtitles link to the parent show. Recycled cards lose the
@@ -1121,7 +1155,7 @@ flips the flag back, og's "Add to library" button appears and the toolkit's hide
 - If a recording's audio fails, the next cached recording is tried before showing `Audio unavailable.`; later clicks
   toggle pause. A Forvo search link is shown when lookup fails, nothing matches or every recording fails.
 - curl to Forvo's search returned Cloudflare 403 in this environment, while an audio HEAD returned 200. Parsing was
-  tested against a trimmed fixture; live in-browser playback in a userscript manager is still unverified.
+  tested against a trimmed fixture; live playback in a userscript manager was later verified by the user (2026-11-10).
 
 ## 2026-10-29
 

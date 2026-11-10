@@ -7,15 +7,8 @@ behaviour, never its code. Finished features are listed at the end; their detail
 
 ## Up next
 
-| # | Feature | Needs | Status |
-|---|---|---|---|
-| 30 | Trakt onboarding without manual API setup | Trakt's answer on app access | implemented (og session); production app still unavailable |
-| 27 | Resolve external site IDs for direct custom links | public lookup services | implemented; anime mapping deferred |
-| 28 | Conditional presets and person-page custom links | native genre/person metadata | implemented; anime destinations remain searches |
-| 31 | Trakt ratings distribution in the summary's empty space | client ID | implemented; compact chart, tiles when there is room |
-
-Then live testing and the **0.4.0** release. Userscript managers only offer an update when `@version` changes, so bump
-it whenever main should reach users.
+Nothing is queued; v0.4.0 released everything shipped since v0.3.0. Userscript managers only offer an update when `@version`
+changes, so bump it whenever main should reach users.
 
 **Not planned, og already ships these:** ratings distribution chart (`/stats` pages; feature 31 only mirrors it into
 the summary), trailers and videos, external links and ratings strip, profile cover images, list pages, header
@@ -77,150 +70,13 @@ site.
 
 ---
 
-## 30. Trakt onboarding without manual API setup
+## Deferred
 
-**Status:** implemented (2026-11-09) for Trakt's og-session answer; a shared production app is still unavailable.
-Goal: a user installs the script and signs in, with no developer-portal steps. Fresh installs on og.trakt.tv use
-og's existing session; the toolkit's own per-user app remains the fallback.
-
-**What we found**
-
-- Trakt's app form offers **Development** apps only. They accept localhost redirect URIs only, and "only you and
-  people you add can sign in". **Production** apps are "currently unavailable", with a pointer to support@trakt.tv.
-  So one shared Toolkit app can't sign other users in, not even through device-code sign-in, which never uses the
-  redirect.
-- og signs in with its own Client ID through `oidc-client-ts` (auth code + PKCE against `auth.trakt.tv`). It keeps the
-  user, including the access token, in `localStorage` under `oidc.user:https://auth.trakt.tv:<client_id>`, and copies
-  it into an httpOnly cookie via `/api/store-token` (`trakt/trakt-og` `lib/auth/userManager.ts`). A userscript on
-  og.trakt.tv could read that token.
-- An email to Trakt support asks for (1) a production app, or (2) permission to make API calls with og's existing
-  access token.
-
-**Paths, by Trakt's answer**
-
-- **Production app granted.** Ship its public Client ID as the default with the existing device flow. Later add browser
-  sign-in with [PKCE](https://developer.trakt.tv/docs/pkce) through the HTTPS callback page (below). Keep **Use your
-  own application** under advanced settings and never switch a signed-in session to another Client ID silently.
-- **og session allowed (implemented 2026-11-09).** Read og's access token on og.trakt.tv and send it with og's Client ID. Never refresh it
-  ourselves: og rotates the refresh token on renewal, so a second refresher strands og's session. When it expires or
-  a call returns 401, wait for og to renew it (or ask for a reload). Never copy it out of the page realm, store it, or
-  log it. Add the storage key to `npm run drift`. Keep the toolkit's own sign-in as a fallback.
-- **Neither.** Keep per-user Development apps, but replace the manual instructions with a guided setup: open the form,
-  show the values to enter, then ask for the Client ID. The localhost redirect is fine, because device-code sign-in
-  never uses it. Separately, check from a second account whether public (unsigned) API calls work with a shared
-  Development Client ID; if they do, ship it as the default for unsigned features.
-
-**Callback page (merged in #34).** `site/` holds a placeholder that only strips query and fragment parameters, and
-`.github/workflows/pages.yml` publishes it from `main` to `https://ezo-mas.github.io/trakt-og-toolkit/callback.html`.
-Before the first run, set **Settings → Pages → Source** to **GitHub Actions**. Register the address as a redirect URI
-only once a production app exists, and keep the existing redirect for current sessions.
-
-**PKCE handoff (when a production app exists).** Generate a fresh S256 verifier/challenge and unpredictable state per
-attempt, and keep the verifier in the userscript. Validate state, expiry, origin and the originating session, accept a
-code once, and exchange it from the userscript. The callback page must not receive or store tokens or the verifier,
-load third-party scripts, or leak parameters through referrers. Handle reloads, closed tabs, denied or expired consent
-and concurrent attempts. Keep device flow as the fallback until PKCE works in Violentmonkey and Tampermonkey on Firefox
-and Chromium.
-
-**Scope:** `src/config.js`, `src/settings.js`, `src/oauth-menu.js`, `src/core/{oauth,store,trakt}.js`, menu labels,
-focused OAuth/menu tests and README/NOTES (the README's setup section shrinks once this lands).
-
-**Acceptance:** a fresh install, preserved custom app settings, approval/denial/expiry, cancellation, reload, refresh,
-sign-out, account switches and credentials kept out of the page. Verify with a second Trakt account.
-
-## 27. Resolve external site IDs for direct custom links
-
-**Status:** implemented (2026-11-09) for Rotten Tomatoes and Metacritic; anime mapping remains deferred.
-Lookups use validated native links first, then lazy Wikidata resolution with cached hits/misses and one shared
-Wikidata cooldown. Hover/focus starts resolution, redraws reuse cached URLs, and fast unresolved clicks keep search.
-
-Improve destinations that currently search because Trakt does not provide
-that site's identifier. Add only specific resolvers needed by enabled presets, reusing the existing custom-links
-resolution path rather than building a general API wrapper or executing JavaScript stored in templates.
-
-- **First: Metacritic and Rotten Tomatoes.** Prefer a valid direct URL already rendered by OG (Rotten Tomatoes
-  already does this). Otherwise query Wikidata by a validated movie/show TMDb or IMDb id for
-  [Metacritic P1712](https://www.wikidata.org/wiki/Property:P1712) and
-  [Rotten Tomatoes P1258](https://www.wikidata.org/wiki/Property:P1258). Match the media kind, validate the returned
-  identifier and destination host/path, and keep the existing search when no reliable match exists.
-- Resolve on demand when a user activates a link. Cache successful mappings and deduplicate in-flight requests
-  by service and title id. Use a bounded timeout and short-lived missing-result cache; transient failures must not
-  become permanent misses. Check service terms, CORS/GM transport requirements and request limits before wiring
-  endpoints into the existing HTTP layer; add only required `@connect` hosts.
-- Keep the search URL usable while resolution is pending or unavailable. Upgrade the anchor when an exact URL
-  resolves; preserve normal navigation where possible. Failed lookups remain retryable and must not leave
-  `javascript:void(0)` links or remove the only click handler. Ignore late results after navigation/teardown.
-- Verify Metacritic/Rotten Tomatoes season routes against actual site behavior. Resolve an exact episode id/URL
-  only when trustworthy mapping exists; do not manufacture an episode slug from the episode title. Fall back to
-  a verified season/show page or search when the specific episode cannot be resolved.
-- **Then: anime IDs.** Check a maintained mapping source for TMDb/IMDb → MAL/AniList before implementation.
-  Add direct links only for unambiguous anime/season matches; keep search for missing or ambiguous results.
-  Do not globally rewrite Trakt season/episode numbering using fuzzy title matches. Any necessary destination-
-  specific episode mapping stays local to that destination and must be verified.
-
-**Scope:** the existing custom-links data/API/preset modules plus the smallest lookup helper, shared public HTTP
-facilities, build metadata for required hosts, fixtures, targeted resolver/integration tests and README/NOTES.
-Preserve the existing direct routes and per-user server URLs; no lookup should be needed for links already exact.
-
-**Acceptance:** test correct movie/show matches, malformed/wrong-host results, missing/ambiguous mappings, timeouts,
-rate limits, concurrent clicks, retry after failure, cache reuse and navigation during lookup. Verify representative
-live destinations before shipping. Lookups must not block initial page rendering or all other custom links.
-
-## 28. Conditional presets and person-page custom links
-
-**Status:** implemented (2026-11-09). MyAnimeList/AniList use the current title’s native Genres field; unknown
-metadata keeps presets available, and hidden links remain saved. Person pages reuse the sidebar, icons and modal
-editor with person-specific variables and a YouTube interviews preset. Person IDs come only from the native
-external-link strip. Anime destinations remain searches; reliable anime ID mapping is still deferred.
-
-- Extend existing preset kind restrictions with only the context needed by concrete presets: e.g. anime-only
-  destinations when reliable genre metadata is available. Reuse DOM metadata or existing public API results;
-  do not fetch every title's full details merely to decide whether to draw an icon. Unknown metadata must not
-  silently delete saved links, and genre restrictions apply to known presets rather than arbitrary user templates.
-- Extend the existing custom-links feature to person pages using `parseRoute`'s existing person route. Read the
-  person's name and available identifiers; do not feed person ids into movie/show templates. Pick a small useful
-  starting set, such as YouTube interviews and verified external profile links; do not duplicate pronunciation UI.
-- Decide and document name/person-id template variables before exposing them in the editor. Unsupported
-  placeholders hide the affected link safely, with existing movie/show/season/episode variables unchanged.
-- Reuse the icon presentation, management UI, saved order and optional lookup behavior from 26–27. Check OG's
-  native person external links first and avoid adding destinations that already cover the same need without value.
-
-**Acceptance:** fixtures/tests cover anime versus non-anime/unknown genres, movie/show/person preset eligibility,
-person variable filling and navigation between kinds, with no irrelevant presets or lost saved configuration.
-
-## 31. Trakt ratings distribution in the summary's empty space
-
-**Status:** implemented (2026-11-09) as `src/features/summary-ratings/`, toggle **Trakt ratings chart**. Per the
-user, it is a compact chart rather than the full stats view: ten bars with counts, the average line and a header
-linking to `/stats`, plus og's four stat tiles when there is room for them too. It needs a client ID (no Trakt HTML
-is read) and hides under 10 votes. See NOTES.md (2026-11-09).
-
-Original plan (2026-11-08): the action stack grew with Add to watchlist and Add to library (features 12–13),
-so on movie, show, season and episode summaries the overview column under the tagline/overview text now ends well
-above the buttons and leaves an empty block. Fill it with the **Trakt** section of the title's stats page: the 1–10
-ratings distribution bars with the average marker, and the Rating / Votes / Most given / Liked it tiles. The user's
-screenshots (2026-11-08, Dune: Prophecy show and S1E3) show the gap and og's `/stats` section to mirror.
-
-- Check live og and `trakt/trakt-og` first: the summary's overview column, what already sits below the overview
-  (playback progress on episodes, feature 2's panel), and how `/stats` renders the section, so the copy matches og's
-  bar colours, labels ("Weak Sauce :(" … "Totally Ninja!"), heart icons and tile style. Build it ourselves; don't copy
-  og's GPL code or styles verbatim into the MIT bundle.
-- Data: with a client ID, `GET /movies/:id/ratings`, `/shows/:id/ratings`, `/shows/:id/seasons/:s/ratings` and
-  `/shows/:id/seasons/:s/episodes/:e/ratings` return `rating`, `votes` and the `distribution`; the watcher share
-  ("5.5% of watchers") needs the matching `/stats` endpoint's `watchers`, or drop that line. Without a client ID,
-  decide between hiding the section and reading og's own `/stats` page (same origin, server-rendered); prefer the
-  API per Trakt's policy. Derive Most given and Liked it (share of 7+) from the distribution.
-- Only fill space that is actually empty: measure the overview column against the action stack and skip (or shrink to
-  the tiles) when the overview text is long enough to reach the buttons. No layout shift for og's own content; mount
-  after hydration, clean up on SPA navigation, and add a feature toggle (feature 20).
-- Link the section to the title's `/stats` page. Accessible bars (names with value and label), keyboard focus, and
-  no hover-only information.
-
-**Scope:** a new `src/features/summary-ratings/` feature, shared `apiGet`, `src/ui/styles.js`, the feature registry
-and menu toggle, trimmed live fixtures (summary pages plus a `/stats` capture), drift selectors, README/NOTES.
-
-**Acceptance:** movies, shows, seasons and episodes, short and long overviews, titles with few or no votes, with and
-without a client ID, Firefox and Chromium; the gap is filled without pushing og's content or the action stack.
+- **Anime ID mapping (from 27 and 28).** MyAnimeList and AniList stay searches. Before building direct links, find a
+  maintained TMDb/IMDb → MAL/AniList mapping source, and link only unambiguous anime or season matches.
+- **A shared production Trakt app (from 30): not happening.** Trakt doesn't grant production apps for tools that add
+  features to its own product, so the toolkit reuses og's session instead, with a per-user app as the fallback. The
+  PKCE browser sign-in and the `site/` callback page it was meant for have no use without one.
 
 ## Shipped
 
@@ -248,9 +104,13 @@ Details for each are in NOTES.md and the merged PRs.
 | 21 | Month review: browse earlier months | done |
 | 22, 24 | Presets that open the exact title, season or episode | done |
 | 25 | Per-user server presets | done |
-| 26 | Custom links below the poster, with logos and Watch Now | done |
-| 29 | Shared authenticated-write queue and rate-limit handling | done |
-| 23 | Test suite review and cleanup | done |
+| 26 | Custom links below the poster, with logos and Watch Now | done, 0.4.0 |
+| 29 | Shared authenticated-write queue and rate-limit handling | done, 0.4.0 |
+| 23 | Test suite review and cleanup | done, 0.4.0 |
+| 27 | Direct custom links from external ids (Rotten Tomatoes, Metacritic) | done, 0.4.0; anime deferred |
+| 28 | Conditional presets and person-page custom links | done, 0.4.0; anime deferred |
+| 30 | No API setup: reuse og's session | done, 0.4.0 |
+| 31 | Trakt ratings chart in the summary's empty space | done, 0.4.0 |
 | 3, 14 | Metadata links; Add to library on poster cards | dropped (og ships it; cards too tight) |
 
 ## Running several agents at once

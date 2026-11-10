@@ -1,7 +1,7 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { get } from 'node:https';
 import { Window } from 'happy-dom';
-import { LOGIN_CHECKS, checkSelectors, unreachableReason } from './og-drift-checks.mjs';
+import { LOGIN_PAGES, checkSelectors, unreachableReason } from './og-drift-checks.mjs';
 import { checkOgSessionStorage, checkNativeModules } from './og-drift-native.mjs';
 import { STORAGE } from '../src/core/store.js';
 
@@ -15,12 +15,17 @@ const pages = [
   { name: 'person', path: '/people/bryan-cranston', panel: '.ogt-pronounce', feature: 'pronunciation' },
   { name: 'listing', path: '/movies/trending' },
 ];
+const options = {};
 const args = process.argv.slice(2);
-if (args.length && (args.length !== 2 || args[0] !== '--save' || !args[1])) {
-  console.error('Usage: node scripts/og-drift.mjs [--save <dir>]');
-  process.exit(2);
+for (let i = 0; i < args.length; i += 2) {
+  const flag = { '--save': 'save', '--signed-in': 'signedIn' }[args[i]];
+  if (!flag || !args[i + 1] || options[flag]) {
+    console.error('Usage: node scripts/og-drift.mjs [--save <dir>] [--signed-in <dir>]');
+    process.exit(2);
+  }
+  options[flag] = args[i + 1];
 }
-const saveDir = args[1];
+const saveDir = options.save;
 if (saveDir) await mkdir(saveDir, { recursive: true });
 const bundle = await readFile(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -112,12 +117,26 @@ if (sampleHtml) {
   results.push({ page: 'session', status: sessionDetails.length ? 'drift' : 'ok', details: sessionDetails });
 }
 
+// og's session is an httpOnly cookie; this script never handles it. Signed-in pages are checked from HTML
+// saved in a signed-in browser instead.
+const loginNotes = [];
+for (const page of LOGIN_PAGES) {
+  if (!options.signedIn) { loginNotes.push(`${page.name}: not checked (needs login; see --signed-in)`); continue; }
+  let html;
+  try { html = await readFile(`${options.signedIn}/${page.name}.html`, 'utf8'); }
+  catch { loginNotes.push(`${page.name}: not checked (no ${page.name}.html in ${options.signedIn})`); continue; }
+  const window = new Window({ url: `${OG_ORIGIN}${page.path}` });
+  window.document.write(html);
+  const missing = checkSelectors(window.document, page.name).filter((check) => !check.ok);
+  window.close();
+  const details = missing.map((check) => `${check.feature}: ${check.selector}`);
+  results.push({ page: page.name, status: details.length ? 'drift' : 'ok', details });
+}
+
 console.log('Page     Status       Details');
 for (const result of results) {
   console.log(`${result.page.padEnd(8)} ${result.status.padEnd(12)} ${result.details.join('; ') || '-'}`);
 }
-console.log('playback overview: not checked (needs login)');
+for (const note of loginNotes) console.log(note);
 if (results.some((result) => result.status === 'drift')) process.exitCode = 1;
 else if (results.some((result) => result.status === 'unreachable')) process.exitCode = 2;
-
-for (const check of LOGIN_CHECKS) console.log(`${check.feature} ${check.selector}: ${check.status}`);
