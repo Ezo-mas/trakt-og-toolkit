@@ -61,6 +61,18 @@ export function removeValue(key) {
   }
 }
 
+/**
+ * Calls `callback(oldValue, newValue)` when another tab changes a stored value. Managers without
+ * `GM_addValueChangeListener` (it must be granted in the header) and the localStorage fallback
+ * do not notify.
+ */
+export function onRemoteValueChange(key, callback) {
+  if (typeof GM_addValueChangeListener !== 'function') return;
+  GM_addValueChangeListener(key, (_key, oldValue, newValue, remote) => {
+    if (remote) callback(oldValue, newValue);
+  });
+}
+
 export const STORAGE = {
   monthReview: (user, month) => `review.${encodeURIComponent(user)}.${month}`,
   dismissedReview: (user) => `review.dismissed.${encodeURIComponent(user)}`,

@@ -2,7 +2,7 @@
 import { request, HttpError } from './http.js';
 import { getClientId } from '../settings.js';
 import { STORAGE, getPrivateValue, setPrivateValue, removePrivateValue } from './store.js';
-import { readOgSession, getOgSessionRevision } from './og-session.js';
+import { readOgSession, getOgSessionRevision, OG_SESSION_CHANGE_EVENT } from './og-session.js';
 
 const AUTH = 'https://auth.trakt.tv';
 let generation = 0;
@@ -48,14 +48,24 @@ export function hasOwnSession() {
   const t = readTokens();
   return Boolean(t?.access_token && t?.refresh_token);
 }
+/** The host-facing signal; it must only describe the credential that is actually in use. */
+function notifyAuthChange() {
+  if (typeof document !== 'undefined') document.dispatchEvent(new Event('ogt:authchange'));
+}
+// og's entry is the active credential only while the toolkit has no tokens of its own. Its account
+// changes must not cancel own-session writes or reset personal caches and features in that case.
+if (typeof document !== 'undefined') document.addEventListener(OG_SESSION_CHANGE_EVENT, () => {
+  if (!readTokens()) notifyAuthChange();
+});
 /** Signed in through the toolkit's own app, or through og's session. */
 export function isSignedIn() {
   return hasOwnSession() || Boolean(readOgSession());
 }
 /** Identifies the signed-in session without exposing credentials; changes on sign-in/out and observed
- * og login, logout or account replacement, but not on a token renewal. */
+ * og login, logout or account replacement, but not on a token renewal. While the toolkit's own
+ * tokens are the active credential, an og account change is irrelevant and must not invalidate it. */
 export function getSessionGeneration() {
-  return `${generation}:${getOgSessionRevision()}`;
+  return readTokens() ? `own:${generation}` : `og:${generation}:${getOgSessionRevision()}`;
 }
 function saveTokens(text, clientId) {
   let t;
@@ -76,7 +86,7 @@ function saveTokens(text, clientId) {
 export function clearTokens() {
   generation += 1;
   removePrivateValue(STORAGE.tokens);
-  if (typeof document !== 'undefined') document.dispatchEvent(new Event('ogt:authchange'));
+  notifyAuthChange();
 }
 
 /** One rotating refresh token may be consumed only once, even with concurrent 401s. */
@@ -176,7 +186,7 @@ export async function signIn({ onCode = () => {}, onMessage = () => {} } = {}) {
         saveTokens(result.text, clientId);
         // A new session invalidates writes queued by any earlier one.
         generation += 1;
-        if (typeof document !== 'undefined') document.dispatchEvent(new Event('ogt:authchange'));
+        notifyAuthChange();
         emit('Signed in to Trakt.');
         return;
       }

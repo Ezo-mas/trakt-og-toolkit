@@ -19,6 +19,19 @@ const OPTION_ID = 'ogt-all-lists-option';
 const HASH = '#ogt-all-lists';
 const ROUTES = ['lists', 'smart-lists', 'lists-collaborations', 'liked-lists'];
 const posterRequests = new Map();
+// The open All lists view reopens after the host rebuilds features on an account change.
+let resumeProfile = null;
+// That request belongs only to the profile's lists page where the account changed. If the first
+// remount fails, the host has no mounted feature to tear down, so watch the route itself and drop
+// the request once the user leaves that page. og may rewrite the URL while it handles the switch;
+// staying on the same profile's lists page keeps the request.
+if (typeof document !== 'undefined') {
+  document.addEventListener('ogt:routechange', (event) => {
+    const route = event.detail?.route;
+    if (route?.name === 'lists' && route.id != null && decodeURIComponent(route.id) === resumeProfile) return;
+    resumeProfile = null;
+  });
+}
 
 const ICONS = {
   Private: ['--color-list-chip-private', 'M5 10h14v11H5z M8 10V7a4 4 0 0 1 8 0v3'],
@@ -347,17 +360,6 @@ function createView(profile, lists) {
     loading ??= load().catch((error) => debugError('all-lists render failed', error));
     return loading;
   }
-  // A different account must not keep private rows; also discard the resolved load promise so a
-  // later open fetches instead of returning the old view.
-  function reset() {
-    loadRevision += 1;
-    loading = null;
-    observer?.disconnect();
-    observer = null;
-    node.replaceChildren();
-    if (node.isConnected) void startLoad();
-  }
-  document.addEventListener('ogt:authchange', reset);
   return {
     node,
     load: startLoad,
@@ -366,7 +368,6 @@ function createView(profile, lists) {
       loadRevision += 1;
       loading = null;
       observer?.disconnect();
-      document.removeEventListener('ogt:authchange', reset);
       node.remove();
     },
   };
@@ -375,6 +376,7 @@ function createView(profile, lists) {
 export const allLists = {
   id: 'all-lists',
   css: CSS,
+  authScoped: true,
   match: (route) => ROUTES.includes(route.name),
   mount(route) {
     const dropdown = findDropdown();
@@ -432,14 +434,20 @@ export const allLists = {
     }
     option.addEventListener('click', choose);
     menu.addEventListener('click', chooseNative);
-    if (route.name === 'lists' && location.hash === HASH) {
-      history.replaceState(history.state, '', location.pathname + location.search);
+    const resume = resumeProfile === profile;
+    resumeProfile = null;
+    if (route.name === 'lists' && (resume || location.hash === HASH)) {
+      if (!resume) history.replaceState(history.state, '', location.pathname + location.search);
       show();
     }
 
     return {
       node: item,
-      destroy() {
+      destroy(reason) {
+        // The host rebuilds features on an account change; reopen an active view then. Any
+        // other teardown (navigation) drops a pending resume.
+        if (reason === 'authchange' && active) resumeProfile = profile;
+        else resumeProfile = null;
         menu.removeEventListener('click', chooseNative);
         hide();
         view.destroy();

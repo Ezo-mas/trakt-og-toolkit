@@ -11,6 +11,7 @@ import { actionButtonCss, findActionStack } from '../../ui/action-button.js';
 const ID = 'ogt-library';
 export const library = {
   id: 'library',
+  authScoped: true,
   css: actionButtonCss('ogt-library', 'var(--brand-quaternary, #129982)'),
   match: route => route.kind === 'movie' && route.name === 'title' || route.kind === 'show' && ['title', 'season', 'episode'].includes(route.name),
   mount(route) {
@@ -123,22 +124,7 @@ export const library = {
         }
       }
     }
-    function authChanged() {
-      session++;
-      operation++;
-      nativeRefresh.destroy();
-      busy = false;
-      undoing = false;
-      refreshing = false;
-      button.disabled = false;
-      added = false;
-      wasCollected = false;
-      label.textContent = 'Add to library';
-      status.textContent = '';
-      syncVisibility();
-    }
     button.addEventListener('click', add);
-    document.addEventListener('ogt:authchange', authChanged);
     // Keep OG's own controls intact; this is a separate manual-add action.
     const history = anchor.querySelector('.stacked');
     if (history) history.after(node);
@@ -151,7 +137,6 @@ export const library = {
       nativeRefresh.destroy();
       observer.disconnect();
       button.removeEventListener('click', add);
-      document.removeEventListener('ogt:authchange', authChanged);
       node.remove();
     } };
   },

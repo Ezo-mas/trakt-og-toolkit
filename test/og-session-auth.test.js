@@ -16,12 +16,13 @@ globalThis.GM_setValue = (key, value) => storage.set(key, value);
 globalThis.GM_deleteValue = (key) => storage.delete(key);
 globalThis.localStorage = new MemoryStorage();
 globalThis.window = new EventTarget();
+globalThis.document = new EventTarget();
 
 const { STORAGE } = await import('../src/core/store.js');
 const { setClientId } = await import('../src/settings.js');
 const oauth = await import('../src/core/oauth.js');
-const { apiAuth, apiGet } = await import('../src/core/trakt.js');
-const { ogSessionKey } = await import('../src/core/og-session.js');
+const { apiAuth, apiGet, MissingClientIdError } = await import('../src/core/trakt.js');
+const { ogSessionKey, readOgSession } = await import('../src/core/og-session.js');
 const { clearCache } = await import('../src/core/http.js');
 const { debugError, setVerbose } = await import('../src/core/log.js');
 
@@ -126,6 +127,20 @@ test('a token og renewed meanwhile is retried once without refreshing', async ()
   assert.equal(calls.some((request) => request.url.endsWith('/oauth/token')), false);
 });
 
+test('a first read after an og account switch adopts the new account', async () => {
+  reset();
+  ogSession({ account: 1, username: 'account-a' });
+  mock(() => ({ status: 200, body: { username: 'account-b' } }));
+
+  await apiAuth('GET', '/users/me');
+  assert.equal(calls[0].headers.Authorization, 'Bearer OG_ACCESS');
+  // The switch happens in this tab, so no storage notification advances the revision.
+  ogSession({ access: 'OG_B_ACCESS', refresh: 'OG_B_REFRESH', account: 2, username: 'account-b' });
+
+  assert.deepEqual(await apiAuth('GET', '/users/me'), { username: 'account-b' });
+  assert.equal(calls[1].headers.Authorization, 'Bearer OG_B_ACCESS');
+});
+
 test('an expired og token fails before any request', async () => {
   reset();
   ogSession({ expires: expiring(-60) });
@@ -163,6 +178,80 @@ test('public lookups use og without a client ID, preserving query and caching', 
   await apiGet('/shows/1388/seasons?extended=full');
   assert.equal(calls.length, 2);
   assert.match(calls[1].url, /\/shows\/1388\/seasons\?extended=full$/);
+});
+
+test('public lookups degrade to a missing client ID when og is expired', async () => {
+  reset();
+  ogSession({ expires: expiring(-60) });
+  mock(() => ({ status: 200 }));
+
+  const error = await apiGet('/movies/the-matrix-1999').catch((failure) => failure);
+  assert.ok(error instanceof MissingClientIdError, 'metadata lookups keep their setup/fallback path');
+  assert.equal(calls.length, 0);
+});
+
+test('a revoked og token on a public lookup asks for a reload', async () => {
+  reset();
+  ogSession();
+  mock(() => ({ status: 401 }));
+
+  const error = await apiGet('/movies/the-matrix-1999').catch((failure) => failure);
+  assert.match(error.message, /reload the page/);
+  assert.equal(error.ogSession, true);
+  assert.equal(calls.length, 1, 'the rejected token is not retried');
+});
+
+test('an og account change does not cancel a queued own-session write', async (t) => {
+  reset();
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1_900_000_000_000 });
+  setClientId('own-client');
+  storage.set(STORAGE.tokens, {
+    client_id: 'own-client', access_token: 'OWN_ACCESS', refresh_token: 'OWN_REFRESH',
+    expires_at: Date.now() + 3600000,
+  });
+  ogSession({ account: 1, username: 'account-a' });
+  // Establish the og baseline even though the toolkit's own session is active.
+  readOgSession();
+  const oldValue = localStorage.getItem(OG_KEY);
+  mock(() => ({ status: 200, body: {} }));
+
+  await apiAuth('POST', '/sync/first', {});
+  const queued = apiAuth('POST', '/sync/second', {});
+  // Another og tab switches accounts while the own-session write waits for its pacing slot.
+  ogSession({ access: 'OG_B_ACCESS', refresh: 'OG_B_REFRESH', account: 2, username: 'account-b' });
+  const event = new Event('storage');
+  Object.assign(event, { key: OG_KEY, oldValue, newValue: localStorage.getItem(OG_KEY), storageArea: localStorage });
+  window.dispatchEvent(event);
+
+  t.mock.timers.tick(1000);
+  await queued;
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].headers.Authorization, 'Bearer OWN_ACCESS', 'the own session still owns the write');
+});
+
+test('an og account change under the toolkit sign-in announces no auth change', async () => {
+  reset();
+  setClientId('own-client');
+  storage.set(STORAGE.tokens, {
+    client_id: 'own-client', access_token: 'OWN_ACCESS', refresh_token: 'OWN_REFRESH',
+    expires_at: Date.now() + 3600000,
+  });
+  ogSession({ account: 1, username: 'account-a' });
+  readOgSession();
+  const events = [];
+  const changed = () => events.push('authchange');
+  document.addEventListener('ogt:authchange', changed);
+  try {
+    const oldValue = localStorage.getItem(OG_KEY);
+    ogSession({ access: 'OG_B_ACCESS', refresh: 'OG_B_REFRESH', account: 2, username: 'account-b' });
+    const event = new Event('storage');
+    Object.assign(event, { key: OG_KEY, oldValue, newValue: localStorage.getItem(OG_KEY), storageArea: localStorage });
+    window.dispatchEvent(event);
+    await Promise.resolve();
+    assert.deepEqual(events, [], 'og is not the active credential');
+  } finally {
+    document.removeEventListener('ogt:authchange', changed);
+  }
 });
 
 test('a queued write is abandoned when og switches accounts', async (t) => {

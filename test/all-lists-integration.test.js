@@ -141,6 +141,90 @@ test('auth changes clear private rows and reload instead of reusing the old view
     'the resolved loading promise does not prevent a reload');
 });
 
+test('an active All lists view reopens after a delayed remount', async (t) => {
+  let account = 'a';
+  const { window, document } = boot({ signedIn: true,
+    collaborations: () => [list(account === 'a' ? 1 : 9, { name: `List ${account}`, privacy: 'private' })] });
+  t.after(() => window.close());
+  await wait();
+  option(document).click();
+  await wait();
+  assert.match(view(document).textContent, /List a/);
+
+  // og redraws the lists page on login: the first remount after the account change can fail.
+  const trigger = document.querySelector('button[popovertarget]');
+  const target = trigger.getAttribute('popovertarget');
+  trigger.removeAttribute('popovertarget');
+  account = 'b';
+  document.dispatchEvent(new window.Event('ogt:authchange'));
+  assert.equal(Boolean(view(document)), false, 'the old view is gone');
+
+  await wait(1200);
+  trigger.setAttribute('popovertarget', target);
+  document.dispatchEvent(new window.Event('ogt:featurechange'));
+  await wait();
+  assert.match(view(document).textContent, /List b/);
+  assert.equal(document.querySelector('.ogt-all-lists__personal-heading').textContent, 'Personal');
+});
+
+test('a route rewrite on the same profile lists page keeps a pending reopen', async (t) => {
+  let account = 'a';
+  const { window, document } = boot({ signedIn: true,
+    collaborations: () => [list(account === 'a' ? 1 : 9, { name: `List ${account}`, privacy: 'private' })] });
+  t.after(() => window.close());
+  await wait();
+  option(document).click();
+  await wait();
+
+  const trigger = document.querySelector('button[popovertarget]');
+  const target = trigger.getAttribute('popovertarget');
+  trigger.removeAttribute('popovertarget');
+  account = 'b';
+  document.dispatchEvent(new window.Event('ogt:authchange'));
+  assert.equal(Boolean(view(document)), false);
+
+  // og can rewrite the URL while it handles the switch; the route still names this profile's lists.
+  document.dispatchEvent(new window.CustomEvent('ogt:routechange', {
+    detail: { route: { name: 'lists', id: 'justin', path: '/users/justin/lists/', key: '/users/justin/lists/' } } }));
+  await wait(500); // past the host's retry spacing for the failed remount
+  trigger.setAttribute('popovertarget', target);
+  document.dispatchEvent(new window.Event('ogt:featurechange'));
+  await wait();
+  assert.match(view(document).textContent, /List b/, 'the view still reopens under the new account');
+});
+
+test('a pending reopen is dropped after leaving the lists page', async (t) => {
+  let account = 'a';
+  const { window, document } = boot({ signedIn: true,
+    collaborations: () => [list(account === 'a' ? 1 : 9, { name: `List ${account}`, privacy: 'private' })] });
+  t.after(() => window.close());
+  await wait();
+  option(document).click();
+  await wait();
+  assert.match(view(document).textContent, /List a/);
+
+  // The first remount after the account change fails while og redraws the page.
+  const trigger = document.querySelector('button[popovertarget]');
+  const target = trigger.getAttribute('popovertarget');
+  trigger.removeAttribute('popovertarget');
+  account = 'b';
+  document.dispatchEvent(new window.Event('ogt:authchange'));
+  assert.equal(Boolean(view(document)), false);
+
+  // Leaving the lists page drops the request; coming back later must not reopen the view.
+  window.history.pushState({}, '', '/movies/the-matrix-1999');
+  window.dispatchEvent(new window.Event('popstate'));
+  await wait(250);
+  trigger.setAttribute('popovertarget', target);
+  window.history.pushState({}, '', '/users/justin/lists');
+  window.dispatchEvent(new window.Event('popstate'));
+  await wait(250);
+  document.dispatchEvent(new window.Event('ogt:featurechange'));
+  await wait();
+  assert.equal(Boolean(view(document)), false, 'the stale request does not reopen All lists');
+  assert.equal(option(document).hasAttribute('aria-current'), false);
+});
+
 test('liked lists read every page, publicly or with the toolkit sign-in', async (t) => {
   const many = (count, from) => Array.from({ length: count }, (_, i) => ({ liked_at: '2026-11-01T00:00:00Z', list: list(from + i, { images: { posters: ['media.trakt.tv/p.jpg'] } }) }));
   for (const signedIn of [false, true]) {

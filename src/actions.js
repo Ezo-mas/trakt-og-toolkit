@@ -69,7 +69,11 @@ export async function promptClientId() {
   );
   if (answer === null) return;
 
+  const before = getClientId();
   const clean = setClientId(answer);
+  // The client ID decides which credential is active: editing or clearing it can switch from the
+  // toolkit's own tokens to og's session (possibly another account). Rebuild personal state.
+  if (getClientId() !== before) document.dispatchEvent(new Event('ogt:authchange'));
   toast(clean ? 'Client ID saved.' : 'Client ID cleared.');
   document.dispatchEvent(new CustomEvent('ogt:refresh'));
 }

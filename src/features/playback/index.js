@@ -28,31 +28,10 @@ function createPanel(route) {
     ...(overview ? [el('p', { class: 'ogt-hint', text: 'Your paused movies and episodes from the toolkit’s Trakt account.' }),
       button('Load paused playback', 'load')] : []), status, content);
 
-  // Check the session after isSignedIn(): that read can detect an account change and reset the panel.
+  // The host rebuilds this panel on an account change; a destroyed instance must discard
+  // every result and dialog from its previous session.
   function alive(epoch = session) { return !destroyed && isSignedIn() && epoch === session; }
   function closeDialog() { dialogControl?.abort(); dialogControl = null; }
-  function onAuthChange() {
-    if (destroyed) return;
-    session += 1;
-    closeDialog();
-    items = [];
-    selected.clear();
-    loaded = false;
-    busy = false;
-    status.textContent = '';
-    content.replaceChildren();
-    node.removeAttribute('aria-busy');
-    for (const control of node.querySelectorAll('button, input')) control.disabled = false;
-    if (!isSignedIn()) { node.hidden = true; return; }
-    node.hidden = false;
-    if (overview) {
-      const load = node.querySelector('[data-action="load"]');
-      if (load) load.textContent = 'Load paused playback';
-      return;
-    }
-    const epoch = session;
-    read().catch((error) => { if (alive(epoch)) debugError('playback badge lookup failed', error); });
-  }
   function lock(next) {
     busy = next;
     node.setAttribute('aria-busy', String(next));
@@ -223,7 +202,6 @@ function createPanel(route) {
   }
   node.addEventListener('click', onClick);
   node.addEventListener('change', onChange);
-  document.addEventListener('ogt:authchange', onAuthChange);
   if (!overview) {
     const epoch = session;
     read().catch((error) => { if (alive(epoch)) debugError('playback badge lookup failed', error); });
@@ -234,13 +212,12 @@ function createPanel(route) {
     closeDialog();
     node.removeEventListener('click', onClick);
     node.removeEventListener('change', onChange);
-    document.removeEventListener('ogt:authchange', onAuthChange);
     node.remove();
   } };
 }
 
 export const playback = {
-  id: 'playback', css: CSS,
+  id: 'playback', css: CSS, authScoped: true,
   match(route) {
     return isSignedIn() && (route.name === 'progress' || route.kind === 'movie' && route.name === 'title' || route.name === 'episode');
   },

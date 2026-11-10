@@ -140,6 +140,11 @@ Run **Trakt OG Toolkit: sign in** from the menu.
 Tokens stay in your userscript manager's private storage, never in the page. **Sign out** revokes them and always
 clears them locally. No client secret is used.
 
+Signing in or out, or changing the client ID, applies to every open og tab: the others rebuild their personal
+features instead of showing the previous account until a reload. A token refresh is not an account change. Changing
+or clearing the client ID turns off this sign-in and falls back to og's session, which may be a different account.
+While the toolkit's own sign-in is active, og logging in, out or switching account does not affect it.
+
 ## Custom link templates
 
 Use **Edit** in the strip, or the menu's **add custom link** (`Label | URL`):

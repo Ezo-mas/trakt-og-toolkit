@@ -18,7 +18,7 @@ function heart() {
 }
 
 export const yourRatings = {
-  id: 'your-ratings', css: CSS,
+  id: 'your-ratings', css: CSS, authScoped: true,
   match: (route) => route.kind === 'show' && ['title', 'seasons'].includes(route.name) && isSignedIn(),
   mount(route) {
     const section = document.querySelector('section.seasons');
@@ -51,8 +51,7 @@ export const yourRatings = {
     observer.observe(section, { childList: true, subtree: true });
     ratingsApi.load().then((rows) => { items = forShow(rows, route.id); render(); })
       .catch((error) => debugError('personal ratings lookup failed', error));
-    function onAuth() { cancelled = true; observer.disconnect(); node.remove(); for (const badge of badges) badge.remove(); }
-    document.addEventListener('ogt:authchange', onAuth);
-    return { node, destroy() { onAuth(); document.removeEventListener('ogt:authchange', onAuth); } };
+    function cleanup() { cancelled = true; observer.disconnect(); node.remove(); for (const badge of badges) badge.remove(); }
+    return { node, destroy() { cleanup(); } };
   },
 };

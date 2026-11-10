@@ -23,6 +23,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
     id,
     match,
     css,
+    authScoped: true,
     mount() {
       if (!document.body || document.getElementById(markerId)) return null;
       // A host-owned marker keeps this page-wide feature alive when the first card or row is replaced.
@@ -265,24 +266,15 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         scheduled = true;
         queueMicrotask(() => { scheduled = false; scan(); });
       }
-      function authChanged() {
-        session++;
-        bulkBusy = false;
-        nativeRefresh.destroy();
-        states.clear();
-        scan();
-      }
       if (bulkButton) bulkButton.addEventListener('click', addAll);
       const observer = new MutationObserver(schedule);
       observer.observe(document.body, { childList: true, subtree: true, characterData: true,
         attributes: true, attributeFilter: ['href', 'aria-describedby', 'hidden'] });
-      document.addEventListener('ogt:authchange', authChanged);
       scan();
       return { node, destroy() {
         destroyed = true;
         nativeRefresh.destroy();
         observer.disconnect();
-        document.removeEventListener('ogt:authchange', authChanged);
         for (const entry of entries.values()) remove(entry);
         states.clear();
         if (bulkButton) { bulkButton.removeEventListener('click', addAll); bulkButton.remove(); }

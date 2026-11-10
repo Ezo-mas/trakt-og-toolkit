@@ -12,6 +12,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_deleteValue
+// @grant        GM_addValueChangeListener
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
@@ -1417,17 +1418,20 @@
   var RETRY_AFTER_MS = 400;
   function createFeatureHost(features, { isEnabled = () => true } = {}) {
     const mounted = /* @__PURE__ */ new Map();
-    function unmount(id) {
+    let syncing = false;
+    let rerun = false;
+    let pendingRoute = null;
+    function unmount(id, reason) {
       const entry = mounted.get(id);
       if (!entry) return;
       try {
-        entry.destroy?.();
+        entry.destroy?.(reason);
       } catch (error) {
         debugError(`failed to destroy ${id}`, error);
       }
       mounted.delete(id);
     }
-    return function sync(route) {
+    function syncOnce(route) {
       for (const feature of features) {
         let entry = mounted.get(feature.id);
         if (!isEnabled(feature.id)) {
@@ -1465,7 +1469,30 @@
           attemptAt: Date.now()
         });
       }
+    }
+    function sync(route) {
+      if (syncing) {
+        rerun = true;
+        pendingRoute = route;
+        return;
+      }
+      syncing = true;
+      try {
+        let current = route;
+        for (; ; ) {
+          syncOnce(current);
+          if (!rerun) break;
+          rerun = false;
+          current = pendingRoute ?? current;
+        }
+      } finally {
+        syncing = false;
+      }
+    }
+    sync.reset = () => {
+      for (const feature of features) if (feature.authScoped) unmount(feature.id, "authchange");
     };
+    return sync;
   }
 
   // src/core/hydration.js
@@ -1673,6 +1700,12 @@
       localStorage.removeItem(localKey(key));
     } catch {
     }
+  }
+  function onRemoteValueChange(key, callback) {
+    if (typeof GM_addValueChangeListener !== "function") return;
+    GM_addValueChangeListener(key, (_key, oldValue, newValue, remote) => {
+      if (remote) callback(oldValue, newValue);
+    });
   }
   var STORAGE = {
     monthReview: (user, month) => `review.${encodeURIComponent(user)}.${month}`,
@@ -2875,13 +2908,27 @@
   var OG_SESSION_CLIENT_ID = "WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI";
   var OG_SESSION_PREFIX = "oidc.user:";
   var OG_SESSION_KEY_PREFIX = `${OG_SESSION_PREFIX}${OG_SESSION_AUTHORITY}:`;
+  var OG_SESSION_CHANGE_EVENT = "ogt:ogsessionchange";
   var watchedAccount;
+  var watchedRaw;
   var watchingAccounts = false;
   var accountRevision = 0;
+  var cachedRaw;
+  var cachedSession;
+  var authChangeScheduled = false;
   function getOgSessionRevision() {
     return accountRevision;
   }
-  function noteAccount(accountKey2) {
+  function scheduleAuthChange() {
+    if (authChangeScheduled || typeof document === "undefined" || typeof Event !== "function") return;
+    authChangeScheduled = true;
+    queueMicrotask(() => {
+      authChangeScheduled = false;
+      document.dispatchEvent(new Event(OG_SESSION_CHANGE_EVENT));
+    });
+  }
+  function observe(raw, accountKey2) {
+    watchedRaw = raw;
     const next = accountKey2 ?? null;
     if (!watchingAccounts) {
       watchingAccounts = true;
@@ -2891,9 +2938,7 @@
     if (next === watchedAccount) return;
     watchedAccount = next;
     accountRevision += 1;
-    if (typeof document !== "undefined" && typeof Event === "function") {
-      document.dispatchEvent(new Event("ogt:authchange"));
-    }
+    scheduleAuthChange();
   }
   function ogSessionKey(clientId) {
     return `${OG_SESSION_KEY_PREFIX}${clientId}`;
@@ -2922,6 +2967,13 @@
     const expiresAt = Number.isFinite(user.expires_at) ? user.expires_at * 1e3 : null;
     return { clientId, accessToken: user.access_token, expiresAt, accountKey: key };
   }
+  function parseCached(raw) {
+    if (raw == null) return null;
+    if (cachedRaw === raw) return cachedSession;
+    cachedRaw = raw;
+    cachedSession = parseOgSession(raw, OG_SESSION_CLIENT_ID);
+    return cachedSession;
+  }
   function pageStorage() {
     const scope = typeof unsafeWindow !== "undefined" ? unsafeWindow : globalThis;
     try {
@@ -2930,30 +2982,64 @@
       return null;
     }
   }
+  function sameStorageArea(area, storage) {
+    if (!area) return true;
+    try {
+      if (area === storage) return true;
+      const key = ogSessionKey(OG_SESSION_CLIENT_ID);
+      return area.getItem(key) === storage.getItem(key);
+    } catch {
+      return false;
+    }
+  }
   function readOgSession() {
     const storage = pageStorage();
     if (!storage) {
-      noteAccount(null);
+      observe(null, null);
       return null;
     }
-    let session = null;
+    let raw = null;
     try {
-      session = parseOgSession(storage.getItem(ogSessionKey(OG_SESSION_CLIENT_ID)), OG_SESSION_CLIENT_ID);
+      raw = storage.getItem(ogSessionKey(OG_SESSION_CLIENT_ID));
     } catch {
-      session = null;
+      raw = null;
     }
-    noteAccount(session?.accountKey);
+    const session = parseCached(raw);
+    observe(raw, session?.accountKey);
     return session;
   }
   if (typeof window !== "undefined") window.addEventListener("storage", (event) => {
     const storage = pageStorage();
-    if (!storage || event.storageArea !== storage) return;
+    if (!storage || !sameStorageArea(event.storageArea, storage)) return;
     const key = ogSessionKey(OG_SESSION_CLIENT_ID);
     if (event.key !== null && event.key !== key) return;
-    if (!watchingAccounts && event.key !== null) {
-      noteAccount(parseOgSession(event.oldValue, OG_SESSION_CLIENT_ID)?.accountKey);
+    let currentRaw = null;
+    try {
+      currentRaw = storage.getItem(key);
+    } catch {
+      return;
     }
-    noteAccount(event.key === null ? null : parseOgSession(event.newValue, OG_SESSION_CLIENT_ID)?.accountKey);
+    const current = parseCached(currentRaw)?.accountKey ?? null;
+    if (!watchingAccounts) {
+      observe(currentRaw, current);
+      return;
+    }
+    if (event.key === null) {
+      if (currentRaw !== watchedRaw) observe(null, null);
+      return;
+    }
+    const nextRaw = event.newValue;
+    const next = parseCached(nextRaw)?.accountKey ?? null;
+    if (event.oldValue === watchedRaw) {
+      observe(nextRaw, next);
+      return;
+    }
+    if (nextRaw === watchedRaw) return;
+    if (nextRaw === currentRaw) {
+      observe(currentRaw, current);
+      return;
+    }
+    if (currentRaw !== watchedRaw) observe(currentRaw, current);
   });
 
   // src/core/oauth.js
@@ -2995,11 +3081,17 @@
     const t = readTokens();
     return Boolean(t?.access_token && t?.refresh_token);
   }
+  function notifyAuthChange() {
+    if (typeof document !== "undefined") document.dispatchEvent(new Event("ogt:authchange"));
+  }
+  if (typeof document !== "undefined") document.addEventListener(OG_SESSION_CHANGE_EVENT, () => {
+    if (!readTokens()) notifyAuthChange();
+  });
   function isSignedIn() {
     return hasOwnSession() || Boolean(readOgSession());
   }
   function getSessionGeneration() {
-    return `${generation}:${getOgSessionRevision()}`;
+    return readTokens() ? `own:${generation}` : `og:${generation}:${getOgSessionRevision()}`;
   }
   function saveTokens(text2, clientId) {
     let t;
@@ -3022,7 +3114,7 @@
   function clearTokens() {
     generation += 1;
     removePrivateValue(STORAGE.tokens);
-    if (typeof document !== "undefined") document.dispatchEvent(new Event("ogt:authchange"));
+    notifyAuthChange();
   }
   function refreshTokens() {
     if (refreshFlight) return refreshFlight;
@@ -3130,7 +3222,7 @@
         if (result.status === 200) {
           saveTokens(result.text, clientId);
           generation += 1;
-          if (typeof document !== "undefined") document.dispatchEvent(new Event("ogt:authchange"));
+          notifyAuthChange();
           emit("Signed in to Trakt.");
           return;
         }
@@ -3229,6 +3321,10 @@
       accountKey: null
     };
     return ogAuth();
+  }
+  function observedGeneration() {
+    currentAuth();
+    return getSessionGeneration();
   }
   function sameAuth(a, b) {
     return Boolean(a && b) && a.kind === b.kind && a.clientId === b.clientId && a.accountKey === b.accountKey;
@@ -3339,18 +3435,22 @@
   async function ogGet(path, ttl) {
     const first = ogAuth();
     if (!first) throw new MissingClientIdError();
-    assertOgFresh(first);
+    if (first.expiresAt != null && first.expiresAt <= Date.now()) throw new MissingClientIdError();
     const url = `${API.base}${path}`;
     try {
       return await getJSON(url, { ttl, headers: authHeaders(first) });
     } catch (error) {
       if (error?.status !== 401) throw error;
       const latest = ogAuth();
-      if (!latest) throw ogSessionExpiredError();
+      if (!latest || latest.expiresAt != null && latest.expiresAt <= Date.now()) throw new MissingClientIdError();
       if (!sameAuth(latest, first)) throw sessionChangedError();
-      assertOgFresh(latest);
       if (latest.accessToken === first.accessToken) throw ogSessionExpiredError();
-      return getJSON(url, { ttl, headers: authHeaders(latest) });
+      try {
+        return await getJSON(url, { ttl, headers: authHeaders(latest) });
+      } catch (retryError) {
+        if (retryError?.status === 401) throw ogSessionExpiredError();
+        throw retryError;
+      }
     }
   }
   function apiGet(path, { ttl = CACHE_TTL } = {}) {
@@ -3396,9 +3496,8 @@
     return enqueueWrite(entry, () => sendAuthenticated(method, url, body, metadata, entry));
   }
   async function sendAuthenticated(method, url, body, metadata, entry) {
-    let origin = entry?.generation ?? null;
+    const origin = entry?.generation ?? observedGeneration();
     const checkOrigin = () => {
-      if (origin === null) return;
       if (getSessionGeneration() === origin) return;
       if (entry) entry.check();
       throw sessionChangedError();
@@ -3410,7 +3509,6 @@
       checkOrigin();
       if (entry) await waitForTurn(entry);
       const auth = await ensureAuth();
-      if (origin === null) origin = getSessionGeneration();
       if (entry) entry.check();
       checkOrigin();
       if (!sameAuth(currentAuth(), auth)) throw sessionChangedError();
@@ -4582,33 +4680,6 @@
       dialogControl?.abort();
       dialogControl = null;
     }
-    function onAuthChange() {
-      if (destroyed) return;
-      session += 1;
-      closeDialog();
-      items = [];
-      selected.clear();
-      loaded = false;
-      busy = false;
-      status.textContent = "";
-      content.replaceChildren();
-      node.removeAttribute("aria-busy");
-      for (const control of node.querySelectorAll("button, input")) control.disabled = false;
-      if (!isSignedIn()) {
-        node.hidden = true;
-        return;
-      }
-      node.hidden = false;
-      if (overview) {
-        const load = node.querySelector('[data-action="load"]');
-        if (load) load.textContent = "Load paused playback";
-        return;
-      }
-      const epoch = session;
-      read().catch((error) => {
-        if (alive2(epoch)) debugError("playback badge lookup failed", error);
-      });
-    }
     function lock(next) {
       busy = next;
       node.setAttribute("aria-busy", String(next));
@@ -4810,7 +4881,6 @@
     }
     node.addEventListener("click", onClick);
     node.addEventListener("change", onChange);
-    document.addEventListener("ogt:authchange", onAuthChange);
     if (!overview) {
       const epoch = session;
       read().catch((error) => {
@@ -4823,13 +4893,13 @@
       closeDialog();
       node.removeEventListener("click", onClick);
       node.removeEventListener("change", onChange);
-      document.removeEventListener("ogt:authchange", onAuthChange);
       node.remove();
     } };
   }
   var playback = {
     id: "playback",
     css: CSS2,
+    authScoped: true,
     match(route) {
       return isSignedIn() && (route.name === "progress" || route.kind === "movie" && route.name === "title" || route.name === "episode");
     },
@@ -5306,6 +5376,7 @@
   var yourRatings = {
     id: "your-ratings",
     css: CSS4,
+    authScoped: true,
     match: (route) => route.kind === "show" && ["title", "seasons"].includes(route.name) && isSignedIn(),
     mount(route) {
       const section = document.querySelector("section.seasons");
@@ -5342,16 +5413,14 @@
         items = forShow(rows, route.id);
         render();
       }).catch((error) => debugError("personal ratings lookup failed", error));
-      function onAuth() {
+      function cleanup() {
         cancelled = true;
         observer.disconnect();
         node.remove();
         for (const badge of badges) badge.remove();
       }
-      document.addEventListener("ogt:authchange", onAuth);
       return { node, destroy() {
-        onAuth();
-        document.removeEventListener("ogt:authchange", onAuth);
+        cleanup();
       } };
     }
   };
@@ -5705,7 +5774,6 @@
         if (!cancelled) debugError("personal season ratings failed", error);
       }
     }
-    document.addEventListener("ogt:authchange", loadPersonal);
     function render(nextEpisodes) {
       if (cancelled) return;
       currentEpisodes = nextEpisodes;
@@ -5738,7 +5806,6 @@
         cancelled = true;
         resize2?.disconnect();
         authRevision++;
-        document.removeEventListener("ogt:authchange", loadPersonal);
         node.remove();
       }
     };
@@ -5746,6 +5813,7 @@
   var seasonChart = {
     id: "season-chart",
     css: CSS5,
+    authScoped: true,
     match(route) {
       return route.kind === "show" && route.name === "season";
     },
@@ -6563,6 +6631,7 @@
   var monthReview = {
     id: "month-review",
     css: CSS7,
+    authScoped: true,
     match: (route) => route.name === "dashboard" && isSignedIn(),
     mount() {
       const anchor = document.querySelector("nav.ribbon");
@@ -6722,26 +6791,10 @@
           }
         }
       };
-      const onAuthChange = () => {
-        if (destroyed) return;
-        token++;
-        busy = false;
-        review = null;
-        user = null;
-        earliest = void 0;
-        earliestFailed = false;
-        prevButton = nextButton = hideButton = null;
-        node.className = "ogt-review";
-        node.hidden = true;
-        node.replaceChildren();
-        if (isSignedIn()) show(lastMonth(), true);
-      };
-      document.addEventListener("ogt:authchange", onAuthChange);
       show(lastMonth(), true);
       return { node, destroy() {
         destroyed = true;
         token++;
-        document.removeEventListener("ogt:authchange", onAuthChange);
         node.remove();
       } };
     }
@@ -7211,6 +7264,14 @@
   var HASH = "#ogt-all-lists";
   var ROUTES = ["lists", "smart-lists", "lists-collaborations", "liked-lists"];
   var posterRequests = /* @__PURE__ */ new Map();
+  var resumeProfile = null;
+  if (typeof document !== "undefined") {
+    document.addEventListener("ogt:routechange", (event) => {
+      const route = event.detail?.route;
+      if (route?.name === "lists" && route.id != null && decodeURIComponent(route.id) === resumeProfile) return;
+      resumeProfile = null;
+    });
+  }
   var ICONS2 = {
     Private: ["--color-list-chip-private", "M5 10h14v11H5z M8 10V7a4 4 0 0 1 8 0v3"],
     Following: ["--color-list-chip-following", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20a7 7 0 0 1 14 0Z"],
@@ -7587,15 +7648,6 @@
       loading ??= load().catch((error) => debugError("all-lists render failed", error));
       return loading;
     }
-    function reset() {
-      loadRevision += 1;
-      loading = null;
-      observer?.disconnect();
-      observer = null;
-      node.replaceChildren();
-      if (node.isConnected) void startLoad();
-    }
-    document.addEventListener("ogt:authchange", reset);
     return {
       node,
       load: startLoad,
@@ -7604,7 +7656,6 @@
         loadRevision += 1;
         loading = null;
         observer?.disconnect();
-        document.removeEventListener("ogt:authchange", reset);
         node.remove();
       }
     };
@@ -7612,6 +7663,7 @@
   var allLists = {
     id: "all-lists",
     css: CSS8,
+    authScoped: true,
     match: (route) => ROUTES.includes(route.name),
     mount(route) {
       const dropdown = findDropdown();
@@ -7664,13 +7716,17 @@
       }
       option.addEventListener("click", choose);
       menu.addEventListener("click", chooseNative);
-      if (route.name === "lists" && location.hash === HASH) {
-        history.replaceState(history.state, "", location.pathname + location.search);
+      const resume = resumeProfile === profile;
+      resumeProfile = null;
+      if (route.name === "lists" && (resume || location.hash === HASH)) {
+        if (!resume) history.replaceState(history.state, "", location.pathname + location.search);
         show();
       }
       return {
         node: item,
-        destroy() {
+        destroy(reason) {
+          if (reason === "authchange" && active2) resumeProfile = profile;
+          else resumeProfile = null;
           menu.removeEventListener("click", chooseNative);
           hide();
           view.destroy();
@@ -7765,6 +7821,7 @@
   var listPreview = {
     id: "list-preview",
     css: css + cornerRatingStyles,
+    authScoped: true,
     match(route) {
       return ["lists", "lists-collaborations", "liked-lists", "smart-lists"].includes(route.name) || /^\/users\/[^/]+\/(?:lists|smart-lists)(?:\/|$)/.test(route.path) || /^\/lists(?:\/|$)/.test(route.path);
     },
@@ -7880,7 +7937,6 @@
       });
       document.addEventListener("click", navigate, true);
       document.addEventListener("auxclick", navigate, true);
-      document.addEventListener("ogt:authchange", loadRatings);
       loadRatings();
       scan();
       return {
@@ -7890,7 +7946,6 @@
           observer.disconnect();
           document.removeEventListener("click", navigate, true);
           document.removeEventListener("auxclick", navigate, true);
-          document.removeEventListener("ogt:authchange", loadRatings);
           for (const slot of slots.keys()) slot.classList.remove("ogt-list-preview-slot");
           for (const { node } of corners.values()) node.remove();
           for (const { nav } of navs.values()) nav.remove();
@@ -8082,6 +8137,7 @@
   var ID3 = "ogt-library";
   var library = {
     id: "library",
+    authScoped: true,
     css: actionButtonCss("ogt-library", "var(--brand-quaternary, #129982)"),
     match: (route) => route.kind === "movie" && route.name === "title" || route.kind === "show" && ["title", "season", "episode"].includes(route.name),
     mount(route) {
@@ -8204,22 +8260,7 @@
           }
         }
       }
-      function authChanged() {
-        session++;
-        operation++;
-        nativeRefresh.destroy();
-        busy = false;
-        undoing = false;
-        refreshing = false;
-        button2.disabled = false;
-        added = false;
-        wasCollected = false;
-        label.textContent = "Add to library";
-        status.textContent = "";
-        syncVisibility();
-      }
       button2.addEventListener("click", add);
-      document.addEventListener("ogt:authchange", authChanged);
       const history2 = anchor.querySelector(".stacked");
       if (history2) history2.after(node);
       else anchor.append(node);
@@ -8231,7 +8272,6 @@
         nativeRefresh.destroy();
         observer.disconnect();
         button2.removeEventListener("click", add);
-        document.removeEventListener("ogt:authchange", authChanged);
         node.remove();
       } };
     }
@@ -8483,6 +8523,7 @@
   var watchlist = {
     id: "watchlist",
     css: css2,
+    authScoped: true,
     match: (route) => Boolean(watchlistLookup(route)),
     mount(route) {
       const anchor = findActionStack();
@@ -8585,21 +8626,7 @@
           }
         }
       }
-      function authChanged() {
-        session++;
-        operation++;
-        nativeRefresh.destroy();
-        busy = false;
-        undoing = false;
-        button2.disabled = false;
-        added = false;
-        wasWatchlisted = false;
-        label.textContent = "Add to watchlist";
-        status.textContent = "";
-        syncVisibility();
-      }
       button2.addEventListener("click", add);
-      document.addEventListener("ogt:authchange", authChanged);
       const history2 = anchor.querySelector(".stacked");
       if (history2) history2.after(node);
       else anchor.append(node);
@@ -8611,7 +8638,6 @@
         nativeRefresh.destroy();
         observer.disconnect();
         button2.removeEventListener("click", add);
-        document.removeEventListener("ogt:authchange", authChanged);
         node.remove();
       } };
     }
@@ -8623,6 +8649,7 @@
       id,
       match,
       css: css3,
+      authScoped: true,
       mount() {
         if (!document.body || document.getElementById(markerId)) return null;
         const node = el("span", { id: markerId, hidden: true });
@@ -8879,13 +8906,6 @@
             scan();
           });
         }
-        function authChanged() {
-          session++;
-          bulkBusy = false;
-          nativeRefresh.destroy();
-          states.clear();
-          scan();
-        }
         if (bulkButton) bulkButton.addEventListener("click", addAll);
         const observer = new MutationObserver(schedule);
         observer.observe(document.body, {
@@ -8895,13 +8915,11 @@
           attributes: true,
           attributeFilter: ["href", "aria-describedby", "hidden"]
         });
-        document.addEventListener("ogt:authchange", authChanged);
         scan();
         return { node, destroy() {
           destroyed = true;
           nativeRefresh.destroy();
           observer.disconnect();
-          document.removeEventListener("ogt:authchange", authChanged);
           for (const entry of entries.values()) remove(entry);
           states.clear();
           if (bulkButton) {
@@ -9064,7 +9082,9 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
       { title: "Trakt API client ID", label: "Client ID", ok: "Save", value: getClientId(), placeholder: "(none)" }
     );
     if (answer === null) return;
+    const before = getClientId();
     const clean = setClientId(answer);
+    if (getClientId() !== before) document.dispatchEvent(new Event("ogt:authchange"));
     toast(clean ? "Client ID saved." : "Client ID cleared.");
     document.dispatchEvent(new CustomEvent("ogt:refresh"));
   }
@@ -9245,8 +9265,17 @@ MIT licensed.`);
     const sync = () => {
       if (canMount && host) host(route);
     };
-    document.addEventListener("ogt:authchange", sync);
+    const authChanged = () => {
+      host?.reset?.();
+      sync();
+    };
+    document.addEventListener("ogt:authchange", authChanged);
     document.addEventListener("ogt:featurechange", sync);
+    const announce = () => document.dispatchEvent(new Event("ogt:authchange"));
+    onRemoteValueChange(STORAGE.clientId, announce);
+    onRemoteValueChange(STORAGE.tokens, (before, after) => {
+      if (Boolean(before?.access_token) !== Boolean(after?.access_token) || before?.client_id !== after?.client_id) announce();
+    });
     const openGate = () => {
       if (canMount) return;
       canMount = true;
@@ -9256,7 +9285,9 @@ MIT licensed.`);
       host = createFeatureHost(FEATURES, { isEnabled: isFeatureEnabled });
       createRouter({
         onRoute(next) {
+          const changed = next.key !== route.key;
           route = next;
+          if (changed) document.dispatchEvent(new CustomEvent("ogt:routechange", { detail: { route: next } }));
           sync();
         },
         // Every settled DOM change: re-mounts anything the app re-rendered away.

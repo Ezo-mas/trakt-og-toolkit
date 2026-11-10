@@ -31,6 +31,7 @@ import { registerMenu } from './menu.js';
 import { applyDebugSetting, isFeatureEnabled } from './settings.js';
 import { info, warn } from './core/log.js';
 import { cacheSize } from './core/http.js';
+import { STORAGE, onRemoteValueChange } from './core/store.js';
 
 const FEATURES = [customLinks, seasonChart, summaryRatings, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, monthReview, allLists, listPreview];
 
@@ -57,9 +58,26 @@ function start() {
   const sync = () => {
     if (canMount && host) host(route);
   };
+  // Rebuild features that hold personal state from scratch on an account change, so none of
+  // them has to remember to clear fields, epochs and listeners itself.
+  const authChanged = () => {
+    host?.reset?.();
+    sync();
+  };
 
-  document.addEventListener('ogt:authchange', sync);
+  document.addEventListener('ogt:authchange', authChanged);
   document.addEventListener('ogt:featurechange', sync);
+
+  // The client ID and the toolkit's own tokens are shared by every tab. A change made elsewhere can
+  // switch this tab's active account, so rebuild instead of keeping the previous account's data.
+  // Own writes already dispatch `ogt:authchange`; the listener ignores them.
+  const announce = () => document.dispatchEvent(new Event('ogt:authchange'));
+  onRemoteValueChange(STORAGE.clientId, announce);
+  // A refresh in another tab rewrites the tokens for the same session; only a sign-in, sign-out
+  // or a different app is an account change. A renewal must not rebuild every open tab.
+  onRemoteValueChange(STORAGE.tokens, (before, after) => {
+    if (Boolean(before?.access_token) !== Boolean(after?.access_token) || before?.client_id !== after?.client_id) announce();
+  });
 
   const openGate = () => {
     if (canMount) return;
@@ -73,7 +91,9 @@ function start() {
     host = createFeatureHost(FEATURES, { isEnabled: isFeatureEnabled });
     createRouter({
       onRoute(next) {
+        const changed = next.key !== route.key;
         route = next;
+        if (changed) document.dispatchEvent(new CustomEvent('ogt:routechange', { detail: { route: next } }));
         sync();
       },
       // Every settled DOM change: re-mounts anything the app re-rendered away.

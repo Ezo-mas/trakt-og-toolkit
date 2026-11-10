@@ -13,7 +13,7 @@ class MemoryStorage {
 globalThis.localStorage = new MemoryStorage();
 globalThis.window = new EventTarget();
 const { ogSessionKey, ogClientIdFromKey, parseOgSession, readOgSession, getOgSessionRevision,
-  OG_SESSION_PREFIX, OG_SESSION_CLIENT_ID } = await import('../src/core/og-session.js');
+  OG_SESSION_PREFIX, OG_SESSION_CLIENT_ID, OG_SESSION_CHANGE_EVENT } = await import('../src/core/og-session.js');
 
 // The ID here is deliberately independent of the implementation constant.
 const OG_CLIENT = 'WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI';
@@ -76,7 +76,7 @@ test('reads the live session from page localStorage without writing anything', (
   assert.equal(store.getItem('unrelated'), 'kept');
 });
 
-test('announces account replacement but not a token renewal', () => {
+test('announces account replacement on the og session event but not a token renewal', async () => {
   reset();
   const store = globalThis.localStorage;
   store.setItem(ogSessionKey(OG_CLIENT), entry({ profile: { ids: { trakt: 1 } } }));
@@ -88,11 +88,14 @@ test('announces account replacement but not a token renewal', () => {
     store.setItem(ogSessionKey(OG_CLIENT), entry({ access_token: 'RENEWED', profile: { ids: { trakt: 1 } } }));
     assert.equal(readOgSession().accessToken, 'RENEWED');
     assert.equal(getOgSessionRevision(), revision, 'a token renewal is not a session change');
+    // The notification is deferred so it cannot re-enter the host's sync loop.
+    await Promise.resolve();
     assert.deepEqual(events, []);
     store.setItem(ogSessionKey(OG_CLIENT), entry({ access_token: 'RENEWED', profile: { ids: { trakt: 2 } } }));
     assert.equal(readOgSession().accountKey, 'trakt:2');
     assert.equal(getOgSessionRevision(), revision + 1);
-    assert.deepEqual(events, ['ogt:authchange']);
+    await Promise.resolve();
+    assert.deepEqual(events, [OG_SESSION_CHANGE_EVENT]);
   } finally {
     delete globalThis.document;
   }
@@ -133,6 +136,38 @@ test('storage notifications preserve a rapid logout/login even when storage alre
   storageChange(key, null, renewed);
   assert.equal(getOgSessionRevision(), revision + 2);
   assert.equal(readOgSession().accessToken, 'RENEWED');
+});
+
+test('an event wrapper for the same storage is accepted across sandbox boundaries', () => {
+  reset();
+  const key = ogSessionKey(OG_CLIENT);
+  const a = entry({ profile: { ids: { trakt: 1 } } });
+  const b = entry({ profile: { ids: { trakt: 2 } } });
+  localStorage.setItem(key, a);
+  readOgSession();
+  const revision = getOgSessionRevision();
+  localStorage.setItem(key, b);
+  // Firefox/Violentmonkey can expose the page's localStorage through distinct wrappers.
+  storageChange(key, a, b, { getItem: (name) => localStorage.getItem(name) });
+  assert.equal(getOgSessionRevision(), revision + 1);
+});
+
+test('a delayed notification never regresses a newer observed account', async () => {
+  reset();
+  const key = ogSessionKey(OG_CLIENT);
+  const a = entry({ access_token: 'A', profile: { ids: { trakt: 1 } } });
+  const b = entry({ access_token: 'B', profile: { ids: { trakt: 2 } } });
+  localStorage.setItem(key, a);
+  readOgSession();
+  // A direct read sees the other tab's account switch before its notifications arrive.
+  localStorage.setItem(key, b);
+  assert.equal(readOgSession().accountKey, 'trakt:2');
+  const revision = getOgSessionRevision();
+  storageChange(key, a, null);
+  storageChange(key, null, b);
+  await Promise.resolve();
+  assert.equal(getOgSessionRevision(), revision, 'stale notifications must not cancel the new account\'s work');
+  assert.equal(readOgSession().accountKey, 'trakt:2');
 });
 
 test('storage notifications ignore renewal and unrelated storage, but detect account replacement and clear', () => {

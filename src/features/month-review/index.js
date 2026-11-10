@@ -36,7 +36,7 @@ function chevron(dir) {
   return svg;
 }
 export const monthReview = {
-  id: 'month-review', css: CSS,
+  id: 'month-review', css: CSS, authScoped: true,
   match: (route) => route.name === 'dashboard' && isSignedIn(),
   mount() {
     const anchor = document.querySelector('nav.ribbon');
@@ -157,27 +157,10 @@ export const monthReview = {
         }
       }
     };
-    // A different og account must not keep the previous account's card or cached user.
-    const onAuthChange = () => {
-      if (destroyed) return;
-      token++;
-      busy = false;
-      review = null;
-      user = null;
-      earliest = undefined;
-      earliestFailed = false;
-      prevButton = nextButton = hideButton = null;
-      node.className = 'ogt-review';
-      node.hidden = true;
-      node.replaceChildren();
-      if (isSignedIn()) show(lastMonth(), true);
-    };
-    document.addEventListener('ogt:authchange', onAuthChange);
     show(lastMonth(), true);
     return { node, destroy() {
       destroyed = true;
       token++;
-      document.removeEventListener('ogt:authchange', onAuthChange);
       node.remove();
     } };
   },

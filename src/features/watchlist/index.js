@@ -13,6 +13,7 @@ const ID = 'ogt-watchlist';
 export const watchlist = {
   id: 'watchlist',
   css,
+  authScoped: true,
   match: route => Boolean(watchlistLookup(route)),
   mount(route) {
     const anchor = findActionStack();
@@ -108,21 +109,7 @@ export const watchlist = {
         }
       }
     }
-    function authChanged() {
-      session++;
-      operation++;
-      nativeRefresh.destroy();
-      busy = false;
-      undoing = false;
-      button.disabled = false;
-      added = false;
-      wasWatchlisted = false;
-      label.textContent = 'Add to watchlist';
-      status.textContent = '';
-      syncVisibility();
-    }
     button.addEventListener('click', add);
-    document.addEventListener('ogt:authchange', authChanged);
     // Follow the same hydration-gated mount and native-state observer as the library action.
     const history = anchor.querySelector('.stacked');
     if (history) history.after(node);
@@ -135,7 +122,6 @@ export const watchlist = {
       nativeRefresh.destroy();
       observer.disconnect();
       button.removeEventListener('click', add);
-      document.removeEventListener('ogt:authchange', authChanged);
       node.remove();
     } };
   },

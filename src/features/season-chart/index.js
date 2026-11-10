@@ -162,7 +162,6 @@ function createPanel(episodes, route) {
       render(currentEpisodes);
     } catch (error) { if (!cancelled) debugError('personal season ratings failed', error); }
   }
-  document.addEventListener('ogt:authchange', loadPersonal);
 
   function render(nextEpisodes) {
     if (cancelled) return;
@@ -202,7 +201,6 @@ function createPanel(episodes, route) {
       cancelled = true;
       resize?.disconnect();
       authRevision++;
-      document.removeEventListener('ogt:authchange', loadPersonal);
       node.remove();
     },
   };
@@ -211,6 +209,7 @@ function createPanel(episodes, route) {
 export const seasonChart = {
   id: 'season-chart',
   css: CSS,
+  authScoped: true,
   match(route) {
     return route.kind === 'show' && route.name === 'season';
   },

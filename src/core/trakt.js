@@ -81,6 +81,16 @@ function currentAuth() {
   return ogAuth();
 }
 
+/**
+ * Freeze the live session's version before a request. og's revision only advances when its entry
+ * is read, so read it first; otherwise the first request after a same-tab account switch captures
+ * the old version and then rejects its own new session as a replacement.
+ */
+function observedGeneration() {
+  currentAuth();
+  return getSessionGeneration();
+}
+
 /** A toolkit refresh changes its token but not the session; an og account change is different. */
 function sameAuth(a, b) {
   return Boolean(a && b) && a.kind === b.kind && a.clientId === b.clientId && a.accountKey === b.accountKey;
@@ -205,18 +215,27 @@ async function ensureAuth() {
 async function ogGet(path, ttl) {
   const first = ogAuth();
   if (!first) throw new MissingClientIdError();
-  assertOgFresh(first);
+  // An expired og token cannot authorize even a public lookup. Degrade like a missing client
+  // ID so callers keep their setup/fallback path instead of showing og's reload message.
+  if (first.expiresAt != null && first.expiresAt <= Date.now()) throw new MissingClientIdError();
   const url = `${API.base}${path}`;
   try {
     return await getJSON(url, { ttl, headers: authHeaders(first) });
   } catch (error) {
     if (error?.status !== 401) throw error;
     const latest = ogAuth();
-    if (!latest) throw ogSessionExpiredError();
+    // No entry at all means there is no client ID to fall back to. An entry whose clock has
+    // passed is a stale tab, which callers already handle as missing setup rather than reload.
+    if (!latest || (latest.expiresAt != null && latest.expiresAt <= Date.now())) throw new MissingClientIdError();
     if (!sameAuth(latest, first)) throw sessionChangedError();
-    assertOgFresh(latest);
+    // Rejected before its expiry: og's session was revoked, and only a reload can renew it.
     if (latest.accessToken === first.accessToken) throw ogSessionExpiredError();
-    return getJSON(url, { ttl, headers: authHeaders(latest) });
+    try {
+      return await getJSON(url, { ttl, headers: authHeaders(latest) });
+    } catch (retryError) {
+      if (retryError?.status === 401) throw ogSessionExpiredError();
+      throw retryError;
+    }
   }
 }
 
@@ -287,11 +306,12 @@ async function authenticated(method, path, body, options, metadata, control) {
 }
 
 async function sendAuthenticated(method, url, body, metadata, entry) {
-  // A response belongs to the session that started the request. A late 401 must never refresh
-  // or clear a replacement session's tokens.
-  let origin = entry?.generation ?? null;
+  // A response belongs to the session that started the request. Capture the origin before any
+  // await: ensureAuth() can refresh tokens or observe a session change while it runs, and that
+  // replacement must not be adopted as the origin. A late 401 must never refresh or clear a
+  // replacement session's tokens.
+  const origin = entry?.generation ?? observedGeneration();
   const checkOrigin = () => {
-    if (origin === null) return; // the first authenticated read establishes the origin below
     if (getSessionGeneration() === origin) return;
     if (entry) entry.check();
     throw sessionChangedError();
@@ -303,7 +323,6 @@ async function sendAuthenticated(method, url, body, metadata, entry) {
     checkOrigin();
     if (entry) await waitForTurn(entry);
     const auth = await ensureAuth();
-    if (origin === null) origin = getSessionGeneration();
     if (entry) entry.check();
     checkOrigin();
     if (!sameAuth(currentAuth(), auth)) throw sessionChangedError();

@@ -35,6 +35,70 @@ test('built bundle registers OAuth menus and shows user without exposing tokens'
   assert.equal(Boolean(window.document.querySelector('[id*=playback]')), false);
 });
 
+test('editing the client ID announces the credential switch', async (t) => {
+  const window = new Window({ url: 'https://og.trakt.tv/' });
+  t.after(() => window.close());
+  const menus = new Map();
+  const data = new Map([
+    ['trakt.clientId', 'client'],
+    ['trakt.oauth.tokens', { client_id: 'client', access_token: 'SECRET_ACCESS', refresh_token: 'SECRET_REFRESH', expires_at: Date.now() + 3600000 }],
+  ]);
+  window.GM_getValue = (k, fallback) => data.get(k) ?? fallback;
+  window.GM_setValue = (k, v) => data.set(k, v);
+  window.GM_deleteValue = (k) => data.delete(k);
+  window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+  window.GM_xmlhttpRequest = () => ({ abort() {} });
+  answerDialogs(window, { prompt: () => '' });
+  window.document.write('<html><head></head><body></body></html>');
+  window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
+  window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
+
+  const changes = [];
+  window.document.addEventListener('ogt:authchange', () => changes.push(true));
+  await menus.get('set API client ID')();
+  assert.equal(data.has('trakt.clientId'), false, 'the client ID is cleared');
+  assert.equal(changes.length, 1, 'the credential switch rebuilds personal state');
+});
+
+test('account storage changed in another tab rebuilds the session', async (t) => {
+  const window = new Window({ url: 'https://og.trakt.tv/' });
+  t.after(() => window.close());
+  const listeners = new Map();
+  const data = new Map([['trakt.clientId', 'client']]);
+  window.GM_getValue = (k, fallback) => data.get(k) ?? fallback;
+  window.GM_setValue = (k, v) => data.set(k, v);
+  window.GM_deleteValue = (k) => data.delete(k);
+  window.GM_registerMenuCommand = () => {};
+  window.GM_addValueChangeListener = (key, callback) => { listeners.set(key, callback); };
+  window.GM_xmlhttpRequest = () => ({ abort() {} });
+  window.document.write('<html><head></head><body></body></html>');
+  window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
+  window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
+
+  assert.deepEqual([...listeners.keys()].sort(), ['trakt.clientId', 'trakt.oauth.tokens']);
+  let changes = 0;
+  window.document.addEventListener('ogt:authchange', () => { changes += 1; });
+  const tokens = (access, client = 'client') => ({ access_token: access, refresh_token: `r-${access}`, client_id: client, expires_at: 1 });
+  listeners.get('trakt.clientId')('trakt.clientId', 'old', 'new', true);
+  assert.equal(changes, 1, 'a client ID change in another tab rebuilds');
+  listeners.get('trakt.oauth.tokens')('trakt.oauth.tokens', undefined, tokens('a'), true);
+  assert.equal(changes, 2, 'a sign-in in another tab rebuilds');
+  listeners.get('trakt.oauth.tokens')('trakt.oauth.tokens', tokens('a'), tokens('b'), true);
+  assert.equal(changes, 2, 'a token refresh in another tab is not an account change');
+  listeners.get('trakt.oauth.tokens')('trakt.oauth.tokens', tokens('b'), tokens('c', 'other'), true);
+  assert.equal(changes, 3, 'tokens for a different app are a new session');
+  listeners.get('trakt.oauth.tokens')('trakt.oauth.tokens', tokens('c', 'other'), undefined, true);
+  assert.equal(changes, 4, 'a sign-out in another tab rebuilds');
+  listeners.get('trakt.clientId')('trakt.clientId', 'old', 'new', false);
+  assert.equal(changes, 4, 'this tab\'s own writes do not rebuild twice');
+});
+
+test('the userscript header grants the cross-tab value listener', () => {
+  const header = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8').split('==/UserScript==')[0];
+  assert.match(header, /^\/\/ @grant\s+GM_addValueChangeListener$/m,
+    'managers hide ungranted GM APIs, so other tabs would never be notified');
+});
+
 test('private credentials never fall back to page localStorage', () => {
   const script = `
     import assert from 'node:assert/strict';

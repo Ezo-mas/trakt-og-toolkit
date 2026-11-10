@@ -64,9 +64,11 @@ test('built bundle makes og-session calls without storing or printing the token'
   window.dispatchEvent(new window.StorageEvent('storage', {
     key: OG_KEY, oldValue: renewed, newValue: replacement, storageArea: window.localStorage,
   }));
+  await Promise.resolve();
   assert.equal(changes.length, 1, 'the built script observes another tab switching accounts');
   window.localStorage.clear();
   window.dispatchEvent(new window.StorageEvent('storage', { key: null, storageArea: window.localStorage }));
+  await Promise.resolve();
   assert.equal(changes.length, 2, 'clearing localStorage announces sign-out');
   assert.equal(vault.has('trakt.oauth.tokens'), false);
 });

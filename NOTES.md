@@ -20,17 +20,38 @@ Working notes and known issues. Newest first.
 - A token renewal keeps the same account key, so it does not invalidate anything. Observed og login, logout and
   account replacement advance a session version; signing back into the same account therefore does not revive
   queued work from before the gap. An account replacement also aborts in-flight work and a late 401 is never
-  retried as the new account. `ogt:authchange` clears personal caches (ratings, playback, month review), the
-  playback panel's rows/selections/open dialogs, and All lists' old load. `apiAuth` refreshes only the toolkit's own
-  tokens; og's token is never refreshed, because og rotates its refresh token and a second refresher would strand
-  og's session.
+  retried as the new account. og's observed login/logout/account replacement emits the internal
+  `ogt:ogsessionchange` on a microtask; `oauth.js` promotes it to `ogt:authchange` only while og is the active
+  credential, so an og switch in another tab cannot cancel or reset work under the toolkit's own tokens. The host
+  rebuilds every `authScoped` feature from its mount state, so personal rows, selections, dialogs and listeners
+  cannot survive an account change; All lists reopens its active view on that remount. Module-level
+  ratings/playback/month-review caches still reset on the same notification. `apiAuth` refreshes only the
+  toolkit's own tokens; og's token is never refreshed, because og rotates its refresh token and a second refresher
+  would strand og's session.
 - Cross-tab `storage` notifications also feed the session revision. Only localStorage changes for the pinned og key
-  (or `clear()`) count; unrelated keys, sessionStorage and same-account token renewals are ignored. The handler uses
-  each notification's value, so a logout/login that finishes before notifications arrive still cancels old queued
-  work. Regression tests cover both removal and `clear()` followed by a rapid same-account login.
+  (or `clear()`) count; unrelated keys, sessionStorage and same-account token renewals are ignored. The handler orders
+  each notification against the entry this tab last read: a logout/login that finishes before notifications arrive
+  still cancels old queued work, while a delayed notification cannot regress an account a direct read already
+  observed. Storage areas are compared by their pinned entry because Firefox/Violentmonkey Xray wrappers need not be
+  identical objects.
 - `apiGet` uses a configured client ID when present and otherwise sends public metadata through og's connection,
   preserving the URL and query so `getJSON` caching still works. Watchlist, library and playback lookups therefore
   work without manual setup. A public 401 retries once only when og rotated the token for the same account.
+- `getSessionGeneration()` includes og's revision only while og's session is the active credential, so an og change
+  in another tab cannot abort queued work under the toolkit's own tokens. og entry parsing is cached by raw value
+  (`isSignedIn()` runs from every `match()` and per-row `alive()`), a non-write request reads and freezes the live
+  session before `ensureAuth()` can await a refresh, and an expired og entry makes public metadata lookups fall back
+  to `MissingClientIdError`, while a token the API rejects before its expiry keeps og's reload message.
+- Editing or clearing the API client ID dispatches `ogt:authchange`: it can switch the active credential from the
+  toolkit's own tokens to og's session, which may be a different account, so features and caches must rebuild.
+- Changes to the client ID or the toolkit's tokens made in another tab do the same through
+  `GM_addValueChangeListener`, so background tabs do not keep the previous account's data until a reload. The header
+  must `@grant` it: managers hide ungranted GM APIs, and the guard would silently skip the listener. A token refresh
+  in another tab rewrites the tokens for the same session and is ignored; only a sign-in, sign-out or a different
+  `client_id` rebuilds. Browser-checked with two same-origin tabs of a saved og lists page and Violentmonkey-like
+  shims (the pane blocks og.trakt.tv from loading a localhost bundle, and a real manager was not available).
+- A failed All lists remount keeps its reopen request until the route leaves that profile's lists page; leaving it
+  drops the request, so coming back later does not reopen the view by itself.
 - Expired `expires_at` is checked in `beforeSend` as well as before a request, so a write that waited for an HTTP
   slot cannot dispatch after the token expired. Nothing from og's entry is cleared on failure. User-facing watchlist,
   library, playback and sign-in hints mention og.trakt.tv; the menu's **sign out** leaves og's session alone.
