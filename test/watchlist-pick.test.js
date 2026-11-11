@@ -87,12 +87,22 @@ test('labels the picked title and can avoid an immediate repeat', () => {
   assert.equal(pickWatchlistItem(null, null), null);
 });
 
+test('Pick again excludes the previous pick before sampling', () => {
+  const item = (slug) => normalizeWatchlistItem({ type: 'movie', movie: { title: slug.toUpperCase(), ids: { slug } } });
+  const items = [item('a'), item('b'), item('c')];
+  assert.equal(pickWatchlistItem(items, items[0].key, () => 0).title, 'B');
+  assert.equal(pickWatchlistItem(items, items[0].key, () => 0.5).title, 'C');
+  assert.equal(pickWatchlistItem(items, items[0].key, () => 0.999).title, 'C');
+  assert.equal(pickWatchlistItem(items, 'movie:missing', () => 0).title, 'A', 'an absent previous pick keeps every candidate');
+  assert.equal(pickWatchlistItem([items[0]], items[0].key, () => 0).title, 'A', 'a lone candidate is still returned');
+});
+
 test('public watchlist reads walk pages until a short one and keep the filter', async () => {
   const calls = [];
   const api = createWatchlistApi({
     signedIn: () => false,
-    get: async (path) => {
-      calls.push(path);
+    get: async (path, options) => {
+      calls.push({ path, options });
       const page = Number(new URL(`https://api.trakt.tv${path}`).searchParams.get('page'));
       return page === 1 ? Array.from({ length: PAGE_SIZE }, () => movie) : page === 2 ? [movie] : [];
     },
@@ -100,10 +110,11 @@ test('public watchlist reads walk pages until a short one and keep the filter', 
 
   const rows = await api.list('justin', { display: 'movie' });
   assert.equal(rows.length, PAGE_SIZE + 1);
-  assert.deepEqual(calls, [
+  assert.deepEqual(calls.map((call) => call.path), [
     `/users/justin/watchlist/movies?page=1&limit=${PAGE_SIZE}`,
     `/users/justin/watchlist/movies?page=2&limit=${PAGE_SIZE}`,
   ]);
+  assert.deepEqual(calls.map((call) => call.options), [{ ttl: 0 }, { ttl: 0 }], 'public reads bypass the shared cache');
 });
 
 test('signed-in watchlist reads use Trakt page counts', async () => {

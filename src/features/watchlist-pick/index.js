@@ -62,7 +62,6 @@ export const watchlistPick = {
     let itemsFor = null;
     let itemsAt = 0;
     let shownFor = null;
-    let filterTimer = null;
 
     const currentDisplay = () => watchlistType(location.search, route.type);
     const currentFilter = () => currentDisplay() ?? 'all';
@@ -80,19 +79,10 @@ export const watchlistPick = {
       button.textContent = 'Pick something';
     }
 
-    // A same-page filter link changes only the query, so neither routechange nor a settle pass reports it.
-    function scheduleFilterCheck() {
-      clearTimeout(filterTimer);
-      filterTimer = setTimeout(clearFilterMismatch, 0);
-    }
-
-    function onDocumentClick(event) {
-      const link = event.target?.closest?.('a[href]');
-      if (link && (link.getAttribute('href') || '').includes('/watchlist')) scheduleFilterCheck();
-    }
-
-    function onPopState() {
-      scheduleFilterCheck();
+    // A filter link changes only the query, which routechange does not report. Check on every settle instead of
+    // once after the click, so a navigation that lands later still clears a result from the previous filter.
+    function onSettle() {
+      clearFilterMismatch();
     }
 
     async function load(display) {
@@ -180,17 +170,14 @@ export const watchlistPick = {
     }
 
     button.addEventListener('click', choose);
-    document.addEventListener('click', onDocumentClick, true);
-    window.addEventListener('popstate', onPopState);
+    document.addEventListener('ogt:settle', onSettle);
 
     return {
       node,
       destroy() {
         active = false;
-        clearTimeout(filterTimer);
         button.removeEventListener('click', choose);
-        document.removeEventListener('click', onDocumentClick, true);
-        window.removeEventListener('popstate', onPopState);
+        document.removeEventListener('ogt:settle', onSettle);
         node.remove();
       },
     };

@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
-import { waitFor } from './wait.js';
+import { wait, waitFor } from './wait.js';
 import { WATCHLIST_PAGE_HTML } from './fixtures.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
@@ -175,6 +175,28 @@ test('changing the filter hides a result from the old filter', async (t) => {
   await waitFor(() => b.result().hidden, { message: 'the stale result to be hidden' });
   assert.equal(b.button().textContent, 'Pick something');
   assert.equal(b.announcer().textContent, '');
+});
+
+test('a filter navigation that lands after the click still hides the old pick', async (t) => {
+  const b = boot();
+  t.after(() => b.window.close());
+  await waitFor(() => b.panel(), { message: 'the watchlist picker to mount' });
+
+  b.button().click();
+  await waitFor(() => !b.result().hidden && b.result().textContent, { message: 'the first pick' });
+
+  // og handles the filter link first; its navigation updates the URL a moment later.
+  const link = b.document.createElement('a');
+  link.setAttribute('href', '/users/justin/watchlist?display=show');
+  link.addEventListener('click', (event) => event.preventDefault());
+  b.document.body.append(link);
+  link.click();
+  await wait(100);
+  assert.equal(b.result().hidden, false, 'the pick is still visible before the URL changes');
+
+  b.window.history.pushState({}, '', '/users/justin/watchlist?display=show');
+  await waitFor(() => b.result().hidden, { message: 'the stale result to be hidden after navigation settles' });
+  assert.equal(b.button().textContent, 'Pick something');
 });
 
 test('picks seasons and episodes with their own routes', async (t) => {

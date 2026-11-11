@@ -9126,13 +9126,14 @@
   function pickWatchlistItem(items, previousKey = null, random = Math.random) {
     const candidates = Array.isArray(items) ? items.filter(Boolean) : [];
     if (!candidates.length) return null;
-    const value = Number(random());
-    const raw = Number.isFinite(value) ? Math.floor(Math.min(0.999999, Math.max(0, value)) * candidates.length) : 0;
-    let index = raw;
-    if (previousKey != null && candidates.length > 1 && candidates[index].key === previousKey) {
-      index = (index + 1) % candidates.length;
+    let pool = candidates;
+    if (previousKey != null && candidates.length > 1) {
+      const others = candidates.filter((item) => item.key !== previousKey);
+      if (others.length) pool = others;
     }
-    return candidates[index];
+    const value = Number(random());
+    const raw = Number.isFinite(value) ? Math.floor(Math.min(0.999999, Math.max(0, value)) * pool.length) : 0;
+    return pool[raw];
   }
 
   // src/features/watchlist-pick/api.js
@@ -9156,7 +9157,7 @@
         }
         const rows = [];
         for (let page = 1; page <= MAX_PAGES2; page++) {
-          const data = await get(`${path}?page=${page}&limit=${PAGE_SIZE}`);
+          const data = await get(`${path}?page=${page}&limit=${PAGE_SIZE}`, { ttl: 0 });
           if (!Array.isArray(data) || !data.length) break;
           rows.push(...data);
           if (data.length < PAGE_SIZE) break;
@@ -9237,7 +9238,6 @@
       let itemsFor = null;
       let itemsAt = 0;
       let shownFor = null;
-      let filterTimer = null;
       const currentDisplay = () => watchlistType(location.search, route.type);
       const currentFilter = () => currentDisplay() ?? "all";
       function clearFilterMismatch() {
@@ -9252,16 +9252,8 @@
         announcer.textContent = "";
         button2.textContent = "Pick something";
       }
-      function scheduleFilterCheck() {
-        clearTimeout(filterTimer);
-        filterTimer = setTimeout(clearFilterMismatch, 0);
-      }
-      function onDocumentClick(event) {
-        const link = event.target?.closest?.("a[href]");
-        if (link && (link.getAttribute("href") || "").includes("/watchlist")) scheduleFilterCheck();
-      }
-      function onPopState() {
-        scheduleFilterCheck();
+      function onSettle() {
+        clearFilterMismatch();
       }
       async function load(display) {
         const key = display ?? "all";
@@ -9344,16 +9336,13 @@
         }
       }
       button2.addEventListener("click", choose);
-      document.addEventListener("click", onDocumentClick, true);
-      window.addEventListener("popstate", onPopState);
+      document.addEventListener("ogt:settle", onSettle);
       return {
         node,
         destroy() {
           active2 = false;
-          clearTimeout(filterTimer);
           button2.removeEventListener("click", choose);
-          document.removeEventListener("click", onDocumentClick, true);
-          window.removeEventListener("popstate", onPopState);
+          document.removeEventListener("ogt:settle", onSettle);
           node.remove();
         }
       };
@@ -9628,8 +9617,12 @@ MIT licensed.`);
           if (changed) document.dispatchEvent(new CustomEvent("ogt:routechange", { detail: { route: next } }));
           sync();
         },
-        // Every settled DOM change: re-mounts anything the app re-rendered away.
-        onSettle: sync
+        // Every settled DOM change: re-mounts anything the app re-rendered away, and lets features
+        // follow a query-only change that routechange cannot report.
+        onSettle() {
+          sync();
+          document.dispatchEvent(new CustomEvent("ogt:settle"));
+        }
       });
       sync();
     };

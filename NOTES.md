@@ -31,6 +31,13 @@ Working notes and known issues. Newest first.
   bar and items section. Tests cover normalization, filter mapping, mid-read and post-pick filter changes, seasons and
   episodes, empty lists, expired og sessions, both paging paths, repeat avoidance, private-list hints and teardown.
   The watched-title filter remains out of scope.
+- Review fixes (2026-11-11): `main.js` dispatches `ogt:settle` on every settled navigation/DOM pass and the picker
+  checks the filter there, so a filter navigation that updates the URL after the click (delayed `pushState`/`replaceState`)
+  still clears the old pick; the zero-delay click/popstate listeners are gone. Public watchlist reads pass `{ ttl: 0 }`
+  so the picker's five-minute cache controls freshness instead of the shared eight-hour one. `pickWatchlistItem`
+  samples from the candidates other than the previous pick, so after picking A every other title has an equal chance;
+  a lone candidate is still returned and an absent previous key keeps the full pool. Tests cover the delayed filter
+  navigation, even sampling over `[A, B, C]` and `ttl: 0` on every public page request.
 
 ## v0.4.0 (2026-11-10)
 

@@ -28,7 +28,8 @@ export function createWatchlistApi({ get = apiGet, authPage = apiAuthPage, signe
       // The public cache drops response headers, so read until a short page.
       const rows = [];
       for (let page = 1; page <= MAX_PAGES; page++) {
-        const data = await get(`${path}?page=${page}&limit=${PAGE_SIZE}`);
+        // The picker owns its five-minute freshness window; the shared cache would keep removed titles for hours.
+        const data = await get(`${path}?page=${page}&limit=${PAGE_SIZE}`, { ttl: 0 });
         if (!Array.isArray(data) || !data.length) break;
         rows.push(...data);
         if (data.length < PAGE_SIZE) break;

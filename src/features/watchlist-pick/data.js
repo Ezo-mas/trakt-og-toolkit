@@ -115,17 +115,19 @@ export function watchlistLabel(item) {
 }
 
 /**
- * Pick one item uniformly. When there is a previous pick and more than one candidate, step to the next item instead
- * of returning the same title again. `random` is injectable so tests stay deterministic.
+ * Pick one item uniformly. When there is a previous pick and more than one candidate, sample among the other items
+ * so every title after the previous pick has the same chance. `random` is injectable so tests stay deterministic.
  */
 export function pickWatchlistItem(items, previousKey = null, random = Math.random) {
   const candidates = Array.isArray(items) ? items.filter(Boolean) : [];
   if (!candidates.length) return null;
-  const value = Number(random());
-  const raw = Number.isFinite(value) ? Math.floor(Math.min(0.999999, Math.max(0, value)) * candidates.length) : 0;
-  let index = raw;
-  if (previousKey != null && candidates.length > 1 && candidates[index].key === previousKey) {
-    index = (index + 1) % candidates.length;
+  let pool = candidates;
+  if (previousKey != null && candidates.length > 1) {
+    const others = candidates.filter((item) => item.key !== previousKey);
+    // If duplicate keys filled the whole list, keep the full pool rather than return nothing.
+    if (others.length) pool = others;
   }
-  return candidates[index];
+  const value = Number(random());
+  const raw = Number.isFinite(value) ? Math.floor(Math.min(0.999999, Math.max(0, value)) * pool.length) : 0;
+  return pool[raw];
 }
