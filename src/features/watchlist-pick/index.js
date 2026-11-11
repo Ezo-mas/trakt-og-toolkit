@@ -1,12 +1,12 @@
 /**
- * Pick something on a watchlist: og shows the page's loaded rows, but reads one random title from the whole list
- * through the API. The media filter (`?display=movie|show|season|episode`) is read when a pick starts and rechecked
- * after every read, so changing it in place cannot show a title from the previous filter.
+ * Pick something from the watchlist API using the page's media filter. Recheck the filter after loading
+ * candidates so a navigation during the request cannot show a pick from the previous filter.
  */
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
-import { MissingClientIdError } from '../../core/trakt.js';
-import { watchlistApi } from './api.js';
+import { decodePathPart } from '../../core/text.js';
+import { listReadFailureHint } from '../../core/trakt.js';
+import { MAX_ITEMS, watchlistApi } from './api.js';
 import { pickWatchlistItem, watchlistItems, watchlistLabel, watchlistType } from './data.js';
 import { CSS } from './styles.js';
 
@@ -15,27 +15,8 @@ const ID = 'ogt-watchlist-pick';
 const ITEMS_TTL_MS = 5 * 60 * 1000;
 /** Filter changes during a read are retried, but a page that keeps changing must not spin forever. */
 const FILTER_RETRIES = 2;
-
-function failureHint(error) {
-  if (error instanceof MissingClientIdError) {
-    return error.ogSession
-      ? error.message
-      : 'Sign in to og.trakt.tv or set a Trakt client ID to pick from a watchlist.';
-  }
-  // og owns its renewal: an expired or rejected og token needs a reload, not a new sign-in.
-  if (error?.ogSession) return error.message || 'Your og.trakt.tv session expired; reload the page to renew it.';
-  if (error?.status === 403 || error?.status === 404) return 'This watchlist is private or unavailable.';
-  if (error?.status === 401) return 'Sign in to Trakt to pick from this watchlist.';
-  return 'Could not read this watchlist. Try again later.';
-}
-
-function profileId(value) {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
+const FILTER_CHANGED = 'The page filter changed while picking. Try again.';
+const LIMIT_HINT = `Picks use up to the first ${MAX_ITEMS.toLocaleString('en-US')} watchlist entries.`;
 
 export const watchlistPick = {
   id: 'watchlist-pick',
@@ -46,7 +27,7 @@ export const watchlistPick = {
     const actions = document.querySelector('section.title-row .title-bar .actions');
     if (!actions || document.getElementById(ID)) return null;
 
-    const profile = profileId(route.id);
+    const profile = decodePathPart(route.id);
     const button = el('button', { type: 'button', class: 'ogt-watchlist-pick__button', text: 'Pick something' });
     const result = el('a', { class: 'ogt-watchlist-pick__result', hidden: true });
     const announcer = el('span', { class: 'ogt-visually-hidden', role: 'status', 'aria-live': 'polite' });
@@ -66,33 +47,37 @@ export const watchlistPick = {
     const currentDisplay = () => watchlistType(location.search, route.type);
     const currentFilter = () => currentDisplay() ?? 'all';
 
-    function clearFilterMismatch() {
-      if (!active || result.hidden || shownFor == null || shownFor === currentFilter()) return;
+    function clearResult() {
       result.hidden = true;
       result.removeAttribute('href');
       result.removeAttribute('title');
       result.textContent = '';
       previousKey = null;
       shownFor = null;
-      status.textContent = '';
       announcer.textContent = '';
+    }
+
+    function showStatus(message) {
+      clearResult();
+      shownFor = message ? currentFilter() : null;
+      status.textContent = message;
       button.textContent = 'Pick something';
     }
 
-    // A filter link changes only the query, which routechange does not report. Check on every settle instead of
-    // once after the click, so a navigation that lands later still clears a result from the previous filter.
-    function onSettle() {
-      clearFilterMismatch();
+    function onQueryChange() {
+      if (shownFor == null || shownFor === currentFilter()) return;
+      if (busy) clearResult();
+      else showStatus('');
     }
 
     async function load(display) {
       const key = display ?? 'all';
       const fresh = items && itemsFor === key && Date.now() - itemsAt < ITEMS_TTL_MS;
       if (fresh) return items;
-      const rows = watchlistItems(await watchlistApi.list(profile, { display }));
+      const { rows, limited } = await watchlistApi.list(profile, { display });
       if (!active) return null;
       if (itemsFor !== key) previousKey = null;
-      items = rows;
+      items = { candidates: watchlistItems(rows), limited };
       itemsFor = key;
       itemsAt = Date.now();
       return items;
@@ -100,6 +85,7 @@ export const watchlistPick = {
 
     async function choose() {
       if (busy) return;
+      onQueryChange();
       busy = true;
       button.disabled = true;
       button.textContent = 'Picking…';
@@ -118,24 +104,16 @@ export const watchlistPick = {
           loaded = null;
         }
         if (!loaded) {
-          result.hidden = true;
-          shownFor = null;
-          status.textContent = 'The page filter changed while picking. Try again.';
-          button.textContent = 'Pick something';
+          showStatus(FILTER_CHANGED);
           return;
         }
-        if (!loaded.length) {
-          result.hidden = true;
-          result.removeAttribute('href');
-          result.removeAttribute('title');
-          result.textContent = '';
-          shownFor = null;
-          status.textContent = 'Nothing to pick in this filter.';
-          button.textContent = 'Pick something';
+        const { candidates, limited } = loaded;
+        if (!candidates.length) {
+          showStatus(limited ? `Nothing to pick in this filter. ${LIMIT_HINT}` : 'Nothing to pick in this filter.');
           return;
         }
 
-        const picked = pickWatchlistItem(loaded, previousKey);
+        const picked = pickWatchlistItem(candidates, previousKey);
         previousKey = picked.key;
         const label = watchlistLabel(picked);
         result.href = picked.href;
@@ -143,24 +121,17 @@ export const watchlistPick = {
         result.title = label;
         result.hidden = false;
         shownFor = currentFilter();
-        status.textContent = '';
+        status.textContent = limited ? LIMIT_HINT : '';
         announcer.textContent = `Picked ${label}.`;
         button.textContent = 'Pick again';
       } catch (error) {
         debugError('watchlist pick failed', error);
         if (!active) return;
-        result.hidden = true;
-        result.removeAttribute('href');
-        result.removeAttribute('title');
-        result.textContent = '';
-        previousKey = null;
-        shownFor = null;
         items = null;
         itemsFor = null;
         itemsAt = 0;
-        announcer.textContent = '';
-        status.textContent = failureHint(error);
-        button.textContent = 'Pick something';
+        // A failed read for a filter the page has since left still needs an answer, or the click looks ignored.
+        showStatus(display === currentDisplay() ? listReadFailureHint(error, 'watchlist', 'pick from') : FILTER_CHANGED);
       } finally {
         if (active) {
           busy = false;
@@ -170,14 +141,14 @@ export const watchlistPick = {
     }
 
     button.addEventListener('click', choose);
-    document.addEventListener('ogt:settle', onSettle);
+    document.addEventListener('ogt:querychange', onQueryChange);
 
     return {
       node,
       destroy() {
         active = false;
         button.removeEventListener('click', choose);
-        document.removeEventListener('ogt:settle', onSettle);
+        document.removeEventListener('ogt:querychange', onQueryChange);
         node.remove();
       },
     };

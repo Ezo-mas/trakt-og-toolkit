@@ -33,6 +33,7 @@ function boot({
   shows = [showItem],
   fail = () => false,
   pageCount = 1,
+  pageRows = null,
   ogSession = false,
   delay = 0,
 } = {}) {
@@ -63,7 +64,7 @@ function boot({
       // answered below with a 404
     } else if (/\/watchlist(?:\/(?:movies|shows|seasons|episodes))?$/.test(pathname)) {
       const rows = pathname.endsWith('/shows') ? shows : movies;
-      body = page === 1 ? rows : page === 2 && pageCount > 1 ? [...movies, ...shows].slice(-1) : [];
+      body = pageRows ? pageRows(page) : page === 1 ? rows : page === 2 && pageCount > 1 ? [...movies, ...shows].slice(-1) : [];
       if (pageCount > 1) headers = `x-pagination-page-count: ${pageCount}`;
     }
     const status = fail(pathname) ? 404 : 200;
@@ -163,6 +164,18 @@ test('a filter change during a read picks from the new filter', async (t) => {
   assert.equal(b.result().textContent, 'Breaking Bad (2008)');
 });
 
+test('a failed read after a filter change asks to try again', async (t) => {
+  const b = boot({ delay: 100, fail: (pathname) => pathname === '/users/justin/watchlist' });
+  t.after(() => b.window.close());
+  await waitFor(() => b.panel(), { message: 'the watchlist picker to mount' });
+
+  b.button().click();
+  b.window.history.replaceState({}, '', '/users/justin/watchlist?display=show');
+  await waitFor(() => !b.button().disabled, { message: 'the failed read to finish' });
+  assert.equal(b.status().textContent, 'The page filter changed while picking. Try again.');
+  assert.ok(b.result().hidden);
+});
+
 test('changing the filter hides a result from the old filter', async (t) => {
   const b = boot();
   t.after(() => b.window.close());
@@ -173,6 +186,8 @@ test('changing the filter hides a result from the old filter', async (t) => {
   b.window.history.replaceState({}, '', '/users/justin/watchlist?display=show');
   b.window.dispatchEvent(new b.window.Event('popstate'));
   await waitFor(() => b.result().hidden, { message: 'the stale result to be hidden' });
+  assert.equal(b.result().hasAttribute('href'), false);
+  assert.equal(b.result().hasAttribute('title'), false);
   assert.equal(b.button().textContent, 'Pick something');
   assert.equal(b.announcer().textContent, '');
 });
@@ -215,14 +230,35 @@ test('picks seasons and episodes with their own routes', async (t) => {
   }
 });
 
-test('an empty watchlist says there is nothing to pick', async (t) => {
-  const b = boot({ movies: [] });
+test('an empty filter shows a hint until the user switches filters', async (t) => {
+  const b = boot({ url: 'https://og.trakt.tv/users/justin/watchlist?display=movie', movies: [] });
   t.after(() => b.window.close());
   await waitFor(() => b.panel(), { message: 'the watchlist picker to mount' });
   b.button().click();
   await waitFor(() => b.status().textContent === 'Nothing to pick in this filter.', { message: 'the empty hint' });
   assert.equal(b.result().hidden, true);
   assert.equal(b.button().textContent, 'Pick something');
+
+  const panel = b.panel();
+  b.window.history.pushState({}, '', '/users/justin/watchlist?display=show');
+  await waitFor(() => !b.status().textContent, { message: 'the stale empty-filter hint to be cleared' });
+  assert.equal(b.panel(), panel, 'query navigation keeps the picker mounted');
+});
+
+test('picks at the read limit show a note and keep it on reroll', async (t) => {
+  const b = boot({ signedIn: true, pageCount: 51, pageRows: () => defaultMovies });
+  t.after(() => b.window.close());
+  await waitFor(() => b.button());
+
+  b.button().click();
+  await waitFor(() => !b.result().hidden);
+  assert.match(b.status().textContent, /first 5,000 watchlist entries/);
+  assert.equal(b.requests.length, 50);
+
+  b.button().click();
+  await waitFor(() => !b.button().disabled);
+  assert.match(b.status().textContent, /first 5,000 watchlist entries/);
+  assert.equal(b.requests.length, 50);
 });
 
 test('an expired og session asks for a reload', async (t) => {

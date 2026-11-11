@@ -7,34 +7,37 @@
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
 import { parseRoute } from '../../core/router.js';
-import { MissingClientIdError } from '../../core/trakt.js';
+import { decodePathPart } from '../../core/text.js';
+import { listReadFailureHint } from '../../core/trakt.js';
 import { exportApi } from './api.js';
 import { exportFilename, exportItems, toCsv } from './data.js';
 import { CSS } from './styles.js';
 
 const ID = 'ogt-csv-export';
+const DOWNLOAD_URL_LIFETIME_MS = 60_000;
 
-function decodePart(value) {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
-function failureHint(error, target) {
+function exportFailureHint(error, target) {
   if (error?.exportLimit) return `This ${target} is too large to export as one CSV.`;
   if (error?.exportIncomplete) return `Could not read this ${target} completely. Try again later.`;
-  if (error instanceof MissingClientIdError) {
-    return error.ogSession
-      ? error.message
-      : `Sign in to og.trakt.tv or set a Trakt client ID to export this ${target}.`;
+  return listReadFailureHint(error, target, 'export');
+}
+
+function save(filename, csv) {
+  // The UTF-8 marker lets Excel open the file with the correct encoding.
+  const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = 'noopener';
+  anchor.hidden = true;
+  (document.body ?? document.documentElement).append(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    // The browser may still be starting the download after the feature unmounts.
+    setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_LIFETIME_MS);
   }
-  // og owns its renewal: an expired or rejected og token needs a reload, not a new sign-in.
-  if (error?.ogSession) return error.message || 'Your og.trakt.tv session expired; reload the page to renew it.';
-  if (error?.status === 403 || error?.status === 404) return `This ${target} is private or unavailable.`;
-  if (error?.status === 401) return `Sign in to Trakt to export this ${target}.`;
-  return `Could not read this ${target}. Try again later.`;
 }
 
 export const csvExport = {
@@ -49,8 +52,8 @@ export const csvExport = {
     const watchlist = route.name === 'watchlist';
     const official = route.name === 'official-list';
     const target = watchlist ? 'watchlist' : 'list';
-    const profile = official ? null : decodePart(route.id);
-    const slug = watchlist ? null : decodePart(route.slug);
+    const profile = official ? null : decodePathPart(route.id);
+    const slug = watchlist ? null : decodePathPart(route.slug);
 
     const button = el('button', {
       type: 'button',
@@ -65,46 +68,6 @@ export const csvExport = {
 
     let active = true;
     let busy = false;
-    let objectUrl = null;
-    let revokeTimer = null;
-
-    function releaseObjectUrl() {
-      clearTimeout(revokeTimer);
-      revokeTimer = null;
-      if (!objectUrl) return;
-      try {
-        URL.revokeObjectURL(objectUrl);
-      } catch {
-        /* the URL is already gone */
-      }
-      objectUrl = null;
-    }
-
-    /** Hand the finished document to the browser as a download; nothing is uploaded. */
-    function save(filename, csv) {
-      releaseObjectUrl();
-      objectUrl = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.download = filename;
-      anchor.rel = 'noopener';
-      anchor.hidden = true;
-      (document.body ?? document.documentElement).append(anchor);
-      anchor.click();
-      anchor.remove();
-      // Let the click start the download before releasing the blob URL.
-      revokeTimer = setTimeout(() => {
-        revokeTimer = null;
-        if (!objectUrl) return;
-        try {
-          URL.revokeObjectURL(objectUrl);
-        } catch {
-          /* the URL is already gone */
-        }
-        objectUrl = null;
-      }, 0);
-    }
-
     async function run() {
       if (busy) return;
       busy = true;
@@ -124,10 +87,9 @@ export const csvExport = {
         save(exportFilename(route), toCsv(items));
         status.textContent = `Exported ${items.length} ${items.length === 1 ? 'item' : 'items'}.`;
       } catch (error) {
-        if (objectUrl) releaseObjectUrl();
         debugError('CSV export failed', error);
         if (!active) return;
-        status.textContent = failureHint(error, target);
+        status.textContent = exportFailureHint(error, target);
       } finally {
         if (active) {
           busy = false;
@@ -144,7 +106,6 @@ export const csvExport = {
       destroy() {
         active = false;
         button.removeEventListener('click', run);
-        releaseObjectUrl();
         node.remove();
       },
     };

@@ -33,3 +33,11 @@ export function parseYear(value) {
   const match = String(value || '').match(/\b(18|19|20)\d{2}\b/);
   return match ? Number(match[0]) : null;
 }
+/** Decode one URL path segment, preserving malformed percent escapes. */
+export function decodePathPart(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}

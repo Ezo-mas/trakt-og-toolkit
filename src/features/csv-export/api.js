@@ -4,6 +4,7 @@ import { apiAuthPage, apiGet, isSignedIn } from '../../core/trakt.js';
 export const PAGE_SIZE = 100;
 /** Defensive cap for page walking; signed-in reads are capped too. */
 export const MAX_PAGES = 200;
+const BATCH = 4;
 const SEARCH_LIMIT = 25;
 
 function traktId(list) {
@@ -39,47 +40,42 @@ function pageCount(value) {
 export function createExportApi({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
   /** Every page, in API order. `publicOnly` keeps official-list reads on the public transport. */
   async function readAll(path, { publicOnly = false } = {}) {
-    if (!publicOnly && signedIn()) {
-      const page = (number) => authPage(path, { page: number, limit: PAGE_SIZE });
-      const first = await page(1);
-      const pages = pageCount(first?.pages) ?? 1;
-      if (pages > MAX_PAGES) throw exportLimitError();
-      if (!Array.isArray(first?.data) || (pages > 1 && !first.data.length)) throw incompleteExportError();
-      const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => page(index + 2)));
-      return first.data.concat(...rest.map((result) => {
-        if (!Array.isArray(result?.data) || !result.data.length) throw incompleteExportError();
-        return result.data;
-      }));
-    }
+    const authenticated = !publicOnly && signedIn();
+    const read = async (page, limit = PAGE_SIZE) => {
+      if (authenticated) return (await authPage(path, { page, limit })) ?? { data: [], pages: null };
+      return get(`${path}?page=${page}&limit=${limit}`, { ttl: 0, withHeaders: true });
+    };
 
-    // Read fresh and keep the headers: the shared cache would keep removed titles, and a short page alone does
-    // not mean the end because Trakt may serve fewer than the requested page size.
     const rows = [];
     let total = null;
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      const { data, pages } = await get(`${path}?page=${page}&limit=${PAGE_SIZE}`, { ttl: 0, withHeaders: true });
-      const reported = pageCount(pages);
-      if (reported != null) total = total == null ? reported : Math.max(total, reported);
-      if (total != null && total > MAX_PAGES) throw exportLimitError();
-      if (!Array.isArray(data)) throw incompleteExportError();
-
-      if (total != null) {
-        // Every page up to a known count is required; a gap would make the CSV partial.
-        if (!data.length && total > 1) throw incompleteExportError();
+    for (let page = 1; page <= MAX_PAGES;) {
+      const last = total == null ? page : Math.min(total, page + BATCH - 1);
+      const batch = await Promise.all(Array.from({ length: last - page + 1 }, (_, offset) => read(page + offset)));
+      for (const { data, pages } of batch) {
+        const reported = pageCount(pages);
+        if (reported != null) total = Math.max(total ?? 0, reported);
+        if (total > MAX_PAGES) throw exportLimitError();
+        if (!Array.isArray(data) || (!data.length && total > 1)) throw incompleteExportError();
         rows.push(...data);
-        if (page >= total) return rows;
-      } else {
-        if (!data.length) return rows;
-        rows.push(...data);
-        if (data.length < PAGE_SIZE) return rows;
+        if (total == null ? data.length < PAGE_SIZE : page >= total) return rows;
+        page++;
       }
     }
-    throw exportLimitError();
+    // Without a count, a full final page could be the exact limit. Ask for just the next item.
+    const { data } = await read(MAX_PAGES * PAGE_SIZE + 1, 1);
+    if (!Array.isArray(data)) throw incompleteExportError();
+    if (data.length) throw exportLimitError();
+    return rows;
   }
 
   /** Official lists need their numeric id: `/lists/:id/items`; a slug can also belong to a personal list. */
   async function officialId(slug) {
-    const summary = await get(`/lists/${encodeURIComponent(slug)}`);
+    let summary;
+    try {
+      summary = await get(`/lists/${encodeURIComponent(slug)}`);
+    } catch (error) {
+      if (error?.status !== 404) throw error;
+    }
     if (summary?.type === 'official') {
       const id = traktId(summary);
       if (id) return id;

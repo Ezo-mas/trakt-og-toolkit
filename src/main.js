@@ -98,12 +98,11 @@ function start() {
         if (changed) document.dispatchEvent(new CustomEvent('ogt:routechange', { detail: { route: next } }));
         sync();
       },
-      // Every settled DOM change: re-mounts anything the app re-rendered away, and lets features
-      // follow a query-only change that routechange cannot report.
-      onSettle() {
-        sync();
-        document.dispatchEvent(new CustomEvent('ogt:settle'));
+      onQuery(route, search) {
+        document.dispatchEvent(new CustomEvent('ogt:querychange', { detail: { route, search } }));
       },
+      // Every settled DOM change: re-mounts anything the app re-rendered away.
+      onSettle: sync,
     });
     sync();
   };

@@ -34,6 +34,7 @@ function boot({
   url = 'https://og.trakt.tv/users/justin/lists/2015-fall-shows',
   html = LIST_PAGE_HTML,
   signedIn = false,
+  emptyBody = false,
   clientId = 'client',
   ogSession = false,
   listRows = defaultRows,
@@ -61,6 +62,16 @@ function boot({
   const downloads = [];
   const blobs = [];
   const pending = [];
+  const revocations = [];
+  const revokeTimers = [];
+  const setTimeout = window.setTimeout.bind(window);
+  window.setTimeout = (callback, delay, ...args) => {
+    if (delay === 60_000) {
+      revokeTimers.push(() => callback(...args));
+      return;
+    }
+    return setTimeout(callback, delay, ...args);
+  };
   let currentListRows = listRows;
   window.GM_getValue = (key, fallback) => (store.has(key) ? store.get(key) : fallback);
   window.GM_setValue = (key, value) => store.set(key, value);
@@ -71,7 +82,7 @@ function boot({
     blobs.push(blob);
     return `blob:ogt-test/${blobs.length}`;
   };
-  window.URL.revokeObjectURL = () => {};
+  window.URL.revokeObjectURL = (url) => revocations.push(url);
   window.HTMLAnchorElement.prototype.click = function () {
     downloads.push({ download: this.download, href: this.href });
   };
@@ -103,7 +114,7 @@ function boot({
     const count = pageCounts ? pageCounts[page - 1] : pageCount > 1 ? pageCount : null;
     const responseHeaders = count ? `x-pagination-page-count: ${count}` : '';
     const respond = () => queueMicrotask(() => request.onload({
-      status, responseText: JSON.stringify(body), responseHeaders,
+      status, responseText: emptyBody ? '' : JSON.stringify(body), responseHeaders,
     }));
     if (defer) pending.push(respond);
     else respond();
@@ -120,6 +131,8 @@ function boot({
     requests,
     downloads,
     blobs,
+    revocations,
+    expireDownloadUrls: () => revokeTimers.splice(0).forEach((revoke) => revoke()),
     setListRows: (rows) => { currentListRows = rows; },
     release: () => { while (pending.length) pending.shift()(); },
     panel: () => window.document.getElementById('ogt-csv-export'),
@@ -140,7 +153,7 @@ test('mounts Export CSV beside the list actions and fetches nothing until clicke
 });
 
 test('downloads a personal list as RFC 4180 CSV with quoted and guarded fields', async (t) => {
-  const b = boot();
+  const b = boot({ listRows: [{ ...movie, movie: { ...movie.movie, title: 'Movie, "Amélie"' } }, show, season, episode] });
   t.after(() => b.window.close());
   await waitFor(() => b.panel(), { message: 'the CSV exporter to mount' });
 
@@ -156,13 +169,15 @@ test('downloads a personal list as RFC 4180 CSV with quoted and guarded fields',
   assert.match(b.downloads[0].href, /^blob:ogt-test\//);
   assert.equal(b.blobs.length, 1);
   assert.equal(b.blobs[0].type, 'text/csv;charset=utf-8');
+  const bytes = new Uint8Array(await b.blobs[0].arrayBuffer());
+  assert.deepEqual([...bytes.slice(0, 3)], [0xef, 0xbb, 0xbf]);
 
-  const csv = await b.blobs[0].text();
+  const csv = new TextDecoder().decode(bytes);
   assert.match(csv, /^Rank,Type,Title,Year,Season,Episode,Trakt ID,IMDb ID,TMDb ID,Listed At,Notes\r\n/);
-  assert.ok(csv.includes('3,movie,"Movie, ""Quoted""",2026,,,1,tt0000001,10,2026-11-01T12:00:00.000Z,\'@open'));
+  assert.ok(csv.includes('3,movie,"Movie, ""Amélie""",2026,,,1,tt0000001,10,2026-11-01T12:00:00.000Z,\'@open'));
   assert.ok(csv.includes('0,show,Breaking Bad,2008,,,1388,tt0903747,1396,2026-10-01T00:00:00.000Z,Watch with friends'));
   assert.ok(csv.includes('1,season,Breaking Bad,2008,2,,302,,,2026-09-01T00:00:00.000Z,'));
-  assert.ok(csv.includes('2,episode,Do the Right-est Thing,2020,2,3,5256056,tt0000003,42,2026-08-01T00:00:00.000Z,'));
+  assert.ok(csv.includes('2,episode,Ted Lasso — Do the Right-est Thing,2020,2,3,5256056,tt0000003,42,2026-08-01T00:00:00.000Z,'));
   assert.equal(b.button().textContent, 'Export CSV');
   assert.equal(b.button().disabled, false);
 });
@@ -282,16 +297,18 @@ test('an export that would exceed the page cap fails without a download', async 
   assert.equal(b.downloads.length, 0);
 });
 
-test('empty lists still download the header row', async (t) => {
-  const b = boot({ listRows: [] });
-  t.after(() => b.window.close());
-  await waitFor(() => b.panel(), { message: 'the CSV exporter to mount' });
+test('empty lists and empty signed-in responses download the header row', async (t) => {
+  for (const options of [{ listRows: [] }, { signedIn: true, emptyBody: true }]) {
+    const b = boot(options);
+    t.after(() => b.window.close());
+    await waitFor(() => b.panel(), { message: 'the CSV exporter to mount' });
 
-  b.button().click();
-  await waitFor(() => b.status().textContent === 'Exported 0 items.', { message: 'the empty export' });
-  assert.equal(b.downloads.length, 1);
-  assert.equal(await b.blobs[0].text(),
-    'Rank,Type,Title,Year,Season,Episode,Trakt ID,IMDb ID,TMDb ID,Listed At,Notes\r\n');
+    b.button().click();
+    await waitFor(() => b.status().textContent === 'Exported 0 items.', { message: 'the empty export' });
+    assert.equal(b.downloads.length, 1);
+    assert.equal(new TextDecoder().decode(await b.blobs[0].arrayBuffer()),
+      'Rank,Type,Title,Year,Season,Episode,Trakt ID,IMDb ID,TMDb ID,Listed At,Notes\r\n');
+  }
 });
 
 test('a missing signed-in page reports an incomplete export without downloading', async (t) => {
@@ -337,10 +354,15 @@ test('leaving the list removes the exporter', async (t) => {
   const b = boot();
   t.after(() => b.window.close());
   await waitFor(() => b.panel(), { message: 'the CSV exporter to mount' });
+  b.button().click();
+  await waitFor(() => b.downloads.length === 1, { message: 'the download to start' });
 
   b.window.history.pushState({}, '', '/shows/breaking-bad');
   b.window.dispatchEvent(new b.window.Event('popstate'));
   await waitFor(() => !b.panel(), { message: 'the exporter to be removed' });
+  assert.deepEqual(b.revocations, [], 'navigation leaves the download URL alive');
+  b.expireDownloadUrls();
+  assert.deepEqual(b.revocations, [b.downloads[0].href]);
 });
 
 test('a navigation during the read does not start a download', async (t) => {

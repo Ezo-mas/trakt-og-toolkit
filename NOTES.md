@@ -7,7 +7,7 @@ Working notes and known issues. Newest first.
 - Live og (2026-11-11, trakt-og `d320877`): personal, collaboration and liked list pages use
   `/users/:id/lists/:slug`; collaboration and liked links point at the list owner, so that path is also the API owner
   path. Liked official lists use `/lists/official/:slug`; their items endpoints take a numeric Trakt list id, so the
-  exporter first reads `/lists/:slug` and, when that resolves to a personal list sharing the slug, searches
+  exporter first reads `/lists/:slug` and, if it is missing or resolves to a personal list sharing the slug, searches
   `/search/list` for the official list. `parseRoute` names the three shapes `list` and `official-list` (comments and
   smart-list details stay `other`). They share the watchlist's `section.title-row .title-bar .actions` mount point,
   before `.share`.
@@ -15,15 +15,16 @@ Working notes and known issues. Newest first.
   the watchlist uses `/users/:id/watchlist`. All send 100 per page and return
   `{ type, movie|show|season|episode|person, show?, rank, listed_at, notes }`. Both transports read
   `x-pagination-page-count`; public item reads bypass the shared cache and keep the header. Once a count is known it
-  carries across pages, so a later short page without one cannot end the walk; without any count they fall back to a
-  short page. A required page with a malformed payload fails the export instead of producing a partial file. Both
-  paths fail rather than export a partial file when the 200-page cap is exceeded. The whole list/watchlist is
-  exported, independent of og's page filter.
+  carries across pages and bounds batches of up to four requests. Without a count, reads proceed one at a time until
+  a short page. A required page with a malformed payload fails the export. Without a count, the exporter checks one
+  item past the 20,000-item limit to distinguish a full export from an oversized list. The page filter does not
+  affect the export.
 - CSV columns are rank, type, title, year, season, episode, Trakt/IMDb/TMDb ids, listed date and notes. Movies and
-  shows use their own title/year; seasons use the show title with the season number; episodes use the episode title
-  with their season/number. Fields are quoted per RFC 4180 with CRLF rows, and formula markers (`=`, `+`, `-`, `@`
+  shows use their own title/year. Seasons use the show title with the season number. Episodes include both the show
+  and episode title, with season and episode numbers. The UTF-8 file starts with a byte-order mark for Excel. Fields
+  are quoted per RFC 4180 with CRLF rows, and formula markers (`=`, `+`, `-`, `@`
   and their full-width forms) get a leading apostrophe, including after leading whitespace or control characters, so
-  spreadsheets do not evaluate them. The download is a browser Blob; no list data is uploaded.
+  spreadsheets do not evaluate them. The browser keeps the download's Blob URL alive for a minute after the click.
 - Fixture `LIST_PAGE_HTML` mirrors the live list title bar. Tests cover normalization for all item kinds, quoting and
   formula guards including leading controls and full-width markers, filenames, both paging paths, fresh repeat
   exports, header-led short pages, cap errors, personal and watchlist downloads, official summary/id resolution,
@@ -32,11 +33,14 @@ Working notes and known issues. Newest first.
 
 ## 2026-11-11: auto-update URLs (feature 32)
 
-- The built header carries `@updateURL` and `@downloadURL` for `dist/trakt-og-toolkit.user.js` on `main`, plus
-  `@homepageURL` and `@supportURL`. A manager only learns these from an installed header that already has them, so
-  installs made before this change (or from a saved file) need one reinstall; after that they follow `@version`.
-- `test/userscript-header.test.js` reads the committed bundle, so it fails when the header was changed without
-  `npm run build`. Version bumps still happen at release, when `src/meta.js` and `dist/` are rebuilt together.
+- The built header carries `@homepageURL`, `@supportURL`, `@downloadURL` for `dist/trakt-og-toolkit.user.js` on
+  `main`, and `@updateURL` for `dist/trakt-og-toolkit.meta.js`, a header-only copy the build writes so update checks
+  don't fetch the whole bundle. All four are built from `REPO` and `DIR` in `src/meta.js`. A manager only learns these from an installed header that already has them.
+  A copy installed from the raw link before this change still tracks that same URL, so the bumped release reaches
+  it and its header teaches the copy the URLs. Copies from a saved file need one reinstall; after that they follow
+  `@version`.
+- `test/userscript-header.test.js` reads the committed bundle and `.meta.js`, so it fails when the header was
+  changed without `npm run build`. Version bumps still happen at release, when `src/meta.js` and `dist/` are rebuilt together.
 
 ## 2026-11-11: random watchlist pick (feature 33)
 
@@ -47,11 +51,14 @@ Working notes and known issues. Newest first.
   heading is `h2#list-title` and the filters sit in a separate section above it.
 - API entries are `{ type, movie|show|season|episode, show? }`. Seasons wrap `{ number, ids }` and episodes
   `{ title, season, number }`; both link through `show.ids.slug`. Reads use `/users/:id/watchlist[/movies|shows|
-  seasons|episodes]` with 100 per page. Authenticated responses carry `x-pagination-page-count`; the public transport
-  drops headers, so public reads walk pages until a short one (capped at 50). og's session or the toolkit sign-in is
-  used for private profiles; without either the button shows a one-line hint.
-- The picker reads the media filter again after every page load; if it changed during the read, it re-reads for
-  the current feed and never shows a result from the old one. Filter changes after a result hide it again. Loaded
+  seasons|episodes]` with 100 per page. Page 1 is read alone; once Trakt sends a page count, the rest are read four at
+  a time, and without one, pages are read one by one until a short one. An empty signed-in body or 204 counts as an
+  empty page. The picker shows a note when the 50-page read limit bounds the candidate pool; a list with no page count
+  whose 50 pages are all full gets one more one-entry read to check whether anything is past the limit.
+  og's session or the toolkit sign-in is used for private profiles; without either the button shows a one-line hint.
+- The picker checks the media filter again after each list read; if it changed, it reads for the current filter. A read
+  that fails after the filter changed asks to try again instead of clearing silently.
+  Same-path query changes reported by the router clear a pick or status message from the previous filter. Loaded
   entries are kept for five minutes so **Pick again** does not repeat the whole list fetch.
 - An expired og session gets og's reload message; missing credentials, private lists and 404s keep their one-line
   hints. Results carry the full label in `title` and announce the pick through a visually hidden live region.
@@ -59,13 +66,8 @@ Working notes and known issues. Newest first.
   bar and items section. Tests cover normalization, filter mapping, mid-read and post-pick filter changes, seasons and
   episodes, empty lists, expired og sessions, both paging paths, repeat avoidance, private-list hints and teardown.
   The watched-title filter remains out of scope.
-- Review fixes (2026-11-11): `main.js` dispatches `ogt:settle` on every settled navigation/DOM pass and the picker
-  checks the filter there, so a filter navigation that updates the URL after the click (delayed `pushState`/`replaceState`)
-  still clears the old pick; the zero-delay click/popstate listeners are gone. Public watchlist reads pass `{ ttl: 0 }`
-  so the picker's five-minute cache controls freshness instead of the shared eight-hour one. `pickWatchlistItem`
-  samples from the candidates other than the previous pick, so after picking A every other title has an equal chance;
-  a lone candidate is still returned and an absent previous key keeps the full pool. Tests cover the delayed filter
-  navigation, even sampling over `[A, B, C]` and `ttl: 0` on every public page request.
+- Public watchlist reads pass `{ ttl: 0 }` so the picker's five-minute cache controls freshness. Rerolls sample
+  evenly among the remaining entries and can repeat a lone candidate.
 
 ## v0.4.0 (2026-11-10)
 

@@ -14,6 +14,16 @@ export class MissingClientIdError extends Error {
   }
 }
 
+export function listReadFailureHint(error, target, action) {
+  if (error?.ogSession) return error.message || 'Your og.trakt.tv session expired; reload the page to renew it.';
+  if (error instanceof MissingClientIdError) {
+    return `Sign in to og.trakt.tv or set a Trakt client ID to ${action} this ${target}.`;
+  }
+  if (error?.status === 403 || error?.status === 404) return `This ${target} is private or unavailable.`;
+  if (error?.status === 401) return `Sign in to Trakt to ${action} this ${target}.`;
+  return `Could not read this ${target}. Try again later.`;
+}
+
 /**
  * Trakt's current standard-app limit for authenticated writes is one POST/PUT/DELETE per second
  * (https://developer.trakt.tv/docs/rate-limiting, checked 2026-11-07). One shared FIFO queue sends

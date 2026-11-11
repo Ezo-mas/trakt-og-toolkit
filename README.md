@@ -11,8 +11,10 @@ sign-in. Not affiliated with or endorsed by Trakt.
 3. No API setup is needed when you are signed into og.trakt.tv. Otherwise set a client ID and sign in (see
    [Setup](#setup)).
 
-Installed copies update themselves from `main` when a new version is released. A copy installed from a saved file, or
-from before these update URLs existed, needs one reinstall from the link above.
+Installed copies update themselves from `main` when a new version is released. A copy installed from the link above
+before these update URLs existed keeps tracking that same link, so the next bumped release reaches it and its header
+teaches the copy the new URLs. A copy installed from a saved file needs one reinstall from the link above, and so
+does any existing copy that doesn't find the update.
 
 Every feature has its own **toggle** in the userscript menu. All are on by default, and switching one off removes it
 immediately.
@@ -90,10 +92,12 @@ Signed in:
   scroll. Works with og's session or a configured client ID.
 - **List previews:** each poster in a list card's preview opens its title. Signed in, posters show your rating.
 - **Pick something:** on a watchlist, picks a random title from the page's current All/Movies/Shows/Seasons/Episodes
-  filter and links to it, with **Pick again**. The whole list is read through the API, not just the loaded rows.
+  filter and links to it, with **Pick again**. It reads up to 5,000 entries through the API and shows a note when it
+  reaches the read limit.
 - **Export CSV:** on a personal, collaboration or liked list page (including official liked lists), or the watchlist,
   downloads the whole list with rank, type, title, year, season/episode, Trakt/IMDb/TMDb ids, listed date and notes.
-  Fields are RFC 4180 quoted, formula-like values are neutralized, and the file is built in your browser.
+  Episode titles include their show. The browser builds a UTF-8 CSV with a byte-order mark for Excel and guards
+  formula-like values.
 
 ### Month in review and pronunciation
 

@@ -51,7 +51,7 @@ test('normalizes movies, shows, seasons, episodes and people into CSV columns', 
     listed_at: '2026-09-01T00:00:00.000Z', notes: '',
   });
   assert.deepEqual(normalizeExportItem(episode), {
-    rank: 2, type: 'episode', title: 'Do the Right-est Thing', year: 2020, season: 2, episode: 3,
+    rank: 2, type: 'episode', title: 'Ted Lasso — Do the Right-est Thing', year: 2020, season: 2, episode: 3,
     trakt: '5256056', imdb: 'tt123', tmdb: '42',
     listed_at: '2026-08-01T00:00:00.000Z', notes: '',
   });
@@ -200,6 +200,59 @@ test('signed-in reads fail instead of truncating an export at the page cap', asy
   assert.deepEqual(calls, [1]);
 });
 
+test('signed-in reads without a count continue until a short page', async () => {
+  const calls = [];
+  const first = Array(PAGE_SIZE).fill(movie);
+  const api = createExportApi({
+    signedIn: () => true,
+    authPage: async (_, { page }) => {
+      calls.push(page);
+      return { data: page === 1 ? first : [show], pages: null };
+    },
+  });
+
+  assert.deepEqual(await api.watchlist('justin'), [...first, show]);
+  assert.deepEqual(calls, [1, 2]);
+});
+
+test('signed-in reads keep page order and run at most four requests at once', async () => {
+  let inFlight = 0;
+  let peak = 0;
+  const api = createExportApi({
+    signedIn: () => true,
+    authPage: async (_, { page }) => {
+      peak = Math.max(peak, ++inFlight);
+      await Promise.resolve();
+      inFlight--;
+      return { data: [page], pages: 10 };
+    },
+  });
+
+  assert.deepEqual(await api.watchlist('justin'), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.equal(peak, 4);
+});
+
+test('a headerless public list can have exactly 20,000 items', async () => {
+  const full = Array(PAGE_SIZE).fill(movie);
+  const calls = [];
+  let extra = [];
+  const api = createExportApi({
+    signedIn: () => false,
+    get: async (path) => {
+      const query = new URL(path, 'https://api.trakt.tv').searchParams;
+      const limit = Number(query.get('limit'));
+      calls.push([Number(query.get('page')), limit]);
+      return { data: limit === 1 ? extra : full, pages: null };
+    },
+  });
+
+  assert.equal((await api.list('justin', 'full')).length, 20_000);
+  assert.equal(calls.length, MAX_PAGES + 1);
+  assert.deepEqual(calls.at(-1), [20_001, 1]);
+  extra = [show];
+  await assert.rejects(api.list('justin', 'oversized'), (error) => error.exportLimit === true);
+});
+
 test('signed-in reads reject empty or malformed required pages', async () => {
   for (const data of [[], { error: 'unexpected response' }]) {
     const api = createExportApi({
@@ -233,13 +286,15 @@ test('official lists resolve their numeric id and read public items', async () =
   ]);
 });
 
-test('official slug collisions search for the official list instead of reading the personal one', async () => {
+test('official slugs fall back to search on a 404 or a personal-list collision', async () => {
   const calls = [];
+  let missing = true;
   const api = createExportApi({
     signedIn: () => false,
     get: async (path) => {
       calls.push(path);
       if (path === '/lists/1001-movies') {
+        if (missing) throw Object.assign(new Error('Not found'), { status: 404 });
         return { type: 'personal', ids: { trakt: 805405, slug: '1001-movies' } };
       }
       if (path === '/search/list?query=1001%20movies&limit=25') {
@@ -259,6 +314,8 @@ test('official slug collisions search for the official list instead of reading t
     '/search/list?query=1001%20movies&limit=25',
     `/lists/37675689/items?page=1&limit=${PAGE_SIZE}`,
   ]);
+  missing = false;
+  assert.deepEqual(await api.official('1001-movies'), [movie]);
 });
 
 test('official slug collisions without an official match fail instead of exporting the personal list', async () => {

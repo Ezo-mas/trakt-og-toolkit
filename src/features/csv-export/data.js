@@ -5,6 +5,7 @@
  * `{ type, movie|show|season|episode|person, show?, rank, listed_at, notes }`; seasons and episodes carry their
  * show separately. Only fields the CSV exposes are read here.
  */
+import { decodePathPart } from '../../core/text.js';
 
 export const CSV_COLUMNS = [
   'rank', 'type', 'title', 'year', 'season', 'episode', 'trakt', 'imdb', 'tmdb', 'listed_at', 'notes',
@@ -83,7 +84,7 @@ export function normalizeExportItem(raw) {
       title = showTitle || titleOf(entity);
       season = integer(entity.number);
     } else {
-      title = titleOf(entity) || showTitle;
+      title = [showTitle, titleOf(entity)].filter(Boolean).join(' — ');
       season = integer(entity.season);
       episode = integer(entity.number, 1);
     }
@@ -129,18 +130,10 @@ export function toCsv(items) {
   return `${lines.join('\r\n')}\r\n`;
 }
 
-function decodePart(value) {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
 /** `trakt-justin-2015-fall-shows.csv` or `trakt-justin-watchlist.csv`. */
 export function exportFilename(route) {
-  const owner = decodePart(String(route?.id ?? ''));
-  const source = route?.name === 'watchlist' ? 'watchlist' : decodePart(String(route?.slug ?? ''));
+  const owner = decodePathPart(String(route?.id ?? ''));
+  const source = route?.name === 'watchlist' ? 'watchlist' : decodePathPart(String(route?.slug ?? ''));
   const prefix = route?.name === 'official-list' ? 'official' : owner;
   const base = [prefix, source].filter(Boolean).join('-') || 'export';
   const safe = base.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '');

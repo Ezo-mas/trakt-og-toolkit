@@ -100,14 +100,20 @@ export function parseRoute(pathname = location.pathname) {
  * covers it. A debounced observer is the safety net for anything else (and for
  * re-renders that replace the DOM under us).
  */
-export function createRouter({ onRoute, onSettle }) {
+export function createRouter({ onRoute, onQuery, onSettle }) {
   let lastKey = null;
+  let lastSearch = null;
 
   const settle = debounce(() => {
     const route = parseRoute();
+    const search = location.search;
+    const queryChanged = search !== lastSearch;
+    lastSearch = search;
     if (route.key !== lastKey) {
       lastKey = route.key;
       onRoute(route);
+    } else if (queryChanged) {
+      onQuery?.(route, search);
     }
     onSettle?.(route);
   }, 150);
@@ -138,6 +144,7 @@ export function createRouter({ onRoute, onSettle }) {
   const ready = () => {
     const route = parseRoute();
     lastKey = route.key;
+    lastSearch = location.search;
     onRoute(route);
     onSettle?.(route);
   };

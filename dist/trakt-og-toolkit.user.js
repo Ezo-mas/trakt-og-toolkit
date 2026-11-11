@@ -7,7 +7,7 @@
 // @license      MIT
 // @homepageURL  https://github.com/Ezo-mas/trakt-og-toolkit
 // @supportURL   https://github.com/Ezo-mas/trakt-og-toolkit/issues
-// @updateURL    https://raw.githubusercontent.com/Ezo-mas/trakt-og-toolkit/main/dist/trakt-og-toolkit.user.js
+// @updateURL    https://raw.githubusercontent.com/Ezo-mas/trakt-og-toolkit/main/dist/trakt-og-toolkit.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Ezo-mas/trakt-og-toolkit/main/dist/trakt-og-toolkit.user.js
 // @match        https://og.trakt.tv/*
 // @match        http://localhost:5173/*
@@ -1356,13 +1356,19 @@
     }
     return { name, kind, id, rest, season, episode, path, key: path };
   }
-  function createRouter({ onRoute, onSettle }) {
+  function createRouter({ onRoute, onQuery, onSettle }) {
     let lastKey = null;
+    let lastSearch = null;
     const settle = debounce(() => {
       const route = parseRoute();
+      const search = location.search;
+      const queryChanged = search !== lastSearch;
+      lastSearch = search;
       if (route.key !== lastKey) {
         lastKey = route.key;
         onRoute(route);
+      } else if (queryChanged) {
+        onQuery?.(route, search);
       }
       onSettle?.(route);
     }, 150);
@@ -1387,6 +1393,7 @@
     const ready = () => {
       const route = parseRoute();
       lastKey = route.key;
+      lastSearch = location.search;
       onRoute(route);
       onSettle?.(route);
     };
@@ -1884,6 +1891,13 @@
   function parseYear(value) {
     const match = String(value || "").match(/\b(18|19|20)\d{2}\b/);
     return match ? Number(match[0]) : null;
+  }
+  function decodePathPart(value) {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
   }
 
   // src/core/http.js
@@ -3285,6 +3299,15 @@
       this.name = "MissingClientIdError";
     }
   };
+  function listReadFailureHint(error, target, action) {
+    if (error?.ogSession) return error.message || "Your og.trakt.tv session expired; reload the page to renew it.";
+    if (error instanceof MissingClientIdError) {
+      return `Sign in to og.trakt.tv or set a Trakt client ID to ${action} this ${target}.`;
+    }
+    if (error?.status === 403 || error?.status === 404) return `This ${target} is private or unavailable.`;
+    if (error?.status === 401) return `Sign in to Trakt to ${action} this ${target}.`;
+    return `Could not read this ${target}. Try again later.`;
+  }
   var WRITE_INTERVAL_MS = 1e3;
   var WRITE_RETRIES = 2;
   var RETRY_BASE_MS = 1e3;
@@ -3957,8 +3980,8 @@
         draft.push(entry);
         renderEditor(`${entry.id}-label`);
       });
-      const save = el("button", { class: "ogt-chip", type: "button", text: "Save links" });
-      save.addEventListener("click", () => {
+      const save2 = el("button", { class: "ogt-chip", type: "button", text: "Save links" });
+      save2.addEventListener("click", () => {
         const errors = validateCustomLinks(draft);
         if (errors.length) {
           const first = errors[0];
@@ -3983,7 +4006,7 @@
       editor.append(
         el("div", { class: "ogt-editor-list-wrap" }, list),
         error,
-        el("div", { class: "ogt-row ogt-editor-footer" }, add, save, cancel)
+        el("div", { class: "ogt-row ogt-editor-footer" }, add, save2, cancel)
       );
       if (focusKey) editor.querySelector(`[data-focus="${focusKey}"]`)?.focus();
     }
@@ -4010,8 +4033,8 @@
         list.append(el("label", { class: "ogt-editor-field" }, field.label, input));
       }
       const error = el("p", { class: "ogt-editor-error", role: "alert", hidden: true });
-      const save = el("button", { class: "ogt-chip", type: "button", text: "Save servers" });
-      save.addEventListener("click", () => {
+      const save2 = el("button", { class: "ogt-chip", type: "button", text: "Save servers" });
+      save2.addEventListener("click", () => {
         const next = {};
         for (const field of SERVER_FIELDS) {
           const raw = inputs[field.key].value.trim();
@@ -4038,7 +4061,7 @@
         }),
         list,
         error,
-        el("div", { class: "ogt-row ogt-editor-footer" }, save, cancel)
+        el("div", { class: "ogt-row ogt-editor-footer" }, save2, cancel)
       );
       serversPanel.querySelector("input")?.focus();
     }
@@ -4730,8 +4753,8 @@
           content.append(el("p", { class: "ogt-hint", text: "No saved playback." }), button("Save progress…", "save"));
           return;
         }
-        const save = button("Save progress…", "save");
-        save.dataset.id = String(item.id);
+        const save2 = button("Save progress…", "save");
+        save2.dataset.id = String(item.id);
         const clear2 = button("Clear", "one");
         clear2.dataset.id = String(item.id);
         content.append(el(
@@ -4739,7 +4762,7 @@
           { class: "ogt-playback__tools" },
           el("span", { text: `${percent(item.progress)} paused` }),
           el("progress", { class: "ogt-playback__meter", max: 100, value: item.progress, "aria-label": "Saved playback progress" }),
-          save,
+          save2,
           clear2
         ));
         return;
@@ -4762,8 +4785,8 @@
       );
       const list = el("ul", { class: "ogt-playback__list" });
       for (const item of items) {
-        const save = button("Save progress…", "save");
-        save.dataset.id = String(item.id);
+        const save2 = button("Save progress…", "save");
+        save2.dataset.id = String(item.id);
         const clear2 = button("Clear", "one");
         clear2.dataset.id = String(item.id);
         const poster = item.poster ? el("img", { class: "ogt-playback__poster", src: item.poster, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }) : el("span", { class: "ogt-playback__poster", "aria-hidden": true });
@@ -4779,7 +4802,7 @@
             el("span", { text: ` · ${percent(item.progress)}` }),
             el("time", { class: "ogt-playback__date", datetime: item.pausedAt, text: `Paused ${new Date(item.pausedMs).toLocaleString()}` })
           ),
-          save,
+          save2,
           clear2
         ));
       }
@@ -9153,38 +9176,52 @@
       const others = candidates.filter((item) => item.key !== previousKey);
       if (others.length) pool = others;
     }
-    const value = Number(random());
-    const raw = Number.isFinite(value) ? Math.floor(Math.min(0.999999, Math.max(0, value)) * pool.length) : 0;
-    return pool[raw];
+    return pool[Math.floor(random() * pool.length)];
   }
 
   // src/features/watchlist-pick/api.js
   var PAGE_SIZE = 100;
   var MAX_PAGES2 = 50;
+  var MAX_ITEMS = PAGE_SIZE * MAX_PAGES2;
+  var BATCH = 4;
   function watchlistPath(user, display) {
     const type = apiType(display);
     return `/users/${encodeURIComponent(user)}/watchlist${type ? `/${type}` : ""}`;
   }
   function createWatchlistApi2({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
     return {
-      /** Every page, in og's order. Signed in, Trakt's page count bounds the reads. */
+      /**
+       * Read pages in API order. Once Trakt sends a page count, the remaining pages are read `BATCH` at a time;
+       * without one, pages are read one by one until a short page.
+       */
       async list(user, { display = null } = {}) {
         const path = watchlistPath(user, display);
-        if (signedIn()) {
-          const page = (number) => authPage(path, { page: number, limit: PAGE_SIZE });
-          const first = await page(1);
-          const pages = Math.min(Math.max(Number(first?.pages) || 1, 1), MAX_PAGES2);
-          const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => page(index + 2)));
-          return [first, ...rest].flatMap((result) => Array.isArray(result?.data) ? result.data : []);
-        }
+        const authenticated2 = signedIn();
+        const read = async (page2, limit = PAGE_SIZE) => {
+          if (!authenticated2) return { data: await get(`${path}?page=${page2}&limit=${limit}`, { ttl: 0 }), pages: null };
+          return await authPage(path, { page: page2, limit }) ?? { data: [], pages: null };
+        };
         const rows = [];
-        for (let page = 1; page <= MAX_PAGES2; page++) {
-          const data = await get(`${path}?page=${page}&limit=${PAGE_SIZE}`, { ttl: 0 });
-          if (!Array.isArray(data) || !data.length) break;
-          rows.push(...data);
-          if (data.length < PAGE_SIZE) break;
+        let total = null;
+        let page = 1;
+        while (page <= MAX_PAGES2) {
+          const last = total == null ? page : Math.min(total, MAX_PAGES2, page + BATCH - 1);
+          const numbers = Array.from({ length: last - page + 1 }, (_, index) => page + index);
+          const results = await Promise.all(numbers.map((number) => read(number)));
+          for (const [index, { data: data2, pages }] of results.entries()) {
+            const number = numbers[index];
+            if (Number.isSafeInteger(pages) && pages > 0) total = Math.max(total ?? 0, pages);
+            if (!Array.isArray(data2) || !data2.length && total > number) {
+              throw new Error("Incomplete Trakt watchlist response.");
+            }
+            rows.push(...data2);
+            if (total == null ? data2.length < PAGE_SIZE : number >= total) return { rows, limited: false };
+          }
+          page = last + 1;
         }
-        return rows;
+        if (total != null) return { rows, limited: true };
+        const { data } = await read(MAX_ITEMS + 1, 1);
+        return { rows, limited: Array.isArray(data) && data.length > 0 };
       }
     };
   }
@@ -9221,22 +9258,8 @@
   var ID5 = "ogt-watchlist-pick";
   var ITEMS_TTL_MS = 5 * 60 * 1e3;
   var FILTER_RETRIES = 2;
-  function failureHint(error) {
-    if (error instanceof MissingClientIdError) {
-      return error.ogSession ? error.message : "Sign in to og.trakt.tv or set a Trakt client ID to pick from a watchlist.";
-    }
-    if (error?.ogSession) return error.message || "Your og.trakt.tv session expired; reload the page to renew it.";
-    if (error?.status === 403 || error?.status === 404) return "This watchlist is private or unavailable.";
-    if (error?.status === 401) return "Sign in to Trakt to pick from this watchlist.";
-    return "Could not read this watchlist. Try again later.";
-  }
-  function profileId(value) {
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return value;
-    }
-  }
+  var FILTER_CHANGED = "The page filter changed while picking. Try again.";
+  var LIMIT_HINT = `Picks use up to the first ${MAX_ITEMS.toLocaleString("en-US")} watchlist entries.`;
   var watchlistPick = {
     id: "watchlist-pick",
     css: CSS9,
@@ -9245,7 +9268,7 @@
     mount(route) {
       const actions = document.querySelector("section.title-row .title-bar .actions");
       if (!actions || document.getElementById(ID5)) return null;
-      const profile = profileId(route.id);
+      const profile = decodePathPart(route.id);
       const button2 = el("button", { type: "button", class: "ogt-watchlist-pick__button", text: "Pick something" });
       const result = el("a", { class: "ogt-watchlist-pick__result", hidden: true });
       const announcer = el("span", { class: "ogt-visually-hidden", role: "status", "aria-live": "polite" });
@@ -9262,35 +9285,41 @@
       let shownFor = null;
       const currentDisplay = () => watchlistType(location.search, route.type);
       const currentFilter = () => currentDisplay() ?? "all";
-      function clearFilterMismatch() {
-        if (!active2 || result.hidden || shownFor == null || shownFor === currentFilter()) return;
+      function clearResult() {
         result.hidden = true;
         result.removeAttribute("href");
         result.removeAttribute("title");
         result.textContent = "";
         previousKey = null;
         shownFor = null;
-        status.textContent = "";
         announcer.textContent = "";
+      }
+      function showStatus(message) {
+        clearResult();
+        shownFor = message ? currentFilter() : null;
+        status.textContent = message;
         button2.textContent = "Pick something";
       }
-      function onSettle() {
-        clearFilterMismatch();
+      function onQueryChange() {
+        if (shownFor == null || shownFor === currentFilter()) return;
+        if (busy) clearResult();
+        else showStatus("");
       }
       async function load(display) {
         const key = display ?? "all";
         const fresh = items && itemsFor === key && Date.now() - itemsAt < ITEMS_TTL_MS;
         if (fresh) return items;
-        const rows = watchlistItems(await watchlistApi2.list(profile, { display }));
+        const { rows, limited } = await watchlistApi2.list(profile, { display });
         if (!active2) return null;
         if (itemsFor !== key) previousKey = null;
-        items = rows;
+        items = { candidates: watchlistItems(rows), limited };
         itemsFor = key;
         itemsAt = Date.now();
         return items;
       }
       async function choose() {
         if (busy) return;
+        onQueryChange();
         busy = true;
         button2.disabled = true;
         button2.textContent = "Picking…";
@@ -9308,23 +9337,15 @@
             loaded = null;
           }
           if (!loaded) {
-            result.hidden = true;
-            shownFor = null;
-            status.textContent = "The page filter changed while picking. Try again.";
-            button2.textContent = "Pick something";
+            showStatus(FILTER_CHANGED);
             return;
           }
-          if (!loaded.length) {
-            result.hidden = true;
-            result.removeAttribute("href");
-            result.removeAttribute("title");
-            result.textContent = "";
-            shownFor = null;
-            status.textContent = "Nothing to pick in this filter.";
-            button2.textContent = "Pick something";
+          const { candidates, limited } = loaded;
+          if (!candidates.length) {
+            showStatus(limited ? `Nothing to pick in this filter. ${LIMIT_HINT}` : "Nothing to pick in this filter.");
             return;
           }
-          const picked = pickWatchlistItem(loaded, previousKey);
+          const picked = pickWatchlistItem(candidates, previousKey);
           previousKey = picked.key;
           const label = watchlistLabel(picked);
           result.href = picked.href;
@@ -9332,24 +9353,16 @@
           result.title = label;
           result.hidden = false;
           shownFor = currentFilter();
-          status.textContent = "";
+          status.textContent = limited ? LIMIT_HINT : "";
           announcer.textContent = `Picked ${label}.`;
           button2.textContent = "Pick again";
         } catch (error) {
           debugError("watchlist pick failed", error);
           if (!active2) return;
-          result.hidden = true;
-          result.removeAttribute("href");
-          result.removeAttribute("title");
-          result.textContent = "";
-          previousKey = null;
-          shownFor = null;
           items = null;
           itemsFor = null;
           itemsAt = 0;
-          announcer.textContent = "";
-          status.textContent = failureHint(error);
-          button2.textContent = "Pick something";
+          showStatus(display === currentDisplay() ? listReadFailureHint(error, "watchlist", "pick from") : FILTER_CHANGED);
         } finally {
           if (active2) {
             busy = false;
@@ -9358,13 +9371,13 @@
         }
       }
       button2.addEventListener("click", choose);
-      document.addEventListener("ogt:settle", onSettle);
+      document.addEventListener("ogt:querychange", onQueryChange);
       return {
         node,
         destroy() {
           active2 = false;
           button2.removeEventListener("click", choose);
-          document.removeEventListener("ogt:settle", onSettle);
+          document.removeEventListener("ogt:querychange", onQueryChange);
           node.remove();
         }
       };
@@ -9374,6 +9387,7 @@
   // src/features/csv-export/api.js
   var PAGE_SIZE2 = 100;
   var MAX_PAGES3 = 200;
+  var BATCH2 = 4;
   var SEARCH_LIMIT = 25;
   function traktId(list) {
     const id = list?.ids?.trakt;
@@ -9401,40 +9415,38 @@
   }
   function createExportApi({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
     async function readAll(path, { publicOnly = false } = {}) {
-      if (!publicOnly && signedIn()) {
-        const page = (number) => authPage(path, { page: number, limit: PAGE_SIZE2 });
-        const first = await page(1);
-        const pages = pageCount(first?.pages) ?? 1;
-        if (pages > MAX_PAGES3) throw exportLimitError();
-        if (!Array.isArray(first?.data) || pages > 1 && !first.data.length) throw incompleteExportError();
-        const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => page(index + 2)));
-        return first.data.concat(...rest.map((result) => {
-          if (!Array.isArray(result?.data) || !result.data.length) throw incompleteExportError();
-          return result.data;
-        }));
-      }
+      const authenticated2 = !publicOnly && signedIn();
+      const read = async (page, limit = PAGE_SIZE2) => {
+        if (authenticated2) return await authPage(path, { page, limit }) ?? { data: [], pages: null };
+        return get(`${path}?page=${page}&limit=${limit}`, { ttl: 0, withHeaders: true });
+      };
       const rows = [];
       let total = null;
-      for (let page = 1; page <= MAX_PAGES3; page++) {
-        const { data, pages } = await get(`${path}?page=${page}&limit=${PAGE_SIZE2}`, { ttl: 0, withHeaders: true });
-        const reported = pageCount(pages);
-        if (reported != null) total = total == null ? reported : Math.max(total, reported);
-        if (total != null && total > MAX_PAGES3) throw exportLimitError();
-        if (!Array.isArray(data)) throw incompleteExportError();
-        if (total != null) {
-          if (!data.length && total > 1) throw incompleteExportError();
-          rows.push(...data);
-          if (page >= total) return rows;
-        } else {
-          if (!data.length) return rows;
-          rows.push(...data);
-          if (data.length < PAGE_SIZE2) return rows;
+      for (let page = 1; page <= MAX_PAGES3; ) {
+        const last = total == null ? page : Math.min(total, page + BATCH2 - 1);
+        const batch = await Promise.all(Array.from({ length: last - page + 1 }, (_, offset) => read(page + offset)));
+        for (const { data: data2, pages } of batch) {
+          const reported = pageCount(pages);
+          if (reported != null) total = Math.max(total ?? 0, reported);
+          if (total > MAX_PAGES3) throw exportLimitError();
+          if (!Array.isArray(data2) || !data2.length && total > 1) throw incompleteExportError();
+          rows.push(...data2);
+          if (total == null ? data2.length < PAGE_SIZE2 : page >= total) return rows;
+          page++;
         }
       }
-      throw exportLimitError();
+      const { data } = await read(MAX_PAGES3 * PAGE_SIZE2 + 1, 1);
+      if (!Array.isArray(data)) throw incompleteExportError();
+      if (data.length) throw exportLimitError();
+      return rows;
     }
     async function officialId(slug) {
-      const summary2 = await get(`/lists/${encodeURIComponent(slug)}`);
+      let summary2;
+      try {
+        summary2 = await get(`/lists/${encodeURIComponent(slug)}`);
+      } catch (error) {
+        if (error?.status !== 404) throw error;
+      }
       if (summary2?.type === "official") {
         const id2 = traktId(summary2);
         if (id2) return id2;
@@ -9551,7 +9563,7 @@
         title = showTitle || titleOf2(entity);
         season = integer(entity.number);
       } else {
-        title = titleOf2(entity) || showTitle;
+        title = [showTitle, titleOf2(entity)].filter(Boolean).join(" — ");
         season = integer(entity.season);
         episode = integer(entity.number, 1);
       }
@@ -9585,16 +9597,9 @@
     return `${lines.join("\r\n")}\r
 `;
   }
-  function decodePart(value) {
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return value;
-    }
-  }
   function exportFilename(route) {
-    const owner = decodePart(String(route?.id ?? ""));
-    const source = route?.name === "watchlist" ? "watchlist" : decodePart(String(route?.slug ?? ""));
+    const owner = decodePathPart(String(route?.id ?? ""));
+    const source = route?.name === "watchlist" ? "watchlist" : decodePathPart(String(route?.slug ?? ""));
     const prefix = route?.name === "official-list" ? "official" : owner;
     const base = [prefix, source].filter(Boolean).join("-") || "export";
     const safe = base.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "");
@@ -9622,23 +9627,26 @@
 
   // src/features/csv-export/index.js
   var ID6 = "ogt-csv-export";
-  function decodePart2(value) {
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return value;
-    }
-  }
-  function failureHint2(error, target) {
+  var DOWNLOAD_URL_LIFETIME_MS = 6e4;
+  function exportFailureHint(error, target) {
     if (error?.exportLimit) return `This ${target} is too large to export as one CSV.`;
     if (error?.exportIncomplete) return `Could not read this ${target} completely. Try again later.`;
-    if (error instanceof MissingClientIdError) {
-      return error.ogSession ? error.message : `Sign in to og.trakt.tv or set a Trakt client ID to export this ${target}.`;
+    return listReadFailureHint(error, target, "export");
+  }
+  function save(filename, csv) {
+    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = "noopener";
+    anchor.hidden = true;
+    (document.body ?? document.documentElement).append(anchor);
+    try {
+      anchor.click();
+    } finally {
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_LIFETIME_MS);
     }
-    if (error?.ogSession) return error.message || "Your og.trakt.tv session expired; reload the page to renew it.";
-    if (error?.status === 403 || error?.status === 404) return `This ${target} is private or unavailable.`;
-    if (error?.status === 401) return `Sign in to Trakt to export this ${target}.`;
-    return `Could not read this ${target}. Try again later.`;
   }
   var csvExport = {
     id: "csv-export",
@@ -9651,8 +9659,8 @@
       const watchlist2 = route.name === "watchlist";
       const official = route.name === "official-list";
       const target = watchlist2 ? "watchlist" : "list";
-      const profile = official ? null : decodePart2(route.id);
-      const slug = watchlist2 ? null : decodePart2(route.slug);
+      const profile = official ? null : decodePathPart(route.id);
+      const slug = watchlist2 ? null : decodePathPart(route.slug);
       const button2 = el("button", {
         type: "button",
         class: "ogt-csv-export__button",
@@ -9665,39 +9673,6 @@
       actions.insertBefore(node, share ?? null);
       let active2 = true;
       let busy = false;
-      let objectUrl = null;
-      let revokeTimer = null;
-      function releaseObjectUrl() {
-        clearTimeout(revokeTimer);
-        revokeTimer = null;
-        if (!objectUrl) return;
-        try {
-          URL.revokeObjectURL(objectUrl);
-        } catch {
-        }
-        objectUrl = null;
-      }
-      function save(filename, csv) {
-        releaseObjectUrl();
-        objectUrl = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-        const anchor = document.createElement("a");
-        anchor.href = objectUrl;
-        anchor.download = filename;
-        anchor.rel = "noopener";
-        anchor.hidden = true;
-        (document.body ?? document.documentElement).append(anchor);
-        anchor.click();
-        anchor.remove();
-        revokeTimer = setTimeout(() => {
-          revokeTimer = null;
-          if (!objectUrl) return;
-          try {
-            URL.revokeObjectURL(objectUrl);
-          } catch {
-          }
-          objectUrl = null;
-        }, 0);
-      }
       async function run() {
         if (busy) return;
         busy = true;
@@ -9712,10 +9687,9 @@
           save(exportFilename(route), toCsv(items));
           status.textContent = `Exported ${items.length} ${items.length === 1 ? "item" : "items"}.`;
         } catch (error) {
-          if (objectUrl) releaseObjectUrl();
           debugError("CSV export failed", error);
           if (!active2) return;
-          status.textContent = failureHint2(error, target);
+          status.textContent = exportFailureHint(error, target);
         } finally {
           if (active2) {
             busy = false;
@@ -9730,7 +9704,6 @@
         destroy() {
           active2 = false;
           button2.removeEventListener("click", run);
-          releaseObjectUrl();
           node.remove();
         }
       };
@@ -10006,12 +9979,11 @@ MIT licensed.`);
           if (changed) document.dispatchEvent(new CustomEvent("ogt:routechange", { detail: { route: next } }));
           sync();
         },
-        // Every settled DOM change: re-mounts anything the app re-rendered away, and lets features
-        // follow a query-only change that routechange cannot report.
-        onSettle() {
-          sync();
-          document.dispatchEvent(new CustomEvent("ogt:settle"));
-        }
+        onQuery(route2, search) {
+          document.dispatchEvent(new CustomEvent("ogt:querychange", { detail: { route: route2, search } }));
+        },
+        // Every settled DOM change: re-mounts anything the app re-rendered away.
+        onSettle: sync
       });
       sync();
     };
