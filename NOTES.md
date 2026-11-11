@@ -11,7 +11,7 @@ Working notes and known issues. Newest first.
 - This needs `GM_unregisterMenuCommand` (granted in the header). A manager without it keeps the plain `Toggle <feature>` labels
   rather than gaining duplicates. Violentmonkey builds that return no command id unregister by caption, so the caption
   is the fallback id. Changes from another tab (`features.disabled`, `debug`) relabel this tab's menu too.
-- Toggles request `autoClose: false` so supporting managers keep the popup open while you change several options.
+- The menu closes after a click as before; reopening it shows the new state.
 
 ## 2026-11-11: CSV export (feature 34)
 

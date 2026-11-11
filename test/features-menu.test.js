@@ -46,20 +46,15 @@ function boot(t, { storage = {}, unregister = false } = {}) {
   t.after(() => window.close());
   const data = new Map(Object.entries(storage));
   const menus = new Map();
-  const menuOptions = new Map();
   window.GM_getValue = (key, fallback) => data.has(key) ? data.get(key) : fallback;
   window.GM_setValue = (key, value) => data.set(key, value);
   window.GM_deleteValue = key => data.delete(key);
   window.GM_addStyle = () => {};
-  window.GM_registerMenuCommand = (name, callback, options) => {
+  window.GM_registerMenuCommand = (name, callback) => {
     menus.set(name, callback);
-    menuOptions.set(name, options);
     return name;
   };
-  if (unregister) window.GM_unregisterMenuCommand = (name) => {
-    menus.delete(name);
-    menuOptions.delete(name);
-  };
+  if (unregister) window.GM_unregisterMenuCommand = (name) => menus.delete(name);
   window.document.write(`<!doctype html><html><head></head><body>${SHOW_HTML}</body></html>`);
   window.eval(bundle);
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
@@ -68,7 +63,6 @@ function boot(t, { storage = {}, unregister = false } = {}) {
     document: window.document,
     data,
     menus,
-    menuOptions,
     panel: () => window.document.getElementById('ogt-custom-links'),
     toggle: (label) => (menus.get(`Toggle ${label}`) ?? menus.get(`✅ ${label}`) ?? menus.get(`⬜ ${label}`))(),
   };
@@ -201,15 +195,11 @@ test('with GM_unregisterMenuCommand, toggles show their state and relabel in pla
     'About', 'Set API client ID', 'Test API connection', 'Sign in', 'Cancel sign-in', 'Sign out',
     'Show signed-in user', 'Add custom link', 'Remove custom link', 'Diagnostics', 'Clear API cache',
   ]);
-  for (const name of before) {
-    assert.equal(b.menuOptions.get(name)?.autoClose, /^(✅|⬜) /.test(name) ? false : undefined, name);
-  }
 
   b.toggle('Custom links');
   await wait();
   assert.equal(Boolean(b.panel()), false);
   assert.ok(b.menus.has('⬜ Custom links'));
-  assert.equal(b.menuOptions.get('⬜ Custom links')?.autoClose, false);
   assert.equal(b.menus.has('✅ Custom links'), false, 'the old label is removed, not duplicated');
   assert.equal(names().length, before.length);
   assert.equal(names().indexOf('⬜ Custom links'), before.indexOf('✅ Custom links'), 'the toggle keeps its place');

@@ -17,8 +17,7 @@ teaches the copy the new URLs. A copy installed from a saved file needs one rein
 does any existing copy that doesn't find the update.
 
 Every feature has its own **toggle** in the userscript menu, marked ✅ when it is on and ⬜ when it is off. All are on
-by default, and switching one off removes it immediately. On managers that support keeping the popup open, you can
-change several toggles in one visit.
+by default, and switching one off removes it immediately.
 
 ## Features
 
