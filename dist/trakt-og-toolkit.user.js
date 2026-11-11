@@ -1324,6 +1324,10 @@
       const name2 = path.endsWith("/smart-lists") ? "smart-lists" : path.endsWith("/collaborations") ? "lists-collaborations" : path.includes("/liked") ? "liked-lists" : "lists";
       return { name: name2, kind: null, id: lists[1], path, key: path };
     }
+    const list = path.match(/^\/users\/([^/]+)\/lists\/([^/]+)$/);
+    if (list) return { name: "list", kind: null, id: list[1], slug: list[2], path, key: path };
+    const official = path.match(/^\/lists\/official\/([^/]+)$/);
+    if (official) return { name: "official-list", kind: null, id: null, slug: official[1], path, key: path };
     const match = path.match(TITLE_PATH);
     if (!match) {
       return { name: "other", kind: null, id: null, path, key: path };
@@ -1971,10 +1975,7 @@
     return line ? line.slice(line.indexOf(":") + 1).trim() : null;
   }
   var cache = /* @__PURE__ */ new Map();
-  async function getJSON(url, { headers: headers2 = {}, ttl = 0, timeout, retries } = {}) {
-    const now = Date.now();
-    const hit = cache.get(url);
-    if (hit && hit.expires > now) return hit.value;
+  async function requestJSON(url, { headers: headers2 = {}, timeout, retries } = {}) {
     const response = await request({
       url,
       headers: headers2,
@@ -1985,14 +1986,22 @@
     if (response.status < 200 || response.status >= 300) {
       throw new HttpError(`HTTP ${response.status} for ${url}`, response.status, response.text, response.headers);
     }
-    let value;
     try {
-      value = JSON.parse(response.text);
+      return { data: JSON.parse(response.text), headers: response.headers };
     } catch (error) {
       throw new HttpError(`Invalid JSON from ${url}`, response.status, response.text, response.headers);
     }
-    if (ttl > 0) cache.set(url, { expires: now + ttl, value });
-    return value;
+  }
+  async function getJSON(url, { headers: headers2 = {}, ttl = 0, timeout, retries } = {}) {
+    const now = Date.now();
+    const hit = cache.get(url);
+    if (hit && hit.expires > now) return hit.value;
+    const { data } = await requestJSON(url, { headers: headers2, timeout, retries });
+    if (ttl > 0) cache.set(url, { expires: now + ttl, value: data });
+    return data;
+  }
+  async function getJSONWithHeaders(url, options = {}) {
+    return requestJSON(url, options);
   }
   function clearCache(prefix) {
     if (!prefix) {
@@ -3099,10 +3108,10 @@
   function getSessionGeneration() {
     return readTokens() ? `own:${generation}` : `og:${generation}:${getOgSessionRevision()}`;
   }
-  function saveTokens(text2, clientId) {
+  function saveTokens(text3, clientId) {
     let t;
     try {
-      t = JSON.parse(text2);
+      t = JSON.parse(text3);
     } catch {
     }
     if (!t || typeof t.access_token !== "string" || !t.access_token || typeof t.refresh_token !== "string" || !t.refresh_token || !Number.isFinite(t.expires_in) || t.expires_in <= 0 || t.created_at != null && !Number.isFinite(t.created_at)) {
@@ -3444,13 +3453,14 @@
     if (!og) throw signedOutError();
     return assertOgFresh(og);
   }
-  async function ogGet(path, ttl) {
+  async function ogGet(path, ttl, withHeaders = false) {
     const first = ogAuth();
     if (!first) throw new MissingClientIdError();
     if (first.expiresAt != null && first.expiresAt <= Date.now()) throw ogLookupExpiredError();
     const url = `${API.base}${path}`;
+    const read = (auth) => withHeaders ? getJSONWithHeaders(url, { headers: authHeaders(auth) }) : getJSON(url, { ttl, headers: authHeaders(auth) });
     try {
-      return await getJSON(url, { ttl, headers: authHeaders(first) });
+      return await read(first);
     } catch (error) {
       if (error?.status !== 401) throw error;
       const latest = ogAuth();
@@ -3459,17 +3469,29 @@
       if (!sameAuth(latest, first)) throw sessionChangedError();
       if (latest.accessToken === first.accessToken) throw ogLookupExpiredError();
       try {
-        return await getJSON(url, { ttl, headers: authHeaders(latest) });
+        return await read(latest);
       } catch (retryError) {
         if (retryError?.status === 401) throw ogLookupExpiredError();
         throw retryError;
       }
     }
   }
-  function apiGet(path, { ttl = CACHE_TTL } = {}) {
+  function paginationPages(headers2) {
+    const raw = headerValue(headers2, "x-pagination-page-count");
+    if (raw == null || raw === "") return null;
+    const pages = Number(raw);
+    return Number.isSafeInteger(pages) && pages >= 0 ? pages : null;
+  }
+  async function apiGet(path, { ttl = CACHE_TTL, withHeaders = false } = {}) {
     const clientId = getClientId();
-    if (clientId) return getJSON(`${API.base}${path}`, { ttl, headers: apiHeaders(clientId) });
-    return ogGet(path, ttl);
+    if (clientId) {
+      if (!withHeaders) return getJSON(`${API.base}${path}`, { ttl, headers: apiHeaders(clientId) });
+      const { data: data2, headers: headers3 } = await getJSONWithHeaders(`${API.base}${path}`, { headers: apiHeaders(clientId) });
+      return { data: data2, pages: paginationPages(headers3) };
+    }
+    if (!withHeaders) return ogGet(path, ttl);
+    const { data, headers: headers2 } = await ogGet(path, ttl, true);
+    return { data, pages: paginationPages(headers2) };
   }
   async function getSeasons(id) {
     const seasons = await apiGet(`/shows/${encodeURIComponent(id)}/seasons?extended=full`);
@@ -3644,7 +3666,7 @@
   var ICON_ADD = "M12 5v14M5 12h14";
   var ICON_SERVER = "M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01";
   var ICON_EDIT = "M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4";
-  function manageButton(name, text2, d) {
+  function manageButton(name, text3, d) {
     const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg3.setAttribute("viewBox", "0 0 24 24");
     svg3.setAttribute("aria-hidden", "true");
@@ -3663,7 +3685,7 @@
       "button",
       { class: "ogt-manage-button", type: "button", "aria-label": name, title: name },
       svg3,
-      el("span", { text: text2 })
+      el("span", { text: text3 })
     );
   }
   function compactLink(entry, attachResolver) {
@@ -4816,7 +4838,7 @@
         placeholder: "1–100",
         value: item ? String(Number(item.progress.toFixed(1))) : "",
         signal: control.signal,
-        validate: (text2) => normalizeProgress(text2) == null ? "Enter a percentage from 1 to 100." : null
+        validate: (text3) => normalizeProgress(text3) == null ? "Enter a percentage from 1 to 100." : null
       });
       if (dialogControl === control) dialogControl = null;
       if (value == null || !alive2(epoch)) return;
@@ -5545,10 +5567,10 @@
 
   // src/features/season-chart/personal.js
   var NS2 = "http://www.w3.org/2000/svg";
-  function svg(tag, attributes, text2) {
+  function svg(tag, attributes, text3) {
     const node = document.createElementNS(NS2, tag);
     for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
-    if (text2) node.textContent = text2;
+    if (text3) node.textContent = text3;
     return node;
   }
   function drawPersonal(chart, episodes, geometry, personal) {
@@ -9349,6 +9371,372 @@
     }
   };
 
+  // src/features/csv-export/api.js
+  var PAGE_SIZE2 = 100;
+  var MAX_PAGES3 = 200;
+  var SEARCH_LIMIT = 25;
+  function traktId(list) {
+    const id = list?.ids?.trakt;
+    if (Number.isSafeInteger(id) && id > 0) return id;
+    if (typeof id === "string" && /^\d+$/.test(id)) return id;
+    return "";
+  }
+  function missingOfficial() {
+    const error = new Error("Official list not found.");
+    error.status = 404;
+    return error;
+  }
+  function exportLimitError() {
+    const error = new Error("This list is too large to export as one CSV.");
+    error.exportLimit = true;
+    return error;
+  }
+  function incompleteExportError() {
+    const error = new Error("The list changed while it was being read.");
+    error.exportIncomplete = true;
+    return error;
+  }
+  function pageCount(value) {
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+  }
+  function createExportApi({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
+    async function readAll(path, { publicOnly = false } = {}) {
+      if (!publicOnly && signedIn()) {
+        const page = (number) => authPage(path, { page: number, limit: PAGE_SIZE2 });
+        const first = await page(1);
+        const pages = pageCount(first?.pages) ?? 1;
+        if (pages > MAX_PAGES3) throw exportLimitError();
+        if (!Array.isArray(first?.data) || pages > 1 && !first.data.length) throw incompleteExportError();
+        const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => page(index + 2)));
+        return first.data.concat(...rest.map((result) => {
+          if (!Array.isArray(result?.data) || !result.data.length) throw incompleteExportError();
+          return result.data;
+        }));
+      }
+      const rows = [];
+      let total = null;
+      for (let page = 1; page <= MAX_PAGES3; page++) {
+        const { data, pages } = await get(`${path}?page=${page}&limit=${PAGE_SIZE2}`, { ttl: 0, withHeaders: true });
+        const reported = pageCount(pages);
+        if (reported != null) total = total == null ? reported : Math.max(total, reported);
+        if (total != null && total > MAX_PAGES3) throw exportLimitError();
+        if (!Array.isArray(data)) throw incompleteExportError();
+        if (total != null) {
+          if (!data.length && total > 1) throw incompleteExportError();
+          rows.push(...data);
+          if (page >= total) return rows;
+        } else {
+          if (!data.length) return rows;
+          rows.push(...data);
+          if (data.length < PAGE_SIZE2) return rows;
+        }
+      }
+      throw exportLimitError();
+    }
+    async function officialId(slug) {
+      const summary2 = await get(`/lists/${encodeURIComponent(slug)}`);
+      if (summary2?.type === "official") {
+        const id2 = traktId(summary2);
+        if (id2) return id2;
+        throw missingOfficial();
+      }
+      if (/^\d+$/.test(slug)) throw missingOfficial();
+      const query = slug.replaceAll("-", " ");
+      const results = await get(`/search/list?query=${encodeURIComponent(query)}&limit=${SEARCH_LIMIT}`);
+      if (!Array.isArray(results)) throw missingOfficial();
+      const match = results.find((row) => row?.list?.type === "official" && row.list.ids?.slug === slug);
+      const id = traktId(match?.list);
+      if (!id) throw missingOfficial();
+      return id;
+    }
+    return {
+      /** Personal, collaboration and liked list pages all resolve through the list's owner path. */
+      list(profile, slug) {
+        return readAll(`/users/${encodeURIComponent(profile)}/lists/${encodeURIComponent(slug)}/items`);
+      },
+      watchlist(profile) {
+        return readAll(`/users/${encodeURIComponent(profile)}/watchlist`);
+      },
+      /** Official lists are public and have no profile owner. */
+      async official(slug) {
+        const id = await officialId(slug);
+        return readAll(`/lists/${id}/items`, { publicOnly: true });
+      }
+    };
+  }
+  var exportApi = createExportApi();
+
+  // src/features/csv-export/data.js
+  var CSV_COLUMNS = [
+    "rank",
+    "type",
+    "title",
+    "year",
+    "season",
+    "episode",
+    "trakt",
+    "imdb",
+    "tmdb",
+    "listed_at",
+    "notes"
+  ];
+  var CSV_HEADER = [
+    "Rank",
+    "Type",
+    "Title",
+    "Year",
+    "Season",
+    "Episode",
+    "Trakt ID",
+    "IMDb ID",
+    "TMDb ID",
+    "Listed At",
+    "Notes"
+  ];
+  var TYPES = /* @__PURE__ */ new Set(["movie", "show", "season", "episode", "person"]);
+  function text2(value) {
+    return typeof value === "string" ? value : "";
+  }
+  function integer(value, minimum = 0) {
+    return Number.isSafeInteger(value) && value >= minimum ? value : "";
+  }
+  function titleOf2(entity) {
+    return typeof entity?.title === "string" ? entity.title.trim() : "";
+  }
+  function nameOf(entity) {
+    const name = typeof entity?.name === "string" ? entity.name.trim() : "";
+    return name || titleOf2(entity);
+  }
+  function yearOf2(entity) {
+    return integer(entity?.year, 1);
+  }
+  function usableId2(value) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (Number.isSafeInteger(value) && value > 0) return String(value);
+    return "";
+  }
+  function idSet(entity) {
+    const ids = entity?.ids;
+    return {
+      trakt: usableId2(ids?.trakt),
+      imdb: usableId2(ids?.imdb),
+      tmdb: usableId2(ids?.tmdb)
+    };
+  }
+  function normalizeExportItem(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const kind = raw.type;
+    if (!TYPES.has(kind)) return null;
+    const entity = raw[kind];
+    if (!entity || typeof entity !== "object" || entity === null || Array.isArray(entity)) return null;
+    let title = "";
+    let year = "";
+    let season = "";
+    let episode = "";
+    let ids;
+    if (kind === "movie" || kind === "show") {
+      title = titleOf2(entity);
+      year = yearOf2(entity);
+      ids = idSet(entity);
+    } else if (kind === "person") {
+      title = nameOf(entity);
+      ids = idSet(entity);
+    } else {
+      const show = raw.show ?? entity.show;
+      const showTitle = titleOf2(show);
+      const showYear = yearOf2(show);
+      year = showYear;
+      ids = idSet(entity);
+      if (kind === "season") {
+        title = showTitle || titleOf2(entity);
+        season = integer(entity.number);
+      } else {
+        title = titleOf2(entity) || showTitle;
+        season = integer(entity.season);
+        episode = integer(entity.number, 1);
+      }
+    }
+    return {
+      rank: integer(raw.rank),
+      type: kind,
+      title,
+      year,
+      season,
+      episode,
+      ...ids,
+      listed_at: text2(raw.listed_at),
+      notes: text2(raw.notes)
+    };
+  }
+  function exportItems(payload) {
+    if (!Array.isArray(payload)) return [];
+    return payload.map(normalizeExportItem).filter(Boolean);
+  }
+  function escapeCsvCell(value) {
+    let cell = value == null ? "" : String(value);
+    if (/^[\s\p{Cc}\p{Cf}]*[=+\-@＝＋－＠]/u.test(cell)) cell = `'${cell}`;
+    if (/[",\r\n]/.test(cell)) cell = `"${cell.replace(/"/g, '""')}"`;
+    return cell;
+  }
+  function toCsv(items) {
+    const rows = Array.isArray(items) ? items : [];
+    const lines = [CSV_HEADER.map(escapeCsvCell).join(",")];
+    for (const item of rows) lines.push(CSV_COLUMNS.map((column) => escapeCsvCell(item?.[column])).join(","));
+    return `${lines.join("\r\n")}\r
+`;
+  }
+  function decodePart(value) {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  function exportFilename(route) {
+    const owner = decodePart(String(route?.id ?? ""));
+    const source = route?.name === "watchlist" ? "watchlist" : decodePart(String(route?.slug ?? ""));
+    const prefix = route?.name === "official-list" ? "official" : owner;
+    const base = [prefix, source].filter(Boolean).join("-") || "export";
+    const safe = base.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "");
+    return `trakt-${safe || "export"}.csv`;
+  }
+
+  // src/features/csv-export/styles.js
+  var CSS10 = String.raw`
+.ogt-csv-export { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-stat, 6px) 10px; min-inline-size: 0; }
+.ogt-csv-export__button {
+  display: inline-flex; align-items: center; justify-content: center; block-size: var(--control-height, 36px);
+  padding: 0 var(--button-padding-inline, 12px); border: 1px solid light-dark(#d4d4d4, #3b3b3b);
+  border-radius: var(--radius-control, 6px); background: light-dark(#f2f2f2, #232323);
+  color: light-dark(#333, #e6e6e6); font: inherit; font-size: var(--font-size-button-secondary, 13px);
+  white-space: nowrap; cursor: pointer;
+}
+.ogt-csv-export__button:is(:hover, :focus-visible):not(:disabled) {
+  border-color: var(--brand-primary, #ed1c24); color: light-dark(#111, #fff);
+}
+.ogt-csv-export__button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.ogt-csv-export__button:disabled { opacity: .6; cursor: default; }
+.ogt-csv-export__status { margin: 0; color: var(--color-stat-noun, light-dark(#767676, #9a9a9a)); font-size: 12px; line-height: 1.4; }
+.ogt-csv-export__status:empty { display: none; }
+`;
+
+  // src/features/csv-export/index.js
+  var ID6 = "ogt-csv-export";
+  function decodePart2(value) {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  function failureHint2(error, target) {
+    if (error?.exportLimit) return `This ${target} is too large to export as one CSV.`;
+    if (error?.exportIncomplete) return `Could not read this ${target} completely. Try again later.`;
+    if (error instanceof MissingClientIdError) {
+      return error.ogSession ? error.message : `Sign in to og.trakt.tv or set a Trakt client ID to export this ${target}.`;
+    }
+    if (error?.ogSession) return error.message || "Your og.trakt.tv session expired; reload the page to renew it.";
+    if (error?.status === 403 || error?.status === 404) return `This ${target} is private or unavailable.`;
+    if (error?.status === 401) return `Sign in to Trakt to export this ${target}.`;
+    return `Could not read this ${target}. Try again later.`;
+  }
+  var csvExport = {
+    id: "csv-export",
+    css: CSS10,
+    authScoped: true,
+    match: (route) => route.name === "list" || route.name === "watchlist" || route.name === "official-list",
+    mount(route) {
+      const actions = document.querySelector("section.title-row .title-bar .actions");
+      if (!actions || document.getElementById(ID6)) return null;
+      const watchlist2 = route.name === "watchlist";
+      const official = route.name === "official-list";
+      const target = watchlist2 ? "watchlist" : "list";
+      const profile = official ? null : decodePart2(route.id);
+      const slug = watchlist2 ? null : decodePart2(route.slug);
+      const button2 = el("button", {
+        type: "button",
+        class: "ogt-csv-export__button",
+        title: `Download this ${target} as a CSV file`,
+        text: "Export CSV"
+      });
+      const status = el("span", { class: "ogt-csv-export__status", role: "status", "aria-live": "polite" });
+      const node = el("div", { id: ID6, class: "ogt-csv-export" }, button2, status);
+      const share = [...actions.children].find((child) => child.classList.contains("share"));
+      actions.insertBefore(node, share ?? null);
+      let active2 = true;
+      let busy = false;
+      let objectUrl = null;
+      let revokeTimer = null;
+      function releaseObjectUrl() {
+        clearTimeout(revokeTimer);
+        revokeTimer = null;
+        if (!objectUrl) return;
+        try {
+          URL.revokeObjectURL(objectUrl);
+        } catch {
+        }
+        objectUrl = null;
+      }
+      function save(filename, csv) {
+        releaseObjectUrl();
+        objectUrl = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = filename;
+        anchor.rel = "noopener";
+        anchor.hidden = true;
+        (document.body ?? document.documentElement).append(anchor);
+        anchor.click();
+        anchor.remove();
+        revokeTimer = setTimeout(() => {
+          revokeTimer = null;
+          if (!objectUrl) return;
+          try {
+            URL.revokeObjectURL(objectUrl);
+          } catch {
+          }
+          objectUrl = null;
+        }, 0);
+      }
+      async function run() {
+        if (busy) return;
+        busy = true;
+        button2.disabled = true;
+        button2.textContent = "Exporting…";
+        status.textContent = watchlist2 ? "Reading watchlist…" : "Reading list…";
+        try {
+          const rows = watchlist2 ? await exportApi.watchlist(profile) : official ? await exportApi.official(slug) : await exportApi.list(profile, slug);
+          if (!active2) return;
+          const items = exportItems(rows);
+          if (parseRoute().key !== route.key) return;
+          save(exportFilename(route), toCsv(items));
+          status.textContent = `Exported ${items.length} ${items.length === 1 ? "item" : "items"}.`;
+        } catch (error) {
+          if (objectUrl) releaseObjectUrl();
+          debugError("CSV export failed", error);
+          if (!active2) return;
+          status.textContent = failureHint2(error, target);
+        } finally {
+          if (active2) {
+            busy = false;
+            button2.disabled = false;
+            button2.textContent = "Export CSV";
+          }
+        }
+      }
+      button2.addEventListener("click", run);
+      return {
+        node,
+        destroy() {
+          active2 = false;
+          button2.removeEventListener("click", run);
+          releaseObjectUrl();
+          node.remove();
+        }
+      };
+    }
+  };
+
   // src/actions.js
   var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdb} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}\nServer hosts: {jellyfin} {emby} {radarr} {sonarr} {seerr}";
   function parseCustomLink(answer) {
@@ -9368,7 +9756,7 @@ ${PLACEHOLDER_HELP}`, {
       label: "Label | URL",
       ok: "Add link",
       value: "My service | https://example.com/watch/{tmdb}?s={season}&e={episode}",
-      validate: (text2) => parseCustomLink(text2).error ?? null
+      validate: (text3) => parseCustomLink(text3).error ?? null
     });
     if (!answer) return null;
     const { label, url, error } = parseCustomLink(answer);
@@ -9394,7 +9782,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
       label: "Label",
       ok: "Remove",
       value: links[0].label,
-      validate: (text2) => links.some((entry) => entry.label === text2.trim()) ? null : `No link labelled "${text2.trim()}".`
+      validate: (text3) => links.some((entry) => entry.label === text3.trim()) ? null : `No link labelled "${text3.trim()}".`
     });
     if (!answer) return;
     const next = removeCustomLink(answer.trim());
@@ -9418,10 +9806,10 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
   // src/oauth-menu.js
   var CODE_TOAST_MS = 10 * 60 * 1e3;
   var QUIET = /* @__PURE__ */ new Set([DEVICE_MESSAGES[400], DEVICE_MESSAGES[429]]);
-  function copyText(text2) {
+  function copyText(text3) {
     if (typeof GM_setClipboard !== "function") return false;
     try {
-      GM_setClipboard(text2, "text");
+      GM_setClipboard(text3, "text");
       return true;
     } catch {
       return false;
@@ -9520,6 +9908,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
     "watchlist-cards": "Watchlist card shortcuts",
     "watchlist-credits": "Watchlist credit shortcuts",
     "watchlist-pick": "Watchlist pick",
+    "csv-export": "CSV export",
     "month-review": "Last month in review",
     "all-lists": "All lists",
     "list-preview": "List preview titles"
@@ -9577,7 +9966,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, summaryRatings, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, watchlistPick, monthReview, allLists, listPreview];
+  var FEATURES = [customLinks, seasonChart, summaryRatings, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, csvExport, watchlistPick, monthReview, allLists, listPreview];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))

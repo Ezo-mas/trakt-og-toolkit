@@ -15,6 +15,8 @@ const pages = [
   { name: 'person', path: '/people/bryan-cranston', panel: '.ogt-pronounce', feature: 'pronunciation' },
   { name: 'listing', path: '/movies/trending' },
   { name: 'watchlist', path: '/users/justin/watchlist', panel: '#ogt-watchlist-pick', feature: 'watchlist-pick' },
+  { name: 'list', path: '/users/justin/lists/2015-fall-shows', panel: '#ogt-csv-export', feature: 'csv-export' },
+  { name: 'official', path: '/lists/official/1001-movies-you-must-see-before-you-die', panel: '#ogt-csv-export', feature: 'csv-export' },
 ];
 const options = {};
 const args = process.argv.slice(2);

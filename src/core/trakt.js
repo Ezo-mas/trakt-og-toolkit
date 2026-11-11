@@ -3,7 +3,7 @@ import {
   authError, readTokens, refreshTokens, privateRequest, clearTokens, getSessionGeneration,
 } from './oauth.js';
 import { API, CACHE_TTL } from '../config.js';
-import { getJSON, headerValue, MAX_RETRY_WAIT_MS } from './http.js';
+import { getJSON, getJSONWithHeaders, headerValue, MAX_RETRY_WAIT_MS } from './http.js';
 import { getClientId } from '../settings.js';
 import { readOgSession } from './og-session.js';
 
@@ -223,15 +223,19 @@ async function ensureAuth() {
 /**
  * Public metadata through og's approved session. The response is still public data, so the
  * existing URL cache is safe. A 401 retries once only when og rotated the token for the same account.
+ * `withHeaders` skips the cache so paginated reads can see the page count.
  */
-async function ogGet(path, ttl) {
+async function ogGet(path, ttl, withHeaders = false) {
   const first = ogAuth();
   if (!first) throw new MissingClientIdError();
   // An expired og token cannot authorize even a public lookup.
   if (first.expiresAt != null && first.expiresAt <= Date.now()) throw ogLookupExpiredError();
   const url = `${API.base}${path}`;
+  const read = (auth) => (withHeaders
+    ? getJSONWithHeaders(url, { headers: authHeaders(auth) })
+    : getJSON(url, { ttl, headers: authHeaders(auth) }));
   try {
-    return await getJSON(url, { ttl, headers: authHeaders(first) });
+    return await read(first);
   } catch (error) {
     if (error?.status !== 401) throw error;
     const latest = ogAuth();
@@ -242,7 +246,7 @@ async function ogGet(path, ttl) {
     // Rejected before its expiry: og's session was revoked, and only a reload can renew it.
     if (latest.accessToken === first.accessToken) throw ogLookupExpiredError();
     try {
-      return await getJSON(url, { ttl, headers: authHeaders(latest) });
+      return await read(latest);
     } catch (retryError) {
       if (retryError?.status === 401) throw ogLookupExpiredError();
       throw retryError;
@@ -250,11 +254,27 @@ async function ogGet(path, ttl) {
   }
 }
 
-/** GET a public Trakt API path (e.g. `/shows/1388/seasons`), cached for `ttl` ms. */
-export function apiGet(path, { ttl = CACHE_TTL } = {}) {
+function paginationPages(headers) {
+  const raw = headerValue(headers, 'x-pagination-page-count');
+  if (raw == null || raw === '') return null;
+  const pages = Number(raw);
+  return Number.isSafeInteger(pages) && pages >= 0 ? pages : null;
+}
+
+/**
+ * GET a public Trakt API path (e.g. `/shows/1388/seasons`), cached for `ttl` ms. With `withHeaders`,
+ * bypasses the cache and returns `{ data, pages }` so page walks can trust Trakt's page count.
+ */
+export async function apiGet(path, { ttl = CACHE_TTL, withHeaders = false } = {}) {
   const clientId = getClientId();
-  if (clientId) return getJSON(`${API.base}${path}`, { ttl, headers: apiHeaders(clientId) });
-  return ogGet(path, ttl);
+  if (clientId) {
+    if (!withHeaders) return getJSON(`${API.base}${path}`, { ttl, headers: apiHeaders(clientId) });
+    const { data, headers } = await getJSONWithHeaders(`${API.base}${path}`, { headers: apiHeaders(clientId) });
+    return { data, pages: paginationPages(headers) };
+  }
+  if (!withHeaders) return ogGet(path, ttl);
+  const { data, headers } = await ogGet(path, ttl, true);
+  return { data, pages: paginationPages(headers) };
 }
 
 /** Seasons with their episode counts (season 0 is specials). `extended=full` is what adds the counts. */

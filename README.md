@@ -91,6 +91,9 @@ Signed in:
 - **List previews:** each poster in a list card's preview opens its title. Signed in, posters show your rating.
 - **Pick something:** on a watchlist, picks a random title from the page's current All/Movies/Shows/Seasons/Episodes
   filter and links to it, with **Pick again**. The whole list is read through the API, not just the loaded rows.
+- **Export CSV:** on a personal, collaboration or liked list page (including official liked lists), or the watchlist,
+  downloads the whole list with rank, type, title, year, season/episode, Trakt/IMDb/TMDb ids, listed date and notes.
+  Fields are RFC 4180 quoted, formula-like values are neutralized, and the file is built in your browser.
 
 ### Month in review and pronunciation
 

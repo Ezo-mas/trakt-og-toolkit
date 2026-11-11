@@ -104,8 +104,28 @@ test('list indexes are named and keep the profile slug', () => {
   assert.equal(parseRoute('/users/justin/lists/liked/official').name, 'liked-lists');
   assert.equal(parseRoute('/users/justin/smart-lists').name, 'smart-lists');
 
-  // A single list, its comments, and an unknown list sub-path are not indexes.
-  for (const path of ['/users/justin/lists/noir-essentials', '/users/justin/lists/noir-essentials/comments', '/users/justin/lists/official', '/users/justin/smart-lists/new-releases']) {
+  // Comments and smart-list details are not indexes; single list pages are named below.
+  for (const path of ['/users/justin/lists/noir-essentials/comments', '/users/justin/smart-lists/new-releases']) {
     assert.equal(parseRoute(path).name, 'other', path);
   }
+  assert.equal(parseRoute('/users/justin/lists/noir-essentials').name, 'list');
+  assert.equal(parseRoute('/users/justin/lists/official').name, 'list');
+});
+
+test('single list pages keep the owner and slug', () => {
+  const list = parseRoute('/users/justin/lists/2015-fall-shows');
+  assert.equal(list.name, 'list');
+  assert.equal(list.id, 'justin');
+  assert.equal(list.slug, '2015-fall-shows');
+  assert.equal(parseRoute('/users/justin/lists/2015-fall-shows/').name, 'list');
+  assert.equal(parseRoute('/users/trakt/lists/trakt-picks-best-glow-ups').slug, 'trakt-picks-best-glow-ups');
+});
+
+test('official liked lists have no profile owner', () => {
+  const list = parseRoute('/lists/official/1001-movies-you-must-see-before-you-die');
+  assert.equal(list.name, 'official-list');
+  assert.equal(list.id, null);
+  assert.equal(list.slug, '1001-movies-you-must-see-before-you-die');
+  assert.equal(parseRoute('/lists/official/1001-movies-you-must-see-before-you-die/').name, 'official-list');
+  assert.equal(parseRoute('/lists/official/1001-movies-you-must-see-before-you-die/comments').name, 'other');
 });
