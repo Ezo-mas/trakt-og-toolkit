@@ -16,8 +16,8 @@ before these update URLs existed keeps tracking that same link, so the next bump
 teaches the copy the new URLs. A copy installed from a saved file needs one reinstall from the link above, and so
 does any existing copy that doesn't find the update.
 
-Every feature has its own **toggle** in the userscript menu. All are on by default, and switching one off removes it
-immediately.
+Every feature has its own **toggle** in the userscript menu, marked ✅ when it is on and ⬜ when it is off. All are on
+by default, and switching one off removes it immediately.
 
 ## Features
 

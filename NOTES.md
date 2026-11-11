@@ -2,6 +2,17 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-11: menu toggle state (feature 37)
+
+- Feature toggles and debug logging read `✅ <feature>` or `⬜ <feature>` in the userscript menu instead of
+  `toggle <feature>`. After a click, every toggle is unregistered and registered again so the labels follow the
+  state; they are the last menu entries, so their order holds. Debug logging moved from the middle of the menu into
+  that group.
+- This needs `GM_unregisterMenuCommand` (granted in the header). A manager without it keeps the old "toggle" labels
+  rather than gaining duplicates. Violentmonkey builds that return no command id unregister by caption, so the caption
+  is the fallback id. Changes from another tab (`features.disabled`, `debug`) relabel this tab's menu too.
+- The menu closes after a click as before; reopening it shows the new state.
+
 ## 2026-11-11: auto-update URLs (feature 32)
 
 - The built header carries `@homepageURL`, `@supportURL`, `@downloadURL` for `dist/trakt-og-toolkit.user.js` on

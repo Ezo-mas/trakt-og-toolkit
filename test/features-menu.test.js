@@ -41,7 +41,7 @@ test('feature host never mounts a disabled feature and removes it when switched 
   window.close();
 });
 
-function boot(t, { storage = {} } = {}) {
+function boot(t, { storage = {}, unregister = false } = {}) {
   const window = new Window({ url: 'https://og.trakt.tv/shows/breaking-bad' });
   t.after(() => window.close());
   const data = new Map(Object.entries(storage));
@@ -50,7 +50,11 @@ function boot(t, { storage = {} } = {}) {
   window.GM_setValue = (key, value) => data.set(key, value);
   window.GM_deleteValue = key => data.delete(key);
   window.GM_addStyle = () => {};
-  window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+  window.GM_registerMenuCommand = (name, callback) => {
+    menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+    return name;
+  };
+  if (unregister) window.GM_unregisterMenuCommand = (name) => menus.delete(name.replace('Trakt OG Toolkit: ', ''));
   window.document.write(`<!doctype html><html><head></head><body>${SHOW_HTML}</body></html>`);
   window.eval(bundle);
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
@@ -60,7 +64,7 @@ function boot(t, { storage = {} } = {}) {
     data,
     menus,
     panel: () => window.document.getElementById('ogt-custom-links'),
-    toggle: (label) => menus.get(`toggle ${label}`)(),
+    toggle: (label) => (menus.get(`toggle ${label}`) ?? menus.get(`✅ ${label}`) ?? menus.get(`⬜ ${label}`))(),
   };
 }
 
@@ -176,4 +180,28 @@ test('menu add-link accepts server placeholders and rejects arbitrary templates'
   await wait();
   assert.match(dialogs.errors[0], /server placeholder/);
   assert.equal(b.data.get('watch.customLinks').length, 1, 'an arbitrary placeholder is rejected');
+});
+
+test('with GM_unregisterMenuCommand, toggles show their state and relabel in place after a click', async t => {
+  const b = boot(t, { unregister: true, storage: { 'features.disabled': ['season-chart'] } });
+  await wait();
+  const names = () => [...b.menus.keys()];
+  assert.ok(b.menus.has('✅ Custom links'));
+  assert.ok(b.menus.has('⬜ Season chart'), 'a stored disabled feature starts unticked');
+  assert.ok(b.menus.has('⬜ Debug logging'));
+  assert.equal(names().some((name) => name.startsWith('toggle ')), false);
+  const before = names();
+
+  b.toggle('Custom links');
+  await wait();
+  assert.equal(Boolean(b.panel()), false);
+  assert.ok(b.menus.has('⬜ Custom links'));
+  assert.equal(b.menus.has('✅ Custom links'), false, 'the old label is removed, not duplicated');
+  assert.equal(names().length, before.length);
+  assert.equal(names().indexOf('⬜ Custom links'), before.indexOf('✅ Custom links'), 'the toggle keeps its place');
+  assert.ok(names().indexOf('clear API cache') < names().indexOf('⬜ Debug logging'), 'toggles stay last');
+
+  b.toggle('Debug logging');
+  await wait();
+  assert.ok(b.menus.has('✅ Debug logging'));
 });

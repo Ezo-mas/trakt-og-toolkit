@@ -5,6 +5,7 @@ import { cacheSize, clearCache } from './core/http.js';
 import { registerAuthMenu } from './oauth-menu.js';
 import { ping } from './core/trakt.js';
 import { toast } from './ui/shell.js';
+import { STORAGE, onRemoteValueChange } from './core/store.js';
 import { NAME, VERSION } from './meta.js';
 
 const ATTRIBUTION = `${NAME} uses Trakt but is not endorsed or certified by Trakt.`;
@@ -59,11 +60,6 @@ export function registerMenu(getRouteKey = () => location.pathname, features = [
   registerAuthMenu();
   GM_registerMenuCommand('Trakt OG Toolkit: add custom link', promptAddCustomLink);
   GM_registerMenuCommand('Trakt OG Toolkit: remove custom link', promptRemoveCustomLink);
-  GM_registerMenuCommand('Trakt OG Toolkit: toggle debug logging', () => {
-    const next = setDebug(!isDebug());
-    applyDebugSetting();
-    toast(next ? 'Debug logging on — check the console.' : 'Debug logging off.');
-  });
   GM_registerMenuCommand('Trakt OG Toolkit: diagnostics', () => {
     const summary =
       `v${VERSION} · ${getRouteKey()} · client ID ${getClientId() ? 'set' : 'missing'} · ` +
@@ -75,10 +71,52 @@ export function registerMenu(getRouteKey = () => location.pathname, features = [
     clearCache();
     toast('API cache cleared.');
   });
-  // One toggle per feature; disabled ids are stored, so new features stay on by default.
+  registerToggles(features);
+  // Another tab can switch a feature or debug logging; keep this tab's labels honest.
+  onRemoteValueChange(STORAGE.features, () => registerToggles(features));
+  onRemoteValueChange(STORAGE.debug, () => registerToggles(features));
+}
+
+const ON = '✅';
+const OFF = '⬜';
+let toggleIds = [];
+
+/** `GM_unregisterMenuCommand` lets the labels follow the state; without it they keep the plain "toggle" wording. */
+function canRelabel() {
+  return typeof GM_unregisterMenuCommand === 'function';
+}
+
+export function toggleCaption(label, enabled, relabel = canRelabel()) {
+  return relabel ? `Trakt OG Toolkit: ${enabled ? ON : OFF} ${label}` : `Trakt OG Toolkit: toggle ${label}`;
+}
+
+/**
+ * Debug logging and one toggle per feature, last in the menu so re-registering them keeps their order. Disabled ids
+ * are stored, so new features stay on by default.
+ */
+function registerToggles(features) {
+  const relabel = canRelabel();
+  if (relabel) for (const id of toggleIds) GM_unregisterMenuCommand(id);
+  else if (toggleIds.length) return;
+  toggleIds = [];
+  const add = (label, enabled, onClick) => {
+    const caption = toggleCaption(label, enabled, relabel);
+    const id = GM_registerMenuCommand(caption, () => {
+      onClick();
+      if (relabel) registerToggles(features);
+    });
+    // Older Violentmonkey builds return nothing and unregister by caption.
+    toggleIds.push(id ?? caption);
+  };
+
+  add('Debug logging', isDebug(), () => {
+    const next = setDebug(!isDebug());
+    applyDebugSetting();
+    toast(next ? 'Debug logging on — check the console.' : 'Debug logging off.');
+  });
   for (const feature of features) {
     const label = FEATURE_LABELS[feature.id] || feature.id.replace(/-/g, ' ');
-    GM_registerMenuCommand(`Trakt OG Toolkit: toggle ${label}`, () => {
+    add(label, isFeatureEnabled(feature.id), () => {
       const enabled = setFeatureEnabled(feature.id, !isFeatureEnabled(feature.id));
       toast(`${label} ${enabled ? 'on' : 'off'}.`);
       document.dispatchEvent(new CustomEvent('ogt:featurechange', { detail: { id: feature.id, enabled } }));

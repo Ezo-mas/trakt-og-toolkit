@@ -75,7 +75,7 @@ test('account storage changed in another tab rebuilds the session', async (t) =>
   window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
 
-  assert.deepEqual([...listeners.keys()].sort(), ['trakt.clientId', 'trakt.oauth.tokens']);
+  assert.deepEqual([...listeners.keys()].sort(), ['debug', 'features.disabled', 'trakt.clientId', 'trakt.oauth.tokens']);
   let changes = 0;
   window.document.addEventListener('ogt:authchange', () => { changes += 1; });
   const tokens = (access, client = 'client') => ({ access_token: access, refresh_token: `r-${access}`, client_id: client, expires_at: 1 });

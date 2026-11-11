@@ -20,6 +20,7 @@
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
+// @grant        GM_unregisterMenuCommand
 // @grant        GM_setClipboard
 // @grant        GM_openInTab
 // @connect      api.trakt.tv
@@ -9565,11 +9566,6 @@ MIT licensed.`);
     registerAuthMenu();
     GM_registerMenuCommand("Trakt OG Toolkit: add custom link", promptAddCustomLink);
     GM_registerMenuCommand("Trakt OG Toolkit: remove custom link", promptRemoveCustomLink);
-    GM_registerMenuCommand("Trakt OG Toolkit: toggle debug logging", () => {
-      const next = setDebug(!isDebug());
-      applyDebugSetting();
-      toast(next ? "Debug logging on — check the console." : "Debug logging off.");
-    });
     GM_registerMenuCommand("Trakt OG Toolkit: diagnostics", () => {
       const summary2 = `v${VERSION} · ${getRouteKey()} · client ID ${getClientId() ? "set" : "missing"} · ${getCustomLinks().length} custom links · ${cacheSize()} cached responses`;
       toast(summary2);
@@ -9579,9 +9575,40 @@ MIT licensed.`);
       clearCache();
       toast("API cache cleared.");
     });
+    registerToggles(features);
+    onRemoteValueChange(STORAGE.features, () => registerToggles(features));
+    onRemoteValueChange(STORAGE.debug, () => registerToggles(features));
+  }
+  var ON = "✅";
+  var OFF = "⬜";
+  var toggleIds = [];
+  function canRelabel() {
+    return typeof GM_unregisterMenuCommand === "function";
+  }
+  function toggleCaption(label, enabled, relabel = canRelabel()) {
+    return relabel ? `Trakt OG Toolkit: ${enabled ? ON : OFF} ${label}` : `Trakt OG Toolkit: toggle ${label}`;
+  }
+  function registerToggles(features) {
+    const relabel = canRelabel();
+    if (relabel) for (const id of toggleIds) GM_unregisterMenuCommand(id);
+    else if (toggleIds.length) return;
+    toggleIds = [];
+    const add = (label, enabled, onClick) => {
+      const caption = toggleCaption(label, enabled, relabel);
+      const id = GM_registerMenuCommand(caption, () => {
+        onClick();
+        if (relabel) registerToggles(features);
+      });
+      toggleIds.push(id ?? caption);
+    };
+    add("Debug logging", isDebug(), () => {
+      const next = setDebug(!isDebug());
+      applyDebugSetting();
+      toast(next ? "Debug logging on — check the console." : "Debug logging off.");
+    });
     for (const feature of features) {
       const label = FEATURE_LABELS[feature.id] || feature.id.replace(/-/g, " ");
-      GM_registerMenuCommand(`Trakt OG Toolkit: toggle ${label}`, () => {
+      add(label, isFeatureEnabled(feature.id), () => {
         const enabled = setFeatureEnabled(feature.id, !isFeatureEnabled(feature.id));
         toast(`${label} ${enabled ? "on" : "off"}.`);
         document.dispatchEvent(new CustomEvent("ogt:featurechange", { detail: { id: feature.id, enabled } }));
