@@ -4,7 +4,8 @@
  */
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
-import { MissingClientIdError } from '../../core/trakt.js';
+import { decodePathPart } from '../../core/text.js';
+import { listReadFailureHint } from '../../core/trakt.js';
 import { MAX_ITEMS, watchlistApi } from './api.js';
 import { pickWatchlistItem, watchlistItems, watchlistLabel, watchlistType } from './data.js';
 import { CSS } from './styles.js';
@@ -17,27 +18,6 @@ const FILTER_RETRIES = 2;
 const FILTER_CHANGED = 'The page filter changed while picking. Try again.';
 const LIMIT_HINT = `Picks use up to the first ${MAX_ITEMS.toLocaleString('en-US')} watchlist entries.`;
 
-function failureHint(error) {
-  if (error instanceof MissingClientIdError) {
-    return error.ogSession
-      ? error.message
-      : 'Sign in to og.trakt.tv or set a Trakt client ID to pick from a watchlist.';
-  }
-  // og owns its renewal: an expired or rejected og token needs a reload, not a new sign-in.
-  if (error?.ogSession) return error.message || 'Your og.trakt.tv session expired; reload the page to renew it.';
-  if (error?.status === 403 || error?.status === 404) return 'This watchlist is private or unavailable.';
-  if (error?.status === 401) return 'Sign in to Trakt to pick from this watchlist.';
-  return 'Could not read this watchlist. Try again later.';
-}
-
-function profileId(value) {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
 export const watchlistPick = {
   id: 'watchlist-pick',
   css: CSS,
@@ -47,7 +27,7 @@ export const watchlistPick = {
     const actions = document.querySelector('section.title-row .title-bar .actions');
     if (!actions || document.getElementById(ID)) return null;
 
-    const profile = profileId(route.id);
+    const profile = decodePathPart(route.id);
     const button = el('button', { type: 'button', class: 'ogt-watchlist-pick__button', text: 'Pick something' });
     const result = el('a', { class: 'ogt-watchlist-pick__result', hidden: true });
     const announcer = el('span', { class: 'ogt-visually-hidden', role: 'status', 'aria-live': 'polite' });
@@ -151,7 +131,7 @@ export const watchlistPick = {
         itemsFor = null;
         itemsAt = 0;
         // A failed read for a filter the page has since left still needs an answer, or the click looks ignored.
-        showStatus(display === currentDisplay() ? failureHint(error) : FILTER_CHANGED);
+        showStatus(display === currentDisplay() ? listReadFailureHint(error, 'watchlist', 'pick from') : FILTER_CHANGED);
       } finally {
         if (active) {
           busy = false;

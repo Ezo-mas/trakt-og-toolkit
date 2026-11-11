@@ -32,7 +32,7 @@ function openTab(url) {
 }
 
 export function registerAuthMenu() {
-  GM_registerMenuCommand('Trakt OG Toolkit: sign in', async () => {
+  GM_registerMenuCommand('sign in', async () => {
     if (!getClientId()) { toast('Set your Trakt client ID first.'); return; }
     if (hasOwnSession()) { toast('Already signed in; sign out before changing accounts.'); return; }
     // Refresh's documented payload requires the app's registered redirect URI,
@@ -61,8 +61,8 @@ export function registerAuthMenu() {
       });
     } catch { toast('Sign-in requires userscript GM storage.'); }
   });
-  GM_registerMenuCommand('Trakt OG Toolkit: cancel sign-in', cancelSignIn);
-  GM_registerMenuCommand('Trakt OG Toolkit: sign out', async () => {
+  GM_registerMenuCommand('cancel sign-in', cancelSignIn);
+  GM_registerMenuCommand('sign out', async () => {
     if (!hasOwnSession()) {
       // og's session is og's to manage; clearing or revoking it would sign the page out.
       toast(isSignedIn() ? 'Signed in through og.trakt.tv; sign out there to end that session.' : 'Signed out of Trakt.');
@@ -71,7 +71,7 @@ export function registerAuthMenu() {
     try { await signOut(); toast('Signed out of Trakt.'); }
     catch { toast('Signed out locally; revoke this app in Trakt settings if needed.'); }
   });
-  GM_registerMenuCommand('Trakt OG Toolkit: show signed-in user', async () => {
+  GM_registerMenuCommand('show signed-in user', async () => {
     if (!isSignedIn()) { toast('Signed out of Trakt.'); return; }
     try {
       const user = await apiAuth('GET', '/users/me');

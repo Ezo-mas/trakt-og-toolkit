@@ -22,6 +22,7 @@ export const FEATURE_LABELS = {
   'watchlist-cards': 'Watchlist card shortcuts',
   'watchlist-credits': 'Watchlist credit shortcuts',
   'watchlist-pick': 'Watchlist pick',
+  'csv-export': 'CSV export',
   'month-review': 'Last month in review',
   'all-lists': 'All lists',
   'list-preview': 'List preview titles',
@@ -31,12 +32,12 @@ export const FEATURE_LABELS = {
 export function registerMenu(getRouteKey = () => location.pathname, features = []) {
   if (typeof GM_registerMenuCommand !== 'function') return;
 
-  GM_registerMenuCommand('Trakt OG Toolkit: about', () => {
+  GM_registerMenuCommand('about', () => {
     toast(`${NAME} v${VERSION}`, { duration: 5000 });
     console.info(`[OGT] ${NAME} v${VERSION}\n${ATTRIBUTION}\nMIT licensed.`);
   });
-  GM_registerMenuCommand('Trakt OG Toolkit: set API client ID', promptClientId);
-  GM_registerMenuCommand('Trakt OG Toolkit: test API connection', async () => {
+  GM_registerMenuCommand('set API client ID', promptClientId);
+  GM_registerMenuCommand('test API connection', async () => {
     if (!getClientId()) {
       toast('No client ID yet — use "set API client ID" first.');
       return;
@@ -58,16 +59,16 @@ export function registerMenu(getRouteKey = () => location.pathname, features = [
     }
   });
   registerAuthMenu();
-  GM_registerMenuCommand('Trakt OG Toolkit: add custom link', promptAddCustomLink);
-  GM_registerMenuCommand('Trakt OG Toolkit: remove custom link', promptRemoveCustomLink);
-  GM_registerMenuCommand('Trakt OG Toolkit: diagnostics', () => {
+  GM_registerMenuCommand('add custom link', promptAddCustomLink);
+  GM_registerMenuCommand('remove custom link', promptRemoveCustomLink);
+  GM_registerMenuCommand('diagnostics', () => {
     const summary =
       `v${VERSION} · ${getRouteKey()} · client ID ${getClientId() ? 'set' : 'missing'} · ` +
       `${getCustomLinks().length} custom links · ${cacheSize()} cached responses`;
     toast(summary);
     console.info('[OGT]', summary);
   });
-  GM_registerMenuCommand('Trakt OG Toolkit: clear API cache', () => {
+  GM_registerMenuCommand('clear API cache', () => {
     clearCache();
     toast('API cache cleared.');
   });
@@ -87,7 +88,7 @@ function canRelabel() {
 }
 
 export function toggleCaption(label, enabled, relabel = canRelabel()) {
-  return relabel ? `Trakt OG Toolkit: ${enabled ? ON : OFF} ${label}` : `Trakt OG Toolkit: toggle ${label}`;
+  return relabel ? `${enabled ? ON : OFF} ${label}` : `toggle ${label}`;
 }
 
 /**

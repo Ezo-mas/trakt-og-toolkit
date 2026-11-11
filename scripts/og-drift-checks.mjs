@@ -35,6 +35,7 @@ export const SELECTORS = [
   // Feature 33 mounts in the list's own title bar; og filters the same page with `?display=`.
   { feature: 'watchlist pick', pages: ['watchlist'], selector: 'section.title-row .title-bar .actions' },
   { feature: 'watchlist pick (filter)', pages: ['watchlist'], selector: 'a[href*="/watchlist?display=movie"]' },
+  { feature: 'csv export', pages: ['list', 'official'], selector: 'section.title-row .title-bar .actions' },
   // Signed-in pages: og redirects these to sign-in without a session, so they come from `--signed-in <dir>`.
   { feature: 'playback overview', pages: ['progress'], selector: 'section.progress' },
   { feature: 'month review', pages: ['dashboard'], selector: 'nav.ribbon' },

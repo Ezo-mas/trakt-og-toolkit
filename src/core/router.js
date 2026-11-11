@@ -42,14 +42,20 @@ export function parseRoute(pathname = location.pathname) {
   if (watchlist) return { name: 'watchlist', kind: null, id: watchlist[1], type: watchlist[2] ?? null, path, key: path };
   const person = path.match(/^\/people\/([^/]+)$/);
   if (person) return { name: 'person', kind: 'person', id: person[1], path, key: path };
-  // Lists live under the profile: personal, smart, collaborations and liked lists. Individual lists
-  // and their comments are left as `other`; only the indexes are named here.
+  // Lists live under the profile: personal, smart, collaborations and liked lists. The indexes are named first,
+  // then single personal/collaboration/liked lists below; comments and smart-list details stay `other`.
   const lists = path.match(/^\/users\/([^/]+)\/(?:lists(?:\/collaborations|\/liked(?:\/official)?)?|smart-lists)$/);
   if (lists) {
     const name = path.endsWith('/smart-lists') ? 'smart-lists' : path.endsWith('/collaborations') ? 'lists-collaborations'
       : path.includes('/liked') ? 'liked-lists' : 'lists';
     return { name, kind: null, id: lists[1], path, key: path };
   }
+  // Personal, collaboration and liked lists share this page shape; the owner is the path profile.
+  const list = path.match(/^\/users\/([^/]+)\/lists\/([^/]+)$/);
+  if (list) return { name: 'list', kind: null, id: list[1], slug: list[2], path, key: path };
+  // Liked official lists have no profile owner in the URL.
+  const official = path.match(/^\/lists\/official\/([^/]+)$/);
+  if (official) return { name: 'official-list', kind: null, id: null, slug: official[1], path, key: path };
   const match = path.match(TITLE_PATH);
 
   if (!match) {

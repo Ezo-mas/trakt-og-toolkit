@@ -21,7 +21,7 @@ test('built bundle makes og-session calls without storing or printing the token'
   window.GM_getValue = (key, fallback) => vault.get(key) ?? fallback;
   window.GM_setValue = (key, value) => vault.set(key, value);
   window.GM_deleteValue = (key) => vault.delete(key);
-  window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+  window.GM_registerMenuCommand = (name, callback) => menus.set(name, callback);
   window.GM_xmlhttpRequest = (request) => {
     requests.push(request);
     assert.ok(request.url.startsWith('https://api.trakt.tv/'), `unexpected request to ${request.url}`);

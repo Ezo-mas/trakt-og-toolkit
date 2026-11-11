@@ -51,10 +51,10 @@ function boot(t, { storage = {}, unregister = false } = {}) {
   window.GM_deleteValue = key => data.delete(key);
   window.GM_addStyle = () => {};
   window.GM_registerMenuCommand = (name, callback) => {
-    menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+    menus.set(name, callback);
     return name;
   };
-  if (unregister) window.GM_unregisterMenuCommand = (name) => menus.delete(name.replace('Trakt OG Toolkit: ', ''));
+  if (unregister) window.GM_unregisterMenuCommand = (name) => menus.delete(name);
   window.document.write(`<!doctype html><html><head></head><body>${SHOW_HTML}</body></html>`);
   window.eval(bundle);
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
@@ -191,6 +191,10 @@ test('with GM_unregisterMenuCommand, toggles show their state and relabel in pla
   assert.ok(b.menus.has('⬜ Debug logging'));
   assert.equal(names().some((name) => name.startsWith('toggle ')), false);
   const before = names();
+  assert.deepEqual(before.slice(0, before.indexOf('⬜ Debug logging')), [
+    'about', 'set API client ID', 'test API connection', 'sign in', 'cancel sign-in', 'sign out',
+    'show signed-in user', 'add custom link', 'remove custom link', 'diagnostics', 'clear API cache',
+  ]);
 
   b.toggle('Custom links');
   await wait();

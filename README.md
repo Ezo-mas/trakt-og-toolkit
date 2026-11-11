@@ -94,6 +94,10 @@ Signed in:
 - **Pick something:** on a watchlist, picks a random title from the page's current All/Movies/Shows/Seasons/Episodes
   filter and links to it, with **Pick again**. It reads up to 5,000 entries through the API and shows a note when it
   reaches the read limit.
+- **Export CSV:** on a personal, collaboration or liked list page (including official liked lists), or the watchlist,
+  downloads the whole list with rank, type, title, year, season/episode, Trakt/IMDb/TMDb ids, listed date and notes.
+  Episode titles include their show. The browser builds a UTF-8 CSV with a byte-order mark for Excel and guards
+  formula-like values.
 
 ### Month in review and pronunciation
 
@@ -135,11 +139,11 @@ free app at <https://developer.trakt.tv/apps/new>:
 | Redirect URIs | `http://localhost:5173/callback` |
 | Allowed origins | leave empty |
 
-Copy the **Client ID** (never the secret) and set it from the menu: **Trakt OG Toolkit: set API client ID**.
+Copy the **Client ID** (never the secret) and choose **set API client ID** from the userscript menu.
 
 ### Sign in
 
-Run **Trakt OG Toolkit: sign in** from the menu.
+Run **sign in** from the menu.
 
 1. Confirm the redirect URI you registered above.
 2. A device code is copied to your clipboard, and Trakt's activation page opens in a new tab.

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   apiType, normalizeWatchlistItem, pickWatchlistItem, watchlistItems, watchlistLabel, watchlistType,
 } from '../src/features/watchlist-pick/data.js';
-import { BATCH, createWatchlistApi, MAX_ITEMS, MAX_PAGES, PAGE_SIZE } from '../src/features/watchlist-pick/api.js';
+import { createWatchlistApi, MAX_ITEMS, MAX_PAGES, PAGE_SIZE } from '../src/features/watchlist-pick/api.js';
+import { PAGE_BATCH as BATCH } from '../src/core/pages.js';
 
 const movie = {
   type: 'movie',
@@ -104,7 +105,7 @@ test('public watchlist reads walk pages until a short one and keep the filter', 
     get: async (path, options) => {
       calls.push({ path, options });
       const page = Number(new URL(`https://api.trakt.tv${path}`).searchParams.get('page'));
-      return page === 1 ? Array.from({ length: PAGE_SIZE }, () => movie) : page === 2 ? [movie] : [];
+      return { data: page === 1 ? Array.from({ length: PAGE_SIZE }, () => movie) : page === 2 ? [movie] : [], pages: null };
     },
   });
 
@@ -115,7 +116,28 @@ test('public watchlist reads walk pages until a short one and keep the filter', 
     `/users/justin/watchlist/movies?page=1&limit=${PAGE_SIZE}`,
     `/users/justin/watchlist/movies?page=2&limit=${PAGE_SIZE}`,
   ]);
-  assert.deepEqual(calls.map((call) => call.options), [{ ttl: 0 }, { ttl: 0 }], 'public reads bypass the shared cache');
+  assert.deepEqual(calls.map((call) => call.options), [{ ttl: 0, withHeaders: true }, { ttl: 0, withHeaders: true }],
+    'public reads bypass the shared cache and keep the page count');
+});
+
+test('public watchlist reads batch pages once Trakt sends a page count', async () => {
+  const pages = [];
+  let inFlight = 0;
+  let peak = 0;
+  const api = createWatchlistApi({
+    signedIn: () => false,
+    get: async (path) => {
+      pages.push(Number(new URL(`https://api.trakt.tv${path}`).searchParams.get('page')));
+      peak = Math.max(peak, ++inFlight);
+      await Promise.resolve();
+      inFlight--;
+      return { data: [movie], pages: 6 };
+    },
+  });
+
+  assert.deepEqual(await api.list('justin'), { rows: Array(6).fill(movie), limited: false });
+  assert.deepEqual(pages, [1, 2, 3, 4, 5, 6]);
+  assert.equal(peak, BATCH);
 });
 
 test('signed-in watchlist reads use Trakt page counts', async () => {
@@ -183,7 +205,8 @@ test('a public list of exactly the read limit probes one entry past it', async (
       signedIn: () => false,
       get: async (path) => {
         calls.push(path);
-        return path.includes('limit=1&') || path.endsWith('limit=1') ? beyond : Array(PAGE_SIZE).fill(movie);
+        const data = path.endsWith('limit=1') ? beyond : Array(PAGE_SIZE).fill(movie);
+        return { data, pages: null };
       },
     });
     const result = await api.list('justin');
