@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   apiType, normalizeWatchlistItem, pickWatchlistItem, watchlistItems, watchlistLabel, watchlistType,
 } from '../src/features/watchlist-pick/data.js';
-import { createWatchlistApi, PAGE_SIZE } from '../src/features/watchlist-pick/api.js';
+import { createWatchlistApi, MAX_PAGES, PAGE_SIZE } from '../src/features/watchlist-pick/api.js';
 
 const movie = {
   type: 'movie',
@@ -108,8 +108,9 @@ test('public watchlist reads walk pages until a short one and keep the filter', 
     },
   });
 
-  const rows = await api.list('justin', { display: 'movie' });
+  const { rows, limited } = await api.list('justin', { display: 'movie' });
   assert.equal(rows.length, PAGE_SIZE + 1);
+  assert.equal(limited, false);
   assert.deepEqual(calls.map((call) => call.path), [
     `/users/justin/watchlist/movies?page=1&limit=${PAGE_SIZE}`,
     `/users/justin/watchlist/movies?page=2&limit=${PAGE_SIZE}`,
@@ -127,10 +128,42 @@ test('signed-in watchlist reads use Trakt page counts', async () => {
     },
   });
 
-  const rows = await api.list('justin');
-  assert.equal(rows.length, 2);
+  assert.deepEqual(await api.list('justin'), { rows: [movie, show], limited: false });
   assert.deepEqual(calls, [
     ['/users/justin/watchlist', 1, PAGE_SIZE],
     ['/users/justin/watchlist', 2, PAGE_SIZE],
   ]);
+});
+
+test('signed-in reads without a page count continue until a short page', async () => {
+  const calls = [];
+  const first = Array(PAGE_SIZE).fill(movie);
+  const api = createWatchlistApi({
+    signedIn: () => true,
+    authPage: async (_, { page }) => {
+      calls.push(page);
+      return { data: page === 1 ? first : [show], pages: null };
+    },
+  });
+
+  assert.deepEqual(await api.list('justin'), { rows: [...first, show], limited: false });
+  assert.deepEqual(calls, [1, 2]);
+});
+
+test('signed-in reads request one page at a time and report the read limit', async () => {
+  let requests = 0;
+  let inFlight = 0;
+  const api = createWatchlistApi({
+    signedIn: () => true,
+    authPage: async () => {
+      requests++;
+      assert.equal(++inFlight, 1);
+      await Promise.resolve();
+      inFlight--;
+      return { data: [movie], pages: MAX_PAGES + 1 };
+    },
+  });
+
+  assert.deepEqual(await api.list('justin'), { rows: Array(MAX_PAGES).fill(movie), limited: true });
+  assert.equal(requests, MAX_PAGES);
 });

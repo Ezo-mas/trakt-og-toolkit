@@ -90,7 +90,8 @@ Signed in:
   scroll. Works with og's session or a configured client ID.
 - **List previews:** each poster in a list card's preview opens its title. Signed in, posters show your rating.
 - **Pick something:** on a watchlist, picks a random title from the page's current All/Movies/Shows/Seasons/Episodes
-  filter and links to it, with **Pick again**. The whole list is read through the API, not just the loaded rows.
+  filter and links to it, with **Pick again**. It reads up to 5,000 entries through the API and shows a note when it
+  reaches the read limit.
 
 ### Month in review and pronunciation
 

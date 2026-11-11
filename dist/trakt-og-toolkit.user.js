@@ -1352,13 +1352,19 @@
     }
     return { name, kind, id, rest, season, episode, path, key: path };
   }
-  function createRouter({ onRoute, onSettle }) {
+  function createRouter({ onRoute, onQuery, onSettle }) {
     let lastKey = null;
+    let lastSearch = null;
     const settle = debounce(() => {
       const route = parseRoute();
+      const search = location.search;
+      const queryChanged = search !== lastSearch;
+      lastSearch = search;
       if (route.key !== lastKey) {
         lastKey = route.key;
         onRoute(route);
+      } else if (queryChanged) {
+        onQuery?.(route, search);
       }
       onSettle?.(route);
     }, 150);
@@ -1383,6 +1389,7 @@
     const ready = () => {
       const route = parseRoute();
       lastKey = route.key;
+      lastSearch = location.search;
       onRoute(route);
       onSettle?.(route);
     };
@@ -9131,38 +9138,33 @@
       const others = candidates.filter((item) => item.key !== previousKey);
       if (others.length) pool = others;
     }
-    const value = Number(random());
-    const raw = Number.isFinite(value) ? Math.floor(Math.min(0.999999, Math.max(0, value)) * pool.length) : 0;
-    return pool[raw];
+    return pool[Math.floor(random() * pool.length)];
   }
 
   // src/features/watchlist-pick/api.js
   var PAGE_SIZE = 100;
   var MAX_PAGES2 = 50;
+  var MAX_ITEMS = PAGE_SIZE * MAX_PAGES2;
   function watchlistPath(user, display) {
     const type = apiType(display);
     return `/users/${encodeURIComponent(user)}/watchlist${type ? `/${type}` : ""}`;
   }
   function createWatchlistApi2({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
     return {
-      /** Every page, in og's order. Signed in, Trakt's page count bounds the reads. */
+      /** Read pages in API order, using the page count when Trakt sends it. */
       async list(user, { display = null } = {}) {
         const path = watchlistPath(user, display);
-        if (signedIn()) {
-          const page = (number) => authPage(path, { page: number, limit: PAGE_SIZE });
-          const first = await page(1);
-          const pages = Math.min(Math.max(Number(first?.pages) || 1, 1), MAX_PAGES2);
-          const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => page(index + 2)));
-          return [first, ...rest].flatMap((result) => Array.isArray(result?.data) ? result.data : []);
-        }
+        const authenticated2 = signedIn();
         const rows = [];
+        let total = null;
         for (let page = 1; page <= MAX_PAGES2; page++) {
-          const data = await get(`${path}?page=${page}&limit=${PAGE_SIZE}`, { ttl: 0 });
-          if (!Array.isArray(data) || !data.length) break;
+          const { data, pages } = authenticated2 ? await authPage(path, { page, limit: PAGE_SIZE }) : { data: await get(`${path}?page=${page}&limit=${PAGE_SIZE}`, { ttl: 0 }) };
+          if (Number.isSafeInteger(pages) && pages > 0) total = Math.max(total ?? 0, pages);
+          if (!Array.isArray(data) || !data.length && total > 1) throw new Error("Incomplete Trakt watchlist response.");
           rows.push(...data);
-          if (data.length < PAGE_SIZE) break;
+          if (total == null ? data.length < PAGE_SIZE : page >= total) return { rows, limited: false };
         }
-        return rows;
+        return { rows, limited: true };
       }
     };
   }
@@ -9199,6 +9201,7 @@
   var ID5 = "ogt-watchlist-pick";
   var ITEMS_TTL_MS = 5 * 60 * 1e3;
   var FILTER_RETRIES = 2;
+  var LIMIT_HINT = `Picks use up to the first ${MAX_ITEMS.toLocaleString("en-US")} watchlist entries.`;
   function failureHint(error) {
     if (error instanceof MissingClientIdError) {
       return error.ogSession ? error.message : "Sign in to og.trakt.tv or set a Trakt client ID to pick from a watchlist.";
@@ -9240,35 +9243,41 @@
       let shownFor = null;
       const currentDisplay = () => watchlistType(location.search, route.type);
       const currentFilter = () => currentDisplay() ?? "all";
-      function clearFilterMismatch() {
-        if (!active2 || result.hidden || shownFor == null || shownFor === currentFilter()) return;
+      function clearResult() {
         result.hidden = true;
         result.removeAttribute("href");
         result.removeAttribute("title");
         result.textContent = "";
         previousKey = null;
         shownFor = null;
-        status.textContent = "";
         announcer.textContent = "";
+      }
+      function showStatus(message) {
+        clearResult();
+        shownFor = message ? currentFilter() : null;
+        status.textContent = message;
         button2.textContent = "Pick something";
       }
-      function onSettle() {
-        clearFilterMismatch();
+      function onQueryChange() {
+        if (shownFor == null || shownFor === currentFilter()) return;
+        if (busy) clearResult();
+        else showStatus("");
       }
       async function load(display) {
         const key = display ?? "all";
         const fresh = items && itemsFor === key && Date.now() - itemsAt < ITEMS_TTL_MS;
         if (fresh) return items;
-        const rows = watchlistItems(await watchlistApi2.list(profile, { display }));
+        const { rows, limited } = await watchlistApi2.list(profile, { display });
         if (!active2) return null;
         if (itemsFor !== key) previousKey = null;
-        items = rows;
+        items = { candidates: watchlistItems(rows), limited };
         itemsFor = key;
         itemsAt = Date.now();
         return items;
       }
       async function choose() {
         if (busy) return;
+        onQueryChange();
         busy = true;
         button2.disabled = true;
         button2.textContent = "Picking…";
@@ -9286,23 +9295,15 @@
             loaded = null;
           }
           if (!loaded) {
-            result.hidden = true;
-            shownFor = null;
-            status.textContent = "The page filter changed while picking. Try again.";
-            button2.textContent = "Pick something";
+            showStatus("The page filter changed while picking. Try again.");
             return;
           }
-          if (!loaded.length) {
-            result.hidden = true;
-            result.removeAttribute("href");
-            result.removeAttribute("title");
-            result.textContent = "";
-            shownFor = null;
-            status.textContent = "Nothing to pick in this filter.";
-            button2.textContent = "Pick something";
+          const { candidates, limited } = loaded;
+          if (!candidates.length) {
+            showStatus(limited ? `Nothing to pick in this filter. ${LIMIT_HINT}` : "Nothing to pick in this filter.");
             return;
           }
-          const picked = pickWatchlistItem(loaded, previousKey);
+          const picked = pickWatchlistItem(candidates, previousKey);
           previousKey = picked.key;
           const label = watchlistLabel(picked);
           result.href = picked.href;
@@ -9310,24 +9311,16 @@
           result.title = label;
           result.hidden = false;
           shownFor = currentFilter();
-          status.textContent = "";
+          status.textContent = limited ? LIMIT_HINT : "";
           announcer.textContent = `Picked ${label}.`;
           button2.textContent = "Pick again";
         } catch (error) {
           debugError("watchlist pick failed", error);
           if (!active2) return;
-          result.hidden = true;
-          result.removeAttribute("href");
-          result.removeAttribute("title");
-          result.textContent = "";
-          previousKey = null;
-          shownFor = null;
           items = null;
           itemsFor = null;
           itemsAt = 0;
-          announcer.textContent = "";
-          status.textContent = failureHint(error);
-          button2.textContent = "Pick something";
+          showStatus(display === currentDisplay() ? failureHint(error) : "");
         } finally {
           if (active2) {
             busy = false;
@@ -9336,13 +9329,13 @@
         }
       }
       button2.addEventListener("click", choose);
-      document.addEventListener("ogt:settle", onSettle);
+      document.addEventListener("ogt:querychange", onQueryChange);
       return {
         node,
         destroy() {
           active2 = false;
           button2.removeEventListener("click", choose);
-          document.removeEventListener("ogt:settle", onSettle);
+          document.removeEventListener("ogt:querychange", onQueryChange);
           node.remove();
         }
       };
@@ -9617,12 +9610,11 @@ MIT licensed.`);
           if (changed) document.dispatchEvent(new CustomEvent("ogt:routechange", { detail: { route: next } }));
           sync();
         },
-        // Every settled DOM change: re-mounts anything the app re-rendered away, and lets features
-        // follow a query-only change that routechange cannot report.
-        onSettle() {
-          sync();
-          document.dispatchEvent(new CustomEvent("ogt:settle"));
-        }
+        onQuery(route2, search) {
+          document.dispatchEvent(new CustomEvent("ogt:querychange", { detail: { route: route2, search } }));
+        },
+        // Every settled DOM change: re-mounts anything the app re-rendered away.
+        onSettle: sync
       });
       sync();
     };

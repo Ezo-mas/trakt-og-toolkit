@@ -19,11 +19,11 @@ Working notes and known issues. Newest first.
   heading is `h2#list-title` and the filters sit in a separate section above it.
 - API entries are `{ type, movie|show|season|episode, show? }`. Seasons wrap `{ number, ids }` and episodes
   `{ title, season, number }`; both link through `show.ids.slug`. Reads use `/users/:id/watchlist[/movies|shows|
-  seasons|episodes]` with 100 per page. Authenticated responses carry `x-pagination-page-count`; the public transport
-  drops headers, so public reads walk pages until a short one (capped at 50). og's session or the toolkit sign-in is
-  used for private profiles; without either the button shows a one-line hint.
-- The picker reads the media filter again after every page load; if it changed during the read, it re-reads for
-  the current feed and never shows a result from the old one. Filter changes after a result hide it again. Loaded
+  seasons|episodes]` with 100 per page, one request at a time. Reads use the authenticated page count when available
+  and stop at a short page otherwise. The picker shows a note when the 50-page read limit bounds the candidate pool.
+  og's session or the toolkit sign-in is used for private profiles; without either the button shows a one-line hint.
+- The picker checks the media filter again after each list read; if it changed, it reads for the current filter.
+  Same-path query changes reported by the router clear a pick or status message from the previous filter. Loaded
   entries are kept for five minutes so **Pick again** does not repeat the whole list fetch.
 - An expired og session gets og's reload message; missing credentials, private lists and 404s keep their one-line
   hints. Results carry the full label in `title` and announce the pick through a visually hidden live region.
@@ -31,13 +31,8 @@ Working notes and known issues. Newest first.
   bar and items section. Tests cover normalization, filter mapping, mid-read and post-pick filter changes, seasons and
   episodes, empty lists, expired og sessions, both paging paths, repeat avoidance, private-list hints and teardown.
   The watched-title filter remains out of scope.
-- Review fixes (2026-11-11): `main.js` dispatches `ogt:settle` on every settled navigation/DOM pass and the picker
-  checks the filter there, so a filter navigation that updates the URL after the click (delayed `pushState`/`replaceState`)
-  still clears the old pick; the zero-delay click/popstate listeners are gone. Public watchlist reads pass `{ ttl: 0 }`
-  so the picker's five-minute cache controls freshness instead of the shared eight-hour one. `pickWatchlistItem`
-  samples from the candidates other than the previous pick, so after picking A every other title has an equal chance;
-  a lone candidate is still returned and an absent previous key keeps the full pool. Tests cover the delayed filter
-  navigation, even sampling over `[A, B, C]` and `ttl: 0` on every public page request.
+- Public watchlist reads pass `{ ttl: 0 }` so the picker's five-minute cache controls freshness. Rerolls sample
+  evenly among the remaining entries and can repeat a lone candidate.
 
 ## v0.4.0 (2026-11-10)
 

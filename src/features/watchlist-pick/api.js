@@ -3,8 +3,9 @@ import { apiAuthPage, apiGet, isSignedIn } from '../../core/trakt.js';
 import { apiType } from './data.js';
 
 export const PAGE_SIZE = 100;
-/** A defensive cap for a public profile with an enormous watchlist (100 items per page). */
+/** Bound the number of requests for large watchlists. */
 export const MAX_PAGES = 50;
+export const MAX_ITEMS = PAGE_SIZE * MAX_PAGES;
 
 function watchlistPath(user, display) {
   const type = apiType(display);
@@ -13,28 +14,24 @@ function watchlistPath(user, display) {
 
 export function createWatchlistApi({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
   return {
-    /** Every page, in og's order. Signed in, Trakt's page count bounds the reads. */
+    /** Read pages in API order, using the page count when Trakt sends it. */
     async list(user, { display = null } = {}) {
       const path = watchlistPath(user, display);
 
-      if (signedIn()) {
-        const page = (number) => authPage(path, { page: number, limit: PAGE_SIZE });
-        const first = await page(1);
-        const pages = Math.min(Math.max(Number(first?.pages) || 1, 1), MAX_PAGES);
-        const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => page(index + 2)));
-        return [first, ...rest].flatMap((result) => (Array.isArray(result?.data) ? result.data : []));
-      }
-
-      // The public cache drops response headers, so read until a short page.
+      const authenticated = signedIn();
       const rows = [];
+      let total = null;
       for (let page = 1; page <= MAX_PAGES; page++) {
-        // The picker owns its five-minute freshness window; the shared cache would keep removed titles for hours.
-        const data = await get(`${path}?page=${page}&limit=${PAGE_SIZE}`, { ttl: 0 });
-        if (!Array.isArray(data) || !data.length) break;
+        const { data, pages } = authenticated
+          ? await authPage(path, { page, limit: PAGE_SIZE })
+          // The picker owns freshness; the public transport returns only the body.
+          : { data: await get(`${path}?page=${page}&limit=${PAGE_SIZE}`, { ttl: 0 }) };
+        if (Number.isSafeInteger(pages) && pages > 0) total = Math.max(total ?? 0, pages);
+        if (!Array.isArray(data) || (!data.length && total > 1)) throw new Error('Incomplete Trakt watchlist response.');
         rows.push(...data);
-        if (data.length < PAGE_SIZE) break;
+        if (total == null ? data.length < PAGE_SIZE : page >= total) return { rows, limited: false };
       }
-      return rows;
+      return { rows, limited: true };
     },
   };
 }
