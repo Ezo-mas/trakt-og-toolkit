@@ -64,7 +64,7 @@ function boot(t, { storage = {}, unregister = false } = {}) {
     data,
     menus,
     panel: () => window.document.getElementById('ogt-custom-links'),
-    toggle: (label) => (menus.get(`toggle ${label}`) ?? menus.get(`✅ ${label}`) ?? menus.get(`⬜ ${label}`))(),
+    toggle: (label) => (menus.get(`Toggle ${label}`) ?? menus.get(`✅ ${label}`) ?? menus.get(`⬜ ${label}`))(),
   };
 }
 
@@ -128,7 +128,7 @@ test('every feature gets a menu toggle and all are on by default', async t => {
   await wait();
   assert.ok(b.panel());
   for (const [id, label] of Object.entries(FEATURE_LABELS)) {
-    assert.equal(typeof b.menus.get(`toggle ${label}`), 'function', id);
+    assert.equal(typeof b.menus.get(`Toggle ${label}`), 'function', id);
   }
   assert.equal(b.data.has('features.disabled'), false);
 });
@@ -167,7 +167,7 @@ test('menu add-link accepts server placeholders and rejects arbitrary templates'
   let answer = 'Jellyfin | {jellyfin}/web/#/search?query={title}';
   const dialogs = answerDialogs(b.window, { prompt: () => answer });
 
-  b.menus.get('add custom link')();
+  b.menus.get('Add custom link')();
   await wait();
   assert.match(dialogs.prompts[0].message, /Server hosts:/);
   assert.match(dialogs.prompts[0].message, /\{jellyfin\}/);
@@ -176,7 +176,7 @@ test('menu add-link accepts server placeholders and rejects arbitrary templates'
   ]);
 
   answer = 'Bad | {title}/evil';
-  b.menus.get('add custom link')();
+  b.menus.get('Add custom link')();
   await wait();
   assert.match(dialogs.errors[0], /server placeholder/);
   assert.equal(b.data.get('watch.customLinks').length, 1, 'an arbitrary placeholder is rejected');
@@ -189,11 +189,11 @@ test('with GM_unregisterMenuCommand, toggles show their state and relabel in pla
   assert.ok(b.menus.has('✅ Custom links'));
   assert.ok(b.menus.has('⬜ Season chart'), 'a stored disabled feature starts unticked');
   assert.ok(b.menus.has('⬜ Debug logging'));
-  assert.equal(names().some((name) => name.startsWith('toggle ')), false);
+  assert.equal(names().some((name) => name.startsWith('Toggle ')), false);
   const before = names();
   assert.deepEqual(before.slice(0, before.indexOf('⬜ Debug logging')), [
-    'about', 'set API client ID', 'test API connection', 'sign in', 'cancel sign-in', 'sign out',
-    'show signed-in user', 'add custom link', 'remove custom link', 'diagnostics', 'clear API cache',
+    'About', 'Set API client ID', 'Test API connection', 'Sign in', 'Cancel sign-in', 'Sign out',
+    'Show signed-in user', 'Add custom link', 'Remove custom link', 'Diagnostics', 'Clear API cache',
   ]);
 
   b.toggle('Custom links');
@@ -203,7 +203,7 @@ test('with GM_unregisterMenuCommand, toggles show their state and relabel in pla
   assert.equal(b.menus.has('✅ Custom links'), false, 'the old label is removed, not duplicated');
   assert.equal(names().length, before.length);
   assert.equal(names().indexOf('⬜ Custom links'), before.indexOf('✅ Custom links'), 'the toggle keeps its place');
-  assert.ok(names().indexOf('clear API cache') < names().indexOf('⬜ Debug logging'), 'toggles stay last');
+  assert.ok(names().indexOf('Clear API cache') < names().indexOf('⬜ Debug logging'), 'toggles stay last');
 
   b.toggle('Debug logging');
   await wait();

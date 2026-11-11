@@ -9790,7 +9790,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
     }
   }
   function registerAuthMenu() {
-    GM_registerMenuCommand("sign in", async () => {
+    GM_registerMenuCommand("Sign in", async () => {
       if (!getClientId()) {
         toast("Set your Trakt client ID first.");
         return;
@@ -9819,7 +9819,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
             const copied = copyText(user_code);
             const opened = openTab(verification_url);
             toast(
-              `${copied ? `Code ${user_code} copied; paste it` : `Enter ${user_code}`} at ${verification_url}${opened ? " (opened in a new tab)" : ""}, then come back. Use "cancel sign-in" in the menu to stop.`,
+              `${copied ? `Code ${user_code} copied; paste it` : `Enter ${user_code}`} at ${verification_url}${opened ? " (opened in a new tab)" : ""}, then come back. Use "Cancel sign-in" in the menu to stop.`,
               { duration: CODE_TOAST_MS }
             );
           },
@@ -9832,8 +9832,8 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
         toast("Sign-in requires userscript GM storage.");
       }
     });
-    GM_registerMenuCommand("cancel sign-in", cancelSignIn);
-    GM_registerMenuCommand("sign out", async () => {
+    GM_registerMenuCommand("Cancel sign-in", cancelSignIn);
+    GM_registerMenuCommand("Sign out", async () => {
       if (!hasOwnSession()) {
         toast(isSignedIn() ? "Signed in through og.trakt.tv; sign out there to end that session." : "Signed out of Trakt.");
         return;
@@ -9845,7 +9845,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
         toast("Signed out locally; revoke this app in Trakt settings if needed.");
       }
     });
-    GM_registerMenuCommand("show signed-in user", async () => {
+    GM_registerMenuCommand("Show signed-in user", async () => {
       if (!isSignedIn()) {
         toast("Signed out of Trakt.");
         return;
@@ -9880,16 +9880,16 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
   };
   function registerMenu(getRouteKey = () => location.pathname, features = []) {
     if (typeof GM_registerMenuCommand !== "function") return;
-    GM_registerMenuCommand("about", () => {
+    GM_registerMenuCommand("About", () => {
       toast(`${NAME} v${VERSION}`, { duration: 5e3 });
       console.info(`[OGT] ${NAME} v${VERSION}
 ${ATTRIBUTION}
 MIT licensed.`);
     });
-    GM_registerMenuCommand("set API client ID", promptClientId);
-    GM_registerMenuCommand("test API connection", async () => {
+    GM_registerMenuCommand("Set API client ID", promptClientId);
+    GM_registerMenuCommand("Test API connection", async () => {
       if (!getClientId()) {
-        toast('No client ID yet — use "set API client ID" first.');
+        toast('No client ID yet — use "Set API client ID" first.');
         return;
       }
       toast("Testing the Trakt API…", { duration: 1500 });
@@ -9904,14 +9904,14 @@ MIT licensed.`);
       }
     });
     registerAuthMenu();
-    GM_registerMenuCommand("add custom link", promptAddCustomLink);
-    GM_registerMenuCommand("remove custom link", promptRemoveCustomLink);
-    GM_registerMenuCommand("diagnostics", () => {
+    GM_registerMenuCommand("Add custom link", promptAddCustomLink);
+    GM_registerMenuCommand("Remove custom link", promptRemoveCustomLink);
+    GM_registerMenuCommand("Diagnostics", () => {
       const summary2 = `v${VERSION} · ${getRouteKey()} · client ID ${getClientId() ? "set" : "missing"} · ${getCustomLinks().length} custom links · ${cacheSize()} cached responses`;
       toast(summary2);
       console.info("[OGT]", summary2);
     });
-    GM_registerMenuCommand("clear API cache", () => {
+    GM_registerMenuCommand("Clear API cache", () => {
       clearCache();
       toast("API cache cleared.");
     });
@@ -9926,7 +9926,7 @@ MIT licensed.`);
     return typeof GM_unregisterMenuCommand === "function";
   }
   function toggleCaption(label, enabled, relabel = canRelabel()) {
-    return relabel ? `${enabled ? ON : OFF} ${label}` : `toggle ${label}`;
+    return relabel ? `${enabled ? ON : OFF} ${label}` : `Toggle ${label}`;
   }
   function registerToggles(features) {
     const relabel = canRelabel();

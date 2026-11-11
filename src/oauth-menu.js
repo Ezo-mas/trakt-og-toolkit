@@ -32,7 +32,7 @@ function openTab(url) {
 }
 
 export function registerAuthMenu() {
-  GM_registerMenuCommand('sign in', async () => {
+  GM_registerMenuCommand('Sign in', async () => {
     if (!getClientId()) { toast('Set your Trakt client ID first.'); return; }
     if (hasOwnSession()) { toast('Already signed in; sign out before changing accounts.'); return; }
     // Refresh's documented payload requires the app's registered redirect URI,
@@ -53,7 +53,7 @@ export function registerAuthMenu() {
           const opened = openTab(verification_url);
           toast(
             `${copied ? `Code ${user_code} copied; paste it` : `Enter ${user_code}`} at ${verification_url}` +
-            `${opened ? ' (opened in a new tab)' : ''}, then come back. Use "cancel sign-in" in the menu to stop.`,
+            `${opened ? ' (opened in a new tab)' : ''}, then come back. Use "Cancel sign-in" in the menu to stop.`,
             { duration: CODE_TOAST_MS });
         },
         // Pending and slow-down are expected while waiting; keep the code on screen.
@@ -61,8 +61,8 @@ export function registerAuthMenu() {
       });
     } catch { toast('Sign-in requires userscript GM storage.'); }
   });
-  GM_registerMenuCommand('cancel sign-in', cancelSignIn);
-  GM_registerMenuCommand('sign out', async () => {
+  GM_registerMenuCommand('Cancel sign-in', cancelSignIn);
+  GM_registerMenuCommand('Sign out', async () => {
     if (!hasOwnSession()) {
       // og's session is og's to manage; clearing or revoking it would sign the page out.
       toast(isSignedIn() ? 'Signed in through og.trakt.tv; sign out there to end that session.' : 'Signed out of Trakt.');
@@ -71,7 +71,7 @@ export function registerAuthMenu() {
     try { await signOut(); toast('Signed out of Trakt.'); }
     catch { toast('Signed out locally; revoke this app in Trakt settings if needed.'); }
   });
-  GM_registerMenuCommand('show signed-in user', async () => {
+  GM_registerMenuCommand('Show signed-in user', async () => {
     if (!isSignedIn()) { toast('Signed out of Trakt.'); return; }
     try {
       const user = await apiAuth('GET', '/users/me');

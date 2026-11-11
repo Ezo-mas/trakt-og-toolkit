@@ -139,11 +139,11 @@ free app at <https://developer.trakt.tv/apps/new>:
 | Redirect URIs | `http://localhost:5173/callback` |
 | Allowed origins | leave empty |
 
-Copy the **Client ID** (never the secret) and choose **set API client ID** from the userscript menu.
+Copy the **Client ID** (never the secret) and choose **Set API client ID** from the userscript menu.
 
 ### Sign in
 
-Run **sign in** from the menu.
+Run **Sign in** from the menu.
 
 1. Confirm the redirect URI you registered above.
 2. A device code is copied to your clipboard, and Trakt's activation page opens in a new tab.
@@ -159,7 +159,7 @@ While the toolkit's own sign-in is active, og logging in, out or switching accou
 
 ## Custom link templates
 
-Use **Edit** in the strip, or the menu's **add custom link** (`Label | URL`):
+Use **Edit** in the strip, or the menu's **Add custom link** (`Label | URL`):
 
 ```text
 My service | https://example.com/watch/{tmdb}?s={season}&e={episode}

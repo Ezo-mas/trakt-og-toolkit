@@ -32,14 +32,14 @@ export const FEATURE_LABELS = {
 export function registerMenu(getRouteKey = () => location.pathname, features = []) {
   if (typeof GM_registerMenuCommand !== 'function') return;
 
-  GM_registerMenuCommand('about', () => {
+  GM_registerMenuCommand('About', () => {
     toast(`${NAME} v${VERSION}`, { duration: 5000 });
     console.info(`[OGT] ${NAME} v${VERSION}\n${ATTRIBUTION}\nMIT licensed.`);
   });
-  GM_registerMenuCommand('set API client ID', promptClientId);
-  GM_registerMenuCommand('test API connection', async () => {
+  GM_registerMenuCommand('Set API client ID', promptClientId);
+  GM_registerMenuCommand('Test API connection', async () => {
     if (!getClientId()) {
-      toast('No client ID yet — use "set API client ID" first.');
+      toast('No client ID yet — use "Set API client ID" first.');
       return;
     }
     toast('Testing the Trakt API…', { duration: 1500 });
@@ -59,16 +59,16 @@ export function registerMenu(getRouteKey = () => location.pathname, features = [
     }
   });
   registerAuthMenu();
-  GM_registerMenuCommand('add custom link', promptAddCustomLink);
-  GM_registerMenuCommand('remove custom link', promptRemoveCustomLink);
-  GM_registerMenuCommand('diagnostics', () => {
+  GM_registerMenuCommand('Add custom link', promptAddCustomLink);
+  GM_registerMenuCommand('Remove custom link', promptRemoveCustomLink);
+  GM_registerMenuCommand('Diagnostics', () => {
     const summary =
       `v${VERSION} · ${getRouteKey()} · client ID ${getClientId() ? 'set' : 'missing'} · ` +
       `${getCustomLinks().length} custom links · ${cacheSize()} cached responses`;
     toast(summary);
     console.info('[OGT]', summary);
   });
-  GM_registerMenuCommand('clear API cache', () => {
+  GM_registerMenuCommand('Clear API cache', () => {
     clearCache();
     toast('API cache cleared.');
   });
@@ -82,13 +82,13 @@ const ON = '✅';
 const OFF = '⬜';
 let toggleIds = [];
 
-/** `GM_unregisterMenuCommand` lets the labels follow the state; without it they keep the plain "toggle" wording. */
+/** `GM_unregisterMenuCommand` lets the labels follow the state; without it they keep the plain "Toggle" wording. */
 function canRelabel() {
   return typeof GM_unregisterMenuCommand === 'function';
 }
 
 export function toggleCaption(label, enabled, relabel = canRelabel()) {
-  return relabel ? `${enabled ? ON : OFF} ${label}` : `toggle ${label}`;
+  return relabel ? `${enabled ? ON : OFF} ${label}` : `Toggle ${label}`;
 }
 
 /**
