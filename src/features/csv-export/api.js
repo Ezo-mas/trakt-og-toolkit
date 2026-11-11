@@ -1,10 +1,10 @@
 /** List and watchlist reads for the exporter, through the toolkit sign-in, og's session or the public API. */
 import { apiAuthPage, apiGet, isSignedIn } from '../../core/trakt.js';
+import { IncompletePagesError, PAGE_SIZE, readPages } from '../../core/pages.js';
 
-export const PAGE_SIZE = 100;
 /** Defensive cap for page walking; signed-in reads are capped too. */
 export const MAX_PAGES = 200;
-const BATCH = 4;
+export { PAGE_SIZE };
 const SEARCH_LIMIT = 25;
 
 function traktId(list) {
@@ -32,40 +32,23 @@ function incompleteExportError() {
   return error;
 }
 
-/** A positive page count, or null when Trakt did not send the header. */
-function pageCount(value) {
-  return Number.isSafeInteger(value) && value > 0 ? value : null;
-}
-
 export function createExportApi({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
   /** Every page, in API order. `publicOnly` keeps official-list reads on the public transport. */
   async function readAll(path, { publicOnly = false } = {}) {
     const authenticated = !publicOnly && signedIn();
-    const read = async (page, limit = PAGE_SIZE) => {
-      if (authenticated) return (await authPage(path, { page, limit })) ?? { data: [], pages: null };
-      return get(`${path}?page=${page}&limit=${limit}`, { ttl: 0, withHeaders: true });
-    };
-
-    const rows = [];
-    let total = null;
-    for (let page = 1; page <= MAX_PAGES;) {
-      const last = total == null ? page : Math.min(total, page + BATCH - 1);
-      const batch = await Promise.all(Array.from({ length: last - page + 1 }, (_, offset) => read(page + offset)));
-      for (const { data, pages } of batch) {
-        const reported = pageCount(pages);
-        if (reported != null) total = Math.max(total ?? 0, reported);
-        if (total > MAX_PAGES) throw exportLimitError();
-        if (!Array.isArray(data) || (!data.length && total > 1)) throw incompleteExportError();
-        rows.push(...data);
-        if (total == null ? data.length < PAGE_SIZE : page >= total) return rows;
-        page++;
-      }
+    // Public reads skip the shared cache, which would keep removed titles, and keep the page count.
+    const read = (page, limit) => (authenticated
+      ? authPage(path, { page, limit })
+      : get(`${path}?page=${page}&limit=${limit}`, { ttl: 0, withHeaders: true }));
+    let result;
+    try {
+      result = await readPages(read, { maxPages: MAX_PAGES, stopAtLimit: true });
+    } catch (error) {
+      throw error instanceof IncompletePagesError ? incompleteExportError() : error;
     }
-    // Without a count, a full final page could be the exact limit. Ask for just the next item.
-    const { data } = await read(MAX_PAGES * PAGE_SIZE + 1, 1);
-    if (!Array.isArray(data)) throw incompleteExportError();
-    if (data.length) throw exportLimitError();
-    return rows;
+    // A partial CSV would look complete, so an oversized list fails instead.
+    if (result.limited) throw exportLimitError();
+    return result.rows;
   }
 
   /** Official lists need their numeric id: `/lists/:id/items`; a slug can also belong to a personal list. */

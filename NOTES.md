@@ -25,6 +25,10 @@ Working notes and known issues. Newest first.
   are quoted per RFC 4180 with CRLF rows, and formula markers (`=`, `+`, `-`, `@`
   and their full-width forms) get a leading apostrophe, including after leading whitespace or control characters, so
   spreadsheets do not evaluate them. The browser keeps the download's Blob URL alive for a minute after the click.
+- The exporter and the watchlist picker share `readPages` in `src/core/pages.js`: page 1 alone, then batches of four
+  once a page count is known, one at a time to a short page without one, and a one-item check past the cap. An empty
+  page fails the read when Trakt counts several pages. The exporter passes `stopAtLimit` and fails on an oversized
+  list; the picker reads up to its cap and shows a note. Public picker reads now also ask `apiGet` for the page count.
 - Fixture `LIST_PAGE_HTML` mirrors the live list title bar. Tests cover normalization for all item kinds, quoting and
   formula guards including leading controls and full-width markers, filenames, both paging paths, fresh repeat
   exports, header-led short pages, cap errors, personal and watchlist downloads, official summary/id resolution,

@@ -9081,6 +9081,44 @@
   `
   });
 
+  // src/core/pages.js
+  var PAGE_SIZE = 100;
+  var PAGE_BATCH = 4;
+  var IncompletePagesError = class extends Error {
+    constructor() {
+      super("Incomplete Trakt list response.");
+      this.name = "IncompletePagesError";
+    }
+  };
+  function pageCount(value) {
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+  }
+  async function readPages(read, { maxPages, stopAtLimit = false } = {}) {
+    const rows = [];
+    let total = null;
+    let page = 1;
+    while (page <= maxPages) {
+      const last = total == null ? page : Math.min(total, maxPages, page + PAGE_BATCH - 1);
+      const numbers = Array.from({ length: last - page + 1 }, (_, index) => page + index);
+      const results = await Promise.all(numbers.map((number) => read(number, PAGE_SIZE)));
+      for (const [index, result] of results.entries()) {
+        const number = numbers[index];
+        const { data: data2, pages } = result ?? { data: [], pages: null };
+        const reported = pageCount(pages);
+        if (reported != null) total = Math.max(total ?? 0, reported);
+        if (stopAtLimit && total > maxPages) return { rows, limited: true };
+        if (!Array.isArray(data2) || !data2.length && total > 1) throw new IncompletePagesError();
+        rows.push(...data2);
+        if (total == null ? data2.length < PAGE_SIZE : number >= total) return { rows, limited: false };
+      }
+      page = last + 1;
+    }
+    if (total != null) return { rows, limited: true };
+    const { data } = await read(maxPages * PAGE_SIZE + 1, 1) ?? { data: [] };
+    if (!Array.isArray(data)) throw new IncompletePagesError();
+    return { rows, limited: data.length > 0 };
+  }
+
   // src/features/watchlist-pick/data.js
   var DISPLAY_TO_API = { movie: "movies", show: "shows", season: "seasons", episode: "episodes" };
   var SINGULAR = new Set(Object.keys(DISPLAY_TO_API));
@@ -9180,48 +9218,20 @@
   }
 
   // src/features/watchlist-pick/api.js
-  var PAGE_SIZE = 100;
   var MAX_PAGES2 = 50;
   var MAX_ITEMS = PAGE_SIZE * MAX_PAGES2;
-  var BATCH = 4;
   function watchlistPath(user, display) {
     const type = apiType(display);
     return `/users/${encodeURIComponent(user)}/watchlist${type ? `/${type}` : ""}`;
   }
   function createWatchlistApi2({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
     return {
-      /**
-       * Read pages in API order. Once Trakt sends a page count, the remaining pages are read `BATCH` at a time;
-       * without one, pages are read one by one until a short page.
-       */
-      async list(user, { display = null } = {}) {
+      /** Every page in API order, up to `MAX_PAGES`; `limited` says the watchlist has more. */
+      list(user, { display = null } = {}) {
         const path = watchlistPath(user, display);
         const authenticated2 = signedIn();
-        const read = async (page2, limit = PAGE_SIZE) => {
-          if (!authenticated2) return { data: await get(`${path}?page=${page2}&limit=${limit}`, { ttl: 0 }), pages: null };
-          return await authPage(path, { page: page2, limit }) ?? { data: [], pages: null };
-        };
-        const rows = [];
-        let total = null;
-        let page = 1;
-        while (page <= MAX_PAGES2) {
-          const last = total == null ? page : Math.min(total, MAX_PAGES2, page + BATCH - 1);
-          const numbers = Array.from({ length: last - page + 1 }, (_, index) => page + index);
-          const results = await Promise.all(numbers.map((number) => read(number)));
-          for (const [index, { data: data2, pages }] of results.entries()) {
-            const number = numbers[index];
-            if (Number.isSafeInteger(pages) && pages > 0) total = Math.max(total ?? 0, pages);
-            if (!Array.isArray(data2) || !data2.length && total > number) {
-              throw new Error("Incomplete Trakt watchlist response.");
-            }
-            rows.push(...data2);
-            if (total == null ? data2.length < PAGE_SIZE : number >= total) return { rows, limited: false };
-          }
-          page = last + 1;
-        }
-        if (total != null) return { rows, limited: true };
-        const { data } = await read(MAX_ITEMS + 1, 1);
-        return { rows, limited: Array.isArray(data) && data.length > 0 };
+        const read = (page, limit) => authenticated2 ? authPage(path, { page, limit }) : get(`${path}?page=${page}&limit=${limit}`, { ttl: 0, withHeaders: true });
+        return readPages(read, { maxPages: MAX_PAGES2 });
       }
     };
   }
@@ -9385,9 +9395,7 @@
   };
 
   // src/features/csv-export/api.js
-  var PAGE_SIZE2 = 100;
   var MAX_PAGES3 = 200;
-  var BATCH2 = 4;
   var SEARCH_LIMIT = 25;
   function traktId(list) {
     const id = list?.ids?.trakt;
@@ -9410,35 +9418,18 @@
     error.exportIncomplete = true;
     return error;
   }
-  function pageCount(value) {
-    return Number.isSafeInteger(value) && value > 0 ? value : null;
-  }
   function createExportApi({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
     async function readAll(path, { publicOnly = false } = {}) {
       const authenticated2 = !publicOnly && signedIn();
-      const read = async (page, limit = PAGE_SIZE2) => {
-        if (authenticated2) return await authPage(path, { page, limit }) ?? { data: [], pages: null };
-        return get(`${path}?page=${page}&limit=${limit}`, { ttl: 0, withHeaders: true });
-      };
-      const rows = [];
-      let total = null;
-      for (let page = 1; page <= MAX_PAGES3; ) {
-        const last = total == null ? page : Math.min(total, page + BATCH2 - 1);
-        const batch = await Promise.all(Array.from({ length: last - page + 1 }, (_, offset) => read(page + offset)));
-        for (const { data: data2, pages } of batch) {
-          const reported = pageCount(pages);
-          if (reported != null) total = Math.max(total ?? 0, reported);
-          if (total > MAX_PAGES3) throw exportLimitError();
-          if (!Array.isArray(data2) || !data2.length && total > 1) throw incompleteExportError();
-          rows.push(...data2);
-          if (total == null ? data2.length < PAGE_SIZE2 : page >= total) return rows;
-          page++;
-        }
+      const read = (page, limit) => authenticated2 ? authPage(path, { page, limit }) : get(`${path}?page=${page}&limit=${limit}`, { ttl: 0, withHeaders: true });
+      let result;
+      try {
+        result = await readPages(read, { maxPages: MAX_PAGES3, stopAtLimit: true });
+      } catch (error) {
+        throw error instanceof IncompletePagesError ? incompleteExportError() : error;
       }
-      const { data } = await read(MAX_PAGES3 * PAGE_SIZE2 + 1, 1);
-      if (!Array.isArray(data)) throw incompleteExportError();
-      if (data.length) throw exportLimitError();
-      return rows;
+      if (result.limited) throw exportLimitError();
+      return result.rows;
     }
     async function officialId(slug) {
       let summary2;
