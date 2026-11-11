@@ -2,6 +2,39 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-11: CSV export (feature 34)
+
+- Live og (2026-11-11, trakt-og `d320877`): personal, collaboration and liked list pages use
+  `/users/:id/lists/:slug`; collaboration and liked links point at the list owner, so that path is also the API owner
+  path. Liked official lists use `/lists/official/:slug`; their items endpoints take a numeric Trakt list id, so the
+  exporter first reads `/lists/:slug` and, if it is missing or resolves to a personal list sharing the slug, searches
+  `/search/list` for the official list. `parseRoute` names the three shapes `list` and `official-list` (comments and
+  smart-list details stay `other`). They share the watchlist's `section.title-row .title-bar .actions` mount point,
+  before `.share`.
+- List items come from `/users/:id/lists/:slug/items`; official lists from `/lists/:id/items` after that resolution;
+  the watchlist uses `/users/:id/watchlist`. All send 100 per page and return
+  `{ type, movie|show|season|episode|person, show?, rank, listed_at, notes }`. Both transports read
+  `x-pagination-page-count`; public item reads bypass the shared cache and keep the header. Once a count is known it
+  carries across pages and bounds batches of up to four requests. Without a count, reads proceed one at a time until
+  a short page. A required page with a malformed payload fails the export. Without a count, the exporter checks one
+  item past the 20,000-item limit to distinguish a full export from an oversized list. The page filter does not
+  affect the export.
+- CSV columns are rank, type, title, year, season, episode, Trakt/IMDb/TMDb ids, listed date and notes. Movies and
+  shows use their own title/year. Seasons use the show title with the season number. Episodes include both the show
+  and episode title, with season and episode numbers. The UTF-8 file starts with a byte-order mark for Excel. Fields
+  are quoted per RFC 4180 with CRLF rows, and formula markers (`=`, `+`, `-`, `@`
+  and their full-width forms) get a leading apostrophe, including after leading whitespace or control characters, so
+  spreadsheets do not evaluate them. The browser keeps the download's Blob URL alive for a minute after the click.
+- The exporter and the watchlist picker share `readPages` in `src/core/pages.js`: page 1 alone, then batches of four
+  once a page count is known, one at a time to a short page without one, and a one-item check past the cap. An empty
+  page fails the read when Trakt counts several pages. The exporter passes `stopAtLimit` and fails on an oversized
+  list; the picker reads up to its cap and shows a note. Public picker reads now also ask `apiGet` for the page count.
+- Fixture `LIST_PAGE_HTML` mirrors the live list title bar. Tests cover normalization for all item kinds, quoting and
+  formula guards including leading controls and full-width markers, filenames, both paging paths, fresh repeat
+  exports, header-led short pages, cap errors, personal and watchlist downloads, official summary/id resolution,
+  same-slug personal-list avoidance, empty lists, private/missing/expired credentials, navigation during a read and
+  teardown. Drift checks the list actions and bundle mount/toggle on the live personal and official list pages.
+
 ## 2026-11-11: auto-update URLs (feature 32)
 
 - The built header carries `@homepageURL`, `@supportURL`, `@downloadURL` for `dist/trakt-og-toolkit.user.js` on

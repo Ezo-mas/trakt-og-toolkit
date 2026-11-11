@@ -111,12 +111,7 @@ export function headerValue(headers, name) {
 
 const cache = new Map(); // url -> { expires, value }
 
-/** GET JSON, deduped and cached for `ttl` ms. `timeout`/`retries` are for bounded, non-retrying lookups. */
-export async function getJSON(url, { headers = {}, ttl = 0, timeout, retries } = {}) {
-  const now = Date.now();
-  const hit = cache.get(url);
-  if (hit && hit.expires > now) return hit.value;
-
+async function requestJSON(url, { headers = {}, timeout, retries } = {}) {
   const response = await request({
     url,
     headers,
@@ -128,15 +123,27 @@ export async function getJSON(url, { headers = {}, ttl = 0, timeout, retries } =
     throw new HttpError(`HTTP ${response.status} for ${url}`, response.status, response.text, response.headers);
   }
 
-  let value;
   try {
-    value = JSON.parse(response.text);
+    return { data: JSON.parse(response.text), headers: response.headers };
   } catch (error) {
     throw new HttpError(`Invalid JSON from ${url}`, response.status, response.text, response.headers);
   }
+}
 
-  if (ttl > 0) cache.set(url, { expires: now + ttl, value });
-  return value;
+/** GET JSON, deduped and cached for `ttl` ms. `timeout`/`retries` are for bounded, non-retrying lookups. */
+export async function getJSON(url, { headers = {}, ttl = 0, timeout, retries } = {}) {
+  const now = Date.now();
+  const hit = cache.get(url);
+  if (hit && hit.expires > now) return hit.value;
+
+  const { data } = await requestJSON(url, { headers, timeout, retries });
+  if (ttl > 0) cache.set(url, { expires: now + ttl, value: data });
+  return data;
+}
+
+/** Uncached GET JSON with its response headers, for pagination and freshness-sensitive reads. */
+export async function getJSONWithHeaders(url, options = {}) {
+  return requestJSON(url, options);
 }
 
 export function clearCache(prefix) {

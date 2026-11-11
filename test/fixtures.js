@@ -119,6 +119,23 @@ export const WATCHLIST_PAGE_HTML = `
   <section class="items" aria-label="Watchlist items" aria-busy="false"><div class="container"></div></section>
 </main>`;
 
+/** Live `/users/justin/lists/2015-fall-shows` (2026-11-11, trakt-og d320877): the list title bar, its share control
+ * and the section below it. Personal, collaboration, liked and official list pages share this title-row/actions shape. */
+export const LIST_PAGE_HTML = `
+<main id="content">
+  <section class="title-row" aria-labelledby="list-title">
+    <div class="container">
+      <div class="title-bar">
+        <h2 id="list-title"><a class="list-title" href="/users/justin/lists/2015-fall-shows">2015 Fall Shows</a></h2>
+        <div class="actions">
+          <span class="share"><button type="button" class="share normal" aria-label="Copy Link">Copy Link</button></span>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="items" aria-label="List items" aria-busy="false"><div class="container"></div></section>
+</main>`;
+
 /** Hand-trimmed fanart-card from live /movies/trending (2026-11-01). Poster variant uses the
  * same controls (also checked on the saved show page). Signed-in rich tooltip comes from ListedTip. */
 export function watchlistCardHtml({ id = 'card-movie', href = '/movies/verity-2026', small = false } = {}) {

@@ -94,6 +94,10 @@ Signed in:
 - **Pick something:** on a watchlist, picks a random title from the page's current All/Movies/Shows/Seasons/Episodes
   filter and links to it, with **Pick again**. It reads up to 5,000 entries through the API and shows a note when it
   reaches the read limit.
+- **Export CSV:** on a personal, collaboration or liked list page (including official liked lists), or the watchlist,
+  downloads the whole list with rank, type, title, year, season/episode, Trakt/IMDb/TMDb ids, listed date and notes.
+  Episode titles include their show. The browser builds a UTF-8 CSV with a byte-order mark for Excel and guards
+  formula-like values.
 
 ### Month in review and pronunciation
 

@@ -21,6 +21,7 @@ export const FEATURE_LABELS = {
   'watchlist-cards': 'Watchlist card shortcuts',
   'watchlist-credits': 'Watchlist credit shortcuts',
   'watchlist-pick': 'Watchlist pick',
+  'csv-export': 'CSV export',
   'month-review': 'Last month in review',
   'all-lists': 'All lists',
   'list-preview': 'List preview titles',
