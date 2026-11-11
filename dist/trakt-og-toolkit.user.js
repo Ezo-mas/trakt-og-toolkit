@@ -9938,7 +9938,7 @@ MIT licensed.`);
       const id = GM_registerMenuCommand(caption, () => {
         onClick();
         if (relabel) registerToggles(features);
-      });
+      }, { autoClose: false });
       toggleIds.push(id ?? caption);
     };
     add("Debug logging", isDebug(), () => {

@@ -105,7 +105,7 @@ function registerToggles(features) {
     const id = GM_registerMenuCommand(caption, () => {
       onClick();
       if (relabel) registerToggles(features);
-    });
+    }, { autoClose: false });
     // Older Violentmonkey builds return nothing and unregister by caption.
     toggleIds.push(id ?? caption);
   };
