@@ -7,7 +7,7 @@
 // @license      MIT
 // @homepageURL  https://github.com/Ezo-mas/trakt-og-toolkit
 // @supportURL   https://github.com/Ezo-mas/trakt-og-toolkit/issues
-// @updateURL    https://raw.githubusercontent.com/Ezo-mas/trakt-og-toolkit/main/dist/trakt-og-toolkit.user.js
+// @updateURL    https://raw.githubusercontent.com/Ezo-mas/trakt-og-toolkit/main/dist/trakt-og-toolkit.meta.js
 // @downloadURL  https://raw.githubusercontent.com/Ezo-mas/trakt-og-toolkit/main/dist/trakt-og-toolkit.user.js
 // @match        https://og.trakt.tv/*
 // @match        http://localhost:5173/*

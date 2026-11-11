@@ -1,12 +1,17 @@
 import { build, context } from 'esbuild';
-import { readFileSync, mkdirSync } from 'node:fs';
-import { NAME, DIR, VERSION, HOST, DEV_MATCHES } from './src/meta.js';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { NAME, DIR, REPO, VERSION, HOST, DEV_MATCHES } from './src/meta.js';
 
 const watch = process.argv.includes('--watch');
 mkdirSync('dist', { recursive: true });
 
 /** Userscript metadata. Name, version and hosts come from src/meta.js. */
 const matches = [`https://${HOST}/*`, ...DEV_MATCHES.map((host) => `http://${host}/*`)];
+/**
+ * Managers poll @updateURL for a newer @version, so it points at a header-only .meta.js; @downloadURL is the full
+ * bundle they fetch once an update is found.
+ */
+const raw = `https://raw.githubusercontent.com/${REPO}/main/dist/${DIR}`;
 const header = `// ==UserScript==
 // @name         ${NAME}
 // @namespace    https://github.com/trakt-og-toolkit
@@ -14,10 +19,10 @@ const header = `// ==UserScript==
 // @description  Brings back the useful classic-Trakt extras on og.trakt.tv.
 // @author       Ezo-mas
 // @license      MIT
-// @homepageURL  https://github.com/Ezo-mas/trakt-og-toolkit
-// @supportURL   https://github.com/Ezo-mas/trakt-og-toolkit/issues
-// @updateURL    https://raw.githubusercontent.com/Ezo-mas/trakt-og-toolkit/main/dist/trakt-og-toolkit.user.js
-// @downloadURL  https://raw.githubusercontent.com/Ezo-mas/trakt-og-toolkit/main/dist/trakt-og-toolkit.user.js
+// @homepageURL  https://github.com/${REPO}
+// @supportURL   https://github.com/${REPO}/issues
+// @updateURL    ${raw}.meta.js
+// @downloadURL  ${raw}.user.js
 ${matches.map((match) => `// @match        ${match}`).join('\n')}
 // @run-at       document-start
 // @grant        GM_getValue
@@ -36,6 +41,8 @@ ${matches.map((match) => `// @match        ${match}`).join('\n')}
 // @noframes
 // ==/UserScript==
 `;
+
+writeFileSync(`dist/${DIR}.meta.js`, header);
 
 const options = {
   entryPoints: ['src/main.js'],
