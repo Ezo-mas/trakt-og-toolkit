@@ -1315,6 +1315,8 @@
     if (path === "/" || path === "/dashboard") return { name: "dashboard", kind: null, id: null, path, key: path };
     const progress = path.match(/^\/users\/([^/]+)\/progress(?:\/.*)?$/);
     if (progress) return { name: "progress", kind: null, id: progress[1], path, key: path };
+    const watchlist2 = path.match(/^\/users\/([^/]+)\/watchlist(?:\/(movies|shows|seasons|episodes))?$/);
+    if (watchlist2) return { name: "watchlist", kind: null, id: watchlist2[1], type: watchlist2[2] ?? null, path, key: path };
     const person = path.match(/^\/people\/([^/]+)$/);
     if (person) return { name: "person", kind: "person", id: person[1], path, key: path };
     const lists = path.match(/^\/users\/([^/]+)\/(?:lists(?:\/collaborations|\/liked(?:\/official)?)?|smart-lists)$/);
@@ -1350,13 +1352,19 @@
     }
     return { name, kind, id, rest, season, episode, path, key: path };
   }
-  function createRouter({ onRoute, onSettle }) {
+  function createRouter({ onRoute, onQuery, onSettle }) {
     let lastKey = null;
+    let lastSearch = null;
     const settle = debounce(() => {
       const route = parseRoute();
+      const search = location.search;
+      const queryChanged = search !== lastSearch;
+      lastSearch = search;
       if (route.key !== lastKey) {
         lastKey = route.key;
         onRoute(route);
+      } else if (queryChanged) {
+        onQuery?.(route, search);
       }
       onSettle?.(route);
     }, 150);
@@ -1381,6 +1389,7 @@
     const ready = () => {
       const route = parseRoute();
       lastKey = route.key;
+      lastSearch = location.search;
       onRoute(route);
       onSettle?.(route);
     };
@@ -9034,6 +9043,325 @@
   `
   });
 
+  // src/features/watchlist-pick/data.js
+  var DISPLAY_TO_API = { movie: "movies", show: "shows", season: "seasons", episode: "episodes" };
+  var SINGULAR = new Set(Object.keys(DISPLAY_TO_API));
+  function watchlistType(search = "", pathType = null) {
+    let value = pathType;
+    try {
+      value = new URLSearchParams(search).get("display") || pathType;
+    } catch {
+    }
+    if (typeof value !== "string") return null;
+    const singular = value.trim().toLowerCase().replace(/s$/, "");
+    return SINGULAR.has(singular) ? singular : null;
+  }
+  function apiType(display) {
+    return display ? DISPLAY_TO_API[display] ?? null : null;
+  }
+  function usableId(value) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (Number.isSafeInteger(value) && value > 0) return String(value);
+    return null;
+  }
+  function titleOf(entity) {
+    return typeof entity?.title === "string" ? entity.title.trim() : "";
+  }
+  function yearOf(entity) {
+    return Number.isSafeInteger(entity?.year) ? entity.year : null;
+  }
+  function mediaHref(kind, id) {
+    return `/${kind === "movie" ? "movies" : "shows"}/${encodeURIComponent(id)}`;
+  }
+  function normalizeWatchlistItem(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const kind = raw.type;
+    if (!SINGULAR.has(kind)) return null;
+    const entity = raw[kind];
+    if (!entity || typeof entity !== "object" || Array.isArray(entity)) return null;
+    if (kind === "movie" || kind === "show") {
+      const title = titleOf(entity);
+      const id = usableId(entity.ids?.slug) ?? usableId(entity.ids?.trakt);
+      if (!title || !id) return null;
+      return {
+        key: `${kind}:${id}`,
+        kind,
+        title,
+        year: yearOf(entity),
+        subtitle: null,
+        href: mediaHref(kind, id)
+      };
+    }
+    const show = raw.show ?? entity.show;
+    const showTitle = titleOf(show);
+    const showId = usableId(show?.ids?.slug) ?? usableId(show?.ids?.trakt);
+    if (!showTitle || !showId) return null;
+    if (kind === "season") {
+      const number = entity.number;
+      if (!Number.isSafeInteger(number) || number < 0) return null;
+      return {
+        key: `season:${showId}:${number}`,
+        kind,
+        title: showTitle,
+        year: yearOf(show),
+        subtitle: `Season ${number}`,
+        href: `/shows/${encodeURIComponent(showId)}/seasons/${number}`
+      };
+    }
+    const season = entity.season;
+    const episode = entity.number;
+    if (!Number.isSafeInteger(season) || season < 0 || !Number.isSafeInteger(episode) || episode < 1) return null;
+    const episodeTitle = titleOf(entity);
+    return {
+      key: `episode:${showId}:${season}:${episode}`,
+      kind,
+      title: showTitle,
+      year: yearOf(show),
+      subtitle: `S${season}E${episode}${episodeTitle ? ` · ${episodeTitle}` : ""}`,
+      href: `/shows/${encodeURIComponent(showId)}/seasons/${season}/episodes/${episode}`
+    };
+  }
+  function watchlistItems(payload) {
+    if (!Array.isArray(payload)) return [];
+    return payload.map(normalizeWatchlistItem).filter(Boolean);
+  }
+  function watchlistLabel(item) {
+    if (!item) return "";
+    const title = item.year ? `${item.title} (${item.year})` : item.title;
+    return item.subtitle ? `${title} — ${item.subtitle}` : title;
+  }
+  function pickWatchlistItem(items, previousKey = null, random = Math.random) {
+    const candidates = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (!candidates.length) return null;
+    let pool = candidates;
+    if (previousKey != null && candidates.length > 1) {
+      const others = candidates.filter((item) => item.key !== previousKey);
+      if (others.length) pool = others;
+    }
+    return pool[Math.floor(random() * pool.length)];
+  }
+
+  // src/features/watchlist-pick/api.js
+  var PAGE_SIZE = 100;
+  var MAX_PAGES2 = 50;
+  var MAX_ITEMS = PAGE_SIZE * MAX_PAGES2;
+  var BATCH = 4;
+  function watchlistPath(user, display) {
+    const type = apiType(display);
+    return `/users/${encodeURIComponent(user)}/watchlist${type ? `/${type}` : ""}`;
+  }
+  function createWatchlistApi2({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
+    return {
+      /**
+       * Read pages in API order. Once Trakt sends a page count, the remaining pages are read `BATCH` at a time;
+       * without one, pages are read one by one until a short page.
+       */
+      async list(user, { display = null } = {}) {
+        const path = watchlistPath(user, display);
+        const authenticated2 = signedIn();
+        const read = async (page2, limit = PAGE_SIZE) => {
+          if (!authenticated2) return { data: await get(`${path}?page=${page2}&limit=${limit}`, { ttl: 0 }), pages: null };
+          return await authPage(path, { page: page2, limit }) ?? { data: [], pages: null };
+        };
+        const rows = [];
+        let total = null;
+        let page = 1;
+        while (page <= MAX_PAGES2) {
+          const last = total == null ? page : Math.min(total, MAX_PAGES2, page + BATCH - 1);
+          const numbers = Array.from({ length: last - page + 1 }, (_, index) => page + index);
+          const results = await Promise.all(numbers.map((number) => read(number)));
+          for (const [index, { data: data2, pages }] of results.entries()) {
+            const number = numbers[index];
+            if (Number.isSafeInteger(pages) && pages > 0) total = Math.max(total ?? 0, pages);
+            if (!Array.isArray(data2) || !data2.length && total > number) {
+              throw new Error("Incomplete Trakt watchlist response.");
+            }
+            rows.push(...data2);
+            if (total == null ? data2.length < PAGE_SIZE : number >= total) return { rows, limited: false };
+          }
+          page = last + 1;
+        }
+        if (total != null) return { rows, limited: true };
+        const { data } = await read(MAX_ITEMS + 1, 1);
+        return { rows, limited: Array.isArray(data) && data.length > 0 };
+      }
+    };
+  }
+  var watchlistApi2 = createWatchlistApi2();
+
+  // src/features/watchlist-pick/styles.js
+  var CSS9 = String.raw`
+.ogt-watchlist-pick { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-stat, 6px) 10px; min-inline-size: 0; }
+.ogt-watchlist-pick [hidden] { display: none !important; }
+.ogt-watchlist-pick__button {
+  display: inline-flex; align-items: center; justify-content: center; block-size: var(--control-height, 36px);
+  padding: 0 var(--button-padding-inline, 12px); border: 1px solid light-dark(#d4d4d4, #3b3b3b);
+  border-radius: var(--radius-control, 6px); background: light-dark(#f2f2f2, #232323);
+  color: light-dark(#333, #e6e6e6); font: inherit; font-size: var(--font-size-button-secondary, 13px);
+  white-space: nowrap; cursor: pointer;
+}
+.ogt-watchlist-pick__button:is(:hover, :focus-visible):not(:disabled) {
+  border-color: var(--brand-primary, #ed1c24); color: light-dark(#111, #fff);
+}
+.ogt-watchlist-pick__button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.ogt-watchlist-pick__button:disabled { opacity: .6; cursor: default; }
+.ogt-watchlist-pick__result {
+  max-inline-size: 24ch; overflow: hidden; color: var(--color-text, light-dark(#222, #eee));
+  font-family: var(--font-headings, inherit); font-size: var(--font-size-list-row-meta, 14px);
+  text-decoration: none; text-overflow: ellipsis; white-space: nowrap;
+}
+.ogt-watchlist-pick__result:is(:hover, :focus-visible) { color: var(--color-link-hover, var(--brand-primary, #ed1c24)); text-decoration: underline; }
+.ogt-watchlist-pick__result:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.ogt-watchlist-pick__status { margin: 0; color: var(--color-stat-noun, light-dark(#767676, #9a9a9a)); font-size: 12px; line-height: 1.4; }
+.ogt-watchlist-pick__status:empty { display: none; }
+`;
+
+  // src/features/watchlist-pick/index.js
+  var ID5 = "ogt-watchlist-pick";
+  var ITEMS_TTL_MS = 5 * 60 * 1e3;
+  var FILTER_RETRIES = 2;
+  var FILTER_CHANGED = "The page filter changed while picking. Try again.";
+  var LIMIT_HINT = `Picks use up to the first ${MAX_ITEMS.toLocaleString("en-US")} watchlist entries.`;
+  function failureHint(error) {
+    if (error instanceof MissingClientIdError) {
+      return error.ogSession ? error.message : "Sign in to og.trakt.tv or set a Trakt client ID to pick from a watchlist.";
+    }
+    if (error?.ogSession) return error.message || "Your og.trakt.tv session expired; reload the page to renew it.";
+    if (error?.status === 403 || error?.status === 404) return "This watchlist is private or unavailable.";
+    if (error?.status === 401) return "Sign in to Trakt to pick from this watchlist.";
+    return "Could not read this watchlist. Try again later.";
+  }
+  function profileId(value) {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  var watchlistPick = {
+    id: "watchlist-pick",
+    css: CSS9,
+    authScoped: true,
+    match: (route) => route.name === "watchlist",
+    mount(route) {
+      const actions = document.querySelector("section.title-row .title-bar .actions");
+      if (!actions || document.getElementById(ID5)) return null;
+      const profile = profileId(route.id);
+      const button2 = el("button", { type: "button", class: "ogt-watchlist-pick__button", text: "Pick something" });
+      const result = el("a", { class: "ogt-watchlist-pick__result", hidden: true });
+      const announcer = el("span", { class: "ogt-visually-hidden", role: "status", "aria-live": "polite" });
+      const status = el("span", { class: "ogt-watchlist-pick__status", role: "status", "aria-live": "polite" });
+      const node = el("div", { id: ID5, class: "ogt-watchlist-pick" }, button2, result, announcer, status);
+      const share = [...actions.children].find((child) => child.classList.contains("share"));
+      actions.insertBefore(node, share ?? null);
+      let active2 = true;
+      let busy = false;
+      let previousKey = null;
+      let items = null;
+      let itemsFor = null;
+      let itemsAt = 0;
+      let shownFor = null;
+      const currentDisplay = () => watchlistType(location.search, route.type);
+      const currentFilter = () => currentDisplay() ?? "all";
+      function clearResult() {
+        result.hidden = true;
+        result.removeAttribute("href");
+        result.removeAttribute("title");
+        result.textContent = "";
+        previousKey = null;
+        shownFor = null;
+        announcer.textContent = "";
+      }
+      function showStatus(message) {
+        clearResult();
+        shownFor = message ? currentFilter() : null;
+        status.textContent = message;
+        button2.textContent = "Pick something";
+      }
+      function onQueryChange() {
+        if (shownFor == null || shownFor === currentFilter()) return;
+        if (busy) clearResult();
+        else showStatus("");
+      }
+      async function load(display) {
+        const key = display ?? "all";
+        const fresh = items && itemsFor === key && Date.now() - itemsAt < ITEMS_TTL_MS;
+        if (fresh) return items;
+        const { rows, limited } = await watchlistApi2.list(profile, { display });
+        if (!active2) return null;
+        if (itemsFor !== key) previousKey = null;
+        items = { candidates: watchlistItems(rows), limited };
+        itemsFor = key;
+        itemsAt = Date.now();
+        return items;
+      }
+      async function choose() {
+        if (busy) return;
+        onQueryChange();
+        busy = true;
+        button2.disabled = true;
+        button2.textContent = "Picking…";
+        status.textContent = "Reading the watchlist…";
+        announcer.textContent = "";
+        let display = currentDisplay();
+        try {
+          let loaded = null;
+          for (let attempt = 0; attempt <= FILTER_RETRIES; attempt++) {
+            loaded = await load(display);
+            if (!active2) return;
+            const latest = currentDisplay();
+            if (latest === display) break;
+            display = latest;
+            loaded = null;
+          }
+          if (!loaded) {
+            showStatus(FILTER_CHANGED);
+            return;
+          }
+          const { candidates, limited } = loaded;
+          if (!candidates.length) {
+            showStatus(limited ? `Nothing to pick in this filter. ${LIMIT_HINT}` : "Nothing to pick in this filter.");
+            return;
+          }
+          const picked = pickWatchlistItem(candidates, previousKey);
+          previousKey = picked.key;
+          const label = watchlistLabel(picked);
+          result.href = picked.href;
+          result.textContent = label;
+          result.title = label;
+          result.hidden = false;
+          shownFor = currentFilter();
+          status.textContent = limited ? LIMIT_HINT : "";
+          announcer.textContent = `Picked ${label}.`;
+          button2.textContent = "Pick again";
+        } catch (error) {
+          debugError("watchlist pick failed", error);
+          if (!active2) return;
+          items = null;
+          itemsFor = null;
+          itemsAt = 0;
+          showStatus(display === currentDisplay() ? failureHint(error) : FILTER_CHANGED);
+        } finally {
+          if (active2) {
+            busy = false;
+            button2.disabled = false;
+          }
+        }
+      }
+      button2.addEventListener("click", choose);
+      document.addEventListener("ogt:querychange", onQueryChange);
+      return {
+        node,
+        destroy() {
+          active2 = false;
+          button2.removeEventListener("click", choose);
+          document.removeEventListener("ogt:querychange", onQueryChange);
+          node.remove();
+        }
+      };
+    }
+  };
+
   // src/actions.js
   var PLACEHOLDER_HELP = "Placeholders: {title} {year} {tmdb} {imdb} {imdbnum} {episodeimdb} {episodeimdbnum} {tvdb} {type} {season} {episode} {id} {plural}\nServer hosts: {jellyfin} {emby} {radarr} {sonarr} {seerr}";
   function parseCustomLink(answer) {
@@ -9204,6 +9532,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
     watchlist: "Add to watchlist",
     "watchlist-cards": "Watchlist card shortcuts",
     "watchlist-credits": "Watchlist credit shortcuts",
+    "watchlist-pick": "Watchlist pick",
     "month-review": "Last month in review",
     "all-lists": "All lists",
     "list-preview": "List preview titles"
@@ -9261,7 +9590,7 @@ MIT licensed.`);
   }
 
   // src/main.js
-  var FEATURES = [customLinks, seasonChart, summaryRatings, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, monthReview, allLists, listPreview];
+  var FEATURES = [customLinks, seasonChart, summaryRatings, yourRatings, playback, pronunciation, library, watchlist, watchlistCards, watchlistCredits, watchlistPick, monthReview, allLists, listPreview];
   function isSvelteKit() {
     return Boolean(
       document.body?.hasAttribute("data-sveltekit-preload-data") || document.body?.hasAttribute("data-sveltekit-preload-code") || Object.keys(window).some((key) => key.startsWith("__sveltekit_"))
@@ -9300,6 +9629,9 @@ MIT licensed.`);
           route = next;
           if (changed) document.dispatchEvent(new CustomEvent("ogt:routechange", { detail: { route: next } }));
           sync();
+        },
+        onQuery(route2, search) {
+          document.dispatchEvent(new CustomEvent("ogt:querychange", { detail: { route: route2, search } }));
         },
         // Every settled DOM change: re-mounts anything the app re-rendered away.
         onSettle: sync

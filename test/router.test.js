@@ -82,6 +82,18 @@ test('person routes match only a person page', () => {
 
 test('dashboard routes', () => { for (const path of ['/', '/dashboard', '/dashboard/']) assert.equal(parseRoute(path).name, 'dashboard'); });
 
+test('watchlist routes keep the profile and optional legacy type', () => {
+  const all = parseRoute('/users/justin/watchlist');
+  assert.equal(all.name, 'watchlist');
+  assert.equal(all.id, 'justin');
+  assert.equal(all.type, null);
+  assert.equal(parseRoute('/users/justin/watchlist/').name, 'watchlist');
+  assert.equal(parseRoute('/users/justin/watchlist/movies').type, 'movies');
+  assert.equal(parseRoute('/users/justin/watchlist/shows').type, 'shows');
+  assert.equal(parseRoute('/users/justin/watchlist/comments').name, 'other');
+  assert.equal(parseRoute('/users/justin/watchlist/movies/2').name, 'other');
+});
+
 test('list indexes are named and keep the profile slug', () => {
   const personal = parseRoute('/users/justin/lists');
   assert.equal(personal.name, 'lists');

@@ -32,6 +32,9 @@ export const SELECTORS = [
   { feature: 'watchlist credit toolbar', pages: ['person'], selector: '#credits .toolbar .controls' },
   { feature: 'watchlist credit rows', pages: ['person'], selector: 'article.credit-row a.poster[href^="/movies/"], article.credit-row a.poster[href^="/shows/"]' },
   { feature: 'watchlist credit list controls', pages: ['person'], selector: 'article.credit-row .quick-icons .list-control.card, article.credit-row .quick-icons button.action.list' },
+  // Feature 33 mounts in the list's own title bar; og filters the same page with `?display=`.
+  { feature: 'watchlist pick', pages: ['watchlist'], selector: 'section.title-row .title-bar .actions' },
+  { feature: 'watchlist pick (filter)', pages: ['watchlist'], selector: 'a[href*="/watchlist?display=movie"]' },
   // Signed-in pages: og redirects these to sign-in without a session, so they come from `--signed-in <dir>`.
   { feature: 'playback overview', pages: ['progress'], selector: 'section.progress' },
   { feature: 'month review', pages: ['dashboard'], selector: 'nav.ribbon' },

@@ -37,6 +37,9 @@ export function parseRoute(pathname = location.pathname) {
   if (path === '/' || path === '/dashboard') return { name: 'dashboard', kind: null, id: null, path, key: path };
   const progress = path.match(/^\/users\/([^/]+)\/progress(?:\/.*)?$/);
   if (progress) return { name: 'progress', kind: null, id: progress[1], path, key: path };
+  // og's watchlist is one page filtered by `?display=`; the old `/watchlist/movies` path redirects, but accept it too.
+  const watchlist = path.match(/^\/users\/([^/]+)\/watchlist(?:\/(movies|shows|seasons|episodes))?$/);
+  if (watchlist) return { name: 'watchlist', kind: null, id: watchlist[1], type: watchlist[2] ?? null, path, key: path };
   const person = path.match(/^\/people\/([^/]+)$/);
   if (person) return { name: 'person', kind: 'person', id: person[1], path, key: path };
   // Lists live under the profile: personal, smart, collaborations and liked lists. Individual lists
@@ -91,14 +94,20 @@ export function parseRoute(pathname = location.pathname) {
  * covers it. A debounced observer is the safety net for anything else (and for
  * re-renders that replace the DOM under us).
  */
-export function createRouter({ onRoute, onSettle }) {
+export function createRouter({ onRoute, onQuery, onSettle }) {
   let lastKey = null;
+  let lastSearch = null;
 
   const settle = debounce(() => {
     const route = parseRoute();
+    const search = location.search;
+    const queryChanged = search !== lastSearch;
+    lastSearch = search;
     if (route.key !== lastKey) {
       lastKey = route.key;
       onRoute(route);
+    } else if (queryChanged) {
+      onQuery?.(route, search);
     }
     onSettle?.(route);
   }, 150);
@@ -129,6 +138,7 @@ export function createRouter({ onRoute, onSettle }) {
   const ready = () => {
     const route = parseRoute();
     lastKey = route.key;
+    lastSearch = location.search;
     onRoute(route);
     onSettle?.(route);
   };

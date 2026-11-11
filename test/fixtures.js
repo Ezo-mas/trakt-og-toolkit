@@ -95,6 +95,30 @@ export const WATCHLIST_HTML = `
   </div></div></section>
 </main>`;
 
+/** Live /users/justin/watchlist (2026-11-11, trakt-og d320877): the media filter (og uses `?display=` and 301s
+ * `/watchlist/movies` to the bare page), the list title bar with its actions, and the items section below it. */
+export const WATCHLIST_PAGE_HTML = `
+<main id="content">
+  <section class="filters" aria-label="Watchlist filters"><div class="container"><div class="links">
+    <a href="/users/justin/watchlist" aria-current="page">All</a>
+    <a href="/users/justin/watchlist?display=movie">Movies</a>
+    <a href="/users/justin/watchlist?display=show">Shows</a>
+    <a href="/users/justin/watchlist?display=season">Seasons</a>
+    <a href="/users/justin/watchlist?display=episode">Episodes</a>
+  </div></div></section>
+  <section class="title-row" aria-labelledby="list-title">
+    <div class="container">
+      <div class="title-bar">
+        <h2 id="list-title"><a class="list-title" href="/users/justin/watchlist">Watchlist</a></h2>
+        <div class="actions">
+          <span class="share"><button type="button" class="share normal" aria-label="Copy Link">Copy Link</button></span>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="items" aria-label="Watchlist items" aria-busy="false"><div class="container"></div></section>
+</main>`;
+
 /** Hand-trimmed fanart-card from live /movies/trending (2026-11-01). Poster variant uses the
  * same controls (also checked on the saved show page). Signed-in rich tooltip comes from ListedTip. */
 export function watchlistCardHtml({ id = 'card-movie', href = '/movies/verity-2026', small = false } = {}) {

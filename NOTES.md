@@ -13,6 +13,33 @@ Working notes and known issues. Newest first.
 - `test/userscript-header.test.js` reads the committed bundle and `.meta.js`, so it fails when the header was
   changed without `npm run build`. Version bumps still happen at release, when `src/meta.js` and `dist/` are rebuilt together.
 
+## 2026-11-11: random watchlist pick (feature 33)
+
+- Live og (2026-11-11, trakt-og `d320877`): the watchlist filter is `?display=movie|show|season|episode` on
+  `/users/:id/watchlist`; `/watchlist/movies` and the other type paths answer 301 to the bare page. The picker reads
+  `display` when a pick starts, so og's in-place filter changes need no remount.
+- The stable insertion point is `section.title-row .title-bar .actions`, before og's `.share` control. The list's
+  heading is `h2#list-title` and the filters sit in a separate section above it.
+- API entries are `{ type, movie|show|season|episode, show? }`. Seasons wrap `{ number, ids }` and episodes
+  `{ title, season, number }`; both link through `show.ids.slug`. Reads use `/users/:id/watchlist[/movies|shows|
+  seasons|episodes]` with 100 per page. Page 1 is read alone; once Trakt sends a page count, the rest are read four at
+  a time, and without one, pages are read one by one until a short one. An empty signed-in body or 204 counts as an
+  empty page. The picker shows a note when the 50-page read limit bounds the candidate pool; a list with no page count
+  whose 50 pages are all full gets one more one-entry read to check whether anything is past the limit.
+  og's session or the toolkit sign-in is used for private profiles; without either the button shows a one-line hint.
+- The picker checks the media filter again after each list read; if it changed, it reads for the current filter. A read
+  that fails after the filter changed asks to try again instead of clearing silently.
+  Same-path query changes reported by the router clear a pick or status message from the previous filter. Loaded
+  entries are kept for five minutes so **Pick again** does not repeat the whole list fetch.
+- An expired og session gets og's reload message; missing credentials, private lists and 404s keep their one-line
+  hints. Results carry the full label in `title` and announce the pick through a visually hidden live region.
+- Fixture `WATCHLIST_PAGE_HTML` is the live `/users/justin/watchlist` (323 items) trimmed to the filter links, title
+  bar and items section. Tests cover normalization, filter mapping, mid-read and post-pick filter changes, seasons and
+  episodes, empty lists, expired og sessions, both paging paths, repeat avoidance, private-list hints and teardown.
+  The watched-title filter remains out of scope.
+- Public watchlist reads pass `{ ttl: 0 }` so the picker's five-minute cache controls freshness. Rerolls sample
+  evenly among the remaining entries and can repeat a lone candidate.
+
 ## v0.4.0 (2026-11-10)
 
 Release of everything since v0.3.0, so userscript managers offer the update:
