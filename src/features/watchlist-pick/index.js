@@ -14,6 +14,7 @@ const ID = 'ogt-watchlist-pick';
 const ITEMS_TTL_MS = 5 * 60 * 1000;
 /** Filter changes during a read are retried, but a page that keeps changing must not spin forever. */
 const FILTER_RETRIES = 2;
+const FILTER_CHANGED = 'The page filter changed while picking. Try again.';
 const LIMIT_HINT = `Picks use up to the first ${MAX_ITEMS.toLocaleString('en-US')} watchlist entries.`;
 
 function failureHint(error) {
@@ -123,7 +124,7 @@ export const watchlistPick = {
           loaded = null;
         }
         if (!loaded) {
-          showStatus('The page filter changed while picking. Try again.');
+          showStatus(FILTER_CHANGED);
           return;
         }
         const { candidates, limited } = loaded;
@@ -149,7 +150,8 @@ export const watchlistPick = {
         items = null;
         itemsFor = null;
         itemsAt = 0;
-        showStatus(display === currentDisplay() ? failureHint(error) : '');
+        // A failed read for a filter the page has since left still needs an answer, or the click looks ignored.
+        showStatus(display === currentDisplay() ? failureHint(error) : FILTER_CHANGED);
       } finally {
         if (active) {
           busy = false;

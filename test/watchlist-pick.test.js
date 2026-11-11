@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   apiType, normalizeWatchlistItem, pickWatchlistItem, watchlistItems, watchlistLabel, watchlistType,
 } from '../src/features/watchlist-pick/data.js';
-import { createWatchlistApi, MAX_PAGES, PAGE_SIZE } from '../src/features/watchlist-pick/api.js';
+import { BATCH, createWatchlistApi, MAX_ITEMS, MAX_PAGES, PAGE_SIZE } from '../src/features/watchlist-pick/api.js';
 
 const movie = {
   type: 'movie',
@@ -150,14 +150,16 @@ test('signed-in reads without a page count continue until a short page', async (
   assert.deepEqual(calls, [1, 2]);
 });
 
-test('signed-in reads request one page at a time and report the read limit', async () => {
-  let requests = 0;
+test('signed-in reads batch pages once the count is known and report the read limit', async () => {
+  const pages = [];
   let inFlight = 0;
+  let peak = 0;
   const api = createWatchlistApi({
     signedIn: () => true,
-    authPage: async () => {
-      requests++;
-      assert.equal(++inFlight, 1);
+    authPage: async (_, { page }) => {
+      pages.push(page);
+      peak = Math.max(peak, ++inFlight);
+      if (page === 1) assert.equal(inFlight, 1, 'page 1 is read alone to learn the count');
       await Promise.resolve();
       inFlight--;
       return { data: [movie], pages: MAX_PAGES + 1 };
@@ -165,5 +167,29 @@ test('signed-in reads request one page at a time and report the read limit', asy
   });
 
   assert.deepEqual(await api.list('justin'), { rows: Array(MAX_PAGES).fill(movie), limited: true });
-  assert.equal(requests, MAX_PAGES);
+  assert.deepEqual(pages, Array.from({ length: MAX_PAGES }, (_, index) => index + 1), 'pages are read in order');
+  assert.equal(peak, BATCH);
+});
+
+test('a signed-in empty response or 204 is an empty page, not a failure', async () => {
+  const api = createWatchlistApi({ signedIn: () => true, authPage: async () => null });
+  assert.deepEqual(await api.list('justin'), { rows: [], limited: false });
+});
+
+test('a public list of exactly the read limit probes one entry past it', async () => {
+  for (const [beyond, limited] of [[[], false], [[movie], true]]) {
+    const calls = [];
+    const api = createWatchlistApi({
+      signedIn: () => false,
+      get: async (path) => {
+        calls.push(path);
+        return path.includes('limit=1&') || path.endsWith('limit=1') ? beyond : Array(PAGE_SIZE).fill(movie);
+      },
+    });
+    const result = await api.list('justin');
+    assert.equal(result.rows.length, MAX_ITEMS);
+    assert.equal(result.limited, limited);
+    assert.equal(calls.length, MAX_PAGES + 1);
+    assert.equal(calls.at(-1), `/users/justin/watchlist?page=${MAX_ITEMS + 1}&limit=1`);
+  }
 });

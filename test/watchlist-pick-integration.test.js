@@ -164,6 +164,18 @@ test('a filter change during a read picks from the new filter', async (t) => {
   assert.equal(b.result().textContent, 'Breaking Bad (2008)');
 });
 
+test('a failed read after a filter change asks to try again', async (t) => {
+  const b = boot({ delay: 100, fail: (pathname) => pathname === '/users/justin/watchlist' });
+  t.after(() => b.window.close());
+  await waitFor(() => b.panel(), { message: 'the watchlist picker to mount' });
+
+  b.button().click();
+  b.window.history.replaceState({}, '', '/users/justin/watchlist?display=show');
+  await waitFor(() => !b.button().disabled, { message: 'the failed read to finish' });
+  assert.equal(b.status().textContent, 'The page filter changed while picking. Try again.');
+  assert.ok(b.result().hidden);
+});
+
 test('changing the filter hides a result from the old filter', async (t) => {
   const b = boot();
   t.after(() => b.window.close());

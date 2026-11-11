@@ -19,10 +19,13 @@ Working notes and known issues. Newest first.
   heading is `h2#list-title` and the filters sit in a separate section above it.
 - API entries are `{ type, movie|show|season|episode, show? }`. Seasons wrap `{ number, ids }` and episodes
   `{ title, season, number }`; both link through `show.ids.slug`. Reads use `/users/:id/watchlist[/movies|shows|
-  seasons|episodes]` with 100 per page, one request at a time. Reads use the authenticated page count when available
-  and stop at a short page otherwise. The picker shows a note when the 50-page read limit bounds the candidate pool.
+  seasons|episodes]` with 100 per page. Page 1 is read alone; once Trakt sends a page count, the rest are read four at
+  a time, and without one, pages are read one by one until a short one. An empty signed-in body or 204 counts as an
+  empty page. The picker shows a note when the 50-page read limit bounds the candidate pool; a list with no page count
+  whose 50 pages are all full gets one more one-entry read to check whether anything is past the limit.
   og's session or the toolkit sign-in is used for private profiles; without either the button shows a one-line hint.
-- The picker checks the media filter again after each list read; if it changed, it reads for the current filter.
+- The picker checks the media filter again after each list read; if it changed, it reads for the current filter. A read
+  that fails after the filter changed asks to try again instead of clearing silently.
   Same-path query changes reported by the router clear a pick or status message from the previous filter. Loaded
   entries are kept for five minutes so **Pick again** does not repeat the whole list fetch.
 - An expired og session gets og's reload message; missing credentials, private lists and 404s keep their one-line

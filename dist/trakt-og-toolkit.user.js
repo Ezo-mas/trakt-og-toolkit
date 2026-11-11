@@ -9145,26 +9145,45 @@
   var PAGE_SIZE = 100;
   var MAX_PAGES2 = 50;
   var MAX_ITEMS = PAGE_SIZE * MAX_PAGES2;
+  var BATCH = 4;
   function watchlistPath(user, display) {
     const type = apiType(display);
     return `/users/${encodeURIComponent(user)}/watchlist${type ? `/${type}` : ""}`;
   }
   function createWatchlistApi2({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
     return {
-      /** Read pages in API order, using the page count when Trakt sends it. */
+      /**
+       * Read pages in API order. Once Trakt sends a page count, the remaining pages are read `BATCH` at a time;
+       * without one, pages are read one by one until a short page.
+       */
       async list(user, { display = null } = {}) {
         const path = watchlistPath(user, display);
         const authenticated2 = signedIn();
+        const read = async (page2, limit = PAGE_SIZE) => {
+          if (!authenticated2) return { data: await get(`${path}?page=${page2}&limit=${limit}`, { ttl: 0 }), pages: null };
+          return await authPage(path, { page: page2, limit }) ?? { data: [], pages: null };
+        };
         const rows = [];
         let total = null;
-        for (let page = 1; page <= MAX_PAGES2; page++) {
-          const { data, pages } = authenticated2 ? await authPage(path, { page, limit: PAGE_SIZE }) : { data: await get(`${path}?page=${page}&limit=${PAGE_SIZE}`, { ttl: 0 }) };
-          if (Number.isSafeInteger(pages) && pages > 0) total = Math.max(total ?? 0, pages);
-          if (!Array.isArray(data) || !data.length && total > 1) throw new Error("Incomplete Trakt watchlist response.");
-          rows.push(...data);
-          if (total == null ? data.length < PAGE_SIZE : page >= total) return { rows, limited: false };
+        let page = 1;
+        while (page <= MAX_PAGES2) {
+          const last = total == null ? page : Math.min(total, MAX_PAGES2, page + BATCH - 1);
+          const numbers = Array.from({ length: last - page + 1 }, (_, index) => page + index);
+          const results = await Promise.all(numbers.map((number) => read(number)));
+          for (const [index, { data: data2, pages }] of results.entries()) {
+            const number = numbers[index];
+            if (Number.isSafeInteger(pages) && pages > 0) total = Math.max(total ?? 0, pages);
+            if (!Array.isArray(data2) || !data2.length && total > number) {
+              throw new Error("Incomplete Trakt watchlist response.");
+            }
+            rows.push(...data2);
+            if (total == null ? data2.length < PAGE_SIZE : number >= total) return { rows, limited: false };
+          }
+          page = last + 1;
         }
-        return { rows, limited: true };
+        if (total != null) return { rows, limited: true };
+        const { data } = await read(MAX_ITEMS + 1, 1);
+        return { rows, limited: Array.isArray(data) && data.length > 0 };
       }
     };
   }
@@ -9201,6 +9220,7 @@
   var ID5 = "ogt-watchlist-pick";
   var ITEMS_TTL_MS = 5 * 60 * 1e3;
   var FILTER_RETRIES = 2;
+  var FILTER_CHANGED = "The page filter changed while picking. Try again.";
   var LIMIT_HINT = `Picks use up to the first ${MAX_ITEMS.toLocaleString("en-US")} watchlist entries.`;
   function failureHint(error) {
     if (error instanceof MissingClientIdError) {
@@ -9295,7 +9315,7 @@
             loaded = null;
           }
           if (!loaded) {
-            showStatus("The page filter changed while picking. Try again.");
+            showStatus(FILTER_CHANGED);
             return;
           }
           const { candidates, limited } = loaded;
@@ -9320,7 +9340,7 @@
           items = null;
           itemsFor = null;
           itemsAt = 0;
-          showStatus(display === currentDisplay() ? failureHint(error) : "");
+          showStatus(display === currentDisplay() ? failureHint(error) : FILTER_CHANGED);
         } finally {
           if (active2) {
             busy = false;
