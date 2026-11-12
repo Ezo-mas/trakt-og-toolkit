@@ -21,6 +21,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @grant        GM_unregisterMenuCommand
+// @grant        GM_info
 // @grant        GM_setClipboard
 // @grant        GM_openInTab
 // @connect      api.trakt.tv
@@ -9922,6 +9923,7 @@ MIT licensed.`);
   var ON = "✅";
   var OFF = "⬜";
   var toggleIds = [];
+  var stableToggleIds = false;
   function canRelabel() {
     return typeof GM_unregisterMenuCommand === "function";
   }
@@ -9930,30 +9932,36 @@ MIT licensed.`);
   }
   function registerToggles(features) {
     const relabel = canRelabel();
-    if (relabel) for (const id of toggleIds) GM_unregisterMenuCommand(id);
-    else if (toggleIds.length) return;
+    if (!relabel && toggleIds.length) return;
+    if (!stableToggleIds) for (const id of toggleIds) GM_unregisterMenuCommand(id);
     toggleIds = [];
-    const add = (label, enabled, onClick) => {
+    const violentmonkey = relabel && typeof GM_info !== "undefined" && GM_info.scriptHandler === "Violentmonkey";
+    let acceptsStableIds = violentmonkey;
+    const add = (key, label, enabled, onClick) => {
       const caption = toggleCaption(label, enabled, relabel);
+      const options = { autoClose: false };
+      if (violentmonkey) options.id = `ogt-toggle:${key}`;
       const id = GM_registerMenuCommand(caption, () => {
         onClick();
         if (relabel) registerToggles(features);
-      });
+      }, options);
+      acceptsStableIds &&= id === options.id;
       toggleIds.push(id ?? caption);
     };
-    add("Debug logging", isDebug(), () => {
+    add("debug", "Debug logging", isDebug(), () => {
       const next = setDebug(!isDebug());
       applyDebugSetting();
-      toast(next ? "Debug logging on — check the console." : "Debug logging off.");
+      if (!stableToggleIds) toast(next ? "Debug logging on — check the console." : "Debug logging off.");
     });
     for (const feature of features) {
       const label = FEATURE_LABELS[feature.id] || feature.id.replace(/-/g, " ");
-      add(label, isFeatureEnabled(feature.id), () => {
+      add(`feature:${feature.id}`, label, isFeatureEnabled(feature.id), () => {
         const enabled = setFeatureEnabled(feature.id, !isFeatureEnabled(feature.id));
-        toast(`${label} ${enabled ? "on" : "off"}.`);
+        if (!stableToggleIds) toast(`${label} ${enabled ? "on" : "off"}.`);
         document.dispatchEvent(new CustomEvent("ogt:featurechange", { detail: { id: feature.id, enabled } }));
       });
     }
+    stableToggleIds = acceptsStableIds;
   }
 
   // src/main.js

@@ -41,20 +41,33 @@ test('feature host never mounts a disabled feature and removes it when switched 
   window.close();
 });
 
-function boot(t, { storage = {}, unregister = false } = {}) {
+function boot(t, { storage = {}, unregister = false, violentmonkey = false } = {}) {
   const window = new Window({ url: 'https://og.trakt.tv/shows/breaking-bad' });
   t.after(() => window.close());
   const data = new Map(Object.entries(storage));
   const menus = new Map();
+  const captionsById = new Map();
+  const unregisterCalls = [];
+  if (violentmonkey) window.GM_info = { scriptHandler: 'Violentmonkey' };
   window.GM_getValue = (key, fallback) => data.has(key) ? data.get(key) : fallback;
   window.GM_setValue = (key, value) => data.set(key, value);
   window.GM_deleteValue = key => data.delete(key);
   window.GM_addStyle = () => {};
-  window.GM_registerMenuCommand = (name, callback) => {
+  window.GM_registerMenuCommand = (name, callback, options) => {
+    if (violentmonkey && options?.id) {
+      assert.equal(options.autoClose, false);
+      menus.delete(captionsById.get(options.id));
+      captionsById.set(options.id, name);
+      menus.set(name, callback);
+      return options.id;
+    }
     menus.set(name, callback);
     return name;
   };
-  if (unregister) window.GM_unregisterMenuCommand = (name) => menus.delete(name);
+  if (unregister) window.GM_unregisterMenuCommand = (name) => {
+    unregisterCalls.push(name);
+    menus.delete(name);
+  };
   window.document.write(`<!doctype html><html><head></head><body>${SHOW_HTML}</body></html>`);
   window.eval(bundle);
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
@@ -63,6 +76,8 @@ function boot(t, { storage = {}, unregister = false } = {}) {
     document: window.document,
     data,
     menus,
+    captionsById,
+    unregisterCalls,
     panel: () => window.document.getElementById('ogt-custom-links'),
     toggle: (label) => (menus.get(`Toggle ${label}`) ?? menus.get(`✅ ${label}`) ?? menus.get(`⬜ ${label}`))(),
   };
@@ -200,6 +215,7 @@ test('with GM_unregisterMenuCommand, toggles show their state and relabel in pla
   await wait();
   assert.equal(Boolean(b.panel()), false);
   assert.ok(b.menus.has('⬜ Custom links'));
+  assert.match(b.document.querySelector('.ogt-toast')?.textContent ?? '', /Custom links off/);
   assert.equal(b.menus.has('✅ Custom links'), false, 'the old label is removed, not duplicated');
   assert.equal(names().length, before.length);
   assert.equal(names().indexOf('⬜ Custom links'), before.indexOf('✅ Custom links'), 'the toggle keeps its place');
@@ -208,4 +224,20 @@ test('with GM_unregisterMenuCommand, toggles show their state and relabel in pla
   b.toggle('Debug logging');
   await wait();
   assert.ok(b.menus.has('✅ Debug logging'));
+});
+
+test('Violentmonkey updates the same menu entries across consecutive toggle clicks', async t => {
+  const b = boot(t, { unregister: true, violentmonkey: true });
+  await wait();
+  const ids = [...b.captionsById.keys()];
+  const size = b.menus.size;
+
+  b.toggle('Custom links');
+  b.toggle('Debug logging');
+  assert.deepEqual([...b.captionsById.keys()], ids);
+  assert.equal(b.captionsById.get('ogt-toggle:feature:custom-links'), '⬜ Custom links');
+  assert.equal(b.captionsById.get('ogt-toggle:debug'), '✅ Debug logging');
+  assert.equal(b.menus.size, size);
+  assert.deepEqual(b.unregisterCalls, []);
+  assert.equal(b.document.querySelector('.ogt-toast'), null);
 });
