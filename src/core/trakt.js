@@ -3,9 +3,10 @@ import {
   authError, readTokens, refreshTokens, privateRequest, clearTokens, getSessionGeneration,
 } from './oauth.js';
 import { API, CACHE_TTL } from '../config.js';
-import { getJSON, getJSONWithHeaders, headerValue, MAX_RETRY_WAIT_MS } from './http.js';
+import { getJSON, getJSONWithHeaders, headerValue } from './http.js';
 import { getClientId } from '../settings.js';
 import { readOgSession } from './og-session.js';
+import { cancelledError, enqueueWrite, markWriteDispatched, retryRateLimitedWrite, waitForTurn } from './write-queue.js';
 
 export class MissingClientIdError extends Error {
   constructor() {
@@ -24,39 +25,10 @@ export function listReadFailureHint(error, target, action) {
   return `Could not read this ${target}. Try again later.`;
 }
 
-/**
- * Trakt's current standard-app limit for authenticated writes is one POST/PUT/DELETE per second
- * (https://developer.trakt.tv/docs/rate-limiting, checked 2026-11-07). One shared FIFO queue sends
- * those requests serially and spaces actual dispatches by at least this interval.
- */
-const WRITE_INTERVAL_MS = 1000;
-/** Only a 429 establishes that a write was rejected before being processed; retry those a few times. */
-const WRITE_RETRIES = 2;
-const RETRY_BASE_MS = 1000;
-const RETRY_MAX_MS = 30000;
-/** Long Retry-After waits are sliced so cancellation and sign-out are noticed without shortening them. */
-const WAIT_SLICE_MS = 250;
-
-let writeTail = Promise.resolve();
-let nextWriteAt = 0;
-let blockedUntil = 0;
-let blockedGeneration = null;
-
-function cancelledError() {
-  const error = authError('Trakt request cancelled.', 0);
-  error.control = true;
-  return error;
-}
-
 function signedOutError() {
   const error = authError('Signed out; sign in to Trakt.');
   error.control = true;
   return error;
-}
-
-/** A Retry-After too long to wait through with a button busy; callers show their 429 message. */
-function rateLimitedError() {
-  return authError('Trakt rate limited this request; try again later.', 429);
 }
 
 function sessionChangedError() {
@@ -123,6 +95,34 @@ function assertOgFresh(auth) {
   return auth;
 }
 
+function assertOgLookupFresh(auth) {
+  if (!auth) throw new MissingClientIdError();
+  if (auth.expiresAt != null && auth.expiresAt <= Date.now()) throw ogLookupExpiredError();
+}
+
+/** og owns renewal. A 401 can only retry an already-rotated token for the same account. */
+function og401Retry(sent, { lookup = false, retried = false } = {}) {
+  if (retried) throw ogSessionExpiredError();
+  const latest = ogAuth();
+  // Public lookups keep their missing/expired-client fallback even after a switch to an expired entry.
+  if (lookup) assertOgLookupFresh(latest);
+  else if (!latest) throw ogSessionExpiredError();
+  if (!sameAuth(latest, sent)) throw sessionChangedError();
+  if (!lookup) assertOgFresh(latest);
+  if (latest.accessToken === sent.accessToken) {
+    throw lookup ? ogLookupExpiredError() : ogSessionExpiredError();
+  }
+  return latest;
+}
+
+function own401Action(sent, retried) {
+  if (retried) return 'clear';
+  const latest = readTokens();
+  if (!latest) throw signedOutError();
+  // Compare against the token dispatched after the HTTP-slot wait.
+  return latest.access_token === sent.accessToken ? 'refresh' : 'retry';
+}
+
 function apiHeaders(clientId, accessToken = null) {
   const headers = {
     'Content-Type': 'application/json', 'trakt-api-version': API.version, 'trakt-api-key': clientId,
@@ -133,32 +133,6 @@ function apiHeaders(clientId, accessToken = null) {
 
 function authHeaders(auth) {
   return apiHeaders(auth.clientId, auth.accessToken);
-}
-
-/** Abortable sleep. Timers are read from the global scope so tests can mock them. */
-function sleep(ms, signal) {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) { reject(cancelledError()); return; }
-    const done = () => { cleanup(); resolve(); };
-    const abort = () => { cleanup(); reject(cancelledError()); };
-    const timer = setTimeout(done, Math.max(0, ms));
-    function cleanup() {
-      clearTimeout(timer);
-      signal?.removeEventListener('abort', abort);
-    }
-    signal?.addEventListener('abort', abort, { once: true });
-  });
-}
-
-/** Full seconds when Trakt sends Retry-After, otherwise bounded exponential backoff with jitter. */
-function retryDelay(headers, attempt) {
-  const raw = headerValue(headers, 'retry-after');
-  if (raw != null && raw !== '') {
-    const retryAfter = Number(raw);
-    if (Number.isFinite(retryAfter) && retryAfter >= 0) return retryAfter * 1000;
-  }
-  const base = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS);
-  return Math.round(base * (0.5 + Math.random()));
 }
 
 /**
@@ -186,38 +160,9 @@ function createWriteEntry(control = {}) {
   };
 }
 
-/** FIFO: one queued write runs at a time; a rejection never blocks later writes. */
-function enqueueWrite(entry, task) {
-  const queued = writeTail.then(() => {
-    entry.check();
-    return task();
-  });
-  writeTail = queued.then(() => {}, () => {});
-  return queued;
-}
-
-/** Wait for the one-second write pacing slot and any account-wide Retry-After block. */
-async function waitForTurn(entry) {
-  for (;;) {
-    entry.check();
-    const blocked = blockedGeneration === entry.generation ? blockedUntil : 0;
-    // Fail fast rather than leave a queued action spinning for minutes; the block itself stays.
-    if (blocked - Date.now() > MAX_RETRY_WAIT_MS) throw rateLimitedError();
-    const remaining = Math.max(nextWriteAt, blocked) - Date.now();
-    if (remaining <= 0) return;
-    await sleep(Math.min(remaining, WAIT_SLICE_MS), entry.signal);
-  }
-}
-
-function blockWrites(ms, generation) {
-  const until = Date.now() + ms;
-  if (blockedGeneration === generation) blockedUntil = Math.max(blockedUntil, until);
-  else { blockedGeneration = generation; blockedUntil = until; }
-}
-
 /**
- * Read the credential at send time. The toolkit's own token is refreshed outside the write
- * queue when near expiry; og's token is never refreshed, because og rotates its refresh token.
+ * Read the credential before acquiring a transport slot. The toolkit can refresh its own token
+ * when near expiry. og rotates its refresh token, so the toolkit leaves that renewal to og.
  */
 async function ensureAuth() {
   const tokens = readTokens();
@@ -237,9 +182,7 @@ async function ensureAuth() {
  */
 async function ogGet(path, ttl, withHeaders = false) {
   const first = ogAuth();
-  if (!first) throw new MissingClientIdError();
-  // An expired og token cannot authorize even a public lookup.
-  if (first.expiresAt != null && first.expiresAt <= Date.now()) throw ogLookupExpiredError();
+  assertOgLookupFresh(first);
   const url = `${API.base}${path}`;
   const read = (auth) => (withHeaders
     ? getJSONWithHeaders(url, { headers: authHeaders(auth) })
@@ -248,13 +191,7 @@ async function ogGet(path, ttl, withHeaders = false) {
     return await read(first);
   } catch (error) {
     if (error?.status !== 401) throw error;
-    const latest = ogAuth();
-    // No entry at all means there is no client ID to fall back to; an expired one needs a reload.
-    if (!latest) throw new MissingClientIdError();
-    if (latest.expiresAt != null && latest.expiresAt <= Date.now()) throw ogLookupExpiredError();
-    if (!sameAuth(latest, first)) throw sessionChangedError();
-    // Rejected before its expiry: og's session was revoked, and only a reload can renew it.
-    if (latest.accessToken === first.accessToken) throw ogLookupExpiredError();
+    const latest = og401Retry(first, { lookup: true });
     try {
       return await read(latest);
     } catch (retryError) {
@@ -311,7 +248,6 @@ export async function ping() {
   return Date.now() - started;
 }
 
-
 /**
  * Authenticated requests never enter the public response cache. POST/PUT/DELETE go through the
  * shared write queue; GET keeps its previous concurrency and caching behaviour. `control.signal`
@@ -338,12 +274,24 @@ async function authenticated(method, path, body, options, metadata, control) {
   }
   const requestPath = query.size ? `${path}?${query}` : path;
   const url = `${API.base}${requestPath}`;
-  const exchange = () => sendAuthenticated(method, url, body, metadata, method === 'GET' ? null : control);
-  if (method === 'GET') return exchange();
+  if (method === 'GET') return sendAuthenticated(method, url, body, metadata, null);
 
   const entry = createWriteEntry(control);
   entry.check();
   return enqueueWrite(entry, () => sendAuthenticated(method, url, body, metadata, entry));
+}
+
+function parseAuthenticatedResponse(response, metadata) {
+  if (response.status < 200 || response.status >= 300) throw authError('Authenticated Trakt request failed.', response.status);
+  if (!response.text || response.status === 204) return null;
+  try {
+    const data = JSON.parse(response.text);
+    if (!metadata) return data;
+    const raw = headerValue(response.headers, 'x-pagination-page-count');
+    const pages = raw == null ? null : Number(raw);
+    if (pages !== null && (!Number.isSafeInteger(pages) || pages < 0)) throw new Error();
+    return { data, pages };
+  } catch { throw authError('Invalid Trakt response.'); }
 }
 
 async function sendAuthenticated(method, url, body, metadata, entry) {
@@ -357,8 +305,8 @@ async function sendAuthenticated(method, url, body, metadata, entry) {
     if (entry) entry.check();
     throw sessionChangedError();
   };
-  let refreshed = false;
-  let renewed = false;
+  let retriedOwn = false;
+  let retriedOg = false;
   let rateRetries = 0;
   for (;;) {
     checkOrigin();
@@ -385,8 +333,7 @@ async function sendAuthenticated(method, url, body, metadata, entry) {
             assertOgFresh(current);
             entry.check();
             sent = current;
-            // Pacing starts at the actual transport dispatch, not while waiting for a slot.
-            nextWriteAt = Date.now() + WRITE_INTERVAL_MS;
+            markWriteDispatched();
             return { headers: authHeaders(current) };
           },
         } : {}),
@@ -395,58 +342,30 @@ async function sendAuthenticated(method, url, body, metadata, entry) {
       if (entry?.signal?.aborted) throw cancelledError();
       throw error;
     }
+    checkOrigin();
+    if (response.status === 401 && sent.kind === 'og') {
+      og401Retry(sent, { retried: retriedOg });
+      retriedOg = true;
+      continue;
+    }
     if (response.status === 401) {
-      checkOrigin();
-      if (sent.kind === 'og') {
-        // Never refresh og's token: a second refresher would strand og's session. If og has
-        // already rotated it for this account (in another tab, or on its own), retry once with
-        // the new token; otherwise ask the user to reload so og can renew it. A different
-        // account is a replacement, never a renewal, and must not receive old work.
-        if (renewed) throw ogSessionExpiredError();
-        const latest = ogAuth();
-        if (!latest) throw ogSessionExpiredError();
-        if (!sameAuth(latest, sent)) throw sessionChangedError();
-        assertOgFresh(latest);
-        if (latest.accessToken === sent.accessToken) throw ogSessionExpiredError();
-        renewed = true;
-        continue;
-      }
-      if (refreshed) {
+      const action = own401Action(sent, retriedOwn);
+      if (action === 'clear') {
         clearTokens();
         throw authError('Trakt session expired; sign in again.', 401);
       }
-      // Compare with the token that was actually dispatched: another request may have refreshed
-      // tokens while this one waited for an HTTP slot, after the earlier snapshot was read.
-      const latest = readTokens();
-      if (!latest) throw signedOutError();
-      if (latest.access_token === sent.accessToken) await refreshTokens();
-      refreshed = true;
+      if (action === 'refresh') await refreshTokens();
+      retriedOwn = true;
       continue;
     }
     // A response belongs to the account that sent it. An og account switch during the request
     // must not return the old account's data or success to the replacement session's UI.
-    checkOrigin();
     if (!sameAuth(currentAuth(), sent)) throw sessionChangedError();
-    if (response.status === 429 && entry) {
-      // Trakt says the request was rejected by the limiter; block every write in this session for
-      // the full Retry-After (or the fallback backoff) before retrying it and dispatching others.
-      const delay = retryDelay(response.headers, rateRetries);
-      blockWrites(delay, entry.generation);
-      if (rateRetries < WRITE_RETRIES && delay <= MAX_RETRY_WAIT_MS) {
-        rateRetries += 1;
-        continue;
-      }
+    if (response.status === 429 && entry && retryRateLimitedWrite(response.headers, entry.generation, rateRetries)) {
+      rateRetries += 1;
+      continue;
     }
-    if (response.status < 200 || response.status >= 300) throw authError('Authenticated Trakt request failed.', response.status);
-    if (!response.text || response.status === 204) return null;
-    try {
-      const data = JSON.parse(response.text);
-      if (!metadata) return data;
-      const raw = headerValue(response.headers, 'x-pagination-page-count');
-      const pages = raw == null ? null : Number(raw);
-      if (pages !== null && (!Number.isSafeInteger(pages) || pages < 0)) throw new Error();
-      return { data, pages };
-    } catch { throw authError('Invalid Trakt response.'); }
+    return parseAuthenticatedResponse(response, metadata);
   }
 }
 
