@@ -151,7 +151,7 @@ export function createLinks(state) {
       if (group.length) linksRow.append(el('div', { class: `ogt-links-group ogt-links-${kind}` }, group.map((entry) => compactLink(entry, attachResolver))));
     }
     syncWatchNow(entries);
-    lookUpShow(values);
+    lookUpShow();
     lookUpEpisode();
   }
 

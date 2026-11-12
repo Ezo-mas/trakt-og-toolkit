@@ -2,6 +2,14 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-12: refactor 35b — custom links panel
+
+- Split the panel into `manager.js` and `editor.js` for the dialog, `picker.js` for season/episode controls,
+  `lookups.js` for show and episode IDs, and `links.js` for the strip, resolver activation and Watch Now.
+  The panel passes shared state explicitly and retains its observer and refresh listener; each moved component
+  cleans up its own persistent resources. The existing `data.js` is 401 lines and was left outside this split.
+- The manager stays outside the movable panel, and its close/focus behavior and lazy lookup timing remain unchanged.
+
 ## 2026-11-12: refactor 35a — shared helpers and dead code
 
 - `usableId`, `titleOf` and `yearOf` moved to `src/core/entities.js`; they return null on a miss. csv-export turns

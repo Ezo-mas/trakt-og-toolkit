@@ -23,7 +23,7 @@ export function createLookups(state) {
   /** Season/episode pages: fetch the show once a link needs what og's page doesn't give (the show's year, an episode
    *  page's IMDb id). This runs on every render, so a link added in the editor triggers it too. Without a client ID
    *  those links stay hidden rather than point at the season or episode. */
-  function lookUpShow(values) {
+  function lookUpShow() {
     if (!fixedSelection || showRequested || !getClientId()) return;
     const missing = ['year', 'tmdb', 'imdb', 'tvdb'].filter((key) => meta[key] == null);
     if (!missing.length) return;

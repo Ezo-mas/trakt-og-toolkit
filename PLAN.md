@@ -12,7 +12,7 @@ behaviour, never its code. Finished features are listed at the end; their detail
 | 32 | Auto-update URLs in the userscript header | nothing | done |
 | 33 | Random pick from your watchlist | public API or og's session | done |
 | 34 | Export a list or watchlist to CSV | public API or og's session | done |
-| 35 | Refactor: simpler code, more reuse | tests and drift as the safety net | in progress (35a) |
+| 35 | Refactor: simpler code, more reuse | tests and drift as the safety net | in progress (35b) |
 | 36 | Shorter README with a screenshot of every feature | a signed-in og browser | after 35 |
 | 37 | Menu toggles show whether each feature is on | `GM_unregisterMenuCommand` | done |
 

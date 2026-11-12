@@ -3663,7 +3663,7 @@
       getServers()
     );
     let showRequested = false;
-    function lookUpShow(values) {
+    function lookUpShow() {
       if (!fixedSelection || showRequested || !getClientId()) return;
       const missing = ["year", "tmdb", "imdb", "tvdb"].filter((key) => meta[key] == null);
       if (!missing.length) return;
@@ -3825,7 +3825,7 @@
         if (group.length) linksRow.append(el("div", { class: `ogt-links-group ogt-links-${kind}` }, group.map((entry) => compactLink(entry, attachResolver))));
       }
       syncWatchNow(entries);
-      lookUpShow(values);
+      lookUpShow();
       lookUpEpisode();
     }
     function syncWatchNow(entries = renderedEntries) {
