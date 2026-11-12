@@ -17,8 +17,8 @@ behaviour, never its code. Finished features are listed at the end; their detail
 | 37 | Menu toggles show whether each feature is on | `GM_unregisterMenuCommand` | done |
 | 38 | Use og sign-in for all Trakt API features | 35 and a signed-in og test session | implemented, live check pending |
 
-After that, maintenance: the daily drift workflow, `npm run drift -- --signed-in <dir>` now and then, and fixes when og
-changes. v0.4.0 released everything shipped before this list. Userscript managers only offer an update when `@version`
+After that, maintenance: the daily drift check on a local systemd timer (Cloudflare blocks GitHub runners, so the
+workflow is manual only), `npm run drift -- --signed-in <dir>` now and then, and fixes when og changes. v0.4.0 released everything shipped before this list. Userscript managers only offer an update when `@version`
 changes, so bump it whenever main should reach users. Re-check og before starting each feature: on 2026-11-10
 og's watchlist page had no random pick and its source had no list export.
 

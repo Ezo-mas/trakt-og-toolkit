@@ -1,8 +1,8 @@
 name: og markup drift
 
+# Manual only: Cloudflare blocks og.trakt.tv from GitHub runners, so the daily check runs on a local
+# systemd timer instead. Run this by hand to try a runner again.
 on:
-  schedule:
-    - cron: '0 6 * * *'
   workflow_dispatch:
 
 permissions:
