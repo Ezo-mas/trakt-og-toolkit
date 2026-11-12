@@ -269,5 +269,4 @@ export function createManager(state) {
     manager.removeEventListener('close', onClose);
     manager.remove();
   } };
-
 }

@@ -4419,12 +4419,7 @@
       timers: [],
       linksRow: el("div", { class: "ogt-links" }),
       controlsRow: el("div", { class: "ogt-row ogt-fields", hidden: true }),
-      watchFallback: el("div", { class: "ogt-watch-fallback", hidden: true, [FALLBACK_ATTR]: "" }),
-      renderLinks: () => renderLinks(),
-      needsSelection: () => needsSelection(),
-      renderControls: () => renderControls(),
-      loadSeasons: () => loadSeasons(),
-      onRefresh: () => onRefresh()
+      watchFallback: el("div", { class: "ogt-watch-fallback", hidden: true, [FALLBACK_ATTR]: "" })
     };
     const { linksRow, controlsRow, watchFallback } = state;
     const managerView = createManager(state);
@@ -4446,6 +4441,7 @@
     const { renderLinks, syncWatchNow } = links;
     const picker = createPicker(state);
     const { needsSelection, renderControls, loadSeasons } = picker;
+    Object.assign(state, { renderLinks, needsSelection, renderControls, loadSeasons, onRefresh });
     function onRefresh() {
       renderLinks();
       if (meta.kind === "show" && needsSelection()) {

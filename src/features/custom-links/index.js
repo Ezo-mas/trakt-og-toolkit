@@ -58,11 +58,6 @@ function createPanel(meta, route) {
     linksRow: el('div', { class: 'ogt-links' }),
     controlsRow: el('div', { class: 'ogt-row ogt-fields', hidden: true }),
     watchFallback: el('div', { class: 'ogt-watch-fallback', hidden: true, [FALLBACK_ATTR]: '' }),
-    renderLinks: () => renderLinks(),
-    needsSelection: () => needsSelection(),
-    renderControls: () => renderControls(),
-    loadSeasons: () => loadSeasons(),
-    onRefresh: () => onRefresh(),
   };
   const { linksRow, controlsRow, watchFallback } = state;
   const managerView = createManager(state);
@@ -87,6 +82,7 @@ function createPanel(meta, route) {
 
   const picker = createPicker(state);
   const { needsSelection, renderControls, loadSeasons } = picker;
+  Object.assign(state, { renderLinks, needsSelection, renderControls, loadSeasons, onRefresh });
 
   function onRefresh() {
     renderLinks();
@@ -110,7 +106,6 @@ function createPanel(meta, route) {
       target.parent.append(node);
     }
   }
-
 
   let watchTimer = null;
   const observer = new MutationObserver(() => {
