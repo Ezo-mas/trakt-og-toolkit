@@ -414,3 +414,31 @@ test('the public transport gives up on a Retry-After beyond a minute instead of 
   assert.equal(response.status, 429);
   assert.equal(calls.length, 1);
 });
+
+test('an authenticated GET 429 neither retries nor blocks a write', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 22_000_000 });
+  reset();
+  mockTransport((call) => call.method === 'GET'
+    ? { status: 429, headers: 'retry-after: 600\r\n' }
+    : { status: 200 });
+  await assert.rejects(apiAuth('GET', '/users/me'), {
+    name: 'HttpError', status: 429, message: 'Authenticated Trakt request failed.', body: null, headers: null,
+  });
+  await apiAuth('POST', '/sync/next', {});
+  assert.deepEqual(paths(), ['/users/me', '/sync/next']);
+});
+
+test('a write retries after exactly a minute when Retry-After is at the wait limit', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 23_000_000 });
+  reset();
+  mockTransport((call, number) => number === 1
+    ? { status: 429, headers: 'retry-after: 60\r\n' }
+    : { status: 200 });
+  const write = apiAuth('POST', '/sync/boundary', {});
+  await settle();
+  t.mock.timers.tick(59_999); await settle();
+  assert.equal(calls.length, 1);
+  t.mock.timers.tick(1); await settle();
+  await write;
+  assert.deepEqual(calls.map((call) => call.time), [23_000_000, 23_060_000]);
+});

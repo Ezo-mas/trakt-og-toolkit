@@ -143,6 +143,23 @@ test('authenticated requests, refresh, sign-out and sanitized failures', async (
     assert.equal(calls.filter((r) => r.url.endsWith('/oauth/token')).length, 1);
   });
 
+  await t.test('a 401 reuses the toolkit token another request already refreshed', async () => {
+    reset(); stored();
+    mock((r, n) => {
+      if (n === 1) {
+        stored();
+        storage.get(STORAGE.tokens).access_token = 'already-rotated';
+        return { status: 401 };
+      }
+      return { status: 200, body: { ok: true } };
+    });
+    assert.deepEqual(await apiAuth('GET', '/users/me'), { ok: true });
+    assert.deepEqual(calls.map((r) => [r.url, r.headers.Authorization]), [
+      ['https://api.trakt.tv/users/me', 'Bearer private-access'],
+      ['https://api.trakt.tv/users/me', 'Bearer already-rotated'],
+    ]);
+  });
+
   await t.test('refresh before expiry, no caching, POST JSON and DELETE 204', async () => {
     reset(); stored(Date.now() + 1000);
     mock((r) => r.url.endsWith('/token') ? { status: 200, body: token('rotated', 'rotated-refresh') } : { status: r.method === 'DELETE' ? 204 : 200, body: { ok: true } });

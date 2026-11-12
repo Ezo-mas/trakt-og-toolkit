@@ -2,6 +2,19 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-12: refactor 35d — authenticated Trakt transport
+
+- `core/write-queue.js` owns FIFO scheduling, dispatch pacing, cancellation waits and the 429 retry policy.
+  `core/trakt.js` still binds each queued operation to its session and checks it when the HTTP slot opens.
+- Public and private og 401s share the renewal check and preserve their respective error types and precedence.
+  Toolkit 401s still compare against the bearer actually sent. Device OAuth and its polling timer stay in
+  `oauth.js`; aborting that timer resolves, while aborting a queued write's timer rejects.
+- Tests grew from 563 to 578 and the live drift output matched the baseline. Local Chromium and Firefox smoke
+  checks used mocked Trakt responses and a real cross-tab og storage event. Live Violentmonkey checks are pending.
+- Existing limitation reproduced on main and 35d: if another tab signs out and back in with the same toolkit
+  client ID before a pending request observes the sign-out, the transport generation can stay the same and an
+  old response can pass its session check.
+
 ## 2026-11-12: refactor 35c — all lists
 
 - `all-lists/index.js` went from 458 to 122 lines. `createRows`, `nativeParts`, the row builders and their icons moved

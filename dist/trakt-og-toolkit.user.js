@@ -3294,6 +3294,92 @@
     }
   }
 
+  // src/core/write-queue.js
+  var WRITE_INTERVAL_MS = 1e3;
+  var WRITE_RETRIES = 2;
+  var RETRY_BASE_MS = 1e3;
+  var RETRY_MAX_MS = 3e4;
+  var WAIT_SLICE_MS = 250;
+  var writeTail = Promise.resolve();
+  var nextWriteAt = 0;
+  var blockedUntil = 0;
+  var blockedGeneration = null;
+  function cancelledError() {
+    const error = authError("Trakt request cancelled.", 0);
+    error.control = true;
+    return error;
+  }
+  function rateLimitedError() {
+    return authError("Trakt rate limited this request; try again later.", 429);
+  }
+  function sleep2(ms, signal) {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(cancelledError());
+        return;
+      }
+      const done = () => {
+        cleanup();
+        resolve();
+      };
+      const abort = () => {
+        cleanup();
+        reject(cancelledError());
+      };
+      const timer = setTimeout(done, Math.max(0, ms));
+      function cleanup() {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", abort);
+      }
+      signal?.addEventListener("abort", abort, { once: true });
+    });
+  }
+  function enqueueWrite(entry, task) {
+    const queued = writeTail.then(() => {
+      entry.check();
+      return task();
+    });
+    writeTail = queued.then(() => {
+    }, () => {
+    });
+    return queued;
+  }
+  async function waitForTurn(entry) {
+    for (; ; ) {
+      entry.check();
+      const blocked = blockedGeneration === entry.generation ? blockedUntil : 0;
+      if (blocked - Date.now() > MAX_RETRY_WAIT_MS) throw rateLimitedError();
+      const remaining = Math.max(nextWriteAt, blocked) - Date.now();
+      if (remaining <= 0) return;
+      await sleep2(Math.min(remaining, WAIT_SLICE_MS), entry.signal);
+    }
+  }
+  function blockWrites(ms, generation3) {
+    const until = Date.now() + ms;
+    if (blockedGeneration === generation3) blockedUntil = Math.max(blockedUntil, until);
+    else {
+      blockedGeneration = generation3;
+      blockedUntil = until;
+    }
+  }
+  function retryDelay(headers2, attempt) {
+    const raw = headerValue(headers2, "retry-after");
+    if (raw != null && raw !== "") {
+      const retryAfter = Number(raw);
+      if (Number.isFinite(retryAfter) && retryAfter >= 0) return retryAfter * 1e3;
+    }
+    const base = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS);
+    return Math.round(base * (0.5 + Math.random()));
+  }
+  function retryRateLimitedWrite(headers2, generation3, attempt) {
+    const delay = retryDelay(headers2, attempt);
+    blockWrites(delay, generation3);
+    return attempt < WRITE_RETRIES && delay <= MAX_RETRY_WAIT_MS;
+  }
+  function markWriteDispatched() {
+    nextWriteAt = Date.now() + WRITE_INTERVAL_MS;
+  }
+
   // src/core/trakt.js
   var MissingClientIdError = class extends Error {
     constructor() {
@@ -3310,27 +3396,10 @@
     if (error?.status === 401) return `Sign in to Trakt to ${action} this ${target}.`;
     return `Could not read this ${target}. Try again later.`;
   }
-  var WRITE_INTERVAL_MS = 1e3;
-  var WRITE_RETRIES = 2;
-  var RETRY_BASE_MS = 1e3;
-  var RETRY_MAX_MS = 3e4;
-  var WAIT_SLICE_MS = 250;
-  var writeTail = Promise.resolve();
-  var nextWriteAt = 0;
-  var blockedUntil = 0;
-  var blockedGeneration = null;
-  function cancelledError() {
-    const error = authError("Trakt request cancelled.", 0);
-    error.control = true;
-    return error;
-  }
   function signedOutError() {
     const error = authError("Signed out; sign in to Trakt.");
     error.control = true;
     return error;
-  }
-  function rateLimitedError() {
-    return authError("Trakt rate limited this request; try again later.", 429);
   }
   function sessionChangedError() {
     return authError("Trakt session changed; request abandoned.");
@@ -3379,6 +3448,28 @@
     if (auth.kind === "og" && auth.expiresAt != null && auth.expiresAt <= Date.now()) throw ogSessionExpiredError();
     return auth;
   }
+  function assertOgLookupFresh(auth) {
+    if (!auth) throw new MissingClientIdError();
+    if (auth.expiresAt != null && auth.expiresAt <= Date.now()) throw ogLookupExpiredError();
+  }
+  function og401Retry(sent, { lookup = false, retried = false } = {}) {
+    if (retried) throw ogSessionExpiredError();
+    const latest = ogAuth();
+    if (lookup) assertOgLookupFresh(latest);
+    else if (!latest) throw ogSessionExpiredError();
+    if (!sameAuth(latest, sent)) throw sessionChangedError();
+    if (!lookup) assertOgFresh(latest);
+    if (latest.accessToken === sent.accessToken) {
+      throw lookup ? ogLookupExpiredError() : ogSessionExpiredError();
+    }
+    return latest;
+  }
+  function own401Action(sent, retried) {
+    if (retried) return "clear";
+    const latest = readTokens();
+    if (!latest) throw signedOutError();
+    return latest.access_token === sent.accessToken ? "refresh" : "retry";
+  }
   function apiHeaders(clientId, accessToken = null) {
     const headers2 = {
       "Content-Type": "application/json",
@@ -3390,37 +3481,6 @@
   }
   function authHeaders(auth) {
     return apiHeaders(auth.clientId, auth.accessToken);
-  }
-  function sleep2(ms, signal) {
-    return new Promise((resolve, reject) => {
-      if (signal?.aborted) {
-        reject(cancelledError());
-        return;
-      }
-      const done = () => {
-        cleanup();
-        resolve();
-      };
-      const abort = () => {
-        cleanup();
-        reject(cancelledError());
-      };
-      const timer = setTimeout(done, Math.max(0, ms));
-      function cleanup() {
-        clearTimeout(timer);
-        signal?.removeEventListener("abort", abort);
-      }
-      signal?.addEventListener("abort", abort, { once: true });
-    });
-  }
-  function retryDelay(headers2, attempt) {
-    const raw = headerValue(headers2, "retry-after");
-    if (raw != null && raw !== "") {
-      const retryAfter = Number(raw);
-      if (Number.isFinite(retryAfter) && retryAfter >= 0) return retryAfter * 1e3;
-    }
-    const base = Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS);
-    return Math.round(base * (0.5 + Math.random()));
   }
   function createWriteEntry(control = {}) {
     const signal = control.signal ?? null;
@@ -3440,34 +3500,6 @@
       }
     };
   }
-  function enqueueWrite(entry, task) {
-    const queued = writeTail.then(() => {
-      entry.check();
-      return task();
-    });
-    writeTail = queued.then(() => {
-    }, () => {
-    });
-    return queued;
-  }
-  async function waitForTurn(entry) {
-    for (; ; ) {
-      entry.check();
-      const blocked = blockedGeneration === entry.generation ? blockedUntil : 0;
-      if (blocked - Date.now() > MAX_RETRY_WAIT_MS) throw rateLimitedError();
-      const remaining = Math.max(nextWriteAt, blocked) - Date.now();
-      if (remaining <= 0) return;
-      await sleep2(Math.min(remaining, WAIT_SLICE_MS), entry.signal);
-    }
-  }
-  function blockWrites(ms, generation3) {
-    const until = Date.now() + ms;
-    if (blockedGeneration === generation3) blockedUntil = Math.max(blockedUntil, until);
-    else {
-      blockedGeneration = generation3;
-      blockedUntil = until;
-    }
-  }
   async function ensureAuth() {
     const tokens = readTokens();
     if (tokens) {
@@ -3480,19 +3512,14 @@
   }
   async function ogGet(path, ttl, withHeaders = false) {
     const first = ogAuth();
-    if (!first) throw new MissingClientIdError();
-    if (first.expiresAt != null && first.expiresAt <= Date.now()) throw ogLookupExpiredError();
+    assertOgLookupFresh(first);
     const url = `${API.base}${path}`;
     const read = (auth) => withHeaders ? getJSONWithHeaders(url, { headers: authHeaders(auth) }) : getJSON(url, { ttl, headers: authHeaders(auth) });
     try {
       return await read(first);
     } catch (error) {
       if (error?.status !== 401) throw error;
-      const latest = ogAuth();
-      if (!latest) throw new MissingClientIdError();
-      if (latest.expiresAt != null && latest.expiresAt <= Date.now()) throw ogLookupExpiredError();
-      if (!sameAuth(latest, first)) throw sessionChangedError();
-      if (latest.accessToken === first.accessToken) throw ogLookupExpiredError();
+      const latest = og401Retry(first, { lookup: true });
       try {
         return await read(latest);
       } catch (retryError) {
@@ -3549,11 +3576,24 @@
     }
     const requestPath = query.size ? `${path}?${query}` : path;
     const url = `${API.base}${requestPath}`;
-    const exchange = () => sendAuthenticated(method, url, body, metadata, method === "GET" ? null : control);
-    if (method === "GET") return exchange();
+    if (method === "GET") return sendAuthenticated(method, url, body, metadata, null);
     const entry = createWriteEntry(control);
     entry.check();
     return enqueueWrite(entry, () => sendAuthenticated(method, url, body, metadata, entry));
+  }
+  function parseAuthenticatedResponse(response, metadata) {
+    if (response.status < 200 || response.status >= 300) throw authError("Authenticated Trakt request failed.", response.status);
+    if (!response.text || response.status === 204) return null;
+    try {
+      const data = JSON.parse(response.text);
+      if (!metadata) return data;
+      const raw = headerValue(response.headers, "x-pagination-page-count");
+      const pages = raw == null ? null : Number(raw);
+      if (pages !== null && (!Number.isSafeInteger(pages) || pages < 0)) throw new Error();
+      return { data, pages };
+    } catch {
+      throw authError("Invalid Trakt response.");
+    }
   }
   async function sendAuthenticated(method, url, body, metadata, entry) {
     const origin = entry?.generation ?? observedGeneration();
@@ -3562,8 +3602,8 @@
       if (entry) entry.check();
       throw sessionChangedError();
     };
-    let refreshed = false;
-    let renewed = false;
+    let retriedOwn = false;
+    let retriedOg = false;
     let rateRetries = 0;
     for (; ; ) {
       checkOrigin();
@@ -3588,7 +3628,7 @@
               assertOgFresh(current);
               entry.check();
               sent = current;
-              nextWriteAt = Date.now() + WRITE_INTERVAL_MS;
+              markWriteDispatched();
               return { headers: authHeaders(current) };
             }
           } : {}
@@ -3597,50 +3637,28 @@
         if (entry?.signal?.aborted) throw cancelledError();
         throw error;
       }
+      checkOrigin();
+      if (response.status === 401 && sent.kind === "og") {
+        og401Retry(sent, { retried: retriedOg });
+        retriedOg = true;
+        continue;
+      }
       if (response.status === 401) {
-        checkOrigin();
-        if (sent.kind === "og") {
-          if (renewed) throw ogSessionExpiredError();
-          const latest2 = ogAuth();
-          if (!latest2) throw ogSessionExpiredError();
-          if (!sameAuth(latest2, sent)) throw sessionChangedError();
-          assertOgFresh(latest2);
-          if (latest2.accessToken === sent.accessToken) throw ogSessionExpiredError();
-          renewed = true;
-          continue;
-        }
-        if (refreshed) {
+        const action = own401Action(sent, retriedOwn);
+        if (action === "clear") {
           clearTokens();
           throw authError("Trakt session expired; sign in again.", 401);
         }
-        const latest = readTokens();
-        if (!latest) throw signedOutError();
-        if (latest.access_token === sent.accessToken) await refreshTokens();
-        refreshed = true;
+        if (action === "refresh") await refreshTokens();
+        retriedOwn = true;
         continue;
       }
-      checkOrigin();
       if (!sameAuth(currentAuth(), sent)) throw sessionChangedError();
-      if (response.status === 429 && entry) {
-        const delay = retryDelay(response.headers, rateRetries);
-        blockWrites(delay, entry.generation);
-        if (rateRetries < WRITE_RETRIES && delay <= MAX_RETRY_WAIT_MS) {
-          rateRetries += 1;
-          continue;
-        }
+      if (response.status === 429 && entry && retryRateLimitedWrite(response.headers, entry.generation, rateRetries)) {
+        rateRetries += 1;
+        continue;
       }
-      if (response.status < 200 || response.status >= 300) throw authError("Authenticated Trakt request failed.", response.status);
-      if (!response.text || response.status === 204) return null;
-      try {
-        const data = JSON.parse(response.text);
-        if (!metadata) return data;
-        const raw = headerValue(response.headers, "x-pagination-page-count");
-        const pages = raw == null ? null : Number(raw);
-        if (pages !== null && (!Number.isSafeInteger(pages) || pages < 0)) throw new Error();
-        return { data, pages };
-      } catch {
-        throw authError("Invalid Trakt response.");
-      }
+      return parseAuthenticatedResponse(response, metadata);
     }
   }
 

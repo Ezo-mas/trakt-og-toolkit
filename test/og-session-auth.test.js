@@ -205,6 +205,62 @@ test('a revoked og token on a public lookup asks for a reload', async () => {
   assert.equal(calls.length, 1, 'the rejected token is not retried');
 });
 
+test('a late og 401 preserves the error for each replacement entry', async (t) => {
+  const replacements = [
+    { name: 'missing', replace: () => localStorage.removeItem(OG_KEY), lookup: 'missing', private: 'expired' },
+    { name: 'expired renewal', replace: () => ogSession({ access: 'expired', expires: expiring(-1) }),
+      lookup: 'expired', private: 'expired' },
+    { name: 'different account', replace: () => ogSession({ access: 'other', account: 100 }),
+      lookup: 'changed', private: 'changed' },
+    { name: 'different expired account', replace: () => ogSession({ access: 'other', account: 100, expires: expiring(-1) }),
+      lookup: 'expired', private: 'changed' },
+  ];
+  const errors = {
+    missing: { name: 'MissingClientIdError', message: 'No Trakt API client ID configured' },
+    expired: { message: 'Your og.trakt.tv session expired; reload the page to renew it.', ogSession: true },
+    changed: { name: 'HttpError', status: 0, message: 'Trakt session changed; request abandoned.' },
+  };
+  for (const replacement of replacements) {
+    for (const mode of ['lookup', 'private']) {
+      await t.test(`${mode}, ${replacement.name}`, async () => {
+        reset();
+        ogSession();
+        mock(() => {
+          replacement.replace();
+          return { status: 401 };
+        });
+        const result = mode === 'lookup' ? apiGet('/movies/test') : apiAuth('GET', '/users/me');
+        const expected = { ...errors[replacement[mode]] };
+        if (replacement[mode] === 'expired') {
+          Object.assign(expected, mode === 'lookup'
+            ? { name: 'MissingClientIdError' }
+            : { name: 'HttpError', status: 401, control: true });
+        }
+        await assert.rejects(result, expected);
+        assert.equal(calls.length, 1);
+      });
+    }
+  }
+});
+
+test('a second og 401 ends a retry even when the token rotated again', async (t) => {
+  for (const [mode, read, expected] of [
+    ['lookup', () => apiGet('/movies/test', { withHeaders: true }), { name: 'MissingClientIdError', ogSession: true }],
+    ['private', () => apiAuth('GET', '/users/me'), { name: 'HttpError', status: 401, ogSession: true, control: true }],
+  ]) {
+    await t.test(mode, async () => {
+      reset();
+      ogSession();
+      mock((request, number) => {
+        ogSession({ access: `renewed-${number}` });
+        return { status: 401 };
+      });
+      await assert.rejects(read(), { ...expected, message: /reload the page/ });
+      assert.deepEqual(calls.map((request) => request.headers.Authorization), ['Bearer OG_ACCESS', 'Bearer renewed-1']);
+    });
+  }
+});
+
 test('an og account change does not cancel a queued own-session write', async (t) => {
   reset();
   t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1_900_000_000_000 });
