@@ -20,6 +20,8 @@
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
+// @grant        GM_unregisterMenuCommand
+// @grant        GM_info
 // @grant        GM_setClipboard
 // @grant        GM_openInTab
 // @connect      api.trakt.tv

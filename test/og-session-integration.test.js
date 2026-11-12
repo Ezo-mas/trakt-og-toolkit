@@ -21,7 +21,7 @@ test('built bundle makes og-session calls without storing or printing the token'
   window.GM_getValue = (key, fallback) => vault.get(key) ?? fallback;
   window.GM_setValue = (key, value) => vault.set(key, value);
   window.GM_deleteValue = (key) => vault.delete(key);
-  window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+  window.GM_registerMenuCommand = (name, callback) => menus.set(name, callback);
   window.GM_xmlhttpRequest = (request) => {
     requests.push(request);
     assert.ok(request.url.startsWith('https://api.trakt.tv/'), `unexpected request to ${request.url}`);
@@ -34,7 +34,7 @@ test('built bundle makes og-session calls without storing or printing the token'
   window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
 
-  await menus.get('show signed-in user')();
+  await menus.get('Show signed-in user')();
   assert.match(window.document.body.textContent, /Signed in to Trakt as og-tester/);
   assert.doesNotMatch(window.document.body.textContent, /OG_SECRET_/);
   assert.equal(requests.length, 1);
@@ -44,7 +44,7 @@ test('built bundle makes og-session calls without storing or printing the token'
   assert.equal(vault.has('trakt.clientId'), false);
   assert.match(window.localStorage.getItem(OG_KEY), /OG_SECRET_ACCESS/);
 
-  await menus.get('sign out')();
+  await menus.get('Sign out')();
   assert.match(window.document.body.textContent, /Signed in through og\.trakt\.tv; sign out there/);
   assert.match(window.localStorage.getItem(OG_KEY), /OG_SECRET_ACCESS/);
   assert.equal(vault.has('trakt.oauth.tokens'), false);

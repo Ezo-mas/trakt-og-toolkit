@@ -16,7 +16,7 @@ test('built bundle registers OAuth menus and shows user without exposing tokens'
   window.GM_getValue = (k, fallback) => data.get(k) ?? fallback;
   window.GM_setValue = (k, v) => data.set(k, v);
   window.GM_deleteValue = (k) => data.delete(k);
-  window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+  window.GM_registerMenuCommand = (name, callback) => menus.set(name, callback);
   window.GM_xmlhttpRequest = (r) => {
     assert.ok(r.url.startsWith('https://api.trakt.tv/') || r.url.startsWith('https://auth.trakt.tv/'));
     assert.doesNotMatch(r.url, /SECRET_/);
@@ -25,11 +25,11 @@ test('built bundle registers OAuth menus and shows user without exposing tokens'
   window.document.write('<html><head></head><body></body></html>');
   window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
-  for (const name of ['sign in', 'cancel sign-in', 'sign out', 'show signed-in user']) assert.equal(typeof menus.get(name), 'function');
-  await menus.get('show signed-in user')();
+  for (const name of ['Sign in', 'Cancel sign-in', 'Sign out', 'Show signed-in user']) assert.equal(typeof menus.get(name), 'function');
+  await menus.get('Show signed-in user')();
   assert.match(window.document.body.textContent, /Signed in to Trakt as tester/);
   assert.doesNotMatch(window.document.body.textContent, /SECRET_/);
-  await menus.get('sign out')();
+  await menus.get('Sign out')();
   assert.equal(data.has('trakt.oauth.tokens'), false);
   assert.equal(window.localStorage.getItem('ogt:trakt.oauth.tokens'), null);
   assert.equal(Boolean(window.document.querySelector('[id*=playback]')), false);
@@ -46,7 +46,7 @@ test('editing the client ID announces the credential switch', async (t) => {
   window.GM_getValue = (k, fallback) => data.get(k) ?? fallback;
   window.GM_setValue = (k, v) => data.set(k, v);
   window.GM_deleteValue = (k) => data.delete(k);
-  window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+  window.GM_registerMenuCommand = (name, callback) => menus.set(name, callback);
   window.GM_xmlhttpRequest = () => ({ abort() {} });
   answerDialogs(window, { prompt: () => '' });
   window.document.write('<html><head></head><body></body></html>');
@@ -55,7 +55,7 @@ test('editing the client ID announces the credential switch', async (t) => {
 
   const changes = [];
   window.document.addEventListener('ogt:authchange', () => changes.push(true));
-  await menus.get('set API client ID')();
+  await menus.get('Set API client ID')();
   assert.equal(data.has('trakt.clientId'), false, 'the client ID is cleared');
   assert.equal(changes.length, 1, 'the credential switch rebuilds personal state');
 });
@@ -75,7 +75,7 @@ test('account storage changed in another tab rebuilds the session', async (t) =>
   window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
 
-  assert.deepEqual([...listeners.keys()].sort(), ['trakt.clientId', 'trakt.oauth.tokens']);
+  assert.deepEqual([...listeners.keys()].sort(), ['debug', 'features.disabled', 'trakt.clientId', 'trakt.oauth.tokens']);
   let changes = 0;
   window.document.addEventListener('ogt:authchange', () => { changes += 1; });
   const tokens = (access, client = 'client') => ({ access_token: access, refresh_token: `r-${access}`, client_id: client, expires_at: 1 });
@@ -135,7 +135,7 @@ test('sign-in accepts registered redirect values and pre-fills the README defaul
       window.document.write('<html><head></head><body></body></html>');
       window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
       window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
-      await menus.get('Trakt OG Toolkit: sign in')();
+      await menus.get('Sign in')();
       const accepted = value !== null && (value === undefined || value.trim().length > 0);
       assert.equal(requests.length, accepted ? 1 : 0);
       assert.equal(data.get('trakt.oauth.redirectUri'), accepted ? (value ?? 'http://localhost:5173/callback').trim() : undefined);
@@ -153,7 +153,7 @@ test('sign-in shows the device code in a toast and keeps it there while pending'
   window.GM_getValue = (k, fallback) => data.get(k) ?? fallback;
   window.GM_setValue = (k, v) => data.set(k, v);
   window.GM_deleteValue = (k) => data.delete(k);
-  window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+  window.GM_registerMenuCommand = (name, callback) => menus.set(name, callback);
   window.prompt = () => assert.fail('no native prompt');
   answerDialogs(window, { prompt: (message, initial) => {
     assert.match(message, /redirect URI/, 'only the redirect URI is asked for');
@@ -174,7 +174,7 @@ test('sign-in shows the device code in a toast and keeps it there while pending'
   window.document.write('<html><head></head><body></body></html>');
   window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
-  await menus.get('sign in')();
+  await menus.get('Sign in')();
   assert.equal(polls, 3);
   for (const text of shownWhilePending) assert.match(text, /Enter ABCD1234 at https:\/\/auth\.trakt\.tv\/activate/);
   assert.match(window.document.body.textContent, /Signed in to Trakt\./);
@@ -193,7 +193,7 @@ test('sign-in copies the device code, opens the activation page and says so', as
   window.GM_setClipboard = (text, type) => copied.push([text, type]);
   const opened = [];
   window.GM_openInTab = (url, options) => opened.push([url, options.active]);
-  window.GM_registerMenuCommand = (name, callback) => menus.set(name.replace('Trakt OG Toolkit: ', ''), callback);
+  window.GM_registerMenuCommand = (name, callback) => menus.set(name, callback);
   answerDialogs(window);
   window.GM_xmlhttpRequest = (r) => {
     if (r.url.endsWith('/device/code')) {
@@ -207,7 +207,7 @@ test('sign-in copies the device code, opens the activation page and says so', as
   window.document.write('<html><head></head><body></body></html>');
   window.eval(readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8'));
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
-  await menus.get('sign in')();
+  await menus.get('Sign in')();
   assert.deepEqual(copied, [['ABCD1234', 'text']]);
   assert.deepEqual(opened, [['https://auth.trakt.tv/activate', true]]);
   assert.match(toastAtFirstPoll, /Code ABCD1234 copied; paste it at https:\/\/auth\.trakt\.tv\/activate \(opened in a new tab\)/);

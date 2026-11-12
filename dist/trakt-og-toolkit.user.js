@@ -20,6 +20,8 @@
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
+// @grant        GM_unregisterMenuCommand
+// @grant        GM_info
 // @grant        GM_setClipboard
 // @grant        GM_openInTab
 // @connect      api.trakt.tv
@@ -9789,7 +9791,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
     }
   }
   function registerAuthMenu() {
-    GM_registerMenuCommand("Trakt OG Toolkit: sign in", async () => {
+    GM_registerMenuCommand("Sign in", async () => {
       if (!getClientId()) {
         toast("Set your Trakt client ID first.");
         return;
@@ -9818,7 +9820,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
             const copied = copyText(user_code);
             const opened = openTab(verification_url);
             toast(
-              `${copied ? `Code ${user_code} copied; paste it` : `Enter ${user_code}`} at ${verification_url}${opened ? " (opened in a new tab)" : ""}, then come back. Use "cancel sign-in" in the menu to stop.`,
+              `${copied ? `Code ${user_code} copied; paste it` : `Enter ${user_code}`} at ${verification_url}${opened ? " (opened in a new tab)" : ""}, then come back. Use "Cancel sign-in" in the menu to stop.`,
               { duration: CODE_TOAST_MS }
             );
           },
@@ -9831,8 +9833,8 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
         toast("Sign-in requires userscript GM storage.");
       }
     });
-    GM_registerMenuCommand("Trakt OG Toolkit: cancel sign-in", cancelSignIn);
-    GM_registerMenuCommand("Trakt OG Toolkit: sign out", async () => {
+    GM_registerMenuCommand("Cancel sign-in", cancelSignIn);
+    GM_registerMenuCommand("Sign out", async () => {
       if (!hasOwnSession()) {
         toast(isSignedIn() ? "Signed in through og.trakt.tv; sign out there to end that session." : "Signed out of Trakt.");
         return;
@@ -9844,7 +9846,7 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
         toast("Signed out locally; revoke this app in Trakt settings if needed.");
       }
     });
-    GM_registerMenuCommand("Trakt OG Toolkit: show signed-in user", async () => {
+    GM_registerMenuCommand("Show signed-in user", async () => {
       if (!isSignedIn()) {
         toast("Signed out of Trakt.");
         return;
@@ -9879,16 +9881,16 @@ ${links.map((entry) => `• ${entry.label}`).join("\n")}`, {
   };
   function registerMenu(getRouteKey = () => location.pathname, features = []) {
     if (typeof GM_registerMenuCommand !== "function") return;
-    GM_registerMenuCommand("Trakt OG Toolkit: about", () => {
+    GM_registerMenuCommand("About", () => {
       toast(`${NAME} v${VERSION}`, { duration: 5e3 });
       console.info(`[OGT] ${NAME} v${VERSION}
 ${ATTRIBUTION}
 MIT licensed.`);
     });
-    GM_registerMenuCommand("Trakt OG Toolkit: set API client ID", promptClientId);
-    GM_registerMenuCommand("Trakt OG Toolkit: test API connection", async () => {
+    GM_registerMenuCommand("Set API client ID", promptClientId);
+    GM_registerMenuCommand("Test API connection", async () => {
       if (!getClientId()) {
-        toast('No client ID yet — use "set API client ID" first.');
+        toast('No client ID yet — use "Set API client ID" first.');
         return;
       }
       toast("Testing the Trakt API…", { duration: 1500 });
@@ -9903,30 +9905,63 @@ MIT licensed.`);
       }
     });
     registerAuthMenu();
-    GM_registerMenuCommand("Trakt OG Toolkit: add custom link", promptAddCustomLink);
-    GM_registerMenuCommand("Trakt OG Toolkit: remove custom link", promptRemoveCustomLink);
-    GM_registerMenuCommand("Trakt OG Toolkit: toggle debug logging", () => {
-      const next = setDebug(!isDebug());
-      applyDebugSetting();
-      toast(next ? "Debug logging on — check the console." : "Debug logging off.");
-    });
-    GM_registerMenuCommand("Trakt OG Toolkit: diagnostics", () => {
+    GM_registerMenuCommand("Add custom link", promptAddCustomLink);
+    GM_registerMenuCommand("Remove custom link", promptRemoveCustomLink);
+    GM_registerMenuCommand("Diagnostics", () => {
       const summary2 = `v${VERSION} · ${getRouteKey()} · client ID ${getClientId() ? "set" : "missing"} · ${getCustomLinks().length} custom links · ${cacheSize()} cached responses`;
       toast(summary2);
       console.info("[OGT]", summary2);
     });
-    GM_registerMenuCommand("Trakt OG Toolkit: clear API cache", () => {
+    GM_registerMenuCommand("Clear API cache", () => {
       clearCache();
       toast("API cache cleared.");
     });
+    registerToggles(features);
+    onRemoteValueChange(STORAGE.features, () => registerToggles(features));
+    onRemoteValueChange(STORAGE.debug, () => registerToggles(features));
+  }
+  var ON = "✅";
+  var OFF = "⬜";
+  var toggleIds = [];
+  var stableToggleIds = false;
+  function canRelabel() {
+    return typeof GM_unregisterMenuCommand === "function";
+  }
+  function toggleCaption(label, enabled, relabel = canRelabel()) {
+    return relabel ? `${enabled ? ON : OFF} ${label}` : `Toggle ${label}`;
+  }
+  function registerToggles(features) {
+    const relabel = canRelabel();
+    if (!relabel && toggleIds.length) return;
+    if (!stableToggleIds) for (const id of toggleIds) GM_unregisterMenuCommand(id);
+    toggleIds = [];
+    const violentmonkey = relabel && typeof GM_info !== "undefined" && GM_info.scriptHandler === "Violentmonkey";
+    let acceptsStableIds = violentmonkey;
+    const add = (key, label, enabled, onClick) => {
+      const caption = toggleCaption(label, enabled, relabel);
+      const options = { autoClose: false };
+      if (violentmonkey) options.id = `ogt-toggle:${key}`;
+      const id = GM_registerMenuCommand(caption, () => {
+        onClick();
+        if (relabel) registerToggles(features);
+      }, options);
+      acceptsStableIds &&= id === options.id;
+      toggleIds.push(id ?? caption);
+    };
+    add("debug", "Debug logging", isDebug(), () => {
+      const next = setDebug(!isDebug());
+      applyDebugSetting();
+      if (!stableToggleIds) toast(next ? "Debug logging on — check the console." : "Debug logging off.");
+    });
     for (const feature of features) {
       const label = FEATURE_LABELS[feature.id] || feature.id.replace(/-/g, " ");
-      GM_registerMenuCommand(`Trakt OG Toolkit: toggle ${label}`, () => {
+      add(`feature:${feature.id}`, label, isFeatureEnabled(feature.id), () => {
         const enabled = setFeatureEnabled(feature.id, !isFeatureEnabled(feature.id));
-        toast(`${label} ${enabled ? "on" : "off"}.`);
+        if (!stableToggleIds) toast(`${label} ${enabled ? "on" : "off"}.`);
         document.dispatchEvent(new CustomEvent("ogt:featurechange", { detail: { id: feature.id, enabled } }));
       });
     }
+    stableToggleIds = acceptsStableIds;
   }
 
   // src/main.js

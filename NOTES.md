@@ -2,6 +2,20 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-11: menu toggle state (feature 37)
+
+- Feature toggles and debug logging read `✅ <feature>` or `⬜ <feature>` in the userscript menu instead of
+  `Toggle <feature>`. After a click, every toggle is unregistered and registered again so the labels follow the
+  state; they are the last menu entries, so their order holds. Debug logging moved from the middle of the menu into
+  that group.
+- This needs `GM_unregisterMenuCommand` (granted in the header). A manager without it keeps the plain
+  `Toggle <feature>` labels rather than gaining duplicates. Violentmonkey builds that return no command id unregister by caption, so the caption
+  is the fallback id. Changes from another tab (`features.disabled`, `debug`) relabel this tab's menu too.
+- Menu entries dropped the `Trakt OG Toolkit:` prefix, since managers already group commands under the script name,
+  and use sentence case (`About`, `Set API client ID`, `Sign in`). README and toasts name them the same way.
+- Violentmonkey updates toggle captions by command ID and keeps the popup open. The checkmark shows the
+  new state in place, so toggle toasts are reserved for the fallback.
+
 ## 2026-11-11: CSV export (feature 34)
 
 - Live og (2026-11-11, trakt-og `d320877`): personal, collaboration and liked list pages use
@@ -148,7 +162,7 @@ in Zen with Violentmonkey.
   drops the request, so coming back later does not reopen the view by itself.
 - Expired `expires_at` is checked in `beforeSend` as well as before a request, so a write that waited for an HTTP
   slot cannot dispatch after the token expired. Nothing from og's entry is cleared on failure. User-facing watchlist,
-  library, playback and sign-in hints mention og.trakt.tv; the menu's **sign out** leaves og's session alone.
+  library, playback and sign-in hints mention og.trakt.tv; the menu's **Sign out** leaves og's session alone.
 - `npm run drift` follows the root layout to og's user manager and fails if its client ID differs from
   `OG_SESSION_CLIENT_ID`, then checks the authority and reads the oidc chunk for the
   `user:${authority}:${client_id}` key and `oidc.` prefix. It reports drift instead of silently reading a renamed key.
@@ -774,9 +788,8 @@ in Zen with Violentmonkey.
   mounted and any existing node is destroyed. Commands dispatch `ogt:featurechange`, which main wires to the same
   host sync used by auth changes and route settles; re-enabling mounts again without a reload. Injected feature CSS is
   page-wide and stays in place while a feature is off.
-- Menu entries are `Trakt OG Toolkit: toggle <label>` from `FEATURE_LABELS` in `menu.js`. They are registered in
-  `FEATURE` order after the existing commands. Userscript menus have no portable submenu or checked state, so the
-  toast reports the new state; reopening the menu still shows the same generic toggle label.
+- Toggle entries use `FEATURE_LABELS` in `menu.js` and appear in `FEATURES` order after the other commands.
+  Managers that cannot relabel commands show `Toggle <label>` and report the new state in a toast.
 - Drift: panel pages now name their feature. On live `og.trakt.tv` captures the script boots the bundle once normally
   and once with `features.disabled` set to that feature, then reports drift if the panel still mounts. The origin is
   explicit (`OG_ORIGIN = 'https://og.trakt.tv'`); no classic `trakt.tv` page is fetched. This doubles the bundle boots

@@ -16,8 +16,8 @@ before these update URLs existed keeps tracking that same link, so the next bump
 teaches the copy the new URLs. A copy installed from a saved file needs one reinstall from the link above, and so
 does any existing copy that doesn't find the update.
 
-Every feature has its own **toggle** in the userscript menu. All are on by default, and switching one off removes it
-immediately.
+Every feature has its own **toggle** in the userscript menu, marked ✅ when it is on and ⬜ when it is off. All are on
+by default, and switching one off removes it immediately.
 
 ## Features
 
@@ -139,11 +139,11 @@ free app at <https://developer.trakt.tv/apps/new>:
 | Redirect URIs | `http://localhost:5173/callback` |
 | Allowed origins | leave empty |
 
-Copy the **Client ID** (never the secret) and set it from the menu: **Trakt OG Toolkit: set API client ID**.
+Copy the **Client ID** (never the secret) and choose **Set API client ID** from the userscript menu.
 
 ### Sign in
 
-Run **Trakt OG Toolkit: sign in** from the menu.
+Run **Sign in** from the menu.
 
 1. Confirm the redirect URI you registered above.
 2. A device code is copied to your clipboard, and Trakt's activation page opens in a new tab.
@@ -159,7 +159,7 @@ While the toolkit's own sign-in is active, og logging in, out or switching accou
 
 ## Custom link templates
 
-Use **Edit** in the strip, or the menu's **add custom link** (`Label | URL`):
+Use **Edit** in the strip, or the menu's **Add custom link** (`Label | URL`):
 
 ```text
 My service | https://example.com/watch/{tmdb}?s={season}&e={episode}
