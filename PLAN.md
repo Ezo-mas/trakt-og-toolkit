@@ -11,10 +11,10 @@ behaviour, never its code. Finished features are listed at the end; their detail
 |---|---|---|---|
 | 32 | Auto-update URLs in the userscript header | nothing | done |
 | 33 | Random pick from your watchlist | public API or og's session | done |
-| 34 | Export a list or watchlist to CSV | public API or og's session | planned |
+| 34 | Export a list or watchlist to CSV | public API or og's session | done |
 | 35 | Refactor: simpler code, more reuse | tests and drift as the safety net | after 32–34 |
 | 36 | Shorter README with a screenshot of every feature | a signed-in og browser | after 35 |
-| 37 | Menu toggles show whether each feature is on | `GM_unregisterMenuCommand` | in review |
+| 37 | Menu toggles show whether each feature is on | `GM_unregisterMenuCommand` | done |
 
 After that, maintenance: the daily drift workflow, `npm run drift -- --signed-in <dir>` now and then, and fixes when og
 changes. v0.4.0 released everything shipped before this list. Userscript managers only offer an update when `@version`

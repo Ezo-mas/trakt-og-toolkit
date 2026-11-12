@@ -8,9 +8,11 @@ Working notes and known issues. Newest first.
   `Toggle <feature>`. After a click, every toggle is unregistered and registered again so the labels follow the
   state; they are the last menu entries, so their order holds. Debug logging moved from the middle of the menu into
   that group.
-- This needs `GM_unregisterMenuCommand` (granted in the header). A manager without it keeps the plain `Toggle <feature>` labels
-  rather than gaining duplicates. Violentmonkey builds that return no command id unregister by caption, so the caption
+- This needs `GM_unregisterMenuCommand` (granted in the header). A manager without it keeps the plain
+  `Toggle <feature>` labels rather than gaining duplicates. Violentmonkey builds that return no command id unregister by caption, so the caption
   is the fallback id. Changes from another tab (`features.disabled`, `debug`) relabel this tab's menu too.
+- Menu entries dropped the `Trakt OG Toolkit:` prefix, since managers already group commands under the script name,
+  and use sentence case (`About`, `Set API client ID`, `Sign in`). README and toasts name them the same way.
 - Violentmonkey updates toggle captions by command ID and keeps the popup open. The checkmark shows the
   new state in place, so toggle toasts are reserved for the fallback.
 
