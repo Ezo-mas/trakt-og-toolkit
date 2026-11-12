@@ -1,5 +1,5 @@
-/** List and watchlist reads for the exporter, through the toolkit sign-in, og's session or the public API. */
-import { apiAuthPage, apiGet, isSignedIn } from '../../core/trakt.js';
+/** List and watchlist reads for the exporter, through og's session. */
+import { apiAuthPage, apiGet } from '../../core/trakt.js';
 import { IncompletePagesError, PAGE_SIZE, readPages } from '../../core/pages.js';
 
 /** Defensive cap for page walking; signed-in reads are capped too. */
@@ -32,14 +32,10 @@ function incompleteExportError() {
   return error;
 }
 
-export function createExportApi({ get = apiGet, authPage = apiAuthPage, signedIn = isSignedIn } = {}) {
-  /** Every page, in API order. `publicOnly` keeps official-list reads on the public transport. */
-  async function readAll(path, { publicOnly = false } = {}) {
-    const authenticated = !publicOnly && signedIn();
-    // Public reads skip the shared cache, which would keep removed titles, and keep the page count.
-    const read = (page, limit) => (authenticated
-      ? authPage(path, { page, limit })
-      : get(`${path}?page=${page}&limit=${limit}`, { ttl: 0, withHeaders: true }));
+export function createExportApi({ get = apiGet, authPage = apiAuthPage } = {}) {
+  /** Every page, in API order. */
+  async function readAll(path) {
+    const read = (page, limit) => authPage(path, { page, limit });
     let result;
     try {
       result = await readPages(read, { maxPages: MAX_PAGES, stopAtLimit: true });
@@ -86,7 +82,7 @@ export function createExportApi({ get = apiGet, authPage = apiAuthPage, signedIn
     /** Official lists are public and have no profile owner. */
     async official(slug) {
       const id = await officialId(slug);
-      return readAll(`/lists/${id}/items`, { publicOnly: true });
+      return readAll(`/lists/${id}/items`);
     },
   };
 }

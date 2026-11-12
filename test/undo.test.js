@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession } from './session.js';
 import { Window } from 'happy-dom';
 import { readFileSync } from 'node:fs';
 import { parseRoute } from '../src/core/router.js';
@@ -102,10 +103,8 @@ function boot(t, { path = '/movies/fight-club-1999', html = WATCHLIST_HTML, libr
   const window = new Window({ url: `https://og.trakt.tv${path}` });
   t.after(() => window.close());
   const { document } = window;
-  const store = new Map([
-    ['trakt.clientId', 'client'],
-    ['trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 }],
-  ]);
+  const store = new Map();
+  setOgSession(window.localStorage);
   const calls = [];
   window.GM_getValue = (key, fallback) => store.get(key) ?? fallback;
   window.GM_setValue = (key, value) => store.set(key, value);

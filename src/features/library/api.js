@@ -12,7 +12,7 @@ function writeRequest(auth, path, body, active, signal) {
 export function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSignedIn, now = Date.now } = {}) {
   return {
     async add(route, { confirm = () => true, active, signal } = {}) {
-      if (!signedIn()) throw new Error('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.');
+      if (!signedIn()) throw new Error('Sign in to og.trakt.tv first.');
       const isActive = active ?? (() => true);
       const id = encodeURIComponent(route.id);
       const at = now();
@@ -48,7 +48,7 @@ export function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSi
         body = { episodes: [...new Map(episodes.map(ep => [ep.ids.trakt, ep])).values()] };
         if (!body.episodes.length) throw new Error('No aired episodes to add.');
         if (!isActive() || !signedIn()) return { cancelled: true };
-        if (route.name !== 'episode' && !(await confirm(`Add ${body.episodes.length} aired episode${body.episodes.length === 1 ? '' : 's'} to your toolkit Trakt account’s library?${route.name === 'title' ? ' Specials are excluded.' : ''}`))) {
+        if (route.name !== 'episode' && !(await confirm(`Add ${body.episodes.length} aired episode${body.episodes.length === 1 ? '' : 's'} to your Trakt library?${route.name === 'title' ? ' Specials are excluded.' : ''}`))) {
           return { cancelled: true };
         }
         if (!isActive() || !signedIn()) return { cancelled: true };
@@ -69,7 +69,7 @@ export function createLibraryApi({ get = apiGet, auth = apiAuth, signedIn = isSi
 
     /** Undo an addition with the exact body that was sent. */
     async remove(body, { active, signal } = {}) {
-      if (!signedIn()) throw new Error('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.');
+      if (!signedIn()) throw new Error('Sign in to og.trakt.tv first.');
       const isActive = active ?? (() => true);
       if (!body || typeof body !== 'object' || !isActive()) return { cancelled: true };
       const result = await writeRequest(auth, '/sync/collection/remove', body, active, signal);

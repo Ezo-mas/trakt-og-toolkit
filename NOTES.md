@@ -2,7 +2,22 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-12: og sign-in for all Trakt API features (feature 38)
+
+- This replaces the two sign-in paths from features 2 and 30 and refactor 35d. og's session now serves every Trakt API
+  feature, including summary ratings, season chart data, custom-link lookups and **Test API connection**. Signed-out
+  views still use the data og rendered. API actions such as CSV export and watchlist picks prompt for og sign-in.
+- Requests check the session at dispatch and before using the result. A 401 retries once if og has already renewed
+  the token for the same session. Account changes reset features and caches. Duplicate poster rows share a pending
+  list summary request within one All lists view.
+- Upgrading clears old toolkit credentials locally. Users can revoke the retired app in Trakt's Connected Apps
+  settings. The connection test shows HTTP status codes and keeps the reload message for an expired session.
+- The build, all 519 tests and mocked Chromium and Firefox session checks passed. Cloudflare returned HTTP 403 for
+  live drift requests. The live signed-in check is pending.
+
 ## 2026-11-12: refactor 35d — authenticated Trakt transport
+
+These notes describe the transport as it shipped in 35d. Feature 38 removed the toolkit's device sign-in.
 
 - `core/write-queue.js` owns FIFO scheduling, dispatch pacing, cancellation waits and the 429 retry policy.
   `core/trakt.js` still binds each queued operation to its session and checks it when the HTTP slot opens.
@@ -60,7 +75,7 @@ Working notes and known issues. Newest first.
   `Toggle <feature>` labels rather than gaining duplicates. Violentmonkey builds that return no command id unregister by caption, so the caption
   is the fallback id. Changes from another tab (`features.disabled`, `debug`) relabel this tab's menu too.
 - Menu entries dropped the `Trakt OG Toolkit:` prefix, since managers already group commands under the script name,
-  and use sentence case (`About`, `Set API client ID`, `Sign in`). README and toasts name them the same way.
+  and use sentence case (`About`, `Test API connection`). README and toasts name them the same way.
 - Violentmonkey updates toggle captions by command ID and keeps the popup open. The checkmark shows the
   new state in place, so toggle toasts are reserved for the fallback.
 
@@ -75,8 +90,8 @@ Working notes and known issues. Newest first.
   before `.share`.
 - List items come from `/users/:id/lists/:slug/items`; official lists from `/lists/:id/items` after that resolution;
   the watchlist uses `/users/:id/watchlist`. All send 100 per page and return
-  `{ type, movie|show|season|episode|person, show?, rank, listed_at, notes }`. Both transports read
-  `x-pagination-page-count`; public item reads bypass the shared cache and keep the header. Once a count is known it
+  `{ type, movie|show|season|episode|person, show?, rank, listed_at, notes }`. Item reads use og's session, bypass
+  the shared cache and keep `x-pagination-page-count`. Once a count is known it
   carries across pages and bounds batches of up to four requests. Without a count, reads proceed one at a time until
   a short page. A required page with a malformed payload fails the export. Without a count, the exporter checks one
   item past the 20,000-item limit to distinguish a full export from an oversized list. The page filter does not
@@ -90,7 +105,7 @@ Working notes and known issues. Newest first.
 - The exporter and the watchlist picker share `readPages` in `src/core/pages.js`: page 1 alone, then batches of four
   once a page count is known, one at a time to a short page without one, and a one-item check past the cap. An empty
   page fails the read when Trakt counts several pages. The exporter passes `stopAtLimit` and fails on an oversized
-  list; the picker reads up to its cap and shows a note. Public picker reads now also ask `apiGet` for the page count.
+  list. The picker reads up to its cap and shows a note.
 - Fixture `LIST_PAGE_HTML` mirrors the live list title bar. Tests cover normalization for all item kinds, quoting and
   formula guards including leading controls and full-width markers, filenames, both paging paths, fresh repeat
   exports, header-led short pages, cap errors, personal and watchlist downloads, official summary/id resolution,
@@ -121,7 +136,7 @@ Working notes and known issues. Newest first.
   a time, and without one, pages are read one by one until a short one. An empty signed-in body or 204 counts as an
   empty page. The picker shows a note when the 50-page read limit bounds the candidate pool; a list with no page count
   whose 50 pages are all full gets one more one-entry read to check whether anything is past the limit.
-  og's session or the toolkit sign-in is used for private profiles; without either the button shows a one-line hint.
+  Both public and private profiles require og sign-in as of feature 38. The button shows a sign-in hint when needed.
 - The picker checks the media filter again after each list read; if it changed, it reads for the current filter. A read
   that fails after the filter changed asks to try again instead of clearing silently.
   Same-path query changes reported by the router clear a pick or status message from the previous filter. Loaded
@@ -132,7 +147,7 @@ Working notes and known issues. Newest first.
   bar and items section. Tests cover normalization, filter mapping, mid-read and post-pick filter changes, seasons and
   episodes, empty lists, expired og sessions, both paging paths, repeat avoidance, private-list hints and teardown.
   The watched-title filter remains out of scope.
-- Public watchlist reads pass `{ ttl: 0 }` so the picker's five-minute cache controls freshness. Rerolls sample
+- Paginated reads bypass the shared cache so the picker's five-minute cache controls freshness. Rerolls sample
   evenly among the remaining entries and can repeat a lone candidate.
 
 ## v0.4.0 (2026-11-10)
@@ -140,8 +155,8 @@ Working notes and known issues. Newest first.
 Release of everything since v0.3.0, so userscript managers offer the update:
 
 - **No API setup when signed into og.trakt.tv:** watchlist, library, playback, ratings, All lists and month review use
-  og's own session (30). The toolkit's own app sign-in still works and wins while it is signed in. Account changes in
-  og or in another tab rebuild the toolkit's personal features; an expired og session asks for a reload.
+  og's own session (30). This release still supported the toolkit's app sign-in, which feature 38 removed. Account
+  changes in og or in another tab rebuild the toolkit's personal features. An expired og session asks for a reload.
 - **Custom links:** shown below the poster with service logos and inside Watch Now (26); presets open the exact title,
   season or episode (22, 24), with per-user server presets (25), direct links resolved from external ids (27), and
   genre-conditional presets plus links on person pages (28).
@@ -160,9 +175,7 @@ in Zen with Violentmonkey.
 
 ## 2026-11-09: og's session instead of a production app (feature 30)
 
-- Trakt's answer was that the toolkit may use og's existing session; no production app is available. Authenticated
-  calls now use og's access token with og's Client ID when the toolkit has no sign-in of its own. The toolkit's
-  per-user app and device sign-in stay as the fallback and take priority when connected.
+- Trakt approved reusing og's existing session. Feature 38 made it the sole credential source for Trakt API calls.
 - Live og (2026-11-09): `lib/auth/userManager.ts` creates oidc-client-ts with `authority: https://auth.trakt.tv`,
   the public client ID `WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI`, `automaticSilentRenew: false` and
   `userStore: WebStorageStateStore({ store: localStorage })`. Its `_userStoreKey` is
@@ -173,58 +186,28 @@ in Zen with Violentmonkey.
   `{ clientId, accessToken, expiresAt, accountKey }` and writes nothing. A leftover entry for an older client is
   ignored even when it expires later. Refresh tokens and ID tokens stay unread; the profile is used only to derive
   an in-memory `trakt:`/`sub:`/`user:` account key, which is never stored, logged or put in an error.
-- A token renewal keeps the same account key, so it does not invalidate anything. Observed og login, logout and
-  account replacement advance a session version; signing back into the same account therefore does not revive
-  queued work from before the gap. An account replacement also aborts in-flight work and a late 401 is never
-  retried as the new account. og's observed login/logout/account replacement emits the internal
-  `ogt:ogsessionchange` on a microtask; `oauth.js` promotes it to `ogt:authchange` only while og is the active
-  credential, so an og switch in another tab cannot cancel or reset work under the toolkit's own tokens. The host
-  rebuilds every `authScoped` feature from its mount state, so personal rows, selections, dialogs and listeners
-  cannot survive an account change; All lists reopens its active view on that remount. Module-level
-  ratings/playback/month-review caches still reset on the same notification. `apiAuth` refreshes only the
-  toolkit's own tokens; og's token is never refreshed, because og rotates its refresh token and a second refresher
-  would strand og's session.
+- Token renewal keeps the same account key and session revision. An observed login, logout or account replacement
+  advances the revision and emits `ogt:authchange` on a microtask. A logout followed by sign-in to the same account
+  still invalidates old work. The host rebuilds its features, clears Trakt's metadata cache and reopens an active
+  All lists view. Ratings, playback and month-review state also reset on this notification.
 - Cross-tab `storage` notifications also feed the session revision. Only localStorage changes for the pinned og key
   (or `clear()`) count; unrelated keys, sessionStorage and same-account token renewals are ignored. The handler orders
   each notification against the entry this tab last read: a logout/login that finishes before notifications arrive
   still cancels old queued work, while a delayed notification cannot regress an account a direct read already
   observed. Storage areas are compared by their pinned entry because Firefox/Violentmonkey Xray wrappers need not be
   identical objects.
-- `apiGet` uses a configured client ID when present and otherwise sends public metadata through og's connection,
-  preserving the URL and query so `getJSON` caching still works. Watchlist, library and playback lookups therefore
-  work without manual setup. A public 401 retries once only when og rotated the token for the same account.
-- `getSessionGeneration()` includes og's revision only while og's session is the active credential, so an og change
-  in another tab cannot abort queued work under the toolkit's own tokens. og entry parsing is cached by raw value
-  (`isSignedIn()` runs from every `match()` and per-row `alive()`), a non-write request reads and freezes the live
-  session before `ensureAuth()` can await a refresh, and an expired og entry makes public metadata lookups fall back
-  to `MissingClientIdError`, while a token the API rejects before its expiry keeps og's reload message.
-- Editing or clearing the API client ID dispatches `ogt:authchange`: it can switch the active credential from the
-  toolkit's own tokens to og's session, which may be a different account, so features and caches must rebuild.
-- Changes to the client ID or the toolkit's tokens made in another tab do the same through
-  `GM_addValueChangeListener`, so background tabs do not keep the previous account's data until a reload. The header
-  must `@grant` it: managers hide ungranted GM APIs, and the guard would silently skip the listener. A token refresh
-  in another tab rewrites the tokens for the same session and is ignored; only a sign-in, sign-out or a different
-  `client_id` rebuilds. Browser-checked with two same-origin tabs of a saved og lists page and Violentmonkey-like
-  shims (the pane blocks og.trakt.tv from loading a localhost bundle, and a real manager was not available).
+- `apiGet` caches metadata by URL and session revision. Account and paginated reads bypass that cache.
+  `isSignedIn()` stays true for an expired entry so actions can show the reload message.
 - A failed All lists remount keeps its reopen request until the route leaves that profile's lists page; leaving it
   drops the request, so coming back later does not reopen the view by itself.
-- Expired `expires_at` is checked in `beforeSend` as well as before a request, so a write that waited for an HTTP
-  slot cannot dispatch after the token expired. Nothing from og's entry is cleared on failure. User-facing watchlist,
-  library, playback and sign-in hints mention og.trakt.tv; the menu's **Sign out** leaves og's session alone.
+- Dispatch checks `expires_at` after acquiring an HTTP slot. An expired or rejected token asks the user to reload
+  so og can renew the session. Users sign out on og.trakt.tv.
 - `npm run drift` follows the root layout to og's user manager and fails if its client ID differs from
   `OG_SESSION_CLIENT_ID`, then checks the authority and reads the oidc chunk for the
   `user:${authority}:${client_id}` key and `oidc.` prefix. It reports drift instead of silently reading a renamed key.
-- Tests: `test/og-session.test.js` (key parsing, current-key choice over a longer-lived stale entry, account-change
-  events, blocked storage), `test/og-session-auth.test.js` (og client ID and bearer, no auth.trakt.tv call, own
-  sign-in priority, unchanged/rotated 401s, account-switch and same-account logout/login aborts, dispatch-time expiry,
-  public lookups and caching, sanitized errors) and `test/og-session-integration.test.js` (built bundle reads the page
-  entry, sends it, stores nothing and leaves sign-out to og). Built-bundle regressions cover playback and All lists
+- Session tests cover key parsing, account changes, dispatch-time expiry, 401 retry, session-scoped caching and
+  sanitized errors. Bundle tests cover legacy credential cleanup, connection diagnostics, and playback and All lists
   resets on account changes.
-- Expired og session (user live test, 2026-11-10): Add to watchlist/library start with a public lookup, which used to
-  throw a plain `MissingClientIdError` and read like a missing client ID. Lookups with an expired or rejected og token
-  now throw a `MissingClientIdError` that carries og's reload message and `ogSession`, so metadata fallbacks still
-  work while actions and All lists say to reload. To hold an entry past expiry in testing, block og's auth requests
-  in the network tab, or og renews it first.
 - Live (2026-11-10, Zen + Violentmonkey, two accounts): writes, signed-in reads, playback, sign-out and account
   switching work through og's session. Trakt keeps a replaced session usable for about a minute, so a write right
   after switching accounts can still land on the previous one; that is Trakt's session lifetime, not the toolkit.
@@ -233,9 +216,6 @@ in Zen with Violentmonkey.
   (`document.documentElement.outerHTML` once loaded; og draws the dashboard's `nav.ribbon` client-side, so server HTML
   lacks it) as `progress.html` and `dashboard.html`, then run `npm run drift -- --signed-in <dir>`. Checked
   2026-11-10 in the browser pane: `section.progress` and `nav.ribbon` both present.
-- The summary ratings chart still requires a configured client ID; the season chart keeps its DOM fallback when no
-  API lookup is possible. `isSignedIn()` stays true for an expired og entry so actions can surface the reload message
-  instead of disappearing.
 
 ## 2026-11-09: test suite review (feature 23)
 
@@ -394,7 +374,7 @@ in Zen with Violentmonkey.
 - Of the presets, only Stremio (`{imdb}:{season}:{episode}`) and TMDb (`tv/:id/season/:s/episode/:e`) could open the
   picked episode; IMDb and OpenSubtitles need the episode's own IMDb id, which og only links on episode pages, so from
   the picker they opened the season. The panel now asks `GET /shows/:id/seasons/:s/episodes/:e` for it (basic response
-  carries `ids.imdb`) when a link's templates use `{episodeimdb}`/`{episodeimdbnum}`, a client ID is set and og's page
+  carries `ids.imdb`) when a link's templates use `{episodeimdb}`/`{episodeimdbnum}`, the user is signed in to og and the page
   gave none. Results (including an id-less one) are kept per `season:episode` for the panel's life, so each episode is
   asked once; a failed request is forgotten so picking it again retries. Until it returns, the links keep the season
   route. DMM has no episode route; the rest are show-level or search.
@@ -489,25 +469,19 @@ in Zen with Violentmonkey.
 - `Retry-After` is used only when the header is present and a valid non-negative number. Missing headers use 1 s and
   2 s base delays with ±50% jitter, bounded at 30 s. The parser checks for a non-empty header before `Number()`,
   because `Number(null)` is `0` and would have skipped the fallback. A valid `Retry-After` is never shortened.
-- Only 429s and 401s are resent. A request records the session generation that started it and the token actually
-  handed to the transport (which can be newer than its pre-slot snapshot). A 401 refreshes and resends once through
-  the same pacing and cancellation checks; a second 401 for that session clears tokens. A 401 arriving after a
-  different account connected is abandoned without refreshing or clearing the replacement account's tokens. 5xx,
-  timeout and network failures surface without replay, since a write may already have been accepted.
-- A queued write captures OAuth's session generation and the client ID when it is enqueued. `clearTokens()` and a
-  successful sign-in bump the generation; the queue rechecks generation, client ID and the current token after every
-  wait and after a refresh. The final check runs in `http.js`'s `beforeSend`, after the request acquires one of the
-  transport's four slots and immediately before the send, so signing out while four GETs hold the slots still prevents
-  the old write. Sign-out or an account switch rejects queued work and releases the queue.
+- Writes retry on 429 and on a 401 when og has already rotated the token for the same session. A rejected token
+  asks the user to reload when there is no renewal to try. Server errors, timeouts and network failures surface
+  without replay because the API may already have accepted the write.
+- Each queued write captures the og session revision. The queue rechecks it after each wait, then `beforeSend`
+  checks the current session and token expiry immediately before dispatch. Sign-out or an account switch rejects
+  queued work and releases the queue. Responses from the previous session are discarded.
 - Features can also pass their own `{ active, signal }` operation guard as `apiAuth`'s optional fifth argument. The
   Watchlist, Library and Playback callers forward guards when they have one; the final `beforeSend` rechecks `active`
   too, so navigation or teardown cannot leave a delayed write running. Adds and Undos without a guard keep their old
   request shape. Playback's start respects that page guard, but its completion pause is session-scoped: once
   `/scrobble/start` has been sent, leaving the page must not suppress the pause that saves progress, since start has
   already removed the old entry. A sign-out or account change still rejects the pause.
-- Device polling, token refresh and revoke still call the OAuth endpoints directly. A write holds only its queue
-  slot while refreshing, never a transport slot, so refresh cannot deadlock behind the write waiting for it. GETs are
-  unchanged: not queued or paced, with the same caching and four-way concurrency.
+- GETs use the transport's four slots and bypass the write queue.
 - `src/core/http.js` no longer caps the public transport's `Retry-After` wait at 10 s. Its 429/5xx retries now wait
   the server's full delay; missing headers keep the existing linear fallback.
 - Tests: `test/write-queue.test.js` mocks `Date`/`setTimeout` and `GM_xmlhttpRequest` for FIFO order, one-second
@@ -667,8 +641,7 @@ in Zen with Violentmonkey.
 
 ## 2026-11-06: og-styled dialogs instead of the browser's
 
-- Every `window.confirm` / `window.prompt` (playback clear and save progress, library add, the custom-link and
-  client-ID menu commands, the sign-in redirect URI) now goes through `src/ui/dialog.js`: `confirmDialog()` and
+- Playback, library and custom-link prompts use `src/ui/dialog.js`. Its `confirmDialog()` and
   `promptDialog()` return promises. It is a native modal `<dialog>` like og's `Dialog.svelte` (trakt-og
   `fea92af`), so focus stays inside, Esc cancels and focus goes back to the opener. Its look uses og's own tokens:
   `--color-dialog-bg`, the uppercase title bar (`--color-dialog-title-*`), and the art dialogs' footer, field and
@@ -774,13 +747,13 @@ in Zen with Violentmonkey.
   search URL, so existing links, custom links and duplicate detection are unchanged; `resolvePresetUrl` swaps in a
   deep template only when every placeholder it needs has a value, otherwise the search URL stays. The season/episode
   picker re-resolves the href on change. A user-edited Stremio URL no longer matches the preset and stays as typed.
-- `lookUpShow` also checks the deep templates. A season page gets `{imdb}` from og's IMDb link, so its route fills
-  without a client ID; an episode page's IMDb link is the episode's own, so the exact-episode link needs the
-  client-ID show lookup and otherwise falls back to search.
+- `lookUpShow` also checks the deep templates. A season page gets `{imdb}` from og's IMDb link even while signed
+  out. An episode page's IMDb link is the episode's own, so the exact-episode link needs a signed-in show lookup.
+  The link falls back to search when that lookup is unavailable.
 - The other presets stay search-only. Plex and Jellyfin need their own ids, Metacritic and AniList have no episode
   pages, and og already links TMDb, IMDb, Letterboxd, Rotten Tomatoes and Wikipedia (Trakt is the same site).
 - Tests: `test/presets.test.js` covers the four Stremio routes, fallback, page-kind filtering and the template list;
-  built-bundle tests cover movie, show, season, episode fallback, the client-ID lookup and picker updates.
+  built-bundle tests cover movie, show, season, episode fallback, the signed-in lookup and picker updates.
 
 ## 2026-11-04: month review browsing (feature 21)
 
@@ -911,11 +884,9 @@ The user verified the watchlist, library and all-lists features on a real accoun
   liked pages og's router follows the link and the hash opens the view. Any other dropdown choice restores og's view.
 - Routes (trakt-og d41f511): `/users/:id/lists`, `/smart-lists`, `/lists/collaborations`, `/lists/liked`,
   `/lists/liked/official`. `parseRoute` names them; single lists, `/smart-lists/:slug` and comments stay `other`.
-- Requests follow `loadLists.ts`: collaborations in one request (not paginated); liked lists in pages of 250, up to
-  ten, newest first. Signed in, both go through the toolkit's OAuth (private lists the viewer can see, page-count
-  header); signed out, `apiGet` with the client ID reads liked pages until a short one, since the public cache keeps
-  no headers. `/users/:id/likes/lists` sends empty posters, so each liked row reads `/lists/:id?extended=images` as it
-  nears the viewport (as og's `fetchListPosters.ts` does), once per list per page load.
+- With og sign-in, the view reads collaborations in one request and liked lists in pages of 250, up to ten,
+  newest first. `/users/:id/likes/lists` sends empty posters, so a row near the viewport reads
+  `/lists/:id?extended=images`. Rows for the same list share a pending request within the view.
 - Styling: rows use ListRow's markup. When the page has a native row, the view takes `section.lists`' and its
   container's classes, rows take ListRow's `svelte-*` scope class, and the likes, count, tag, share and progress
   elements are cloned from og's own (tooltips stripped), so og's CSS styles them. The toolkit CSS applies only under
@@ -948,17 +919,17 @@ The user verified the watchlist, library and all-lists features on a real accoun
   (`tv/1396/season/1`, `tv/1396/season/1/episode/1`) and the season page's IMDb link is the show's
   (`tt0903747/episodes?season=1`), so those are read from the page; an episode page's IMDb link is the episode's
   (`tt0959621`) and is not reused.
-- Only what the page lacks is looked up: the show's year, and an episode page's IMDb id. With a client ID, the panel
+- Only what the page lacks is looked up: the show's year, and an episode page's IMDb id. Signed in to og, the panel
   fetches the basic `GET /shows/:id` (title, year and ids; `extended=full` isn't needed) once a link needs one of
   those, checked on every render, so a link added in the editor triggers it too. `showTemplateData` fills only the
   missing values. `{season}`/`{episode}` come from `selectionForRoute`:
   season pages have the route season and no episode, episode pages have both, and title pages keep the picker and
   stored selection. Season/episode pages never render the picker and never call the seasons endpoint.
-- Without a client ID, season/episode pages still use the show link for the title and og's show ids, while `{year}`
+- Signed out, season/episode pages still use the show link for the title and og's show ids, while `{year}`
   links (and `{imdb}` on episode pages) stay hidden instead of pointing at the season/episode. The page year is that season or episode's, so
   it is not used as a fallback. Title pages are unchanged.
 - New live-shaped season and episode fixtures, `readTitleData`/`selectionForRoute`/`showTemplateData` unit tests, and
-  built-bundle integration tests cover the API-filled, no-client-ID and episode-IMDb cases. `npm run drift` checks the
+  built-bundle integration tests cover the API-filled, signed-out and episode-IMDb cases. `npm run drift` checks the
   show link and the show-id links on live season and episode pages.
 - Test pitfall: a failing `assert.equal(element, undefined)` on a happy-dom element makes Node print the element, which
   runs the test process out of memory. Compare a boolean instead.
@@ -1307,7 +1278,7 @@ flips the flag back, og's "Add to library" button appears and the toolkit's hide
   matches a Plex URL example, but curl only checks the hosted app shell for Stremio and Plex because it does not send
   URL fragments. Neither route had a browser click-through check in this environment.
 
-### OAuth live check (2026-10-29, real account)
+### Retired toolkit OAuth live check (2026-10-29, real account)
 
 - Passed against Trakt: device sign-in, `/users/me`, forced refresh (both tokens rotate, 7-day expiry), the old
   refresh token is rejected with 400 after use, and a bad access token refreshes once and retries.
@@ -1332,8 +1303,8 @@ flips the flag back, og's "Add to library" button appears and the toolkit's hide
   routes `movies/[id]`, `shows/[id]/seasons/[season]/episodes/[episode]`, and
   `users/[id]/progress/[[type=progressType]]/[...sort]`. ProgressList renders `section.progress` and Watching,
   Rewatching and Dropped tabs; ProgressPage reads watched/up-next progress, not paused playback. Its loader allows
-  only the og user's own progress page. The new section sits immediately above that list, with an explicit toolkit
-  account label because og and toolkit may be signed in to different Trakt accounts. Its Load button fetches on demand.
+  only the og user's own progress page. The section sits immediately above that list and loads on demand. Feature 38
+  uses the account signed in to og for playback reads and writes.
   Badges go after `.summary-frame #overview .top`, through the existing hydration-gated feature host.
 - Playback cache/deduplication is memory-only for 60 seconds, independent of the public GET cache. Auth-change
   events discard private cached/in-flight results, remove signed-out UI, and stop queued deletes after a session
@@ -1352,7 +1323,7 @@ flips the flag back, og's "Add to library" button appears and the toolkit's hide
   showed as a badge and in the overview, and clearing it deleted it on Trakt. Without a syncing app, that
   start+pause pair is the easiest way to create test playback.
 
-### OAuth review fixes
+### Retired toolkit OAuth review fixes
 
 - Sign-in accepts any non-empty registered redirect URI and defaults to the README's
   `http://localhost:5173/callback`. It is passed to refresh; device authorization still does not redirect.
@@ -1360,7 +1331,7 @@ flips the flag back, og's "Add to library" button appears and the toolkit's hide
   server errors, and malformed success responses preserve stored tokens and show a safe retry message.
 - Polling notifications appear only when their state changes; repeated pending or slow-down replies stay quiet.
 
-### OAuth device flow (feature 2, phase A)
+### Retired toolkit OAuth device flow (feature 2, phase A)
 
 - Checked the current official [authentication guide](https://developer.trakt.tv/docs/authentication-oauth),
   [PKCE guide](https://developer.trakt.tv/docs/pkce), and endpoint contracts in

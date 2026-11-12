@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession } from './session.js';
 import { Window } from 'happy-dom';
 import { readFileSync } from 'node:fs';
 import { createNativeWatchlistRefresh } from '../src/features/watchlist/native-refresh.js';
@@ -81,9 +82,8 @@ test('built bundle refreshes native title/card membership after one toolkit POST
     const window = new Window({ url: 'https://og.trakt.tv/movies/test' });
     t.after(() => window.close());
     const { document } = window;
-    const store = new Map([
-      ['trakt.clientId', 'client'], ['trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 }],
-    ]);
+    const store = new Map();
+    setOgSession(window.localStorage);
     let posts = 0, reads = 0, nativeClicks = 0, popups = 0;
     window.GM_getValue = (key, fallback) => store.get(key) ?? fallback;
     window.GM_setValue = (key, value) => store.set(key, value);

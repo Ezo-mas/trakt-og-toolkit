@@ -25,7 +25,7 @@ function createPanel(route) {
   const content = el('div');
   const node = el('section', { id: ID, class: 'ogt-panel ogt-playback', 'aria-labelledby': `${ID}-title`, hidden: !overview },
     el('h2', { class: 'ogt-title', id: `${ID}-title`, text: overview ? 'Paused playback' : 'Playback progress' }),
-    ...(overview ? [el('p', { class: 'ogt-hint', text: 'Your paused movies and episodes from the toolkit’s Trakt account.' }),
+    ...(overview ? [el('p', { class: 'ogt-hint', text: 'Your paused movies and episodes from the account signed in to og.trakt.tv.' }),
       button('Load paused playback', 'load')] : []), status, content);
 
   // The host rebuilds this panel on an account change; a destroyed instance must discard

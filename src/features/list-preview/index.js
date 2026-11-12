@@ -14,7 +14,7 @@ const FAN = '.list-row .fan';
  * The poster stack of a list card links to the list as a whole. Each slot knows its own title through
  * the media URL, so pointer clicks go to that title while the fan's list link stays intact. The fan is
  * already an anchor, so the slots are not wrapped in nested links; a hidden nav after the stack carries
- * real title links for keyboard and screen-reader users. With the toolkit sign-in, your movie and show
+ * real title links for keyboard and screen-reader users. With an og session, your movie and show
  * ratings appear in the posters' corners (og has none on the fan).
  */
 export const listPreview = {

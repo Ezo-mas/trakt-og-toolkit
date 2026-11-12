@@ -1,13 +1,13 @@
 /** Built-bundle tests for the watchlist random picker on a captured og watchlist page. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession } from './session.js';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { wait, waitFor } from './wait.js';
 import { WATCHLIST_PAGE_HTML } from './fixtures.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
-const OG_SESSION_KEY = 'oidc.user:https://auth.trakt.tv:WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI';
 
 const movie = (slug, title) => ({
   type: 'movie', movie: { title, year: 2026, ids: { slug, trakt: 1 } },
@@ -27,26 +27,18 @@ const defaultMovies = [movie('project-hail-mary-2026', 'Project Hail Mary'), mov
 
 function boot({
   url = 'https://og.trakt.tv/users/justin/watchlist',
-  signedIn = false,
-  clientId = 'client',
+  signedIn = true,
   movies = defaultMovies,
   shows = [showItem],
   fail = () => false,
   pageCount = 1,
   pageRows = null,
-  ogSession = false,
+  expired = false,
   delay = 0,
 } = {}) {
   const window = new Window({ url });
-  const store = new Map();
-  if (ogSession) window.localStorage.setItem(OG_SESSION_KEY, JSON.stringify({
-    access_token: 'expired', token_type: 'bearer', expires_at: Math.floor(Date.now() / 1000) - 60,
-    profile: { ids: { trakt: 1 } },
-  }));
-  if (clientId) store.set('trakt.clientId', clientId);
-  if (signedIn) store.set('trakt.oauth.tokens', {
-    client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000,
-  });
+  const store = new Map([['features.disabled', ['list-preview']]]);
+  if (signedIn) setOgSession(window.localStorage, { expires: Date.now() + (expired ? -60000 : 3600000) });
   const requests = [];
   window.GM_getValue = (key, fallback) => (store.has(key) ? store.get(key) : fallback);
   window.GM_setValue = (key, value) => store.set(key, value);
@@ -146,7 +138,7 @@ test('signed in, reads every page with the authenticated session', async (t) => 
   await waitFor(() => !b.result().hidden && b.result().textContent, { message: 'the authenticated pick' });
   const pages = b.requests.filter((request) => request.pathname === '/users/justin/watchlist');
   assert.deepEqual(pages.map((request) => request.searchParams.get('page')), ['1', '2']);
-  assert.ok(pages.every((request) => request.auth), 'both pages use the toolkit sign-in');
+  assert.ok(pages.every((request) => request.auth), 'both pages use the og session');
   assert.ok(pages.every((request) => request.searchParams.get('limit') === '100'));
 });
 
@@ -262,7 +254,7 @@ test('picks at the read limit show a note and keep it on reroll', async (t) => {
 });
 
 test('an expired og session asks for a reload', async (t) => {
-  const b = boot({ clientId: null, ogSession: true });
+  const b = boot({ expired: true });
   t.after(() => b.window.close());
   await waitFor(() => b.panel(), { message: 'the watchlist picker to mount' });
   b.button().click();
@@ -272,12 +264,12 @@ test('an expired og session asks for a reload', async (t) => {
 });
 
 test('private and unavailable lists show one-line hints instead of error boxes', async (t) => {
-  const noClient = boot({ clientId: null });
-  t.after(() => noClient.window.close());
-  await waitFor(() => noClient.panel(), { message: 'the watchlist picker to mount' });
-  noClient.button().click();
-  await waitFor(() => /Sign in to og\.trakt\.tv|client ID/.test(noClient.status().textContent), { message: 'the sign-in hint' });
-  assert.equal(noClient.result().hidden, true);
+  const signedOut = boot({ signedIn: false });
+  t.after(() => signedOut.window.close());
+  await waitFor(() => signedOut.panel(), { message: 'the watchlist picker to mount' });
+  signedOut.button().click();
+  await waitFor(() => /Sign in to og\.trakt\.tv/.test(signedOut.status().textContent), { message: 'the sign-in hint' });
+  assert.equal(signedOut.result().hidden, true);
 
   const missing = boot({ fail: () => true });
   t.after(() => missing.window.close());

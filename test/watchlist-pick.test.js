@@ -98,13 +98,12 @@ test('Pick again excludes the previous pick before sampling', () => {
   assert.equal(pickWatchlistItem([items[0]], items[0].key, () => 0).title, 'A', 'a lone candidate is still returned');
 });
 
-test('public watchlist reads walk pages until a short one and keep the filter', async () => {
+test('watchlist reads walk pages until a short one and keep the filter', async () => {
   const calls = [];
   const api = createWatchlistApi({
-    signedIn: () => false,
-    get: async (path, options) => {
+    authPage: async (path, options) => {
       calls.push({ path, options });
-      const page = Number(new URL(`https://api.trakt.tv${path}`).searchParams.get('page'));
+      const { page } = options;
       return { data: page === 1 ? Array.from({ length: PAGE_SIZE }, () => movie) : page === 2 ? [movie] : [], pages: null };
     },
   });
@@ -113,37 +112,15 @@ test('public watchlist reads walk pages until a short one and keep the filter', 
   assert.equal(rows.length, PAGE_SIZE + 1);
   assert.equal(limited, false);
   assert.deepEqual(calls.map((call) => call.path), [
-    `/users/justin/watchlist/movies?page=1&limit=${PAGE_SIZE}`,
-    `/users/justin/watchlist/movies?page=2&limit=${PAGE_SIZE}`,
+    '/users/justin/watchlist/movies',
+    '/users/justin/watchlist/movies',
   ]);
-  assert.deepEqual(calls.map((call) => call.options), [{ ttl: 0, withHeaders: true }, { ttl: 0, withHeaders: true }],
-    'public reads bypass the shared cache and keep the page count');
-});
-
-test('public watchlist reads batch pages once Trakt sends a page count', async () => {
-  const pages = [];
-  let inFlight = 0;
-  let peak = 0;
-  const api = createWatchlistApi({
-    signedIn: () => false,
-    get: async (path) => {
-      pages.push(Number(new URL(`https://api.trakt.tv${path}`).searchParams.get('page')));
-      peak = Math.max(peak, ++inFlight);
-      await Promise.resolve();
-      inFlight--;
-      return { data: [movie], pages: 6 };
-    },
-  });
-
-  assert.deepEqual(await api.list('justin'), { rows: Array(6).fill(movie), limited: false });
-  assert.deepEqual(pages, [1, 2, 3, 4, 5, 6]);
-  assert.equal(peak, BATCH);
+  assert.deepEqual(calls.map((call) => call.options), [{ page: 1, limit: PAGE_SIZE }, { page: 2, limit: PAGE_SIZE }]);
 });
 
 test('signed-in watchlist reads use Trakt page counts', async () => {
   const calls = [];
   const api = createWatchlistApi({
-    signedIn: () => true,
     authPage: async (path, options) => {
       calls.push([path, options.page, options.limit]);
       return options.page === 1 ? { data: [movie], pages: 2 } : { data: [show], pages: 2 };
@@ -157,27 +134,11 @@ test('signed-in watchlist reads use Trakt page counts', async () => {
   ]);
 });
 
-test('signed-in reads without a page count continue until a short page', async () => {
-  const calls = [];
-  const first = Array(PAGE_SIZE).fill(movie);
-  const api = createWatchlistApi({
-    signedIn: () => true,
-    authPage: async (_, { page }) => {
-      calls.push(page);
-      return { data: page === 1 ? first : [show], pages: null };
-    },
-  });
-
-  assert.deepEqual(await api.list('justin'), { rows: [...first, show], limited: false });
-  assert.deepEqual(calls, [1, 2]);
-});
-
 test('signed-in reads batch pages once the count is known and report the read limit', async () => {
   const pages = [];
   let inFlight = 0;
   let peak = 0;
   const api = createWatchlistApi({
-    signedIn: () => true,
     authPage: async (_, { page }) => {
       pages.push(page);
       peak = Math.max(peak, ++inFlight);
@@ -194,18 +155,17 @@ test('signed-in reads batch pages once the count is known and report the read li
 });
 
 test('a signed-in empty response or 204 is an empty page, not a failure', async () => {
-  const api = createWatchlistApi({ signedIn: () => true, authPage: async () => null });
+  const api = createWatchlistApi({ authPage: async () => null });
   assert.deepEqual(await api.list('justin'), { rows: [], limited: false });
 });
 
-test('a public list of exactly the read limit probes one entry past it', async () => {
+test('a watchlist of exactly the read limit probes one entry past it', async () => {
   for (const [beyond, limited] of [[[], false], [[movie], true]]) {
     const calls = [];
     const api = createWatchlistApi({
-      signedIn: () => false,
-      get: async (path) => {
-        calls.push(path);
-        const data = path.endsWith('limit=1') ? beyond : Array(PAGE_SIZE).fill(movie);
+      authPage: async (path, { page, limit }) => {
+        calls.push([path, page, limit]);
+        const data = limit === 1 ? beyond : Array(PAGE_SIZE).fill(movie);
         return { data, pages: null };
       },
     });
@@ -213,6 +173,6 @@ test('a public list of exactly the read limit probes one entry past it', async (
     assert.equal(result.rows.length, MAX_ITEMS);
     assert.equal(result.limited, limited);
     assert.equal(calls.length, MAX_PAGES + 1);
-    assert.equal(calls.at(-1), `/users/justin/watchlist?page=${MAX_ITEMS + 1}&limit=1`);
+    assert.deepEqual(calls.at(-1), ['/users/justin/watchlist', MAX_ITEMS + 1, 1]);
   }
 });

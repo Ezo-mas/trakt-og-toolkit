@@ -1,7 +1,7 @@
 /** The All lists view: og's page with the profile's collaborations and liked lists appended. */
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
-import { MissingClientIdError, isSignedIn } from '../../core/trakt.js';
+import { isSignedIn } from '../../core/trakt.js';
 import { collaborationLists, likedLists } from './data.js';
 import { getCollaborationLists, getLikedLists, getViewer } from './api.js';
 import { createRows, nativeParts, postersFor } from './rows.js';
@@ -62,17 +62,23 @@ export function createView(profile, lists) {
 
     const failed = results.slice(0, 2).filter((result) => result.status === 'rejected');
     if (failed.length) {
-      const missing = failed.find((result) => result.reason instanceof MissingClientIdError)?.reason;
-      node.prepend(el('p', { class: 'ogt-all-lists__error', role: 'status', text: missing?.ogSession ? missing.message
-        : missing ? 'Set a Trakt API client ID in the toolkit menu to load collaborations and liked lists.'
-          : 'Some lists could not be loaded. Try again later.' }));
+      const reasons = failed.map((result) => result.reason);
+      const expired = reasons.find((error) => error?.ogSession);
+      const text = expired?.message ?? (reasons.some((error) => error?.status === 401)
+        ? 'Sign in to og.trakt.tv to load collaborations and liked lists.'
+        : 'Some lists could not be loaded. Try again later.');
+      node.prepend(el('p', { class: 'ogt-all-lists__error', role: 'status', text }));
     }
 
     // Liked lists arrive without posters: read each list's summary as its row nears the screen.
+    const posterRequests = new Map();
     const fill = (rowNode) => {
-      const entry = waiting.get(rowNode);
+      const { id } = waiting.get(rowNode);
       waiting.delete(rowNode);
-      void postersFor(entry.id).then((posters) => { if (!cancelled) rowNode.setPosters(posters); });
+      if (!posterRequests.has(id)) {
+        posterRequests.set(id, postersFor(id).finally(() => posterRequests.delete(id)));
+      }
+      void posterRequests.get(id).then((posters) => { if (!cancelled) rowNode.setPosters(posters); });
     };
     if (typeof IntersectionObserver === 'function') {
       observer = new IntersectionObserver((changes) => {

@@ -103,13 +103,12 @@ test('names downloads from the owner and list, with a watchlist fallback', () =>
   assert.equal(exportFilename({}), 'trakt-export.csv');
 });
 
-test('public list reads walk pages until a short one and encode the owner and slug', async () => {
+test('list reads walk pages until a short one and encode the owner and slug', async () => {
   const calls = [];
   const api = createExportApi({
-    signedIn: () => false,
-    get: async (path, options) => {
+    authPage: async (path, options) => {
       calls.push([path, options]);
-      const page = Number(new URL(`https://api.trakt.tv${path}`).searchParams.get('page'));
+      const { page } = options;
       const data = page === 1 ? Array.from({ length: PAGE_SIZE }, () => movie) : page === 2 ? [movie] : [];
       return { data, pages: null };
     },
@@ -118,18 +117,16 @@ test('public list reads walk pages until a short one and encode the owner and sl
   const rows = await api.list('odd name', 'A List!');
   assert.equal(rows.length, PAGE_SIZE + 1);
   assert.deepEqual(calls, [
-    [`/users/odd%20name/lists/A%20List!/items?page=1&limit=${PAGE_SIZE}`, { ttl: 0, withHeaders: true }],
-    [`/users/odd%20name/lists/A%20List!/items?page=2&limit=${PAGE_SIZE}`, { ttl: 0, withHeaders: true }],
+    ['/users/odd%20name/lists/A%20List!/items', { page: 1, limit: PAGE_SIZE }],
+    ['/users/odd%20name/lists/A%20List!/items', { page: 2, limit: PAGE_SIZE }],
   ]);
 });
 
-test('public reads keep a page count when later pages omit the header', async () => {
+test('list reads keep a page count when later pages omit the header', async () => {
   const calls = [];
   const api = createExportApi({
-    signedIn: () => false,
-    get: async (path) => {
+    authPage: async (path, { page }) => {
       calls.push(path);
-      const page = Number(new URL(`https://api.trakt.tv${path}`).searchParams.get('page'));
       return { data: page === 1 ? [movie] : page === 2 ? [show] : [season], pages: page === 1 ? 3 : null };
     },
   });
@@ -138,41 +135,9 @@ test('public reads keep a page count when later pages omit the header', async ()
   assert.equal(calls.length, 3);
 });
 
-test('public reads fail when a required page returns an invalid payload', async () => {
-  const calls = [];
-  const api = createExportApi({
-    signedIn: () => false,
-    get: async (path) => {
-      calls.push(path);
-      const page = Number(new URL(`https://api.trakt.tv${path}`).searchParams.get('page'));
-      return page === 1 ? { data: [movie], pages: 3 }
-        : page === 2 ? { data: [show], pages: null }
-          : { data: null, pages: null };
-    },
-  });
-
-  await assert.rejects(api.list('justin', 'broken'), (error) => error.exportIncomplete === true);
-  assert.equal(calls.length, 3);
-});
-
-test('public reads fail instead of truncating an export at the page cap', async () => {
-  const calls = [];
-  const api = createExportApi({
-    signedIn: () => false,
-    get: async (path) => {
-      calls.push(path);
-      return { data: [movie], pages: MAX_PAGES + 1 };
-    },
-  });
-
-  await assert.rejects(api.list('justin', 'huge'), (error) => error.exportLimit === true);
-  assert.equal(calls.length, 1);
-});
-
 test('signed-in watchlist reads use Trakt page counts', async () => {
   const calls = [];
   const api = createExportApi({
-    signedIn: () => true,
     authPage: async (path, options) => {
       calls.push([path, options.page, options.limit]);
       return options.page === 1 ? { data: [movie], pages: 2 } : { data: [show], pages: 2 };
@@ -189,7 +154,6 @@ test('signed-in watchlist reads use Trakt page counts', async () => {
 test('signed-in reads fail instead of truncating an export at the page cap', async () => {
   const calls = [];
   const api = createExportApi({
-    signedIn: () => true,
     authPage: async (path, options) => {
       calls.push(options.page);
       return { data: [movie], pages: MAX_PAGES + 1 };
@@ -200,26 +164,10 @@ test('signed-in reads fail instead of truncating an export at the page cap', asy
   assert.deepEqual(calls, [1]);
 });
 
-test('signed-in reads without a count continue until a short page', async () => {
-  const calls = [];
-  const first = Array(PAGE_SIZE).fill(movie);
-  const api = createExportApi({
-    signedIn: () => true,
-    authPage: async (_, { page }) => {
-      calls.push(page);
-      return { data: page === 1 ? first : [show], pages: null };
-    },
-  });
-
-  assert.deepEqual(await api.watchlist('justin'), [...first, show]);
-  assert.deepEqual(calls, [1, 2]);
-});
-
 test('signed-in reads keep page order and run at most four requests at once', async () => {
   let inFlight = 0;
   let peak = 0;
   const api = createExportApi({
-    signedIn: () => true,
     authPage: async (_, { page }) => {
       peak = Math.max(peak, ++inFlight);
       await Promise.resolve();
@@ -232,16 +180,13 @@ test('signed-in reads keep page order and run at most four requests at once', as
   assert.equal(peak, 4);
 });
 
-test('a headerless public list can have exactly 20,000 items', async () => {
+test('a headerless list can have exactly 20,000 items', async () => {
   const full = Array(PAGE_SIZE).fill(movie);
   const calls = [];
   let extra = [];
   const api = createExportApi({
-    signedIn: () => false,
-    get: async (path) => {
-      const query = new URL(path, 'https://api.trakt.tv').searchParams;
-      const limit = Number(query.get('limit'));
-      calls.push([Number(query.get('page')), limit]);
+    authPage: async (_, { page, limit }) => {
+      calls.push([page, limit]);
       return { data: limit === 1 ? extra : full, pages: null };
     },
   });
@@ -256,33 +201,35 @@ test('a headerless public list can have exactly 20,000 items', async () => {
 test('signed-in reads reject empty or malformed required pages', async () => {
   for (const data of [[], { error: 'unexpected response' }]) {
     const api = createExportApi({
-      signedIn: () => true,
-      authPage: async (_, { page }) => ({ data: page === 2 ? data : [movie], pages: 3 }),
+        authPage: async (_, { page }) => ({ data: page === 2 ? data : [movie], pages: 3 }),
     });
 
     await assert.rejects(api.watchlist('justin'), (error) => error.exportIncomplete === true);
   }
 });
 
-test('official lists resolve their numeric id and read public items', async () => {
+test('official lists resolve their numeric id and read their items', async () => {
   const calls = [];
   const api = createExportApi({
-    signedIn: () => true,
     get: async (path) => {
       calls.push(path);
       if (path === '/lists/avatar-collection') {
         return { type: 'official', ids: { trakt: 884, slug: 'avatar-collection' } };
       }
-      if (path === `/lists/884/items?page=1&limit=${PAGE_SIZE}`) return { data: [movie], pages: null };
       throw new Error(`unexpected request: ${path}`);
     },
-    authPage: async () => { throw new Error('official items must stay public'); },
+    authPage: async (path, options) => {
+      assert.deepEqual(options, { page: 1, limit: PAGE_SIZE });
+      calls.push(path);
+      assert.equal(path, '/lists/884/items');
+      return { data: [movie], pages: null };
+    },
   });
 
   assert.deepEqual(await api.official('avatar-collection'), [movie]);
   assert.deepEqual(calls, [
     '/lists/avatar-collection',
-    `/lists/884/items?page=1&limit=${PAGE_SIZE}`,
+    '/lists/884/items',
   ]);
 });
 
@@ -290,7 +237,6 @@ test('official slugs fall back to search on a 404 or a personal-list collision',
   const calls = [];
   let missing = true;
   const api = createExportApi({
-    signedIn: () => false,
     get: async (path) => {
       calls.push(path);
       if (path === '/lists/1001-movies') {
@@ -303,8 +249,13 @@ test('official slugs fall back to search on a 404 or a personal-list collision',
           { type: 'list', list: { type: 'official', ids: { trakt: 37675689, slug: '1001-movies' } } },
         ];
       }
-      if (path === `/lists/37675689/items?page=1&limit=${PAGE_SIZE}`) return { data: [movie], pages: null };
       throw new Error(`unexpected request: ${path}`);
+    },
+    authPage: async (path, options) => {
+      assert.deepEqual(options, { page: 1, limit: PAGE_SIZE });
+      calls.push(path);
+      assert.equal(path, '/lists/37675689/items');
+      return { data: [movie], pages: null };
     },
   });
 
@@ -312,7 +263,7 @@ test('official slugs fall back to search on a 404 or a personal-list collision',
   assert.deepEqual(calls, [
     '/lists/1001-movies',
     '/search/list?query=1001%20movies&limit=25',
-    `/lists/37675689/items?page=1&limit=${PAGE_SIZE}`,
+    '/lists/37675689/items',
   ]);
   missing = false;
   assert.deepEqual(await api.official('1001-movies'), [movie]);
@@ -321,7 +272,6 @@ test('official slugs fall back to search on a 404 or a personal-list collision',
 test('official slug collisions without an official match fail instead of exporting the personal list', async () => {
   const calls = [];
   const api = createExportApi({
-    signedIn: () => false,
     get: async (path) => {
       calls.push(path);
       if (path === '/lists/1001-movies') {

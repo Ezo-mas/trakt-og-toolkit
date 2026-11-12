@@ -1,6 +1,7 @@
 /** Built-bundle tests for All lists on a captured og lists page; GM storage and API requests are mocked. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession } from './session.js';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { ALL_LISTS_HTML } from './fixtures.js';
@@ -15,15 +16,12 @@ const list = (id, overrides = {}) => ({
 });
 
 /** Answers by path; `pages` adds Trakt's page-count header to authenticated pages. */
-function boot({ url = 'https://og.trakt.tv/users/justin/lists', html = ALL_LISTS_HTML, signedIn = false, clientId = 'client',
+function boot({ url = 'https://og.trakt.tv/users/justin/lists', html = ALL_LISTS_HTML, signedIn = true,
   collaborations = [list(1, { privacy: 'link' })], liked = () => [{ liked_at: '2026-11-01T00:00:00Z', list: list(2) }],
   fail = () => false, viewer = 'viewer', viewerLiked = [] } = {}) {
   const window = new Window({ url });
-  const store = new Map();
-  if (clientId) store.set('trakt.clientId', clientId);
-  if (signedIn) {
-    store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 });
-  }
+  const store = new Map([['features.disabled', ['list-preview']]]);
+  if (signedIn) setOgSession(window.localStorage);
   const requests = [];
   window.GM_getValue = (key, fallback) => (store.has(key) ? store.get(key) : fallback);
   window.GM_setValue = (key, value) => store.set(key, value);
@@ -104,7 +102,7 @@ test('choosing All lists appends collaborations and liked lists in og\'s own row
   assert.ok(counts[1].classList.contains('svelte-1c8x1ot'), 'og\'s count classes and icon');
   assert.equal(collab.querySelector('.tools .share button').getAttribute('title'), 'Copy Link');
   assert.equal(Boolean(collab.querySelector('.tools [popover]')), false, 'no copied tooltip');
-  assert.equal(Boolean(collab.querySelector('.tools .progress')), false, 'progress needs a signed-in viewer');
+  assert.ok(collab.querySelector('.tools .progress'), 'the signed-in viewer can open list progress');
   assert.equal(Boolean(collab.querySelector('.leave')), false);
 
   // Liked lists come without posters; each row's are read from the list summary.
@@ -118,6 +116,18 @@ test('choosing All lists appends collaborations and liked lists in og\'s own row
   assert.equal(triggerLabel(document), 'Lists: Personal');
   assert.equal(document.querySelector('a[href="/users/justin/lists"]').getAttribute('aria-current'), 'page');
   assert.equal(option(document).hasAttribute('aria-current'), false);
+});
+
+test('duplicate liked rows share one pending poster request', async (t) => {
+  const entry = { liked_at: '2026-11-01T00:00:00Z', list: list(2) };
+  const { window, document, requests } = boot({ liked: () => [entry, entry] });
+  t.after(() => window.close());
+  await wait();
+  option(document).click();
+  await wait();
+
+  assert.equal(requests.filter((request) => request.pathname === '/lists/2').length, 1);
+  assert.equal(view(document).querySelectorAll('.ogt-all-lists__group--liked .fan img.poster').length, 2);
 });
 
 test('auth changes clear private rows and reload instead of reusing the old view', async (t) => {
@@ -225,26 +235,20 @@ test('a pending reopen is dropped after leaving the lists page', async (t) => {
   assert.equal(option(document).hasAttribute('aria-current'), false);
 });
 
-test('liked lists read every page, publicly or with the toolkit sign-in', async (t) => {
+test('liked lists read every page through the og session', async (t) => {
   const many = (count, from) => Array.from({ length: count }, (_, i) => ({ liked_at: '2026-11-01T00:00:00Z', list: list(from + i, { images: { posters: ['media.trakt.tv/p.jpg'] } }) }));
-  for (const signedIn of [false, true]) {
-    const { window, document, requests } = boot({
-      signedIn,
-      // Public: a full page means there may be more. Signed in: Trakt's page count says so.
-      liked: (page) => (signedIn ? { rows: many(page === 1 ? 3 : 2, page * 100), pages: 2 } : many(page === 1 ? 250 : 1, page * 1000)),
-    });
-    t.after(() => window.close());
-    await wait();
-    option(document).click();
-    await wait(150);
-    const pages = requests.filter((request) => request.pathname === '/users/justin/likes/lists');
-    assert.deepEqual(pages.map((request) => request.searchParams.get('page')), ['1', '2']);
-    assert.ok(pages.every((request) => request.searchParams.get('limit') === '250' && request.auth === signedIn));
-    assert.equal(view(document).querySelectorAll('.ogt-all-lists__group--liked .list-row').length, signedIn ? 5 : 251);
-    if (signedIn) {
-      assert.equal(view(document).querySelector('.list-row .tools .progress').getAttribute('href'), '/users/viewer/progress?list=1');
-    }
-  }
+  const { window, document, requests } = boot({
+    liked: (page) => ({ rows: many(page === 1 ? 3 : 2, page * 100), pages: 2 }),
+  });
+  t.after(() => window.close());
+  await wait();
+  option(document).click();
+  await wait(150);
+  const pages = requests.filter((request) => request.pathname === '/users/justin/likes/lists');
+  assert.deepEqual(pages.map((request) => request.searchParams.get('page')), ['1', '2']);
+  assert.ok(pages.every((request) => request.searchParams.get('limit') === '250' && request.auth));
+  assert.equal(view(document).querySelectorAll('.ogt-all-lists__group--liked .list-row').length, 5);
+  assert.equal(view(document).querySelector('.list-row .tools .progress').getAttribute('href'), '/users/viewer/progress?list=1');
 });
 
 test('other list pages link to the personal page, which opens All lists from the link', async (t) => {
@@ -273,12 +277,12 @@ test('single lists and smart lists pages are left alone', async (t) => {
 });
 
 test('failures say what to do, and a page with no native rows uses the fallback styles', async (t) => {
-  const noClient = boot({ clientId: null });
-  t.after(() => noClient.window.close());
+  const signedOut = boot({ signedIn: false });
+  t.after(() => signedOut.window.close());
   await wait();
-  option(noClient.document).click();
+  option(signedOut.document).click();
   await wait();
-  assert.match(view(noClient.document).querySelector('.ogt-all-lists__error').textContent, /client ID/);
+  assert.match(view(signedOut.document).querySelector('.ogt-all-lists__error').textContent, /Sign in to og\.trakt\.tv/);
 
   const failing = boot({ fail: (path) => path.endsWith('/likes/lists'), html: ALL_LISTS_HTML.replace(/<article[\s\S]*<\/article>/, '') });
   t.after(() => failing.window.close());

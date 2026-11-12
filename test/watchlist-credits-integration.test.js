@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession } from './session.js';
 import { Window } from 'happy-dom';
 import { readFileSync } from 'node:fs';
 import { answerDialogs } from './dialogs.js';
@@ -15,10 +16,7 @@ function boot(t, { signedIn = true } = {}) {
   const { document } = window;
   const store = new Map(), calls = [];
   let allow = true, postResult = null;
-  if (signedIn) {
-    store.set('trakt.clientId', 'client');
-    store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 });
-  }
+  if (signedIn) setOgSession(window.localStorage);
   window.GM_getValue = (k, f) => store.get(k) ?? f;
   window.GM_setValue = (k, v) => store.set(k, v);
   window.GM_deleteValue = k => store.delete(k);

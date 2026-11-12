@@ -1,19 +1,6 @@
 /** User settings and small per-title memories, all backed by GM storage. */
-import { DEFAULT_CLIENT_ID } from './config.js';
 import { getValue, setValue, removeValue, STORAGE } from './core/store.js';
 import { isVerbose, setVerbose } from './core/log.js';
-
-export function getClientId() {
-  const stored = getValue(STORAGE.clientId, '');
-  return (stored || DEFAULT_CLIENT_ID || '').trim();
-}
-
-export function setClientId(value) {
-  const clean = String(value || '').trim();
-  if (clean) setValue(STORAGE.clientId, clean);
-  else removeValue(STORAGE.clientId);
-  return clean;
-}
 
 export const SERVER_KEYS = ['jellyfin', 'emby', 'radarr', 'sonarr', 'seerr'];
 

@@ -207,8 +207,7 @@ test('with GM_unregisterMenuCommand, toggles show their state and relabel in pla
   assert.equal(names().some((name) => name.startsWith('Toggle ')), false);
   const before = names();
   assert.deepEqual(before.slice(0, before.indexOf('⬜ Debug logging')), [
-    'About', 'Set API client ID', 'Test API connection', 'Sign in', 'Cancel sign-in', 'Sign out',
-    'Show signed-in user', 'Add custom link', 'Remove custom link', 'Diagnostics', 'Clear API cache',
+    'About', 'Test API connection', 'Add custom link', 'Remove custom link', 'Diagnostics', 'Clear API cache',
   ]);
 
   b.toggle('Custom links');

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession } from './session.js';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { MOVIE_HTML, SHOW_HTML } from './fixtures.js';
@@ -114,10 +115,11 @@ test('layout shows chart and tiles, the chart alone, or nothing, by the space be
  * Boot the built bundle with GM shims and a fake layout: og's details content ends at `space.details` and the
  * action stack's content at `space.actions` (page px). happy-dom has no layout, so rects are stubbed per column.
  */
-function boot({ url, html, storage = {}, responses = {}, space = { details: 300, actions: 600 }, stacked = false }) {
+function boot({ url, html, signedIn = true, responses = {}, space = { details: 300, actions: 600 }, stacked = false }) {
   const window = new Window({ url });
   const { document } = window;
-  const store = new Map(Object.entries(storage));
+  const store = new Map([['features.disabled', ['playback', 'your-ratings']]]);
+  if (signedIn) setOgSession(window.localStorage);
   const requests = [];
   window.GM_getValue = (key, fallback) => (store.has(key) ? store.get(key) : fallback);
   window.GM_setValue = (key, value) => store.set(key, value);
@@ -159,14 +161,12 @@ function boot({ url, html, storage = {}, responses = {}, space = { details: 300,
   return { window, document, store, requests, space };
 }
 
-const CLIENT = { 'trakt.clientId': 'client', 'watch.customLinks': [] };
 const chartOf = (document) => document.getElementById('ogt-summary-ratings');
 
 test('the chart and tiles fill a tall gap and link to og\'s stats page', async (t) => {
   const b = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad',
     html: SHOW_HTML,
-    storage: CLIENT,
     responses: { '/shows/breaking-bad/ratings': SHOW_RATINGS, '/shows/breaking-bad/stats': SHOW_STATS },
   });
   t.after(() => b.window.close());
@@ -191,7 +191,6 @@ test('a smaller gap shows the chart alone and makes no stats request; no gap hid
   const b = boot({
     url: 'https://og.trakt.tv/movies/the-dark-2005',
     html: MOVIE_HTML,
-    storage: CLIENT,
     responses: { '/movies/the-dark-2005/ratings': SHOW_RATINGS },
     space: { details: 300, actions: 300 + 150 },
   });
@@ -216,7 +215,6 @@ test('when og stacks the actions under the details (below 992px) the chart stays
   const b = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad',
     html: SHOW_HTML,
-    storage: CLIENT,
     responses: { '/shows/breaking-bad/ratings': SHOW_RATINGS, '/shows/breaking-bad/stats': SHOW_STATS },
     space: { details: 300, actions: 900 },
     stacked: true,
@@ -228,15 +226,15 @@ test('when og stacks the actions under the details (below 992px) the chart stays
   assert.deepEqual(b.requests, ['/shows/breaking-bad/ratings'], 'no stats request while hidden');
 });
 
-test('no client ID, too few votes or a failed request leave the page untouched', async (t) => {
-  const none = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML, storage: { 'watch.customLinks': [] } });
+test('signed out, too few votes or a failed request leave the page untouched', async (t) => {
+  const none = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML, signedIn: false });
   t.after(() => none.window.close());
   const few = boot({
-    url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML, storage: CLIENT,
+    url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML,
     responses: { '/shows/breaking-bad/ratings': FEW_VOTES },
   });
   t.after(() => few.window.close());
-  const failed = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML, storage: CLIENT });
+  const failed = boot({ url: 'https://og.trakt.tv/shows/breaking-bad', html: SHOW_HTML });
   t.after(() => failed.window.close());
   await waitFor(() => few.requests.length && failed.requests.length, { message: 'the ratings requests' });
   await wait();
@@ -252,7 +250,6 @@ test('turning the feature off removes the chart', async (t) => {
   const b = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad',
     html: SHOW_HTML,
-    storage: CLIENT,
     responses: { '/shows/breaking-bad/ratings': SHOW_RATINGS, '/shows/breaking-bad/stats': SHOW_STATS },
   });
   t.after(() => b.window.close());

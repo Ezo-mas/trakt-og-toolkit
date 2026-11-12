@@ -1,7 +1,7 @@
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
-import { getClientId, getCustomLinks, setSelection } from '../../settings.js';
-import { getSeasons } from '../../core/trakt.js';
+import { getSeasons, isSignedIn } from '../../core/trakt.js';
+import { getCustomLinks, setSelection } from '../../settings.js';
 import { mergeSeasons, readSeasons } from './data.js';
 import { presetTemplateUrls } from './presets.js';
 
@@ -117,16 +117,14 @@ export function createPicker(state) {
     state.renderLinks();
   }
 
-  /** Trakt's API policy asks apps to use documented endpoints rather than read the site. When a client
-   *  ID is configured, the API is the source of truth; the rendered season cards are only the instant
-   *  first paint (and the fallback when there is no key). */
+  /** Render og's season cards first, then fill in the season and episode counts from the API. */
   function loadSeasons() {
     if (meta.kind !== 'show' || fixedSelection) return;
 
     state.seasons = readSeasons(document);
     if (state.seasons.length) renderControls();
 
-    if (!getClientId()) {
+    if (!isSignedIn()) {
       if (!state.seasons.length) retryFromDom();
       return;
     }
