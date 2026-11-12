@@ -228,17 +228,13 @@ async function shareList(title, url) {
   }
 }
 
-const posterRequests = new Map();
-
-export function postersFor(id) {
-  if (!posterRequests.has(id)) {
-    posterRequests.set(id, getListSummary(id)
-      .then((summary) => (Array.isArray(summary?.images?.posters) ? summary.images.posters : []).map(posterUrl).filter(Boolean).slice(0, 5))
-      .catch((error) => {
-        posterRequests.delete(id);
-        debugError(`could not load posters for list ${id}`, error);
-        return [];
-      }));
+export async function postersFor(id) {
+  try {
+    const summary = await getListSummary(id);
+    const posters = summary?.images?.posters;
+    return Array.isArray(posters) ? posters.map(posterUrl).filter(Boolean).slice(0, 5) : [];
+  } catch (error) {
+    debugError(`could not load posters for list ${id}`, error);
+    return [];
   }
-  return posterRequests.get(id);
 }

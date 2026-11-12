@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession, changeOgSession } from './session.js';
 import { Window } from 'happy-dom';
 import { readFileSync } from 'node:fs';
 import { watchlistCardHtml } from './fixtures.js';
@@ -12,11 +13,8 @@ function boot(t, { signedIn = true, html = watchlistCardHtml(), deferred = '', r
   t.after(() => window.close());
   const { document } = window;
   const store = new Map(), calls = [], pending = [];
-  const signIn = () => {
-    store.set('trakt.clientId', 'client');
-    store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 });
-  };
-  if (signedIn) signIn();
+  if (signedIn) setOgSession(window.localStorage);
+  const signIn = () => changeOgSession(window, {});
   window.GM_getValue = (k, f) => store.get(k) ?? f;
   window.GM_setValue = (k, v) => store.set(k, v);
   window.GM_deleteValue = k => store.delete(k);
@@ -35,8 +33,7 @@ function boot(t, { signedIn = true, html = watchlistCardHtml(), deferred = '', r
   document.dispatchEvent(new window.Event('DOMContentLoaded'));
   return { window, document, store, calls, pending, signIn,
     buttons: () => [...document.querySelectorAll('.ogt-watchlist-card')],
-    writes: () => calls.filter(r => r.method === 'POST'),
-    authChange: () => document.dispatchEvent(new window.Event('ogt:authchange')) };
+    writes: () => calls.filter(r => r.method === 'POST') };
 }
 function nativeState(b, id, watchlisted, lists = true) {
   b.document.getElementById(`${id}-tip`).innerHTML = `<span class="listed-tip">
@@ -131,7 +128,7 @@ test('signed-out and failed card additions stay available with guidance and retr
   await wait(); b.buttons()[0].click();
   assert.match(b.document.querySelector('.ogt-toast').textContent, /Sign in/);
   assert.equal(b.calls.length, 0);
-  b.signIn(); b.authChange(); b.buttons()[0].click(); await wait();
+  b.signIn(); await Promise.resolve(); b.buttons()[0].click(); await wait();
   assert.equal(b.buttons()[0].hidden, false);
   assert.equal(b.buttons()[0].disabled, false);
   assert.match(b.document.querySelector('.ogt-toast').textContent, /could not find/);
@@ -142,7 +139,7 @@ test('signed-out and failed card additions stay available with guidance and retr
 test('account changes, card removal and navigation cancel lookups and ignore late saves', async t => {
   for (const action of ['auth', 'remove', 'navigate']) await t.test(action, async t => {
     const b = boot(t, { deferred: 'GET' }); await wait(); b.buttons()[0].click(); await wait();
-    if (action === 'auth') { b.store.delete('trakt.oauth.tokens'); b.authChange(); }
+    if (action === 'auth') { changeOgSession(b.window); }
     if (action === 'remove') b.document.querySelector('article').remove();
     if (action === 'navigate') { b.window.history.pushState({}, '', '/users/test/lists'); await wait(450); }
     await wait(); for (const respond of b.pending) respond(); await wait();
@@ -151,7 +148,7 @@ test('account changes, card removal and navigation cancel lookups and ignore lat
     else assert.equal(b.buttons()[0].disabled, false);
   });
   const b = boot(t, { deferred: 'POST' }); await wait(); b.buttons()[0].click(); await wait();
-  b.store.delete('trakt.oauth.tokens'); b.authChange();
+  changeOgSession(b.window);
   for (const respond of b.pending) respond(); await wait();
   assert.equal(b.buttons()[0].hidden, false);
   assert.equal(Boolean(b.document.querySelector('.ogt-toast')), false);

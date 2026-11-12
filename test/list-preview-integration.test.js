@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession, changeOgSession } from './session.js';
 import { Window } from 'happy-dom';
 import { readFileSync } from 'node:fs';
 
@@ -19,10 +20,7 @@ function boot(t, { signedIn = false, ratings = { movies: [], shows: [] } } = {})
   t.after(() => window.close());
   const { document } = window;
   const store = new Map();
-  if (signedIn) {
-    store.set('trakt.clientId', 'client');
-    store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 });
-  }
+  if (signedIn) setOgSession(window.localStorage);
   const calls = [];
   window.GM_getValue = (key, fallback) => store.get(key) ?? fallback;
   window.GM_setValue = (key, value) => store.set(key, value);
@@ -100,7 +98,7 @@ test('leaving the page removes previews and their listener', async (t) => {
 });
 
 test('signed in, your movie and show ratings sit in the poster corners and follow changes', async (t) => {
-  const { window, document, store, calls } = boot(t, { signedIn: true, ratings: {
+  const { window, document, calls } = boot(t, { signedIn: true, ratings: {
     shows: [{ rating: 8, show: { ids: { trakt: 199343 } } }],
     movies: [{ rating: 3, movie: { ids: { trakt: 7 } } }, { rating: 11, movie: { ids: { trakt: 729942 } } }],
   } });
@@ -117,8 +115,7 @@ test('signed in, your movie and show ratings sit in the poster corners and follo
   assert.equal(slots[0].querySelectorAll('.ogt-corner-rating').length, 1);
   assert.equal(slots[0].querySelector('.ogt-corner-rating-text').textContent, '3', 'a new poster gets its own rating');
 
-  store.delete('trakt.oauth.tokens');
-  document.dispatchEvent(new window.Event('ogt:authchange'));
+  changeOgSession(window);
   await wait();
   assert.equal(Boolean(document.querySelector('.ogt-corner-rating')), false, 'signing out removes the corners');
 });

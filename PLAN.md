@@ -12,9 +12,10 @@ behaviour, never its code. Finished features are listed at the end; their detail
 | 32 | Auto-update URLs in the userscript header | nothing | done |
 | 33 | Random pick from your watchlist | public API or og's session | done |
 | 34 | Export a list or watchlist to CSV | public API or og's session | done |
-| 35 | Refactor: simpler code, more reuse | tests and drift as the safety net | in progress (35d) |
+| 35 | Refactor: simpler code, more reuse | tests and drift as the safety net | done |
 | 36 | Shorter README with a screenshot of every feature | a signed-in og browser | after 35 |
 | 37 | Menu toggles show whether each feature is on | `GM_unregisterMenuCommand` | done |
+| 38 | Use og sign-in for all Trakt API features | 35 and a signed-in og test session | implemented, live check pending |
 
 After that, maintenance: the daily drift workflow, `npm run drift -- --signed-in <dir>` now and then, and fixes when og
 changes. v0.4.0 released everything shipped before this list. Userscript managers only offer an update when `@version`
@@ -62,6 +63,22 @@ the summary), trailers and videos, external links and ratings strip, profile cov
 navigation. Also not planned: anything that unlocks VIP features, scheduled e-mail exports, fixes for the classic
 site.
 
+## 38. Use og sign-in for all Trakt API features
+
+Make og.trakt.tv sign-in the toolkit's only way to access the Trakt API. In one PR, enable summary ratings,
+season chart API data, custom-link season and episode lookups, and **Test API connection** through og's session.
+Remove user-configured client IDs, the toolkit's device sign-in, and its token management. Requests continue to
+send og's client ID and access token, and og handles token renewal. Update the menu, feature hints and README
+so they direct users to sign in to og.
+
+Signed-out users can still use features that work from page data, including the season chart's DOM fallback.
+API-backed features, including public list export and watchlist picks, require an og sign-in. Account actions
+use the account signed into og.
+
+Verify the remaining features and representative account reads and writes on a signed-in og account with an
+empty toolkit configuration. Then sign out and check that page-data fallbacks work and API-backed actions give
+sign-in guidance where appropriate. Cover session expiry and account changes with regression checks.
+
 ## Rules for every feature
 
 **Before starting**
@@ -97,7 +114,7 @@ site.
 - Prefer the public Trakt API over scraping the page. DOM reads are fine for ids og already prints.
 - All CSS classes start with `ogt-`. Use `light-dark()` colours like `src/ui/styles.js`.
 - No runtime dependencies. Charts are hand-written SVG; the bundle must stay a single small file.
-- Missing client ID or API failure: show nothing or a one-line hint, never an error box. Log with `debugError`.
+- When API access is unavailable or a request fails, show nothing or a one-line hint. Log failures with `debugError`.
 - Respect the API budget: `apiGet` caches for 8 h and limits to 4 concurrent requests. Don't fetch per-episode data
   for a whole show at once; fetch the season being viewed.
 
@@ -122,8 +139,8 @@ site.
 - **Anime ID mapping (from 27 and 28).** MyAnimeList and AniList stay searches. Before building direct links, find a
   maintained TMDb/IMDb → MAL/AniList mapping source, and link only unambiguous anime or season matches.
 - **A shared production Trakt app (from 30): not happening.** Trakt doesn't grant production apps for tools that add
-  features to its own product, so the toolkit reuses og's session instead, with a per-user app as the fallback. The
-  PKCE browser sign-in was dropped, and the `site/` callback page and its Pages workflow were removed in 0.4.0.
+  features to its own product. The toolkit reuses og's session, and item 38 removes the per-user app fallback.
+  The PKCE browser sign-in was dropped, and the `site/` callback page and its Pages workflow were removed in 0.4.0.
 
 ## Shipped
 

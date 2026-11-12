@@ -1,9 +1,8 @@
 /** Tampermonkey/Violentmonkey menu entries. No-ops when the API is absent. */
-import { promptAddCustomLink, promptRemoveCustomLink, promptClientId } from './actions.js';
-import { applyDebugSetting, isDebug, setDebug, getClientId, getCustomLinks, isFeatureEnabled, setFeatureEnabled } from './settings.js';
+import { promptAddCustomLink, promptRemoveCustomLink } from './actions.js';
+import { applyDebugSetting, isDebug, setDebug, getCustomLinks, isFeatureEnabled, setFeatureEnabled } from './settings.js';
 import { cacheSize, clearCache } from './core/http.js';
-import { registerAuthMenu } from './oauth-menu.js';
-import { ping } from './core/trakt.js';
+import { isSignedIn, ping } from './core/trakt.js';
 import { toast } from './ui/shell.js';
 import { STORAGE, onRemoteValueChange } from './core/store.js';
 import { NAME, VERSION } from './meta.js';
@@ -36,10 +35,9 @@ export function registerMenu(getRouteKey = () => location.pathname, features = [
     toast(`${NAME} v${VERSION}`, { duration: 5000 });
     console.info(`[OGT] ${NAME} v${VERSION}\n${ATTRIBUTION}\nMIT licensed.`);
   });
-  GM_registerMenuCommand('Set API client ID', promptClientId);
   GM_registerMenuCommand('Test API connection', async () => {
-    if (!getClientId()) {
-      toast('No client ID yet — use "Set API client ID" first.');
+    if (!isSignedIn()) {
+      toast('Sign in to og.trakt.tv first.');
       return;
     }
     toast('Testing the Trakt API…', { duration: 1500 });
@@ -48,22 +46,16 @@ export function registerMenu(getRouteKey = () => location.pathname, features = [
       toast(`Trakt API OK — ${ms} ms.`);
       console.info(`[OGT] Trakt API OK in ${ms} ms`);
     } catch (error) {
-      const reason =
-        error?.status === 401 || error?.status === 403
-          ? 'the client ID was rejected'
-          : error?.status
-            ? `HTTP ${error.status}`
-            : error?.message || 'network error';
-      toast(`Trakt API failed — ${reason}.`);
+      const reason = error?.status ? `HTTP ${error.status}` : error?.message || 'network error';
+      toast(error?.ogSession ? error.message : `Trakt API failed — ${reason}`);
       console.warn('[OGT] Trakt API failed', error);
     }
   });
-  registerAuthMenu();
   GM_registerMenuCommand('Add custom link', promptAddCustomLink);
   GM_registerMenuCommand('Remove custom link', promptRemoveCustomLink);
   GM_registerMenuCommand('Diagnostics', () => {
     const summary =
-      `v${VERSION} · ${getRouteKey()} · client ID ${getClientId() ? 'set' : 'missing'} · ` +
+      `v${VERSION} · ${getRouteKey()} · og ${isSignedIn() ? 'signed in' : 'signed out'} · ` +
       `${getCustomLinks().length} custom links · ${cacheSize()} cached responses`;
     toast(summary);
     console.info('[OGT]', summary);

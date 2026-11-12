@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession, changeOgSession } from './session.js';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { answerDialogs } from './dialogs.js';
@@ -21,10 +22,7 @@ function boot(t, { path = '/users/tester/progress', html = PLAYBACK_PROGRESS_HTM
   const store = new Map(); const calls = []; const scrobbles = []; const pending = [];
   const rows = samples(); let allow = true; let promptValue = null;
   if (empty) { rows.movies = []; rows.episodes = []; }
-  if (signedIn) {
-    store.set('trakt.clientId', 'client');
-    store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'private-access', refresh_token: 'private-refresh', expires_at: Date.now() + 3600000 });
-  }
+  if (signedIn) setOgSession(window.localStorage, { access: 'private-access' });
   window.GM_getValue = (k, f) => store.get(k) ?? f;
   window.GM_setValue = (k, v) => store.set(k, v);
   window.GM_deleteValue = (k) => store.delete(k);
@@ -123,10 +121,10 @@ test('age clear confirms only entries older than the selected age', async (t) =>
 });
 test('sign-out removes private UI and discards the private cache', async (t) => {
   const b = boot(t); await wait(); click(b.document, 'load'); await wait();
-  b.store.delete('trakt.oauth.tokens'); b.document.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
+  changeOgSession(b.window); await wait();
   assert.equal(Boolean(panel(b.document)), false);
-  b.store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'other-access', refresh_token: 'other-refresh', expires_at: Date.now() + 3600000 });
-  b.document.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
+  changeOgSession(b.window, { access: 'other-access', account: 2 });
+  await Promise.resolve(); await wait();
   assert.ok(panel(b.document)); assert.equal(panel(b.document).querySelectorAll('li').length, 0);
   click(b.document, 'load'); await wait();
   assert.equal(b.calls.length, 4);
@@ -137,9 +135,8 @@ test('auth changes clear loaded playback and cancel a pending save', async (t) =
   b.setPrompt('70');
   panel(b.document).querySelector('li [data-action="save"]').click();
   // The test dialog helper answers on a timer; switch accounts before that happens.
-  b.store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'other-access',
-    refresh_token: 'other-refresh', expires_at: Date.now() + 3600000 });
-  b.document.dispatchEvent(new b.window.Event('ogt:authchange'));
+  changeOgSession(b.window, { access: 'other-access', account: 2 });
+  await Promise.resolve();
   assert.equal(panel(b.document).querySelectorAll('li').length, 0, 'old rows disappear immediately');
   assert.match(panel(b.document).textContent, /Load paused playback/);
   assert.equal(Boolean(b.document.querySelector('dialog[open]')), false, 'the old dialog is cancelled');

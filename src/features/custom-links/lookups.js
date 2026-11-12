@@ -1,5 +1,6 @@
+import { isSignedIn } from '../../core/trakt.js';
 import { debugError } from '../../core/log.js';
-import { getClientId, getCustomLinks, getServers } from '../../settings.js';
+import { getCustomLinks, getServers } from '../../settings.js';
 import { personTemplateVars, templateVars, showTemplateData } from './data.js';
 import { presetTemplateUrls } from './presets.js';
 import { getEpisode, getShowDetails } from './api.js';
@@ -21,10 +22,10 @@ export function createLookups(state) {
 
   let showRequested = false;
   /** Season/episode pages: fetch the show once a link needs what og's page doesn't give (the show's year, an episode
-   *  page's IMDb id). This runs on every render, so a link added in the editor triggers it too. Without a client ID
+   *  page's IMDb id). This runs on every render, so a link added in the editor triggers it too. While signed out
    *  those links stay hidden rather than point at the season or episode. */
   function lookUpShow() {
-    if (!fixedSelection || showRequested || !getClientId()) return;
+    if (!fixedSelection || showRequested || !isSignedIn()) return;
     const missing = ['year', 'tmdb', 'imdb', 'tvdb'].filter((key) => meta[key] == null);
     if (!missing.length) return;
     // Deep preset routes may need the show's IMDb id even though the stored search URL doesn't.
@@ -40,9 +41,9 @@ export function createLookups(state) {
   }
 
   /** The picked episode's own IMDb id, so IMDb and OpenSubtitles open that episode rather than its season. Until it
-   *  returns (or without a client ID) those links keep their season route. Each episode is asked for once. */
+   *  returns (or while signed out) those links keep their season route. Each episode is asked for once. */
   function lookUpEpisode() {
-    if (meta.kind !== 'show' || meta.episodeImdb || !getClientId()) return;
+    if (meta.kind !== 'show' || meta.episodeImdb || !isSignedIn()) return;
     const { season, episode } = selection;
     if (season == null || episode == null) return;
     const key = episodeKey();

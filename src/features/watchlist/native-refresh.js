@@ -8,7 +8,7 @@ export function createNativeWatchlistRefresh() {
         return Promise.resolve(false);
       }
       const doc = control.ownerDocument;
-      // Positive signed-in markup only. Never open OG's login from a toolkit-only session.
+      // Only open the watchlist dialog when og has rendered its signed-in control.
       if (!doc.querySelector('header.top-nav .profile')) return Promise.resolve(false);
       const trigger = control.querySelector('button[aria-controls][aria-keyshortcuts~="ArrowDown"]');
       const picker = doc.getElementById(trigger?.getAttribute('aria-controls'));

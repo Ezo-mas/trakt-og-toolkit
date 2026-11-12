@@ -4,6 +4,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession } from './session.js';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { waitFor } from './wait.js';
@@ -26,10 +27,14 @@ import {
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function boot({ url, html, storage = {}, gmRequest, narrow = null }) {
+function boot({ url, html, storage = {}, gmRequest, signedIn = false, narrow = null }) {
   const window = new Window({ url });
   const { document } = window;
   const store = new Map(Object.entries(storage));
+  if (signedIn) {
+    setOgSession(window.localStorage);
+    store.set('features.disabled', ['summary-ratings', 'your-ratings', 'playback']);
+  }
 
   window.GM_getValue = (key, fallback) => (store.has(key) ? store.get(key) : fallback);
   window.GM_setValue = (key, value) => store.set(key, value);
@@ -574,8 +579,8 @@ test('Stremio opens the exact episode once the show IMDb id is looked up', async
   const { window, document } = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1',
     html: EPISODE_PAGE_HTML,
+    signedIn: true,
     storage: {
-      'trakt.clientId': 'client',
       'watch.customLinks': [{ label: 'Stremio', url: 'https://web.stremio.com/#/search?search={title}' }],
     },
     gmRequest(options) {
@@ -952,8 +957,8 @@ test('season pages fill custom links from the show and preset the route season',
   const { window, document } = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
     html: SEASON_PAGE_HTML,
+    signedIn: true,
     storage: {
-      'trakt.clientId': 'client',
       'watch.customLinks': [
         { label: 'Show', url: 'https://e.test/{title}/{year}/{tmdb}/{imdb}/{season}' },
         { label: 'Episode only', url: 'https://e.test/{episode}' },
@@ -990,12 +995,12 @@ test('season pages fill custom links from the show and preset the route season',
 test('season pages fill show ids from og\'s links and only look the show up for what the page lacks', async (t) => {
   const requested = [];
   const storage = {
-    'trakt.clientId': 'client',
     'watch.customLinks': [{ label: 'Ids', url: 'https://e.test/{tmdb}/{imdb}/{season}' }],
   };
   const { window, document } = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
     html: SEASON_PAGE_HTML,
+    signedIn: true,
     storage,
     gmRequest(options) {
       if (new URL(options.url).pathname === '/shows/breaking-bad') requested.push(options.url);
@@ -1021,8 +1026,8 @@ test('TVDB preset looks up the show id on a season page', async (t) => {
   const { window, document } = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1',
     html: SEASON_PAGE_HTML,
+    signedIn: true,
     storage: {
-      'trakt.clientId': 'client',
       'watch.customLinks': [{ label: 'TVDB', url: 'https://thetvdb.com/search?query={title}' }],
     },
     gmRequest(options) {
@@ -1111,8 +1116,8 @@ test('episode pages look up the show for an IMDb-number link', async (t) => {
   const { window, document } = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1',
     html: EPISODE_PAGE_HTML,
+    signedIn: true,
     storage: {
-      'trakt.clientId': 'client',
       'watch.customLinks': [{ label: 'Number', url: 'https://e.test/{imdbnum}' }],
     },
     gmRequest(options) {
@@ -1140,8 +1145,8 @@ test('episode pages fill custom links from the show and preset the route season 
   const { window, document } = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1/episodes/1',
     html: EPISODE_PAGE_HTML,
+    signedIn: true,
     storage: {
-      'trakt.clientId': 'client',
       'watch.customLinks': [
         { label: 'Episode', url: 'https://e.test/{title}/{imdb}/{season}/{episode}' },
       ],
@@ -1268,8 +1273,8 @@ test('the picker looks up the episode IMDb id so IMDb and OpenSubtitles open the
   const b = boot({
     url: 'https://og.trakt.tv/shows/breaking-bad',
     html: SHOW_HTML,
+    signedIn: true,
     storage: {
-      'trakt.clientId': 'client',
       'watch.customLinks': [
         { label: 'IMDb', url: 'https://www.imdb.com/find/?q={title}' },
         { label: 'OpenSubtitles', url: 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-{imdbnum}' },

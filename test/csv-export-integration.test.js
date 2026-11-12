@@ -1,6 +1,7 @@
 /** Built-bundle tests for the CSV exporter on captured og list and watchlist pages. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession } from './session.js';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { waitFor } from './wait.js';
@@ -8,7 +9,6 @@ import { LIST_PAGE_HTML, WATCHLIST_PAGE_HTML } from './fixtures.js';
 import { MAX_PAGES } from '../src/features/csv-export/api.js';
 
 const bundle = readFileSync(new URL('../dist/trakt-og-toolkit.user.js', import.meta.url), 'utf8');
-const OG_SESSION_KEY = 'oidc.user:https://auth.trakt.tv:WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI';
 
 const movie = {
   type: 'movie', rank: 3, listed_at: '2026-11-01T12:00:00.000Z', notes: '@open',
@@ -33,10 +33,9 @@ const defaultRows = [movie, show, season, episode];
 function boot({
   url = 'https://og.trakt.tv/users/justin/lists/2015-fall-shows',
   html = LIST_PAGE_HTML,
-  signedIn = false,
+  signedIn = true,
   emptyBody = false,
-  clientId = 'client',
-  ogSession = false,
+  expired = false,
   listRows = defaultRows,
   watchlistRows = defaultRows,
   extraRows = [],
@@ -48,15 +47,8 @@ function boot({
   fail = () => false,
 } = {}) {
   const window = new Window({ url });
-  const store = new Map();
-  if (ogSession) window.localStorage.setItem(OG_SESSION_KEY, JSON.stringify({
-    access_token: 'expired', token_type: 'bearer', expires_at: Math.floor(Date.now() / 1000) - 60,
-    profile: { ids: { trakt: 1 } },
-  }));
-  if (clientId) store.set('trakt.clientId', clientId);
-  if (signedIn) store.set('trakt.oauth.tokens', {
-    client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000,
-  });
+  const store = new Map([['features.disabled', ['list-preview']]]);
+  if (signedIn) setOgSession(window.localStorage, { expires: Date.now() + (expired ? -60000 : 3600000) });
 
   const requests = [];
   const downloads = [];
@@ -162,7 +154,7 @@ test('downloads a personal list as RFC 4180 CSV with quoted and guarded fields',
 
   assert.equal(b.requests.length, 1);
   assert.deepEqual(b.requests[0], {
-    pathname: '/users/justin/lists/2015-fall-shows/items', page: 1, limit: '100', auth: false,
+    pathname: '/users/justin/lists/2015-fall-shows/items', page: 1, limit: '100', auth: true,
   });
   assert.equal(b.downloads.length, 1);
   assert.equal(b.downloads[0].download, 'trakt-justin-2015-fall-shows.csv');
@@ -182,7 +174,7 @@ test('downloads a personal list as RFC 4180 CSV with quoted and guarded fields',
   assert.equal(b.button().disabled, false);
 });
 
-test('a second public export reads fresh items instead of the cached list', async (t) => {
+test('a second export reads fresh items instead of the cached list', async (t) => {
   const b = boot({ listRows: [movie] });
   t.after(() => b.window.close());
   await waitFor(() => b.panel(), { message: 'the CSV exporter to mount' });
@@ -235,7 +227,7 @@ test('exports a liked official list by resolving its numeric id first', async (t
   await waitFor(() => b.status().textContent === 'Exported 1 item.', { message: 'the official-list export' });
   assert.deepEqual(b.requests.map((request) => request.pathname),
     ['/lists/avatar-collection', '/lists/884/items']);
-  assert.equal(b.requests[1].auth, false, 'official items stay on the public transport');
+  assert.equal(b.requests[1].auth, true, 'official items use the og session');
   assert.equal(b.downloads[0].download, 'trakt-official-avatar-collection.csv');
   assert.ok((await b.blobs[0].text()).includes('Movie, ""Quoted""'));
 });
@@ -249,7 +241,7 @@ test('signed in, reads every page with the authenticated session', async (t) => 
   await waitFor(() => b.status().textContent === 'Exported 2 items.', { message: 'the paged export' });
   const pages = b.requests.filter((request) => request.pathname === '/users/justin/lists/2015-fall-shows/items');
   assert.deepEqual(pages.map((request) => request.page), [1, 2]);
-  assert.ok(pages.every((request) => request.auth), 'both pages use the toolkit sign-in');
+  assert.ok(pages.every((request) => request.auth), 'both pages use the og session');
   assert.ok(pages.every((request) => request.limit === '100'));
 
   const csv = await b.blobs[0].text();
@@ -257,7 +249,7 @@ test('signed in, reads every page with the authenticated session', async (t) => 
   assert.ok(csv.includes('Breaking Bad'));
 });
 
-test('public reads follow the page count even when every page is short', async (t) => {
+test('reads follow the page count even when every page is short', async (t) => {
   const b = boot({ pageCount: 3, listRows: [movie], extraRows: [show], laterRows: [season] });
   t.after(() => b.window.close());
   await waitFor(() => b.panel(), { message: 'the CSV exporter to mount' });
@@ -323,14 +315,14 @@ test('a missing signed-in page reports an incomplete export without downloading'
 });
 
 test('private, missing and expired credentials keep their one-line hints', async (t) => {
-  const noClient = boot({ clientId: null });
-  t.after(() => noClient.window.close());
-  await waitFor(() => noClient.panel(), { message: 'the CSV exporter to mount' });
-  noClient.button().click();
-  await waitFor(() => noClient.status().textContent ===
-    'Sign in to og.trakt.tv or set a Trakt client ID to export this list.', { message: 'the sign-in hint' });
-  assert.equal(noClient.requests.length, 0);
-  assert.equal(noClient.downloads.length, 0);
+  const signedOut = boot({ signedIn: false });
+  t.after(() => signedOut.window.close());
+  await waitFor(() => signedOut.panel(), { message: 'the CSV exporter to mount' });
+  signedOut.button().click();
+  await waitFor(() => signedOut.status().textContent ===
+    'Sign in to og.trakt.tv to export this list.', { message: 'the sign-in hint' });
+  assert.equal(signedOut.requests.length, 0);
+  assert.equal(signedOut.downloads.length, 0);
 
   const missing = boot({ fail: () => true });
   t.after(() => missing.window.close());
@@ -340,7 +332,7 @@ test('private, missing and expired credentials keep their one-line hints', async
     { message: 'the private-list hint' });
   assert.equal(missing.downloads.length, 0);
 
-  const expired = boot({ clientId: null, ogSession: true });
+  const expired = boot({ expired: true });
   t.after(() => expired.window.close());
   await waitFor(() => expired.panel(), { message: 'the CSV exporter to mount' });
   expired.button().click();

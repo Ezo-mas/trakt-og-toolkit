@@ -1,6 +1,5 @@
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
-import { getClientId } from '../../settings.js';
 import {
   averageRating,
   barPath,
@@ -222,7 +221,7 @@ export const seasonChart = {
     const panel = createPanel(fallback, route);
     episodesSection.parentElement.insertBefore(panel.node, episodesSection);
 
-    if (getClientId()) {
+    if (isSignedIn()) {
       getSeasonEpisodes(route.id, route.season)
         .then((episodes) => {
           if (episodes.length) {

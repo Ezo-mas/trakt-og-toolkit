@@ -18,11 +18,8 @@ globalThis.localStorage = new MemoryStorage();
 globalThis.window = new EventTarget();
 globalThis.document = new EventTarget();
 
-const { STORAGE } = await import('../src/core/store.js');
-const { setClientId } = await import('../src/settings.js');
-const oauth = await import('../src/core/oauth.js');
-const { apiAuth, apiGet, MissingClientIdError } = await import('../src/core/trakt.js');
-const { ogSessionKey, readOgSession } = await import('../src/core/og-session.js');
+const { apiAuth, apiGet, isSignedIn } = await import('../src/core/trakt.js');
+const { ogSessionKey } = await import('../src/core/og-session.js');
 const { clearCache } = await import('../src/core/http.js');
 const { debugError, setVerbose } = await import('../src/core/log.js');
 
@@ -47,7 +44,6 @@ function mock(handler) {
 function reset() {
   storage.clear();
   globalThis.localStorage = new MemoryStorage();
-  setClientId('');
   clearCache();
 }
 
@@ -64,8 +60,7 @@ const settle = async () => { for (let i = 0; i < 100; i++) await Promise.resolve
 test('og session is used with og client ID and never refreshed or stored', async () => {
   reset();
   ogSession();
-  assert.equal(oauth.isSignedIn(), true);
-  assert.equal(oauth.hasOwnSession(), false);
+  assert.equal(isSignedIn(), true);
 
   mock(() => ({ status: 200, body: { username: 'og-user' } }));
   assert.deepEqual(await apiAuth('GET', '/users/me'), { username: 'og-user' });
@@ -74,23 +69,26 @@ test('og session is used with og client ID and never refreshed or stored', async
   assert.equal(calls[0].headers.Authorization, 'Bearer OG_ACCESS');
   assert.equal(calls[0].headers['trakt-api-key'], OG_CLIENT);
   assert.equal(calls.some((request) => request.url.startsWith('https://auth.trakt.tv/')), false);
-  assert.equal(storage.has(STORAGE.tokens), false);
+  assert.equal(storage.has('trakt.oauth.tokens'), false);
   assert.match(globalThis.localStorage.getItem(OG_KEY), /OG_ACCESS/);
 });
 
-test("the toolkit's own sign-in wins over og's session", async () => {
+test("legacy toolkit credentials are ignored", async () => {
   reset();
-  setClientId('own-client');
-  storage.set(STORAGE.tokens, {
+  storage.set('trakt.clientId', 'own-client');
+  storage.set('trakt.oauth.tokens', {
     client_id: 'own-client', access_token: 'OWN_ACCESS', refresh_token: 'OWN_REFRESH',
     expires_at: Date.now() + 3600000,
   });
   ogSession();
-  mock(() => ({ status: 200, body: { username: 'own-user' } }));
+  mock(() => ({ status: 200, body: { username: 'og-user' } }));
 
   await apiAuth('GET', '/users/me');
-  assert.equal(calls[0].headers.Authorization, 'Bearer OWN_ACCESS');
-  assert.equal(calls[0].headers['trakt-api-key'], 'own-client');
+  assert.equal(calls[0].headers.Authorization, 'Bearer OG_ACCESS');
+  assert.equal(calls[0].headers['trakt-api-key'], OG_CLIENT);
+  localStorage.removeItem(OG_KEY);
+  await assert.rejects(apiGet('/shows/test'), /Sign in to og\.trakt\.tv/);
+  assert.equal(calls.length, 1);
 });
 
 test('a rejected og token asks for a reload and is left untouched', async () => {
@@ -104,7 +102,7 @@ test('a rejected og token asks for a reload and is left untouched', async () => 
   assert.equal(error.body, null);
   assert.equal(calls.length, 1);
   assert.equal(calls.some((request) => request.url.endsWith('/oauth/token')), false);
-  assert.equal(storage.has(STORAGE.tokens), false);
+  assert.equal(storage.has('trakt.oauth.tokens'), false);
   assert.match(globalThis.localStorage.getItem(OG_KEY), /OG_ACCESS/);
 });
 
@@ -160,7 +158,7 @@ test('writes use the og token without ever refreshing it', async () => {
   assert.equal(calls[0].headers.Authorization, 'Bearer OG_ACCESS');
   assert.equal(calls[0].headers['trakt-api-key'], OG_CLIENT);
   assert.deepEqual(calls[0].body, { movies: [{ ids: { slug: 'the-matrix-1999' } }] });
-  assert.equal(storage.has(STORAGE.tokens), false);
+  assert.equal(storage.has('trakt.oauth.tokens'), false);
 });
 
 test('public lookups use og without a client ID, preserving query and caching', async () => {
@@ -180,14 +178,12 @@ test('public lookups use og without a client ID, preserving query and caching', 
   assert.match(calls[1].url, /\/shows\/1388\/seasons\?extended=full$/);
 });
 
-test('an expired og session keeps lookup fallbacks but asks actions for a reload', async () => {
+test('an expired og session asks for a reload before a lookup', async () => {
   reset();
   ogSession({ expires: expiring(-60) });
   mock(() => ({ status: 200 }));
 
   const error = await apiGet('/movies/the-matrix-1999').catch((failure) => failure);
-  assert.ok(error instanceof MissingClientIdError, 'metadata lookups keep their setup/fallback path');
-  // Add to watchlist/library start with this lookup; it must not read as a missing client ID.
   assert.match(error.message, /og\.trakt\.tv session expired; reload the page/);
   assert.equal(error.ogSession, true);
   assert.equal(calls.length, 0);
@@ -201,52 +197,42 @@ test('a revoked og token on a public lookup asks for a reload', async () => {
   const error = await apiGet('/movies/the-matrix-1999').catch((failure) => failure);
   assert.match(error.message, /reload the page/);
   assert.equal(error.ogSession, true);
-  assert.ok(error instanceof MissingClientIdError, 'a revoked token keeps the same fallback path as an expired one');
   assert.equal(calls.length, 1, 'the rejected token is not retried');
 });
 
-test('a late og 401 preserves the error for each replacement entry', async (t) => {
-  const replacements = [
-    { name: 'missing', replace: () => localStorage.removeItem(OG_KEY), lookup: 'missing', private: 'expired' },
-    { name: 'expired renewal', replace: () => ogSession({ access: 'expired', expires: expiring(-1) }),
-      lookup: 'expired', private: 'expired' },
-    { name: 'different account', replace: () => ogSession({ access: 'other', account: 100 }),
-      lookup: 'changed', private: 'changed' },
-    { name: 'different expired account', replace: () => ogSession({ access: 'other', account: 100, expires: expiring(-1) }),
-      lookup: 'expired', private: 'changed' },
-  ];
-  const errors = {
-    missing: { name: 'MissingClientIdError', message: 'No Trakt API client ID configured' },
-    expired: { message: 'Your og.trakt.tv session expired; reload the page to renew it.', ogSession: true },
-    changed: { name: 'HttpError', status: 0, message: 'Trakt session changed; request abandoned.' },
-  };
-  for (const replacement of replacements) {
-    for (const mode of ['lookup', 'private']) {
-      await t.test(`${mode}, ${replacement.name}`, async () => {
-        reset();
-        ogSession();
-        mock(() => {
-          replacement.replace();
-          return { status: 401 };
-        });
-        const result = mode === 'lookup' ? apiGet('/movies/test') : apiAuth('GET', '/users/me');
-        const expected = { ...errors[replacement[mode]] };
-        if (replacement[mode] === 'expired') {
-          Object.assign(expected, mode === 'lookup'
-            ? { name: 'MissingClientIdError' }
-            : { name: 'HttpError', status: 401, control: true });
-        }
-        await assert.rejects(result, expected);
-        assert.equal(calls.length, 1);
-      });
-    }
+for (const status of [200, 401]) test(`late HTTP ${status} after an account change is discarded`, async () => {
+  for (const read of [() => apiGet('/movies/test'), () => apiAuth('GET', '/users/me')]) {
+    reset();
+    ogSession();
+    mock(() => {
+      ogSession({ access: 'other', account: 100 });
+      return { status, body: { title: 'old account' } };
+    });
+    await assert.rejects(read(), /session changed/);
+    assert.equal(calls.length, 1);
+    mock(() => ({ status: 200, body: { title: 'new account' } }));
+    assert.deepEqual(await read(), { title: 'new account' });
+    assert.equal(calls[0].headers.Authorization, 'Bearer other');
   }
+});
+
+test('cached lookups require the session that populated them', async () => {
+  reset();
+  ogSession();
+  mock(() => ({ status: 200, body: { title: 'first' } }));
+  assert.deepEqual(await apiGet('/lists/test'), { title: 'first' });
+  localStorage.removeItem(OG_KEY);
+  await assert.rejects(apiGet('/lists/test'), /Sign in to og\.trakt\.tv/);
+  ogSession({ access: 'other', account: 100 });
+  mock(() => ({ status: 200, body: { title: 'second' } }));
+  assert.deepEqual(await apiGet('/lists/test'), { title: 'second' });
+  assert.equal(calls.length, 1);
 });
 
 test('a second og 401 ends a retry even when the token rotated again', async (t) => {
   for (const [mode, read, expected] of [
-    ['lookup', () => apiGet('/movies/test', { withHeaders: true }), { name: 'MissingClientIdError', ogSession: true }],
-    ['private', () => apiAuth('GET', '/users/me'), { name: 'HttpError', status: 401, ogSession: true, control: true }],
+    ['lookup', () => apiGet('/movies/test'), { name: 'HttpError', status: 401, ogSession: true }],
+    ['private', () => apiAuth('GET', '/users/me'), { name: 'HttpError', status: 401, ogSession: true }],
   ]) {
     await t.test(mode, async () => {
       reset();
@@ -258,59 +244,6 @@ test('a second og 401 ends a retry even when the token rotated again', async (t)
       await assert.rejects(read(), { ...expected, message: /reload the page/ });
       assert.deepEqual(calls.map((request) => request.headers.Authorization), ['Bearer OG_ACCESS', 'Bearer renewed-1']);
     });
-  }
-});
-
-test('an og account change does not cancel a queued own-session write', async (t) => {
-  reset();
-  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1_900_000_000_000 });
-  setClientId('own-client');
-  storage.set(STORAGE.tokens, {
-    client_id: 'own-client', access_token: 'OWN_ACCESS', refresh_token: 'OWN_REFRESH',
-    expires_at: Date.now() + 3600000,
-  });
-  ogSession({ account: 1, username: 'account-a' });
-  // Establish the og baseline even though the toolkit's own session is active.
-  readOgSession();
-  const oldValue = localStorage.getItem(OG_KEY);
-  mock(() => ({ status: 200, body: {} }));
-
-  await apiAuth('POST', '/sync/first', {});
-  const queued = apiAuth('POST', '/sync/second', {});
-  // Another og tab switches accounts while the own-session write waits for its pacing slot.
-  ogSession({ access: 'OG_B_ACCESS', refresh: 'OG_B_REFRESH', account: 2, username: 'account-b' });
-  const event = new Event('storage');
-  Object.assign(event, { key: OG_KEY, oldValue, newValue: localStorage.getItem(OG_KEY), storageArea: localStorage });
-  window.dispatchEvent(event);
-
-  t.mock.timers.tick(1000);
-  await queued;
-  assert.equal(calls.length, 2);
-  assert.equal(calls[1].headers.Authorization, 'Bearer OWN_ACCESS', 'the own session still owns the write');
-});
-
-test('an og account change under the toolkit sign-in announces no auth change', async () => {
-  reset();
-  setClientId('own-client');
-  storage.set(STORAGE.tokens, {
-    client_id: 'own-client', access_token: 'OWN_ACCESS', refresh_token: 'OWN_REFRESH',
-    expires_at: Date.now() + 3600000,
-  });
-  ogSession({ account: 1, username: 'account-a' });
-  readOgSession();
-  const events = [];
-  const changed = () => events.push('authchange');
-  document.addEventListener('ogt:authchange', changed);
-  try {
-    const oldValue = localStorage.getItem(OG_KEY);
-    ogSession({ access: 'OG_B_ACCESS', refresh: 'OG_B_REFRESH', account: 2, username: 'account-b' });
-    const event = new Event('storage');
-    Object.assign(event, { key: OG_KEY, oldValue, newValue: localStorage.getItem(OG_KEY), storageArea: localStorage });
-    window.dispatchEvent(event);
-    await Promise.resolve();
-    assert.deepEqual(events, [], 'og is not the active credential');
-  } finally {
-    document.removeEventListener('ogt:authchange', changed);
   }
 });
 
@@ -357,9 +290,9 @@ test('a queued write never revives after logout and the same account signs back 
 
   // Both transitions are observed, as they would be by the page's auth reads.
   globalThis.localStorage.removeItem(OG_KEY);
-  assert.equal(oauth.isSignedIn(), false);
+  assert.equal(isSignedIn(), false);
   ogSession({ account: 1, username: 'account-a' });
-  assert.equal(oauth.isSignedIn(), true);
+  assert.equal(isSignedIn(), true);
 
   // The second write's pacing slot arrives after A is signed back in.
   t.mock.timers.tick(1000);

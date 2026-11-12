@@ -3,8 +3,6 @@ import {
   addCustomLink,
   removeCustomLink,
   getCustomLinks,
-  setClientId,
-  getClientId,
   isCustomLinkUrl,
 } from './settings.js';
 import { toast } from './ui/shell.js';
@@ -58,22 +56,5 @@ export async function promptRemoveCustomLink() {
   const next = removeCustomLink(answer.trim());
   if (next.length === links.length) toast(`No link labelled "${answer.trim()}".`);
   else toast('Link removed.');
-  document.dispatchEvent(new CustomEvent('ogt:refresh'));
-}
-
-export async function promptClientId() {
-  const answer = await promptDialog(
-    'Paste your Trakt API client ID. Create a free app at https://app.trakt.tv/settings/apps. The redirect URI ' +
-      'can be anything, since this script only calls public endpoints. Leave it empty to clear it.',
-    { title: 'Trakt API client ID', label: 'Client ID', ok: 'Save', value: getClientId(), placeholder: '(none)' },
-  );
-  if (answer === null) return;
-
-  const before = getClientId();
-  const clean = setClientId(answer);
-  // The client ID decides which credential is active: editing or clearing it can switch from the
-  // toolkit's own tokens to og's session (possibly another account). Rebuild personal state.
-  if (getClientId() !== before) document.dispatchEvent(new Event('ogt:authchange'));
-  toast(clean ? 'Client ID saved.' : 'Client ID cleared.');
   document.dispatchEvent(new CustomEvent('ogt:refresh'));
 }

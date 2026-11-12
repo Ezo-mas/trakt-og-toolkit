@@ -45,7 +45,7 @@ export function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isS
   async function clearItems(ids, confirm, control = {}) {
     const unique = [...new Set(ids)];
     if (unique.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new Error('Invalid playback ID.');
-    if (!signedIn()) throw new Error('Sign in to Trakt first.');
+    if (!signedIn()) throw new Error('Sign in to og.trakt.tv first.');
     const active = () => !control.active || control.active() !== false;
     const epoch = session;
     if (!unique.length || !(await confirm(`Clear paused playback for ${unique.length} item${unique.length === 1 ? '' : 's'}? This cannot be undone.`))) {
@@ -83,7 +83,7 @@ export function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isS
    * failed pause after it is flagged `partial`: the old progress is gone and nothing new was saved.
    */
   async function setProgress(item, progress, epoch = session, control = {}) {
-    if (!signedIn()) throw new Error('Sign in to Trakt first.');
+    if (!signedIn()) throw new Error('Sign in to og.trakt.tv first.');
     const value = normalizeProgress(progress);
     if (!item || value == null) throw new Error('Invalid progress.');
     const episodeIds = item.kind === 'movie' ? null : await episodeIdsFor(item);
@@ -103,7 +103,7 @@ export function createPlaybackApi({ auth = apiAuth, get = apiGet, signedIn = isS
     return { progress: value, body };
   }
   async function setRouteProgress(route, progress, control = {}) {
-    if (!signedIn()) throw new Error('Sign in to Trakt first.');
+    if (!signedIn()) throw new Error('Sign in to og.trakt.tv first.');
     const value = normalizeProgress(progress);
     if (value == null) throw new Error('Invalid progress.');
     if (!route?.id) throw new Error('Unsupported playback page.');

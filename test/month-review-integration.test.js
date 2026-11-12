@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession, changeOgSession } from './session.js';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { lastMonth, shiftMonth } from '../src/features/month-review/data.js';
@@ -10,10 +11,7 @@ function boot(t, { signedIn = true, zero = false, failed = false, dismissed = fa
   t.after(() => window.close());
   const span = lastMonth(); const store = new Map(); const calls = [];
   const first = earliest || span;
-  if (signedIn) {
-    store.set('trakt.clientId', 'client');
-    store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 });
-  }
+  if (signedIn) setOgSession(window.localStorage);
   if (dismissed) store.set('review.dismissed.tester', span.key);
   window.GM_getValue = (key, fallback) => store.get(key) ?? fallback;
   window.GM_setValue = (key, value) => store.set(key, value);
@@ -60,7 +58,7 @@ test('built bundle renders under ribbon, links review, remembers hide and signs 
   assert.equal(Boolean(node.querySelector('img')), false, 'a failed fanart leaves no broken image');
   node.querySelector('.ogt-review__hide').click(); assert.equal(node.hidden, true);
   assert.equal(b.store.get('review.dismissed.tester'), lastMonth().key);
-  b.store.delete('trakt.oauth.tokens'); b.doc.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
+  changeOgSession(b.window); await wait();
   assert.equal(Boolean(b.doc.querySelector('#ogt-month-review')), false);
 });
 test('signed out, dismissed, zero plays and failures are quiet', async (t) => {

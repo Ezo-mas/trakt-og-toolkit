@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession, changeOgSession } from './session.js';
 import { Window } from 'happy-dom';
 import { readFileSync } from 'node:fs';
 import { ELEMENT_TITLE_SHOW_HTML, MOVIE_HTML, SHOW_HTML } from './fixtures.js';
@@ -48,12 +49,9 @@ function boot(t, { show = false, signedIn = true, nativeSignedIn = true, differe
   const window = new Window({ url: `https://og.trakt.tv${path}` });
   t.after(() => window.close());
   const { document } = window;
-  const store = new Map();
-  const signIn = () => {
-    store.set('trakt.clientId', 'client');
-    store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 });
-  };
-  if (signedIn) signIn();
+  const store = new Map([['features.disabled', ['summary-ratings', 'your-ratings', 'playback']]]);
+  if (signedIn) setOgSession(window.localStorage);
+  const signIn = () => changeOgSession(window, {});
   const calls = [], assets = [], bridges = [], pending = [];
   let refreshes = 0;
   window.GM_getValue = (key, fallback) => store.get(key) ?? fallback;
@@ -103,7 +101,7 @@ function boot(t, { show = false, signedIn = true, nativeSignedIn = true, differe
     refreshes: () => refreshes, writes: () => calls.filter(r => r.method === 'POST'),
     library: () => document.querySelector('#ogt-library'),
     button: () => document.querySelector('#ogt-library button'),
-    signIn: () => { signIn(); document.dispatchEvent(new window.Event('ogt:authchange')); },
+    signIn,
     /** An addition has finished (saved or failed) once the button is enabled again after the write. */
     settled: () => waitFor(() => b.writes().length && !b.button().disabled, { message: 'the library addition to settle' }),
   };
@@ -121,7 +119,7 @@ test('built library guides sign-in, then saves once after the account connects, 
   const b = await mounted(t, { signedIn: false });
   b.button().click();
   assert.match(b.library().textContent, /Sign in/);
-  b.signIn();
+  b.signIn(); await Promise.resolve();
   b.button().click(); b.button().click();
   await b.settled();
   assert.equal(b.writes().length, 1);
@@ -178,7 +176,7 @@ for (const change of ['auth', 'navigate']) test(`library ${change} during lookup
   const b = await mounted(t, { deferLookup: true });
   b.button().click();
   await waitFor(() => b.pending.length, { message: 'the title lookup' });
-  if (change === 'auth') { b.store.delete('trakt.oauth.tokens'); b.document.dispatchEvent(new b.window.Event('ogt:authchange')); }
+  if (change === 'auth') { changeOgSession(b.window); }
   else b.window.history.pushState({}, '', '/movies/another-title');
   for (const resume of b.pending) resume();
   await wait();

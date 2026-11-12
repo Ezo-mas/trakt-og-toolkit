@@ -10,6 +10,11 @@ export class HttpError extends Error {
   }
 }
 
+export function authError(message, status = 0) {
+  // Never attach authenticated response bodies or request details.
+  return new HttpError(message, status, null);
+}
+
 const MAX_CONCURRENT = 4;
 const MAX_RETRIES = 2;
 const DEFAULT_TIMEOUT = 20000;
@@ -82,7 +87,7 @@ export async function request(options) {
   try {
     let attempt = 0;
     for (;;) {
-      const prepared = options.beforeSend ? await options.beforeSend() : null;
+      const prepared = options.beforeSend?.();
       const response = await rawRequest(prepared ? { ...options, ...prepared } : options);
       const retryable = response.status === 429 || response.status >= 500;
       if (!retryable || attempt >= (options.retries ?? MAX_RETRIES)) return response;
@@ -109,41 +114,31 @@ export function headerValue(headers, name) {
   return line ? line.slice(line.indexOf(':') + 1).trim() : null;
 }
 
-const cache = new Map(); // url -> { expires, value }
+const cache = new Map(); // key -> { expires, value }
 
-async function requestJSON(url, { headers = {}, timeout, retries } = {}) {
-  const response = await request({
-    url,
-    headers,
-    method: 'GET',
-    ...(timeout !== undefined ? { timeout } : {}),
-    ...(retries !== undefined ? { retries } : {}),
-  });
-  if (response.status < 200 || response.status >= 300) {
-    throw new HttpError(`HTTP ${response.status} for ${url}`, response.status, response.text, response.headers);
-  }
-
-  try {
-    return { data: JSON.parse(response.text), headers: response.headers };
-  } catch (error) {
-    throw new HttpError(`Invalid JSON from ${url}`, response.status, response.text, response.headers);
-  }
-}
-
-/** GET JSON, deduped and cached for `ttl` ms. `timeout`/`retries` are for bounded, non-retrying lookups. */
-export async function getJSON(url, { headers = {}, ttl = 0, timeout, retries } = {}) {
+export async function cachedResponse(key, ttl, load) {
+  if (ttl <= 0) return load();
   const now = Date.now();
-  const hit = cache.get(url);
+  const hit = cache.get(key);
   if (hit && hit.expires > now) return hit.value;
-
-  const { data } = await requestJSON(url, { headers, timeout, retries });
-  if (ttl > 0) cache.set(url, { expires: now + ttl, value: data });
-  return data;
+  const value = await load();
+  cache.set(key, { expires: now + ttl, value });
+  return value;
 }
 
-/** Uncached GET JSON with its response headers, for pagination and freshness-sensitive reads. */
-export async function getJSONWithHeaders(url, options = {}) {
-  return requestJSON(url, options);
+/** GET JSON, optionally cached. `timeout` and `retries` bound the lookup. */
+export function getJSON(url, { headers = {}, ttl = 0, timeout, retries } = {}) {
+  return cachedResponse(url, ttl, async () => {
+    const response = await request({ url, headers, timeout, retries });
+    if (response.status < 200 || response.status >= 300) {
+      throw new HttpError(`HTTP ${response.status} for ${url}`, response.status, response.text, response.headers);
+    }
+    try {
+      return JSON.parse(response.text);
+    } catch {
+      throw new HttpError(`Invalid JSON from ${url}`, response.status, response.text, response.headers);
+    }
+  });
 }
 
 export function clearCache(prefix) {

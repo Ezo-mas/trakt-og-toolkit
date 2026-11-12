@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession, changeOgSession } from './session.js';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { SHOW_HTML, SEASON_HTML } from './fixtures.js';
@@ -10,8 +11,8 @@ function boot(t, { signed = true, defer = false, html = SEASON_HTML } = {}) {
   const window = new Window({ url: 'https://og.trakt.tv/shows/breaking-bad/seasons/1' });
   t.after(() => window.close());
   const { document } = window;
-  const store = new Map([['trakt.clientId', 'client']]);
-  if (signed) store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3600000 });
+  const store = new Map();
+  if (signed) setOgSession(window.localStorage);
   const calls = [], pending = [];
   window.GM_getValue = (k, f) => store.get(k) ?? f;
   window.GM_setValue = (k, v) => store.set(k, v);
@@ -35,6 +36,9 @@ function boot(t, { signed = true, defer = false, html = SEASON_HTML } = {}) {
 const chart = (b) => b.document.getElementById('ogt-season-chart');
 test('bundle: personal chart gaps, average, shared navigation cache and account cleanup', async (t) => {
   const b = boot(t); await wait();
+  const communityRead = b.calls.find((request) => new URL(request.url).pathname === '/shows/breaking-bad/seasons/1');
+  assert.equal(communityRead?.headers.Authorization, 'Bearer access');
+  assert.match(chart(b).querySelector('svg').textContent, /100 votes/);
   assert.match(chart(b).textContent, /Your average: 6.0 \(3 of 4 episodes rated\)/);
   assert.equal(chart(b).querySelectorAll('.ogt-season-chart__personal-dot').length, 3);
   assert.equal((chart(b).querySelector('.ogt-season-chart__personal').getAttribute('d').match(/M/g) || []).length, 2);
@@ -53,18 +57,19 @@ test('bundle: personal chart gaps, average, shared navigation cache and account 
   await wait();
   await waitFor(() => b.document.querySelector('article.poster-card .ogt-your-average'), { message: 'the badge on the seasons page' });
   assert.match(b.document.querySelector('article.poster-card .ogt-your-average').getAttribute('title'), /3 episodes rated/);
-  b.store.delete('trakt.oauth.tokens'); b.document.dispatchEvent(new b.window.Event('ogt:authchange')); await wait();
+  changeOgSession(b.window); await wait();
   assert.equal(Boolean(b.document.querySelector('.ogt-your-average')), false);
 });
 test('bundle: signed out has community chart without private fetch or personal legend', async (t) => {
   const b = boot(t, { signed: false }); await wait();
   assert.equal(chart(b).querySelectorAll('.ogt-season-chart__personal-dot').length, 0);
   assert.equal(chart(b).querySelector('.ogt-season-chart__legend').hidden, true);
-  assert.equal(b.calls.filter((r) => r.url.includes('/sync/ratings')).length, 0);
+  assert.ok(chart(b).querySelector('.ogt-season-chart__bar'), 'the chart uses ratings from the page');
+  assert.equal(b.calls.length, 0);
 });
 test('bundle: late private results cannot survive sign-out', async (t) => {
   const b = boot(t, { defer: true }); await wait();
-  b.store.delete('trakt.oauth.tokens'); b.document.dispatchEvent(new b.window.Event('ogt:authchange'));
+  changeOgSession(b.window);
   b.pending.forEach((respond) => respond()); await wait();
   assert.equal(chart(b).querySelectorAll('.ogt-season-chart__personal-dot').length, 0);
 });

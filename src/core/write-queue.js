@@ -1,6 +1,5 @@
 /** Shared queue for authenticated writes. */
-import { authError } from './oauth.js';
-import { headerValue, MAX_RETRY_WAIT_MS } from './http.js';
+import { authError, headerValue, MAX_RETRY_WAIT_MS } from './http.js';
 
 /**
  * Trakt's current standard-app limit for authenticated writes is one POST/PUT/DELETE per second

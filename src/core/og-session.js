@@ -10,8 +10,7 @@ export const OG_SESSION_AUTHORITY = 'https://auth.trakt.tv';
 export const OG_SESSION_CLIENT_ID = 'WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI';
 export const OG_SESSION_PREFIX = 'oidc.user:';
 const OG_SESSION_KEY_PREFIX = `${OG_SESSION_PREFIX}${OG_SESSION_AUTHORITY}:`;
-/** Internal notification; `oauth.js` promotes it to `ogt:authchange` only for the active credential. */
-export const OG_SESSION_CHANGE_EVENT = 'ogt:ogsessionchange';
+export const OG_SESSION_CHANGE_EVENT = 'ogt:authchange';
 
 let watchedAccount;
 let watchedRaw;

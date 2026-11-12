@@ -79,7 +79,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       }
       async function addAll() {
         if (bulkBusy) return;
-        if (!isSignedIn()) { toast('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'); return; }
+        if (!isSignedIn()) { toast('Sign in to og.trakt.tv first.'); return; }
         const list = bulkEntries();
         if (!list.length) return;
         const epoch = session;
@@ -169,7 +169,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       function failed(error, verb, active) {
         debugError(`${logLabel} watchlist ${verb} failed`, error);
         if (active()) toast(error.status === 429 ? 'Trakt rate limited this request; try again later.' :
-          error.status && !error.ogSession ? `Could not ${verb === 'undo' ? 'undo' : 'add to watchlist'}. Check your toolkit sign-in and try again.`
+          error.status && !error.ogSession ? `Could not ${verb === 'undo' ? 'undo' : 'add to watchlist'}. Try again.`
             : error.message);
       }
       async function add(entry, event) {
@@ -177,7 +177,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
         event.stopPropagation();
         const state = stateFor(entry.key);
         if (bulkBusy || state.busy || state.undoing || entry.button.hidden) return;
-        if (!isSignedIn()) { toast('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'); return; }
+        if (!isSignedIn()) { toast('Sign in to og.trakt.tv first.'); return; }
         const epoch = session;
         const operation = ++state.operation;
         const active = activeFor(entry);
@@ -206,7 +206,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
       async function undo(entry, body) {
         const state = stateFor(entry.key);
         if (bulkBusy || state.busy || state.undoing || !body) return false;
-        if (!isSignedIn()) { toast('Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'); return false; }
+        if (!isSignedIn()) { toast('Sign in to og.trakt.tv first.'); return false; }
         const epoch = session;
         const operation = ++state.operation;
         const active = activeFor(entry);
@@ -241,7 +241,7 @@ export function createWatchlistShortcuts({ id, markerId, className, css, match, 
           const route = host && readRoute(host);
           if (!route) continue;
           const button = el('button', { type: 'button', class: className,
-            'aria-label': 'Add to watchlist', title: 'Add to watchlist using the toolkit’s Trakt account' }, watchlistIcon());
+            'aria-label': 'Add to watchlist', title: 'Add to watchlist using your og.trakt.tv account' }, watchlistIcon());
           const entry = { host, control, route, key: route.key, button };
           entry.click = event => add(entry, event);
           button.addEventListener('click', entry.click);

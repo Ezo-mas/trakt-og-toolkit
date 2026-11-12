@@ -31,7 +31,7 @@ export const watchlist = {
     const glyph = el('span', { class: 'ogt-watchlist__glyph', 'aria-hidden': 'true' });
     glyph.append(watchlistIcon());
     const button = el('button', { type: 'button', class: 'ogt-watchlist__button',
-      title: 'Add using the toolkit’s Trakt account' });
+      title: 'Add using your og.trakt.tv account' });
     button.append(glyph, el('span', { class: 'ogt-watchlist__text' }, label));
     const status = el('p', { class: 'ogt-watchlist__status', role: 'status', 'aria-live': 'polite' });
     const node = el('div', { id: ID, class: 'ogt-watchlist' }, button, status);
@@ -43,7 +43,7 @@ export const watchlist = {
     }
     async function add() {
       if (busy || undoing || node.hidden) return;
-      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'; return; }
+      if (!isSignedIn()) { status.textContent = 'Sign in to og.trakt.tv first.'; return; }
       busy = true;
       const epoch = session;
       const operationId = ++operation;
@@ -68,7 +68,7 @@ export const watchlist = {
       } catch (error) {
         debugError('watchlist addition failed', error);
         if (active()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.' :
-          error.status && !error.ogSession ? 'Could not add to watchlist. Check your toolkit sign-in and try again.' : error.message;
+          error.status && !error.ogSession ? 'Could not add to watchlist. Try again.' : error.message;
       } finally {
         if (active() && operation === operationId) {
           busy = false;
@@ -79,7 +79,7 @@ export const watchlist = {
     }
     async function undo(body) {
       if (undoing || !body) return false;
-      if (!isSignedIn()) { status.textContent = 'Sign in to Trakt at og.trakt.tv or through the toolkit menu first.'; return false; }
+      if (!isSignedIn()) { status.textContent = 'Sign in to og.trakt.tv first.'; return false; }
       undoing = true;
       busy = false;
       const epoch = session;
@@ -98,7 +98,7 @@ export const watchlist = {
       } catch (error) {
         debugError('watchlist undo failed', error);
         if (active()) status.textContent = error.status === 429 ? 'Trakt rate limited this request; try again later.' :
-          error.status && !error.ogSession ? 'Could not undo. Check your toolkit sign-in and try again.' : error.message;
+          error.status && !error.ogSession ? 'Could not undo. Try again.' : error.message;
         return false;
       } finally {
         if (active() && operation === operationId) {

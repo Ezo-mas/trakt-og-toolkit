@@ -1,6 +1,6 @@
+import { isSignedIn } from '../../core/trakt.js';
 import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
-import { getClientId } from '../../settings.js';
 import { getSummaryRatings, getSummaryWatchers } from './api.js';
 import {
   BAR_COLORS,
@@ -125,7 +125,7 @@ export const summaryRatings = {
   id: 'summary-ratings',
   css: CSS,
   match(route) {
-    return Boolean(ratingsPath(route)) && Boolean(getClientId());
+    return Boolean(ratingsPath(route)) && isSignedIn();
   },
   mount(route) {
     if (document.getElementById(NODE_ID)) return null;

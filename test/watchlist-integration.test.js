@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setOgSession, changeOgSession, OG_SESSION_KEY } from './session.js';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import { WATCHLIST_HTML } from './fixtures.js';
@@ -11,12 +12,9 @@ function boot(t, { path = '/movies/fight-club-1999', signedIn = true, result = {
   const window = new Window({ url: `https://og.trakt.tv${path}` });
   t.after(() => window.close());
   const { document } = window;
-  const store = new Map(), calls = [], pending = [];
-  const signIn = () => {
-    store.set('trakt.clientId', 'client');
-    store.set('trakt.oauth.tokens', { client_id: 'client', access_token: 'private-access', refresh_token: 'private-refresh', expires_at: Date.now() + 3600000 });
-  };
-  if (signedIn) signIn();
+  const store = new Map([['features.disabled', ['summary-ratings', 'your-ratings', 'playback']]]), calls = [], pending = [];
+  if (signedIn) setOgSession(window.localStorage);
+  const signIn = () => changeOgSession(window, {});
   window.GM_getValue = (k, f) => store.get(k) ?? f;
   window.GM_setValue = (k, v) => store.set(k, v);
   window.GM_deleteValue = k => store.delete(k);
@@ -34,15 +32,14 @@ function boot(t, { path = '/movies/fight-club-1999', signedIn = true, result = {
     else queueMicrotask(respond);
     return { abort() {} };
   };
-  if (ogEntry) window.localStorage.setItem('oidc.user:https://auth.trakt.tv:WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI', JSON.stringify(ogEntry));
+  if (ogEntry) window.localStorage.setItem(OG_SESSION_KEY, JSON.stringify(ogEntry));
   document.write(`<!doctype html><html><head></head><body>${WATCHLIST_HTML}</body></html>`);
   window.eval(bundle);
   document.dispatchEvent(new window.Event('DOMContentLoaded'));
   return { window, document, store, calls, pending, signIn,
     panel: () => document.getElementById('ogt-watchlist'),
     button: () => document.querySelector('#ogt-watchlist button'),
-    writes: () => calls.filter(r => r.method === 'POST'),
-    authChange: () => document.dispatchEvent(new window.Event('ogt:authchange')) };
+    writes: () => calls.filter(r => r.method === 'POST') };
 }
 function nativeState(b, detail) {
   const action = b.document.querySelector('.list-control .summary-action');
@@ -52,8 +49,7 @@ function nativeState(b, detail) {
     : '<span class="title">Add to list</span>';
 }
 
-test('an expired og session asks for a reload instead of a client ID', async t => {
-  // No client ID and no toolkit sign-in: the lookup before the write runs through og's expired session.
+test('an expired og session asks for a reload before a watchlist write', async t => {
   const b = boot(t, { signedIn: false, ogEntry: {
     access_token: 'og-access', token_type: 'Bearer', profile: { ids: { trakt: 7 } },
     expires_at: Math.floor(Date.now() / 1000) - 60,
@@ -85,7 +81,7 @@ test('built bundle adds exactly once on all four page types, alongside the libra
     const request = b.writes()[0];
     assert.equal(request.url, 'https://api.trakt.tv/sync/watchlist');
     assert.deepEqual(JSON.parse(request.data), { [type]: [{ ids: { trakt: 12 } }] });
-    assert.equal(request.headers.Authorization, 'Bearer private-access');
+    assert.equal(request.headers.Authorization, 'Bearer access');
     assert.equal(b.panel().hidden, true);
     assert.equal(b.document.querySelector('.ogt-watchlist-toast__message').textContent, `You added ${type === 'seasons' ? 'Season 1' : 'Spider-Man: Brand New Day'} to your watchlist.`);
     assert.equal(b.document.getElementById('ogt-library').hidden, false);
@@ -94,11 +90,11 @@ test('built bundle adds exactly once on all four page types, alongside the libra
   });
 });
 
-test('signed-out action gives menu guidance; sign-in clears the hint and enables saving', async t => {
+test('signed-out action directs users to og; sign-in clears the hint and enables saving', async t => {
   const b = boot(t, { signedIn: false }); await wait(); b.button().click();
-  assert.match(b.panel().textContent, /Sign in to Trakt at og\.trakt\.tv/);
+  assert.match(b.panel().textContent, /Sign in to og\.trakt\.tv/);
   assert.equal(b.calls.length, 0);
-  b.signIn(); b.authChange();
+  b.signIn(); await Promise.resolve();
   assert.doesNotMatch(b.panel().textContent, /Sign in/);
   b.button().click(); await wait();
   assert.equal(b.writes().length, 1);
@@ -135,7 +131,7 @@ test('built bundle leaves failed additions visible and retryable', async t => {
 test('auth changes and navigation during lookup prevent writes; late POSTs cannot hide a new session', async t => {
   for (const change of ['auth', 'navigation']) await t.test(change, async t => {
     const b = boot(t, { deferred: 'GET' }); await wait(); b.button().click(); await wait();
-    if (change === 'auth') { b.store.delete('trakt.oauth.tokens'); b.authChange(); }
+    if (change === 'auth') { changeOgSession(b.window); }
     else b.window.history.pushState({}, '', '/');
     await wait(250);
     for (const respond of b.pending) respond(); await wait();
@@ -145,7 +141,7 @@ test('auth changes and navigation during lookup prevent writes; late POSTs canno
   });
   const b = boot(t, { deferred: 'POST' }); await wait(); b.button().click(); await wait();
   assert.equal(b.writes().length, 1);
-  b.store.delete('trakt.oauth.tokens'); b.authChange();
+  changeOgSession(b.window);
   for (const respond of b.pending) respond(); await wait();
   assert.equal(b.panel().hidden, false);
   assert.equal(Boolean(b.document.querySelector('.ogt-toast')), false);

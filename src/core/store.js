@@ -76,9 +76,6 @@ export function onRemoteValueChange(key, callback) {
 export const STORAGE = {
   monthReview: (user, month) => `review.${encodeURIComponent(user)}.${month}`,
   dismissedReview: (user) => `review.dismissed.${encodeURIComponent(user)}`,
-  clientId: 'trakt.clientId',
-  tokens: 'trakt.oauth.tokens',
-  redirectUri: 'trakt.oauth.redirectUri',
   customLinks: 'watch.customLinks',
   servers: 'watch.servers',
   features: 'features.disabled',
@@ -86,12 +83,12 @@ export const STORAGE = {
   selection: (kind, id) => `selection.${kind}.${id}`,
 };
 
-/** OAuth credentials must never use the page-readable localStorage fallback. */
+/** Personal data stays in userscript storage. */
 export function getPrivateValue(key) {
   return backend ? backend.get(key, null) : null;
 }
 export function setPrivateValue(key, value) {
-  if (!backend) throw new Error('OAuth requires userscript GM storage.');
+  if (!backend) throw new Error('Private data requires userscript GM storage.');
   backend.set(key, value);
 }
 export function removePrivateValue(key) {

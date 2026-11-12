@@ -1,15 +1,14 @@
 # Trakt OG Toolkit
 
 An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that brings back useful bits of classic Trakt that
-og doesn't have yet. It talks only to the documented Trakt API, reusing og's own session or your client ID and optional
-sign-in. Not affiliated with or endorsed by Trakt.
+og doesn't have yet. It uses og's session to call the documented Trakt API.
+Not affiliated with or endorsed by Trakt.
 
 ## Install
 
 1. Install [Violentmonkey](https://violentmonkey.github.io/) or [Tampermonkey](https://www.tampermonkey.net/).
 2. Open [`dist/trakt-og-toolkit.user.js`](dist/trakt-og-toolkit.user.js), choose **Raw**, and confirm the install.
-3. No API setup is needed when you are signed into og.trakt.tv. Otherwise set a client ID and sign in (see
-   [Setup](#setup)).
+3. Sign in on og.trakt.tv to use API-backed features. The userscript menu's **Test API connection** checks the session.
 
 Installed copies update themselves from `main` when a new version is released. A copy installed from the link above
 before these update URLs existed keeps tracking that same link, so the next bumped release reaches it and its header
@@ -34,7 +33,7 @@ A strip in the title sidebar, above og's external links, on movie, show, season,
   before resolution still opens search. Episodes fall back to the season.
   Missing or ambiguous mappings retain search. Both destinations share Wikidata’s `Retry-After` cooldown;
   cached mappings and native direct links remain usable. Network, timeout and server failures pause lookups for
-  ten seconds, or longer when requested by `Retry-After`. No Trakt client ID is needed for these lookups.
+  ten seconds, or longer when requested by `Retry-After`.
 - Self-hosted services (Jellyfin, Emby, Radarr, Sonarr, Seerr) use the base URLs you set under **Servers**.
 - Watch and library services also appear under **Your services** in og's Watch Now dialog.
 - On show pages, Season and Episode pickers appear when a link uses `{season}` or `{episode}`.
@@ -49,14 +48,14 @@ See [Custom link templates](#custom-link-templates) for placeholders.
 
 ### Season chart and your ratings
 
-- An episode ratings chart on each season page, from the API with a client ID or og's displayed ratings without one.
+- An episode ratings chart on each season page. It uses the API when signed in and falls back to og's displayed ratings.
   Episodes with under 10 votes are hollow and left out of the average.
 - Signed in: your episode ratings as a second line, **Your average** in the summary, and your average on each season
   card.
 
 ### Trakt ratings chart
 
-With a client ID, movie, show, season and episode pages get a compact Trakt ratings chart in the empty space under the
+Signed in to og, movie, show, season and episode pages get a compact Trakt ratings chart in the empty space under the
 overview, beside og's action buttons.
 
 - Ten bars, one per score, with vote counts and a line at the average. The header links to og's full stats page.
@@ -75,8 +74,6 @@ Signed in, movie, show, season and episode pages get **Add to library** and **Ad
   shown credit at once.
 - Success notices offer **Undo** for newly added titles.
 
-The toolkit's sign-in is separate from og's, so it can be a different Trakt account.
-
 ### Paused playback
 
 Signed in:
@@ -89,12 +86,12 @@ Signed in:
 ### Profiles and lists
 
 - **All lists:** og's Lists dropdown on a profile gains **All lists**: personal, collaboration and liked lists in one
-  scroll. Works with og's session or a configured client ID.
+  scroll. Collaborations and liked lists require og sign-in.
 - **List previews:** each poster in a list card's preview opens its title. Signed in, posters show your rating.
-- **Pick something:** on a watchlist, picks a random title from the page's current All/Movies/Shows/Seasons/Episodes
+- **Pick something:** signed in, on a watchlist, picks a random title from the page's current All/Movies/Shows/Seasons/Episodes
   filter and links to it, with **Pick again**. It reads up to 5,000 entries through the API and shows a note when it
   reaches the read limit.
-- **Export CSV:** on a personal, collaboration or liked list page (including official liked lists), or the watchlist,
+- **Export CSV:** signed in, on a personal, collaboration or liked list page (including official liked lists), or the watchlist,
   downloads the whole list with rank, type, title, year, season/episode, Trakt/IMDb/TMDb ids, listed date and notes.
   Episode titles include their show. The browser builds a UTF-8 CSV with a byte-order mark for Excel and guards
   formula-like values.
@@ -107,55 +104,12 @@ Signed in:
 
 ## Setup
 
-### Using og's sign-in
+Sign in and out on og.trakt.tv. The toolkit uses that account for API reads and writes, including public list exports
+and watchlist picks. Signed out, features that use page data still work, including the season chart's ratings fallback.
 
-The toolkit reuses the session og.trakt.tv already has, so a fresh install needs no API setup.
-
-- The access token is read in place from og's page and sent only to `api.trakt.tv` with og's client ID. It is never
-  refreshed, copied into userscript storage, or logged. Only the access token, its expiry and a stable account ID are
-  read; og's refresh token and the rest of its profile stay unread.
-- The toolkit reads only og's current client entry, not an older one left in the same browser. When og signs out or
-  changes account, queued writes, open playback controls, personal caches and All lists reset; signing back into the
-  same account does not revive old queued work. A token renewal for the same account is not a change.
-- Changes in another tab are handled through the browser's storage notifications, including a quick logout/login
-  and clearing local storage.
-- When it expires, reload og.trakt.tv. The toolkit must never refresh og's token: og rotates the refresh token when
-  it renews, so a second refresher would strand og's session.
-- **Sign out** in the toolkit menu leaves og's session alone; sign out on og.trakt.tv for that.
-
-If og has no session, or you want a different Trakt account, use the toolkit's own app below. Its tokens take priority
-while it is signed in.
-
-### Trakt client ID
-
-Custom links, the season chart, All lists and authenticated actions work through og's session, so no client ID is
-needed for them. A client ID is still needed for the toolkit's own sign-in and the summary ratings chart. Create a
-free app at <https://developer.trakt.tv/apps/new>:
-
-| Field | Value |
-| --- | --- |
-| App name | `Trakt OG Toolkit` (any name works) |
-| App type | **Development** |
-| Redirect URIs | `http://localhost:5173/callback` |
-| Allowed origins | leave empty |
-
-Copy the **Client ID** (never the secret) and choose **Set API client ID** from the userscript menu.
-
-### Sign in
-
-Run **Sign in** from the menu.
-
-1. Confirm the redirect URI you registered above.
-2. A device code is copied to your clipboard, and Trakt's activation page opens in a new tab.
-3. Paste the code there and approve.
-
-Tokens stay in your userscript manager's private storage, never in the page. **Sign out** revokes them and always
-clears them locally. No client secret is used.
-
-Signing in or out, or changing the client ID, applies to every open og tab: the others rebuild their personal
-features instead of showing the previous account until a reload. A token refresh is not an account change. Changing
-or clearing the client ID turns off this sign-in and falls back to og's session, which may be a different account.
-While the toolkit's own sign-in is active, og logging in, out or switching account does not affect it.
+If the session expires, reload og.trakt.tv so og can renew it. Upgrading clears credentials saved for the retired
+toolkit sign-in from userscript storage. If you previously authorised a personal Trakt app for the toolkit,
+revoke its access in [Trakt's Connected Apps settings](https://trakt.tv/oauth/authorized_applications).
 
 ## Custom link templates
 
@@ -191,24 +145,18 @@ from the native external-link strip, and missing genre metadata keeps anime pres
 
 ## Trakt API use
 
-- **Endpoints:** only documented Trakt API endpoints, with your client ID or og's. Signed-in calls use the toolkit's
-  own OAuth connection, or og's session when it has no tokens: playback, collection, watchlist, history, ratings,
-  `users/me` and your comments.
-- **og's session:** the access token in og's current `localStorage` entry is read in place and sent only to `api.trakt.tv`
-  with og's client ID. It is never refreshed, stored, or logged. A 401 retries once if og has already rotated the token
-  for the same account, and otherwise asks for a reload. Public metadata lookups use the same connection when no client
-  ID is set, with their query and cache behavior intact.
-- **Account changes:** the toolkit derives a non-secret account key from og's stored profile so it can tell a different
-  account from a renewed token. A change drops queued writes and personal caches; it does not retry old work as the new
-  account.
-- **What it never touches:** it never fetches Trakt HTML or calls og's internal endpoints; from og's session entry it
-  reads the access token, expiry and account key only.
-- **og integration:** it calls og's own notifier and its read-only collection refresh, so og updates its controls
-  itself.
-- **Reads:** public GETs are cached (8 hours by default; an hour for the ratings chart), de-duplicated while in flight, and honour `Retry-After` on 429.
+- The toolkit calls documented endpoints at `api.trakt.tv` with og's client ID and access token. It reads the token in
+  place from og's session. og handles renewal, and the toolkit retries a 401 once if og has already rotated the token.
+- The toolkit reads the access token, expiry and a stable account key. It keeps the access token out of userscript
+  storage and logs.
+- Signing out or switching accounts drops queued writes, discards old responses and rebuilds personal features.
+  Open tabs detect account changes through browser storage notifications. Token renewal for the same account keeps
+  the current features mounted.
+- The toolkit calls og's notifier and read-only collection refresh to update native controls after a successful write.
+- Metadata reads are cached for the active session, for eight hours by default and one hour for the ratings chart.
+  They honour `Retry-After` on 429. Personal and paginated reads bypass the cache.
 - **Writes:** they share one queue, sent at most once per second, Trakt's standard-app limit. A 429 pauses the
-  queue for the full `Retry-After`. Failed writes are never replayed automatically, and queued writes are dropped on
-  sign-out or when you leave the page.
+  queue for the full `Retry-After`. Only explicit 429 rejections and 401s with a renewed token are eligible for retry.
 - **Other sites:** pronunciation fetches Forvo’s public search page. Hovering/focusing Metacritic or Rotten Tomatoes
   can query Wikidata with title IDs when OG has no direct URL. There is no backend.
 
