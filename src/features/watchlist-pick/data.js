@@ -4,6 +4,7 @@
  * og filters its watchlist with `?display=movie|show|season|episode` (the old `/watchlist/movies` path 301s to the
  * bare page). The API uses plural types and wraps each entry as `{ type, movie|show|season|episode, show?, ... }`.
  */
+import { titleOf, usableId, yearOf } from '../../core/entities.js';
 
 const DISPLAY_TO_API = { movie: 'movies', show: 'shows', season: 'seasons', episode: 'episodes' };
 const SINGULAR = new Set(Object.keys(DISPLAY_TO_API));
@@ -24,20 +25,6 @@ export function watchlistType(search = '', pathType = null) {
 /** The API path segment for a display filter. */
 export function apiType(display) {
   return display ? DISPLAY_TO_API[display] ?? null : null;
-}
-
-function usableId(value) {
-  if (typeof value === 'string' && value.trim()) return value.trim();
-  if (Number.isSafeInteger(value) && value > 0) return String(value);
-  return null;
-}
-
-function titleOf(entity) {
-  return typeof entity?.title === 'string' ? entity.title.trim() : '';
-}
-
-function yearOf(entity) {
-  return Number.isSafeInteger(entity?.year) ? entity.year : null;
 }
 
 function mediaHref(kind, id) {

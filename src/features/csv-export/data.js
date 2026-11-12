@@ -5,6 +5,7 @@
  * `{ type, movie|show|season|episode|person, show?, rank, listed_at, notes }`; seasons and episodes carry their
  * show separately. Only fields the CSV exposes are read here.
  */
+import { titleOf, usableId, yearOf } from '../../core/entities.js';
 import { decodePathPart } from '../../core/text.js';
 
 export const CSV_COLUMNS = [
@@ -24,31 +25,17 @@ function integer(value, minimum = 0) {
   return Number.isSafeInteger(value) && value >= minimum ? value : '';
 }
 
-function titleOf(entity) {
-  return typeof entity?.title === 'string' ? entity.title.trim() : '';
-}
-
 function nameOf(entity) {
   const name = typeof entity?.name === 'string' ? entity.name.trim() : '';
   return name || titleOf(entity);
 }
 
-function yearOf(entity) {
-  return integer(entity?.year, 1);
-}
-
-function usableId(value) {
-  if (typeof value === 'string' && value.trim()) return value.trim();
-  if (Number.isSafeInteger(value) && value > 0) return String(value);
-  return '';
-}
-
 function idSet(entity) {
   const ids = entity?.ids;
   return {
-    trakt: usableId(ids?.trakt),
-    imdb: usableId(ids?.imdb),
-    tmdb: usableId(ids?.tmdb),
+    trakt: usableId(ids?.trakt) ?? '',
+    imdb: usableId(ids?.imdb) ?? '',
+    tmdb: usableId(ids?.tmdb) ?? '',
   };
 }
 
@@ -67,21 +54,21 @@ export function normalizeExportItem(raw) {
   let ids;
 
   if (kind === 'movie' || kind === 'show') {
-    title = titleOf(entity);
-    year = yearOf(entity);
+    title = titleOf(entity) ?? '';
+    year = yearOf(entity, 1) ?? '';
     ids = idSet(entity);
   } else if (kind === 'person') {
-    title = nameOf(entity);
+    title = nameOf(entity) ?? '';
     ids = idSet(entity);
   } else {
     const show = raw.show ?? entity.show;
-    const showTitle = titleOf(show);
-    const showYear = yearOf(show);
+    const showTitle = titleOf(show) ?? '';
+    const showYear = yearOf(show, 1) ?? '';
     year = showYear;
     ids = idSet(entity);
 
     if (kind === 'season') {
-      title = showTitle || titleOf(entity);
+      title = showTitle || (titleOf(entity) ?? '');
       season = integer(entity.number);
     } else {
       title = [showTitle, titleOf(entity)].filter(Boolean).join(' — ');

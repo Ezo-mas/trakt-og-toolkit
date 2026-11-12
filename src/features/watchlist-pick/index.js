@@ -6,6 +6,7 @@ import { el } from '../../core/dom.js';
 import { debugError } from '../../core/log.js';
 import { decodePathPart } from '../../core/text.js';
 import { listReadFailureHint } from '../../core/trakt.js';
+import { mountInTitleBar } from '../../ui/title-bar.js';
 import { MAX_ITEMS, watchlistApi } from './api.js';
 import { pickWatchlistItem, watchlistItems, watchlistLabel, watchlistType } from './data.js';
 import { CSS } from './styles.js';
@@ -24,8 +25,7 @@ export const watchlistPick = {
   authScoped: true,
   match: (route) => route.name === 'watchlist',
   mount(route) {
-    const actions = document.querySelector('section.title-row .title-bar .actions');
-    if (!actions || document.getElementById(ID)) return null;
+    if (document.getElementById(ID)) return null;
 
     const profile = decodePathPart(route.id);
     const button = el('button', { type: 'button', class: 'ogt-watchlist-pick__button', text: 'Pick something' });
@@ -33,8 +33,7 @@ export const watchlistPick = {
     const announcer = el('span', { class: 'ogt-visually-hidden', role: 'status', 'aria-live': 'polite' });
     const status = el('span', { class: 'ogt-watchlist-pick__status', role: 'status', 'aria-live': 'polite' });
     const node = el('div', { id: ID, class: 'ogt-watchlist-pick' }, button, result, announcer, status);
-    const share = [...actions.children].find((child) => child.classList.contains('share'));
-    actions.insertBefore(node, share ?? null);
+    if (!mountInTitleBar(node)) return null;
 
     let active = true;
     let busy = false;
