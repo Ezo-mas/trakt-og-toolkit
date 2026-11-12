@@ -162,7 +162,7 @@ function createWriteEntry(control = {}) {
 
 /**
  * Read the credential before acquiring a transport slot. The toolkit can refresh its own token
- * when near expiry. og owns its session renewal.
+ * when near expiry. og rotates its refresh token, so the toolkit leaves that renewal to og.
  */
 async function ensureAuth() {
   const tokens = readTokens();
@@ -247,6 +247,7 @@ export async function ping() {
   await apiGet('/shows/breaking-bad', { ttl: 0 });
   return Date.now() - started;
 }
+
 /**
  * Authenticated requests never enter the public response cache. POST/PUT/DELETE go through the
  * shared write queue; GET keeps its previous concurrency and caching behaviour. `control.signal`
