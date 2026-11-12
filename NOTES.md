@@ -2,6 +2,20 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-12: refactor 35c — all lists
+
+- `all-lists/index.js` went from 458 to 122 lines. `createRows`, `nativeParts`, the row builders and their icons moved
+  to `rows.js` (244 lines); `createView` and its loading, poster observation and error handling moved to `view.js`
+  (106 lines). `index.js` keeps the dropdown lookup, the added option, the in-place show/hide and the auth-change
+  resume. The rendered markup, classes, request order and lazy poster reads are unchanged.
+- `shareList` and the module-level poster cache (`postersFor`) moved with the rows that use them. The viewer-liked
+  list read, the fallback classes and the error messages are untouched.
+- `icon()` was not shared. All lists draws a 24px stroke icon at 1.8 width with a fixed class; summary-ratings has a
+  fill/stroke switch at stroke width 2, and success-notification adds a filled circle with a different stroke colour.
+  One signature would have to branch, so each file keeps its own, as the brief allows.
+- Tests unchanged: 563 pass, `npm run drift` reports the same pages `ok`, and the rebuilt bundle is 0.1 kB larger from
+  the extra module wrappers.
+
 ## 2026-11-12: refactor 35b — custom links panel
 
 - Split the panel into `manager.js` and `editor.js` for the dialog, `picker.js` for season/episode controls,
