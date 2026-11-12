@@ -2934,6 +2934,67 @@
     return errors;
   }
 
+  // src/features/custom-links/links.js
+  function compactLink(entry, attachResolver) {
+    const label = entry.label.trim() || "Custom link";
+    const icon4 = serviceIcon(entry.icon);
+    const variant = !icon4 ? "text" : entry.surface === "reference" ? "icon" : "tile";
+    const link = el(
+      "a",
+      {
+        class: `ogt-service-link ogt-service-link--${variant}`,
+        href: entry.href,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        "aria-label": label,
+        "data-ogt-tooltip": label,
+        "data-ogt-surface": entry.surface,
+        style: serviceColor(entry.icon) ? `--ogt-brand-tile:${serviceColor(entry.icon)}` : void 0
+      },
+      icon4,
+      variant === "icon" ? null : el("span", { class: "ogt-service-label", text: label })
+    );
+    attachResolver?.(link, entry.source);
+    return link;
+  }
+  var SURFACE_NOTES = { watch: "Your service", library: "Add to library" };
+  function watchLink(entry, attachResolver) {
+    const label = entry.label.trim() || "Custom link";
+    const link = el(
+      "a",
+      {
+        class: "ogt-watch-now-link",
+        href: entry.href,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        "aria-label": label,
+        "data-ogt-surface": entry.surface,
+        style: serviceColor(entry.icon) ? `--ogt-brand-tile:${serviceColor(entry.icon)}` : void 0
+      },
+      el("span", { class: "ogt-watch-now-card" }, serviceIcon(entry.icon), el("span", { class: "ogt-service-name", text: label })),
+      el("span", { class: "ogt-watch-now-note", text: SURFACE_NOTES[entry.surface] || "Your link" })
+    );
+    attachResolver?.(link, entry.source);
+    return link;
+  }
+  function signatureFor(entries) {
+    return JSON.stringify(entries.map(({ label, href, icon: icon4, surface }) => [label, href, icon4, surface]));
+  }
+  function watchNowContainers() {
+    const containers = [];
+    for (const watchNow of document.querySelectorAll(".watch-now")) {
+      const parent = watchNow.parentElement;
+      if (!parent) continue;
+      for (const child of parent.children) {
+        if (child.tagName !== "DIALOG") continue;
+        const links = child.querySelector(".streaming-links");
+        if (!links || !/watch now/i.test(child.textContent || "")) continue;
+        if (!containers.includes(links)) containers.push(links);
+      }
+    }
+    return containers;
+  }
+
   // src/core/og-session.js
   var OG_SESSION_AUTHORITY = "https://auth.trakt.tv";
   var OG_SESSION_CLIENT_ID = "WfAlMngFsnQNotPX9sfCtKX_8ml3Ga9Nwmiqcu4_hRI";
@@ -3712,65 +3773,6 @@
       svg3,
       el("span", { text: text3 })
     );
-  }
-  function compactLink(entry, attachResolver) {
-    const label = entry.label.trim() || "Custom link";
-    const icon4 = serviceIcon(entry.icon);
-    const variant = !icon4 ? "text" : entry.surface === "reference" ? "icon" : "tile";
-    const link = el(
-      "a",
-      {
-        class: `ogt-service-link ogt-service-link--${variant}`,
-        href: entry.href,
-        target: "_blank",
-        rel: "noopener noreferrer",
-        "aria-label": label,
-        "data-ogt-tooltip": label,
-        "data-ogt-surface": entry.surface,
-        style: serviceColor(entry.icon) ? `--ogt-brand-tile:${serviceColor(entry.icon)}` : void 0
-      },
-      icon4,
-      variant === "icon" ? null : el("span", { class: "ogt-service-label", text: label })
-    );
-    attachResolver?.(link, entry.source);
-    return link;
-  }
-  var SURFACE_NOTES = { watch: "Your service", library: "Add to library" };
-  function watchLink(entry, attachResolver) {
-    const label = entry.label.trim() || "Custom link";
-    const link = el(
-      "a",
-      {
-        class: "ogt-watch-now-link",
-        href: entry.href,
-        target: "_blank",
-        rel: "noopener noreferrer",
-        "aria-label": label,
-        "data-ogt-surface": entry.surface,
-        style: serviceColor(entry.icon) ? `--ogt-brand-tile:${serviceColor(entry.icon)}` : void 0
-      },
-      el("span", { class: "ogt-watch-now-card" }, serviceIcon(entry.icon), el("span", { class: "ogt-service-name", text: label })),
-      el("span", { class: "ogt-watch-now-note", text: SURFACE_NOTES[entry.surface] || "Your link" })
-    );
-    attachResolver?.(link, entry.source);
-    return link;
-  }
-  function signatureFor(entries) {
-    return JSON.stringify(entries.map(({ label, href, icon: icon4, surface }) => [label, href, icon4, surface]));
-  }
-  function watchNowContainers() {
-    const containers = [];
-    for (const watchNow of document.querySelectorAll(".watch-now")) {
-      const parent = watchNow.parentElement;
-      if (!parent) continue;
-      for (const child of parent.children) {
-        if (child.tagName !== "DIALOG") continue;
-        const links = child.querySelector(".streaming-links");
-        if (!links || !/watch now/i.test(child.textContent || "")) continue;
-        if (!containers.includes(links)) containers.push(links);
-      }
-    }
-    return containers;
   }
   function createPanel(meta, route) {
     let cancelled = false;
