@@ -3652,67 +3652,59 @@
     return apiGet(`/shows/${encodeURIComponent(id)}/seasons/${season}/episodes/${episode}`);
   }
 
-  // src/features/custom-links/index.js
-  var PANEL_ID = "ogt-custom-links";
-  var TITLE_ID = "ogt-custom-links-title";
-  var MANAGER_ID = "ogt-custom-links-manager";
-  var FALLBACK_ATTR = "data-ogt-watch-fallback";
-  var WATCH_ATTR = "data-ogt-watch-now";
-  var SERVER_FIELDS = [
-    { key: "jellyfin", label: "Jellyfin", placeholder: "http://192.168.1.20:8096" },
-    { key: "emby", label: "Emby", placeholder: "http://192.168.1.20:8096" },
-    { key: "radarr", label: "Radarr", placeholder: "http://192.168.1.20:7878" },
-    { key: "sonarr", label: "Sonarr", placeholder: "http://192.168.1.20:8989" },
-    { key: "seerr", label: "Seerr", placeholder: "http://192.168.1.20:5055" }
-  ];
-  function desktopTarget(aside) {
-    const external = aside.querySelector("ul.external-links");
-    if (external) return { parent: external.parentElement, before: external };
-    const watchNow = aside.querySelector(".watch-now");
-    if (watchNow) {
-      const next = watchNow.nextElementSibling;
-      return { parent: watchNow.parentElement, before: next?.tagName === "DIALOG" ? next.nextSibling : watchNow.nextSibling };
-    }
-    const poster = aside.querySelector(".summary-poster");
-    const holder = poster?.closest("a.poster-link") || poster;
-    if (holder?.parentElement) return { parent: holder.parentElement, before: holder.nextSibling };
-    return { parent: aside, before: null };
-  }
-  function findMountTarget() {
-    const aside = document.querySelector("aside.sidebar");
-    if (aside) return desktopTarget(aside);
-    const top = document.querySelector("#overview .top") || document.querySelector(".summary-frame .top");
-    if (top?.parentElement) return { parent: top.parentElement, before: top.nextSibling };
-    return null;
-  }
-  function seasonLabel(number) {
-    return number === 0 ? "Specials" : `Season ${number}`;
-  }
-  var ICON_ADD = "M12 5v14M5 12h14";
-  var ICON_SERVER = "M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01";
-  var ICON_EDIT = "M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4";
-  function manageButton(name, text3, d) {
-    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg3.setAttribute("viewBox", "0 0 24 24");
-    svg3.setAttribute("aria-hidden", "true");
-    svg3.setAttribute("focusable", "false");
-    const path = document.createElementNS(svg3.namespaceURI, "path");
-    for (const [key, value] of Object.entries({
-      d,
-      fill: "none",
-      stroke: "currentColor",
-      "stroke-width": "2",
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round"
-    })) path.setAttribute(key, value);
-    svg3.append(path);
-    return el(
-      "button",
-      { class: "ogt-manage-button", type: "button", "aria-label": name, title: name },
-      svg3,
-      el("span", { text: text3 })
+  // src/features/custom-links/lookups.js
+  function createLookups(state) {
+    const { meta, route, selection, fixedSelection } = state;
+    const episodeImdbs = /* @__PURE__ */ new Map();
+    const episodeKey = () => `${selection.season}:${selection.episode}`;
+    const vars = () => meta.kind === "person" ? personTemplateVars(meta) : templateVars(
+      meta.episodeImdb ? meta : { ...meta, episodeImdb: episodeImdbs.get(episodeKey()) ?? null },
+      selection,
+      getServers()
     );
+    let showRequested = false;
+    function lookUpShow() {
+      if (!fixedSelection || showRequested || !getClientId()) return;
+      const missing = ["year", "tmdb", "imdb", "tvdb"].filter((key) => meta[key] == null);
+      if (!missing.length) return;
+      const needed = missing.flatMap((key) => key === "imdb" ? ["{imdb}", "{imdbnum}"] : [`{${key}}`]);
+      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => needed.some((placeholder) => template.includes(placeholder)))))
+        return;
+      showRequested = true;
+      getShowDetails(route.id).then((show) => setMeta(showTemplateData(show))).catch((error) => {
+        if (!state.cancelled) debugError("show lookup failed", error);
+      });
+    }
+    function lookUpEpisode() {
+      if (meta.kind !== "show" || meta.episodeImdb || !getClientId()) return;
+      const { season, episode } = selection;
+      if (season == null || episode == null) return;
+      const key = episodeKey();
+      if (episodeImdbs.has(key)) return;
+      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => /\{episodeimdb(?:num)?\}/.test(template))))
+        return;
+      episodeImdbs.set(key, null);
+      getEpisode(meta.id, season, episode).then((data) => {
+        if (state.cancelled) return;
+        const imdb = typeof data?.ids?.imdb === "string" && /^tt\d+$/.test(data.ids.imdb) ? data.ids.imdb : null;
+        episodeImdbs.set(key, imdb);
+        if (imdb && key === episodeKey()) state.renderLinks();
+      }).catch((error) => {
+        if (state.cancelled) return;
+        episodeImdbs.delete(key);
+        debugError("episode lookup failed", error);
+      });
+    }
+    function setMeta(next) {
+      if (state.cancelled || !next) return;
+      for (const [key, value] of Object.entries(next)) if (value != null) meta[key] = value;
+      state.renderLinks();
+    }
+    return { vars, lookUpShow, lookUpEpisode };
   }
+
+  // src/features/custom-links/links.js
+  var WATCH_ATTR = "data-ogt-watch-now";
   function compactLink(entry, attachResolver) {
     const label = entry.label.trim() || "Custom link";
     const icon4 = serviceIcon(entry.icon);
@@ -3772,57 +3764,9 @@
     }
     return containers;
   }
-  function createPanel(meta, route) {
-    let cancelled = false;
-    let seasons = [];
-    const timers = [];
-    const fixedSelection = route.name === "season" || route.name === "episode";
-    let selection = meta.kind === "person" ? { season: null, episode: null } : selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id));
-    const linksRow = el("div", { class: "ogt-links" });
-    const controlsRow = el("div", { class: "ogt-row ogt-fields", hidden: true });
-    const watchFallback = el("div", { class: "ogt-watch-fallback", hidden: true, [FALLBACK_ATTR]: "" });
-    const editor = el("div", { class: "ogt-editor", hidden: true });
-    const presetChecklist = el("div", { class: "ogt-presets", hidden: true });
-    const serversPanel = el("div", { class: "ogt-servers", hidden: true });
-    const presetsButton = manageButton("Add presets…", "Presets", ICON_ADD);
-    const serversButton = manageButton("Servers…", "Servers", ICON_SERVER);
-    const editButton = manageButton("Edit links", "Edit", ICON_EDIT);
-    const closeButton = el("button", { class: "ogt-manager-close", type: "button", text: "Close" });
-    const manager = el(
-      "dialog",
-      { class: "ogt-manager", id: MANAGER_ID, "aria-labelledby": `${MANAGER_ID}-title` },
-      el(
-        "div",
-        { class: "ogt-manager-panel" },
-        el(
-          "header",
-          { class: "ogt-manager-head" },
-          el("h2", { class: "ogt-manager-title", id: `${MANAGER_ID}-title`, text: "Custom links" }),
-          closeButton
-        ),
-        el("div", { class: "ogt-manager-body" }, editor, presetChecklist, serversPanel)
-      )
-    );
-    const node = el(
-      "section",
-      { class: "ogt-panel ogt-links-compact", id: PANEL_ID, "aria-labelledby": TITLE_ID },
-      el(
-        "div",
-        { class: "ogt-links-head" },
-        el("h2", { class: "ogt-visually-hidden", id: TITLE_ID, text: "Custom links" }),
-        linksRow
-      ),
-      watchFallback,
-      controlsRow,
-      el("div", { class: "ogt-links-manage" }, presetsButton, serversButton, editButton)
-    );
-    const episodeImdbs = /* @__PURE__ */ new Map();
-    const episodeKey = () => `${selection.season}:${selection.episode}`;
-    const vars = () => meta.kind === "person" ? personTemplateVars(meta) : templateVars(
-      meta.episodeImdb ? meta : { ...meta, episodeImdb: episodeImdbs.get(episodeKey()) ?? null },
-      selection,
-      getServers()
-    );
+  function createLinks(state) {
+    const { meta, route, selection, linksRow, watchFallback } = state;
+    const { vars, lookUpShow, lookUpEpisode } = createLookups(state);
     function resolverInput(service) {
       return {
         service,
@@ -3849,11 +3793,11 @@
         const fallbackHref = link.getAttribute("href");
         const pageHref = location.href;
         resolveExternalUrl(input).then((url) => {
-          if (!url || cancelled || !link.isConnected || location.href !== pageHref) return;
+          if (!url || state.cancelled || !link.isConnected || location.href !== pageHref) return;
           if (link.getAttribute("href") !== fallbackHref) return;
           link.setAttribute("href", url);
         }).catch((error) => {
-          if (!cancelled) debugError(`${service} lookup failed`, error);
+          if (!state.cancelled) debugError(`${service} lookup failed`, error);
         });
       };
       link.addEventListener("pointerenter", activate);
@@ -3863,44 +3807,219 @@
         if (event.button === 1) activate();
       });
     }
-    let currentView = null;
-    let returnFocus = null;
+    let renderedEntries = [];
+    function renderLinks() {
+      const values = vars();
+      const entries = resolveCustomLinks(getCustomLinks(), values, meta.kind, meta.genres);
+      renderedEntries = entries;
+      linksRow.replaceChildren();
+      if (!entries.length) {
+        linksRow.append(
+          el("p", { class: "ogt-hint", text: "Add links to your own services: Plex, Jellyfin, Sonarr, or any URL." })
+        );
+      }
+      const services = entries.filter((entry) => entry.surface !== "reference" && hasServiceIcon(entry.icon));
+      const logos = entries.filter((entry) => entry.surface === "reference" && hasServiceIcon(entry.icon));
+      const texts = entries.filter((entry) => !hasServiceIcon(entry.icon));
+      for (const [kind, group] of [["services", services], ["logos", logos], ["texts", texts]]) {
+        if (group.length) linksRow.append(el("div", { class: `ogt-links-group ogt-links-${kind}` }, group.map((entry) => compactLink(entry, attachResolver))));
+      }
+      syncWatchNow(entries);
+      lookUpShow();
+      lookUpEpisode();
+    }
+    function syncWatchNow(entries = renderedEntries) {
+      const watch = watchNowLinks(entries);
+      const containers = watchNowContainers();
+      for (const section of document.querySelectorAll(`[${WATCH_ATTR}]`)) {
+        if (!containers.includes(section.parentElement)) section.remove();
+      }
+      if (!watch.length) {
+        watchFallback.hidden = true;
+        watchFallback.replaceChildren();
+        delete watchFallback.dataset.ogtSignature;
+        return;
+      }
+      const signature = signatureFor(watch);
+      for (const container of containers) {
+        const existing = container.querySelector(`:scope > [${WATCH_ATTR}]`);
+        if (existing?.dataset.ogtSignature === signature) continue;
+        existing?.remove();
+        container.append(
+          el(
+            "div",
+            { class: "ogt-watch-now-section", [WATCH_ATTR]: "", "data-ogt-signature": signature },
+            el(
+              "h3",
+              { class: "section-title" },
+              "Your services",
+              el("span", { class: "count", text: String(watch.length) })
+            ),
+            el("div", { class: "tiles ogt-watch-now-tiles" }, watch.map((entry) => watchLink(entry, attachResolver)))
+          )
+        );
+      }
+      if (!containers.length) {
+        if (watchFallback.dataset.ogtSignature !== signature) {
+          watchFallback.replaceChildren(
+            el(
+              "div",
+              { class: "ogt-watch-fallback-head" },
+              el("span", { class: "ogt-watch-fallback-title", text: "Watch Now" }),
+              el("span", { class: "ogt-watch-fallback-note", text: "your links" })
+            ),
+            el("div", { class: "ogt-watch-now-tiles" }, watch.map((entry) => watchLink(entry, attachResolver)))
+          );
+          watchFallback.dataset.ogtSignature = signature;
+        }
+        watchFallback.hidden = false;
+      } else {
+        watchFallback.hidden = true;
+      }
+    }
+    return { renderLinks, syncWatchNow, destroy() {
+      for (const section of document.querySelectorAll(`[${WATCH_ATTR}]`)) section.remove();
+      watchFallback.replaceChildren();
+    } };
+  }
+
+  // src/features/custom-links/picker.js
+  function seasonLabel(number) {
+    return number === 0 ? "Specials" : `Season ${number}`;
+  }
+  function createPicker(state) {
+    const { meta, fixedSelection, selection, controlsRow, timers } = state;
+    function needsSelection() {
+      return !fixedSelection && getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => /\{(?:season|episode)\}/.test(template)));
+    }
+    function persistSelection() {
+      if (!fixedSelection && selection.season != null) setSelection(meta.kind, meta.id, selection);
+    }
+    const seasonSelect = el("select", { class: "ogt-select", "aria-label": "Season" });
+    const episodeSlot = el("span", { class: "ogt-episode" });
+    const seasonField = el("label", { class: "ogt-field" }, el("span", { class: "ogt-visually-hidden", text: "Season" }), seasonSelect);
+    const episodeField = el("label", { class: "ogt-field" }, el("span", { class: "ogt-visually-hidden", text: "Episode" }), episodeSlot);
+    let controlsBuilt = false;
+    function ensureControls() {
+      if (controlsBuilt) return;
+      seasonSelect.addEventListener("change", () => {
+        selection.season = Number(seasonSelect.value);
+        selection.episode = 1;
+        persistSelection();
+        renderEpisodeField();
+        state.renderLinks();
+      });
+      controlsRow.replaceChildren(seasonField, episodeField);
+      controlsBuilt = true;
+    }
+    function renderEpisodeField() {
+      const season = state.seasons.find((entry) => entry.number === selection.season);
+      const count2 = season?.episodes || null;
+      if (!count2 || count2 < 1) {
+        episodeSlot.replaceChildren(el("span", { text: "—" }));
+        selection.episode = null;
+        return;
+      }
+      if (selection.episode == null || selection.episode > count2) selection.episode = 1;
+      if (count2 > 8) {
+        const input = el("input", {
+          class: "ogt-input",
+          type: "number",
+          min: "1",
+          max: String(count2),
+          value: String(selection.episode),
+          "aria-label": "Episode"
+        });
+        input.addEventListener("change", () => {
+          const value = Number(input.value);
+          if (Number.isInteger(value) && value >= 1 && value <= count2) {
+            selection.episode = value;
+            persistSelection();
+            state.renderLinks();
+          } else {
+            input.value = String(selection.episode);
+          }
+        });
+        episodeSlot.replaceChildren(el("span", { class: "ogt-field-prefix", "aria-hidden": "true", text: "Ep." }), input);
+        return;
+      }
+      const select = el("select", { class: "ogt-select", "aria-label": "Episode" });
+      for (let i = 1; i <= count2; i++) {
+        select.append(el("option", { value: String(i), text: `Episode ${i}` }));
+      }
+      select.value = String(selection.episode);
+      select.addEventListener("change", () => {
+        selection.episode = Number(select.value);
+        persistSelection();
+        state.renderLinks();
+      });
+      episodeSlot.replaceChildren(select);
+    }
+    function renderControls() {
+      const hasSeasons = !fixedSelection && meta.kind === "show" && state.seasons.length > 0 && needsSelection();
+      if (!hasSeasons) {
+        controlsRow.hidden = true;
+        return;
+      }
+      ensureControls();
+      seasonField.hidden = false;
+      episodeField.hidden = false;
+      controlsRow.hidden = false;
+      const available = state.seasons.map((season) => season.number);
+      if (selection.season == null || !available.includes(selection.season)) {
+        selection.season = available.includes(1) ? 1 : available[0];
+      }
+      if (seasonSelect.options.length !== state.seasons.length) {
+        seasonSelect.replaceChildren(
+          ...state.seasons.map((season) => el("option", { value: String(season.number), text: seasonLabel(season.number) }))
+        );
+      }
+      seasonSelect.value = String(selection.season);
+      renderEpisodeField();
+      state.renderLinks();
+    }
+    function loadSeasons() {
+      if (meta.kind !== "show" || fixedSelection) return;
+      state.seasons = readSeasons(document);
+      if (state.seasons.length) renderControls();
+      if (!getClientId()) {
+        if (!state.seasons.length) retryFromDom();
+        return;
+      }
+      getSeasons(meta.id).then((list) => {
+        if (state.cancelled || !list.length) return;
+        state.seasons = mergeSeasons(list, state.seasons);
+        renderControls();
+      }).catch((error) => {
+        debugError("season lookup failed", error);
+        if (!state.cancelled && !state.seasons.length) retryFromDom();
+      });
+    }
+    function retryFromDom() {
+      let attempt = 0;
+      const retry = () => {
+        if (state.cancelled) return;
+        state.seasons = readSeasons(document);
+        if (state.seasons.length) {
+          renderControls();
+          return;
+        }
+        attempt += 1;
+        if (attempt < 4) timers.push(setTimeout(retry, 400 * attempt));
+      };
+      timers.push(setTimeout(retry, 400));
+    }
+    return { needsSelection, renderControls, loadSeasons, destroy() {
+      for (const timer of timers) clearTimeout(timer);
+      timers.length = 0;
+    } };
+  }
+
+  // src/features/custom-links/editor.js
+  function createEditor(state, editor, editButton, openManager, closeTools) {
+    const { meta, controlsRow } = state;
     let draft = [];
     let nextDraftId = 0;
-    let selectedPresets = /* @__PURE__ */ new Set();
-    let renderedEntries = [];
-    function restoreFocus(target) {
-      if (cancelled || !target?.isConnected) return;
-      target.focus?.();
-    }
-    function closeTools() {
-      currentView = null;
-      editor.hidden = true;
-      presetChecklist.hidden = true;
-      serversPanel.hidden = true;
-      const target = returnFocus;
-      returnFocus = null;
-      if (manager.open) {
-        manager.close();
-        restoreFocus(target);
-      } else {
-        manager.removeAttribute("open");
-        restoreFocus(target);
-      }
-    }
-    function openManager(view, opener, render) {
-      currentView = view;
-      returnFocus = opener;
-      editor.hidden = view !== "editor";
-      presetChecklist.hidden = view !== "presets";
-      serversPanel.hidden = view !== "servers";
-      if (typeof manager.showModal === "function") {
-        if (!manager.open) manager.showModal();
-      } else {
-        manager.setAttribute("open", "");
-      }
-      render();
-    }
     function renderEditor(focusKey) {
       editor.replaceChildren();
       const list = el("div", { class: "ogt-editor-list" });
@@ -3994,10 +4113,10 @@
           return;
         }
         setCustomLinks(draft.map(({ label, url }) => ({ label: label.trim(), url: url.trim() })));
-        renderLinks();
-        if (meta.kind === "show" && needsSelection()) {
-          if (seasons.length) renderControls();
-          else loadSeasons();
+        state.renderLinks();
+        if (meta.kind === "show" && state.needsSelection()) {
+          if (state.seasons.length) state.renderControls();
+          else state.loadSeasons();
         } else {
           controlsRow.hidden = true;
         }
@@ -4013,10 +4132,106 @@
       if (focusKey) editor.querySelector(`[data-focus="${focusKey}"]`)?.focus();
     }
     function openEditor() {
-      returnFocus = editButton;
       draft = getCustomLinks().map((link) => ({ ...link, id: nextDraftId++ }));
       openManager("editor", editButton, () => renderEditor(draft.length ? `${draft[0].id}-label` : "add-link"));
     }
+    return { openEditor };
+  }
+
+  // src/features/custom-links/manager.js
+  var MANAGER_ID = "ogt-custom-links-manager";
+  var SERVER_FIELDS = [
+    { key: "jellyfin", label: "Jellyfin", placeholder: "http://192.168.1.20:8096" },
+    { key: "emby", label: "Emby", placeholder: "http://192.168.1.20:8096" },
+    { key: "radarr", label: "Radarr", placeholder: "http://192.168.1.20:7878" },
+    { key: "sonarr", label: "Sonarr", placeholder: "http://192.168.1.20:8989" },
+    { key: "seerr", label: "Seerr", placeholder: "http://192.168.1.20:5055" }
+  ];
+  var ICON_ADD = "M12 5v14M5 12h14";
+  var ICON_SERVER = "M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01";
+  var ICON_EDIT = "M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4";
+  function manageButton(name, text3, d) {
+    const svg3 = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg3.setAttribute("viewBox", "0 0 24 24");
+    svg3.setAttribute("aria-hidden", "true");
+    svg3.setAttribute("focusable", "false");
+    const path = document.createElementNS(svg3.namespaceURI, "path");
+    for (const [key, value] of Object.entries({
+      d,
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    })) path.setAttribute(key, value);
+    svg3.append(path);
+    return el(
+      "button",
+      { class: "ogt-manage-button", type: "button", "aria-label": name, title: name },
+      svg3,
+      el("span", { text: text3 })
+    );
+  }
+  function createManager(state) {
+    const { meta, controlsRow } = state;
+    const editor = el("div", { class: "ogt-editor", hidden: true });
+    const presetChecklist = el("div", { class: "ogt-presets", hidden: true });
+    const serversPanel = el("div", { class: "ogt-servers", hidden: true });
+    const presetsButton = manageButton("Add presets…", "Presets", ICON_ADD);
+    const serversButton = manageButton("Servers…", "Servers", ICON_SERVER);
+    const editButton = manageButton("Edit links", "Edit", ICON_EDIT);
+    const closeButton = el("button", { class: "ogt-manager-close", type: "button", text: "Close" });
+    const manager = el(
+      "dialog",
+      { class: "ogt-manager", id: MANAGER_ID, "aria-labelledby": `${MANAGER_ID}-title` },
+      el(
+        "div",
+        { class: "ogt-manager-panel" },
+        el(
+          "header",
+          { class: "ogt-manager-head" },
+          el("h2", { class: "ogt-manager-title", id: `${MANAGER_ID}-title`, text: "Custom links" }),
+          closeButton
+        ),
+        el("div", { class: "ogt-manager-body" }, editor, presetChecklist, serversPanel)
+      )
+    );
+    let currentView = null;
+    let returnFocus = null;
+    let selectedPresets = /* @__PURE__ */ new Set();
+    function restoreFocus(target) {
+      if (state.cancelled || !target?.isConnected) return;
+      target.focus?.();
+    }
+    function closeTools() {
+      currentView = null;
+      editor.hidden = true;
+      presetChecklist.hidden = true;
+      serversPanel.hidden = true;
+      const target = returnFocus;
+      returnFocus = null;
+      if (manager.open) {
+        manager.close();
+        restoreFocus(target);
+      } else {
+        manager.removeAttribute("open");
+        restoreFocus(target);
+      }
+    }
+    function openManager(view, opener, render) {
+      currentView = view;
+      returnFocus = opener;
+      editor.hidden = view !== "editor";
+      presetChecklist.hidden = view !== "presets";
+      serversPanel.hidden = view !== "servers";
+      if (typeof manager.showModal === "function") {
+        if (!manager.open) manager.showModal();
+      } else {
+        manager.setAttribute("open", "");
+      }
+      render();
+    }
+    const { openEditor } = createEditor(state, editor, editButton, openManager, closeTools);
     function renderServers() {
       serversPanel.replaceChildren();
       const servers = getServers();
@@ -4051,7 +4266,7 @@
           next[field.key] = normalized;
         }
         setServers(next);
-        renderLinks();
+        state.renderLinks();
         closeTools();
       });
       const cancel = el("button", { class: "ogt-chip", type: "button", text: "Cancel" });
@@ -4109,7 +4324,7 @@
         const selected = presets.filter((preset) => selectedPresets.has(preset.url));
         if (selected.length) {
           setCustomLinks(addPresets(getCustomLinks(), selected));
-          onRefresh();
+          state.onRefresh();
         }
         closeTools();
       });
@@ -4140,11 +4355,11 @@
     editButton.addEventListener("click", openEditor);
     closeButton.addEventListener("click", closeTools);
     manager.addEventListener("keydown", onKeyDown);
-    manager.addEventListener("cancel", (event) => {
+    function onCancel(event) {
       event.preventDefault();
       closeTools();
-    });
-    manager.addEventListener("close", () => {
+    }
+    function onClose() {
       currentView = null;
       editor.hidden = true;
       presetChecklist.hidden = true;
@@ -4152,242 +4367,89 @@
       const target = returnFocus;
       returnFocus = null;
       restoreFocus(target);
-    });
-    function renderLinks() {
-      const values = vars();
-      const entries = resolveCustomLinks(getCustomLinks(), values, meta.kind, meta.genres);
-      renderedEntries = entries;
-      linksRow.replaceChildren();
-      if (!entries.length) {
-        linksRow.append(
-          el("p", { class: "ogt-hint", text: "Add links to your own services: Plex, Jellyfin, Sonarr, or any URL." })
-        );
-      }
-      const services = entries.filter((entry) => entry.surface !== "reference" && hasServiceIcon(entry.icon));
-      const logos = entries.filter((entry) => entry.surface === "reference" && hasServiceIcon(entry.icon));
-      const texts = entries.filter((entry) => !hasServiceIcon(entry.icon));
-      for (const [kind, group] of [["services", services], ["logos", logos], ["texts", texts]]) {
-        if (group.length) linksRow.append(el("div", { class: `ogt-links-group ogt-links-${kind}` }, group.map((entry) => compactLink(entry, attachResolver))));
-      }
-      syncWatchNow(entries);
-      lookUpShow(values);
-      lookUpEpisode();
     }
-    function syncWatchNow(entries = renderedEntries) {
-      const watch = watchNowLinks(entries);
-      const containers = watchNowContainers();
-      for (const section of document.querySelectorAll(`[${WATCH_ATTR}]`)) {
-        if (!containers.includes(section.parentElement)) section.remove();
-      }
-      if (!watch.length) {
-        watchFallback.hidden = true;
-        watchFallback.replaceChildren();
-        delete watchFallback.dataset.ogtSignature;
-        return;
-      }
-      const signature = signatureFor(watch);
-      for (const container of containers) {
-        const existing = container.querySelector(`:scope > [${WATCH_ATTR}]`);
-        if (existing?.dataset.ogtSignature === signature) continue;
-        existing?.remove();
-        container.append(
-          el(
-            "div",
-            { class: "ogt-watch-now-section", [WATCH_ATTR]: "", "data-ogt-signature": signature },
-            el(
-              "h3",
-              { class: "section-title" },
-              "Your services",
-              el("span", { class: "count", text: String(watch.length) })
-            ),
-            el("div", { class: "tiles ogt-watch-now-tiles" }, watch.map((entry) => watchLink(entry, attachResolver)))
-          )
-        );
-      }
-      if (!containers.length) {
-        if (watchFallback.dataset.ogtSignature !== signature) {
-          watchFallback.replaceChildren(
-            el(
-              "div",
-              { class: "ogt-watch-fallback-head" },
-              el("span", { class: "ogt-watch-fallback-title", text: "Watch Now" }),
-              el("span", { class: "ogt-watch-fallback-note", text: "your links" })
-            ),
-            el("div", { class: "ogt-watch-now-tiles" }, watch.map((entry) => watchLink(entry, attachResolver)))
-          );
-          watchFallback.dataset.ogtSignature = signature;
-        }
-        watchFallback.hidden = false;
-      } else {
-        watchFallback.hidden = true;
-      }
+    manager.addEventListener("cancel", onCancel);
+    manager.addEventListener("close", onClose);
+    return { manager, presetsButton, serversButton, editButton, destroy() {
+      if (manager.open) manager.close();
+      presetsButton.removeEventListener("click", openPresets);
+      serversButton.removeEventListener("click", openServers);
+      editButton.removeEventListener("click", openEditor);
+      closeButton.removeEventListener("click", closeTools);
+      manager.removeEventListener("keydown", onKeyDown);
+      manager.removeEventListener("cancel", onCancel);
+      manager.removeEventListener("close", onClose);
+      manager.remove();
+    } };
+  }
+
+  // src/features/custom-links/index.js
+  var PANEL_ID = "ogt-custom-links";
+  var TITLE_ID = "ogt-custom-links-title";
+  var FALLBACK_ATTR = "data-ogt-watch-fallback";
+  function desktopTarget(aside) {
+    const external = aside.querySelector("ul.external-links");
+    if (external) return { parent: external.parentElement, before: external };
+    const watchNow = aside.querySelector(".watch-now");
+    if (watchNow) {
+      const next = watchNow.nextElementSibling;
+      return { parent: watchNow.parentElement, before: next?.tagName === "DIALOG" ? next.nextSibling : watchNow.nextSibling };
     }
-    let showRequested = false;
-    function lookUpShow(values) {
-      if (!fixedSelection || showRequested || !getClientId()) return;
-      const missing = ["year", "tmdb", "imdb", "tvdb"].filter((key) => meta[key] == null);
-      if (!missing.length) return;
-      const needed = missing.flatMap((key) => key === "imdb" ? ["{imdb}", "{imdbnum}"] : [`{${key}}`]);
-      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => needed.some((placeholder) => template.includes(placeholder)))))
-        return;
-      showRequested = true;
-      getShowDetails(route.id).then((show) => setMeta(showTemplateData(show))).catch((error) => {
-        if (!cancelled) debugError("show lookup failed", error);
-      });
-    }
-    function lookUpEpisode() {
-      if (meta.kind !== "show" || meta.episodeImdb || !getClientId()) return;
-      const { season, episode } = selection;
-      if (season == null || episode == null) return;
-      const key = episodeKey();
-      if (episodeImdbs.has(key)) return;
-      if (!getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => /\{episodeimdb(?:num)?\}/.test(template))))
-        return;
-      episodeImdbs.set(key, null);
-      getEpisode(meta.id, season, episode).then((data) => {
-        if (cancelled) return;
-        const imdb = typeof data?.ids?.imdb === "string" && /^tt\d+$/.test(data.ids.imdb) ? data.ids.imdb : null;
-        episodeImdbs.set(key, imdb);
-        if (imdb && key === episodeKey()) renderLinks();
-      }).catch((error) => {
-        if (cancelled) return;
-        episodeImdbs.delete(key);
-        debugError("episode lookup failed", error);
-      });
-    }
-    function needsSelection() {
-      return !fixedSelection && getCustomLinks().some((entry) => presetTemplateUrls(entry.url, meta.kind).some((template) => /\{(?:season|episode)\}/.test(template)));
-    }
-    function persistSelection() {
-      if (!fixedSelection && selection.season != null) setSelection(meta.kind, meta.id, selection);
-    }
-    const seasonSelect = el("select", { class: "ogt-select", "aria-label": "Season" });
-    const episodeSlot = el("span", { class: "ogt-episode" });
-    const seasonField = el("label", { class: "ogt-field" }, el("span", { class: "ogt-visually-hidden", text: "Season" }), seasonSelect);
-    const episodeField = el("label", { class: "ogt-field" }, el("span", { class: "ogt-visually-hidden", text: "Episode" }), episodeSlot);
-    let controlsBuilt = false;
-    function ensureControls() {
-      if (controlsBuilt) return;
-      seasonSelect.addEventListener("change", () => {
-        selection.season = Number(seasonSelect.value);
-        selection.episode = 1;
-        persistSelection();
-        renderEpisodeField();
-        renderLinks();
-      });
-      controlsRow.replaceChildren(seasonField, episodeField);
-      controlsBuilt = true;
-    }
-    function renderEpisodeField() {
-      const season = seasons.find((entry) => entry.number === selection.season);
-      const count2 = season?.episodes || null;
-      if (!count2 || count2 < 1) {
-        episodeSlot.replaceChildren(el("span", { text: "—" }));
-        selection.episode = null;
-        return;
-      }
-      if (selection.episode == null || selection.episode > count2) selection.episode = 1;
-      if (count2 > 8) {
-        const input = el("input", {
-          class: "ogt-input",
-          type: "number",
-          min: "1",
-          max: String(count2),
-          value: String(selection.episode),
-          "aria-label": "Episode"
-        });
-        input.addEventListener("change", () => {
-          const value = Number(input.value);
-          if (Number.isInteger(value) && value >= 1 && value <= count2) {
-            selection.episode = value;
-            persistSelection();
-            renderLinks();
-          } else {
-            input.value = String(selection.episode);
-          }
-        });
-        episodeSlot.replaceChildren(el("span", { class: "ogt-field-prefix", "aria-hidden": "true", text: "Ep." }), input);
-        return;
-      }
-      const select = el("select", { class: "ogt-select", "aria-label": "Episode" });
-      for (let i = 1; i <= count2; i++) {
-        select.append(el("option", { value: String(i), text: `Episode ${i}` }));
-      }
-      select.value = String(selection.episode);
-      select.addEventListener("change", () => {
-        selection.episode = Number(select.value);
-        persistSelection();
-        renderLinks();
-      });
-      episodeSlot.replaceChildren(select);
-    }
-    function renderControls() {
-      const hasSeasons = !fixedSelection && meta.kind === "show" && seasons.length > 0 && needsSelection();
-      if (!hasSeasons) {
-        controlsRow.hidden = true;
-        return;
-      }
-      ensureControls();
-      seasonField.hidden = false;
-      episodeField.hidden = false;
-      controlsRow.hidden = false;
-      const available = seasons.map((season) => season.number);
-      if (selection.season == null || !available.includes(selection.season)) {
-        selection.season = available.includes(1) ? 1 : available[0];
-      }
-      if (seasonSelect.options.length !== seasons.length) {
-        seasonSelect.replaceChildren(
-          ...seasons.map((season) => el("option", { value: String(season.number), text: seasonLabel(season.number) }))
-        );
-      }
-      seasonSelect.value = String(selection.season);
-      renderEpisodeField();
-      renderLinks();
-    }
-    function loadSeasons() {
-      if (meta.kind !== "show" || fixedSelection) return;
-      seasons = readSeasons(document);
-      if (seasons.length) renderControls();
-      if (!getClientId()) {
-        if (!seasons.length) retryFromDom();
-        return;
-      }
-      getSeasons(meta.id).then((list) => {
-        if (cancelled || !list.length) return;
-        seasons = mergeSeasons(list, seasons);
-        renderControls();
-      }).catch((error) => {
-        debugError("season lookup failed", error);
-        if (!cancelled && !seasons.length) retryFromDom();
-      });
-    }
-    function retryFromDom() {
-      let attempt = 0;
-      const retry = () => {
-        if (cancelled) return;
-        seasons = readSeasons(document);
-        if (seasons.length) {
-          renderControls();
-          return;
-        }
-        attempt += 1;
-        if (attempt < 4) timers.push(setTimeout(retry, 400 * attempt));
-      };
-      timers.push(setTimeout(retry, 400));
-    }
+    const poster = aside.querySelector(".summary-poster");
+    const holder = poster?.closest("a.poster-link") || poster;
+    if (holder?.parentElement) return { parent: holder.parentElement, before: holder.nextSibling };
+    return { parent: aside, before: null };
+  }
+  function findMountTarget() {
+    const aside = document.querySelector("aside.sidebar");
+    if (aside) return desktopTarget(aside);
+    const top = document.querySelector("#overview .top") || document.querySelector(".summary-frame .top");
+    if (top?.parentElement) return { parent: top.parentElement, before: top.nextSibling };
+    return null;
+  }
+  function createPanel(meta, route) {
+    const fixedSelection = route.name === "season" || route.name === "episode";
+    const state = {
+      meta,
+      route,
+      fixedSelection,
+      selection: meta.kind === "person" ? { season: null, episode: null } : selectionForRoute(route, fixedSelection ? null : getSelection(meta.kind, meta.id)),
+      cancelled: false,
+      seasons: [],
+      timers: [],
+      linksRow: el("div", { class: "ogt-links" }),
+      controlsRow: el("div", { class: "ogt-row ogt-fields", hidden: true }),
+      watchFallback: el("div", { class: "ogt-watch-fallback", hidden: true, [FALLBACK_ATTR]: "" })
+    };
+    const { linksRow, controlsRow, watchFallback } = state;
+    const managerView = createManager(state);
+    const { manager, presetsButton, serversButton, editButton } = managerView;
+    const node = el(
+      "section",
+      { class: "ogt-panel ogt-links-compact", id: PANEL_ID, "aria-labelledby": TITLE_ID },
+      el(
+        "div",
+        { class: "ogt-links-head" },
+        el("h2", { class: "ogt-visually-hidden", id: TITLE_ID, text: "Custom links" }),
+        linksRow
+      ),
+      watchFallback,
+      controlsRow,
+      el("div", { class: "ogt-links-manage" }, presetsButton, serversButton, editButton)
+    );
+    const links = createLinks(state);
+    const { renderLinks, syncWatchNow } = links;
+    const picker = createPicker(state);
+    const { needsSelection, renderControls, loadSeasons } = picker;
+    Object.assign(state, { renderLinks, needsSelection, renderControls, loadSeasons, onRefresh });
     function onRefresh() {
       renderLinks();
       if (meta.kind === "show" && needsSelection()) {
-        if (seasons.length) renderControls();
+        if (state.seasons.length) renderControls();
         else loadSeasons();
       } else {
         controlsRow.hidden = true;
       }
-    }
-    function setMeta(next) {
-      if (cancelled || !next) return;
-      for (const [key, value] of Object.entries(next)) if (value != null) meta[key] = value;
-      renderLinks();
     }
     function place() {
       const target = findMountTarget();
@@ -4402,12 +4464,12 @@
     }
     let watchTimer = null;
     const observer = new MutationObserver(() => {
-      if (cancelled || watchTimer) return;
+      if (state.cancelled || watchTimer) return;
       watchTimer = setTimeout(() => {
         watchTimer = null;
-        if (cancelled) return;
+        if (state.cancelled) return;
         place();
-        syncWatchNow(renderedEntries);
+        syncWatchNow();
       }, 60);
     });
     function observeAreas() {
@@ -4430,17 +4492,14 @@
       manager,
       place,
       destroy() {
-        cancelled = true;
+        state.cancelled = true;
         if (watchTimer) clearTimeout(watchTimer);
         watchTimer = null;
-        for (const timer of timers) clearTimeout(timer);
-        timers.length = 0;
+        picker.destroy();
         observer.disconnect();
         document.removeEventListener("ogt:refresh", onRefresh);
-        for (const section of document.querySelectorAll(`[${WATCH_ATTR}]`)) section.remove();
-        watchFallback.replaceChildren();
-        if (manager.open) manager.close();
-        manager.remove();
+        links.destroy();
+        managerView.destroy();
         node.remove();
       }
     };
