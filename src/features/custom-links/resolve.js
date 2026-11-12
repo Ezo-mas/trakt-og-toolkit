@@ -16,9 +16,9 @@
 import { getJSON, headerValue } from '../../core/http.js';
 import { VERSION } from '../../meta.js';
 
-export const RESOLVE_TIMEOUT_MS = 8000;
+const RESOLVE_TIMEOUT_MS = 8000;
 /** An identifier found once is stable for the life of the page; a day is plenty. */
-export const HIT_TTL_MS = 24 * 60 * 60 * 1000;
+const HIT_TTL_MS = 24 * 60 * 60 * 1000;
 /** A genuine miss may become a mapping after Wikidata is edited; retry soon. */
 export const MISS_TTL_MS = 5 * 60 * 1000;
 /** A 429 without a usable Retry-After still blocks this service for a bounded time. */
@@ -62,11 +62,11 @@ function serviceConfig(service, kind) {
   return { ...config.kinds[kind], property: config.property, hostnames: config.hostnames };
 }
 
-export function validTmdbId(value) {
+function validTmdbId(value) {
   return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
-export function validImdbId(value) {
+function validImdbId(value) {
   const imdb = String(value ?? '').trim();
   return IMDB_RE.test(imdb) ? imdb : null;
 }
@@ -143,7 +143,7 @@ export function buildDestinationUrl(service, baseUrl, context = {}) {
   return `${baseUrl.replace(/\/+$/, '')}/season-${season}/`;
 }
 
-export function resolverKey({ service, kind, tmdb, imdb }) {
+function resolverKey({ service, kind, tmdb, imdb }) {
   return `${service}|${kind}|${validTmdbId(tmdb) ?? ''}|${validImdbId(imdb) ?? ''}`;
 }
 
@@ -210,7 +210,7 @@ function fetchBase(input, { fetchImpl }) {
 }
 
 /** Parse Retry-After seconds or an HTTP date; use a bounded fallback when the header is unusable. */
-export function retryAfterMs(value, nowMs = Date.now(), fallbackMs = DEFAULT_COOLDOWN_MS) {
+function retryAfterMs(value, nowMs = Date.now(), fallbackMs = DEFAULT_COOLDOWN_MS) {
   if (value == null || value === '') return fallbackMs;
   const seconds = Number(value);
   if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;

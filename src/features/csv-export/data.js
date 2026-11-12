@@ -8,7 +8,7 @@
 import { titleOf, usableId, yearOf } from '../../core/entities.js';
 import { decodePathPart } from '../../core/text.js';
 
-export const CSV_COLUMNS = [
+const CSV_COLUMNS = [
   'rank', 'type', 'title', 'year', 'season', 'episode', 'trakt', 'imdb', 'tmdb', 'listed_at', 'notes',
 ];
 export const CSV_HEADER = [

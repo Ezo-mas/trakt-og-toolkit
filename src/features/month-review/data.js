@@ -13,7 +13,7 @@ export function shiftMonth(span, delta) {
   const date = new Date(span.year, span.month - 1 + delta, 1);
   return monthSpan(date.getFullYear(), date.getMonth() + 1);
 }
-export function inMonth(value, span) {
+function inMonth(value, span) {
   const time = Date.parse(value);
   return time >= Date.parse(span.start) && time < Date.parse(span.end);
 }

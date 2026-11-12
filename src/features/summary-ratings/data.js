@@ -15,9 +15,9 @@ export const MIN_VOTES = 10;
 
 /** Fixed heights (px, CSS `block-size`): the chart, the gap above it, and the stat tiles with their gap. */
 export const CHART_HEIGHT = 104;
-export const CHART_GAP = 20;
+const CHART_GAP = 20;
 export const TILES_HEIGHT = 60;
-export const TILES_GAP = 16;
+const TILES_GAP = 16;
 
 /** The API path of a summary route (`/movies/:id`, `/shows/:id/seasons/:s/episodes/:e`, …), or null. */
 function apiBase(route) {

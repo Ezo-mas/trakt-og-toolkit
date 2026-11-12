@@ -9083,6 +9083,29 @@
   `
   });
 
+  // src/ui/title-bar.js
+  function mountInTitleBar(node) {
+    const actions = document.querySelector("section.title-row .title-bar .actions");
+    if (!actions) return false;
+    const share = [...actions.children].find((child) => child.classList.contains("share"));
+    actions.insertBefore(node, share ?? null);
+    return true;
+  }
+  function titleBarButtonCss(className) {
+    return String.raw`.${className} {
+  display: inline-flex; align-items: center; justify-content: center; block-size: var(--control-height, 36px);
+  padding: 0 var(--button-padding-inline, 12px); border: 1px solid light-dark(#d4d4d4, #3b3b3b);
+  border-radius: var(--radius-control, 6px); background: light-dark(#f2f2f2, #232323);
+  color: light-dark(#333, #e6e6e6); font: inherit; font-size: var(--font-size-button-secondary, 13px);
+  white-space: nowrap; cursor: pointer;
+}
+.${className}:is(:hover, :focus-visible):not(:disabled) {
+  border-color: var(--brand-primary, #ed1c24); color: light-dark(#111, #fff);
+}
+.${className}:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.${className}:disabled { opacity: .6; cursor: default; }`;
+  }
+
   // src/core/pages.js
   var PAGE_SIZE = 100;
   var PAGE_BATCH = 4;
@@ -9121,6 +9144,22 @@
     return { rows, limited: data.length > 0 };
   }
 
+  // src/core/entities.js
+  function usableId(value) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (Number.isSafeInteger(value) && value > 0) return String(value);
+    return null;
+  }
+  function titleOf(entity) {
+    if (typeof entity?.title !== "string") return null;
+    return entity.title.trim() || null;
+  }
+  function yearOf(entity, minimum = null) {
+    const year = entity?.year;
+    if (!Number.isSafeInteger(year)) return null;
+    return minimum == null || year >= minimum ? year : null;
+  }
+
   // src/features/watchlist-pick/data.js
   var DISPLAY_TO_API = { movie: "movies", show: "shows", season: "seasons", episode: "episodes" };
   var SINGULAR = new Set(Object.keys(DISPLAY_TO_API));
@@ -9136,17 +9175,6 @@
   }
   function apiType(display) {
     return display ? DISPLAY_TO_API[display] ?? null : null;
-  }
-  function usableId(value) {
-    if (typeof value === "string" && value.trim()) return value.trim();
-    if (Number.isSafeInteger(value) && value > 0) return String(value);
-    return null;
-  }
-  function titleOf(entity) {
-    return typeof entity?.title === "string" ? entity.title.trim() : "";
-  }
-  function yearOf(entity) {
-    return Number.isSafeInteger(entity?.year) ? entity.year : null;
   }
   function mediaHref(kind, id) {
     return `/${kind === "movie" ? "movies" : "shows"}/${encodeURIComponent(id)}`;
@@ -9243,18 +9271,7 @@
   var CSS9 = String.raw`
 .ogt-watchlist-pick { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-stat, 6px) 10px; min-inline-size: 0; }
 .ogt-watchlist-pick [hidden] { display: none !important; }
-.ogt-watchlist-pick__button {
-  display: inline-flex; align-items: center; justify-content: center; block-size: var(--control-height, 36px);
-  padding: 0 var(--button-padding-inline, 12px); border: 1px solid light-dark(#d4d4d4, #3b3b3b);
-  border-radius: var(--radius-control, 6px); background: light-dark(#f2f2f2, #232323);
-  color: light-dark(#333, #e6e6e6); font: inherit; font-size: var(--font-size-button-secondary, 13px);
-  white-space: nowrap; cursor: pointer;
-}
-.ogt-watchlist-pick__button:is(:hover, :focus-visible):not(:disabled) {
-  border-color: var(--brand-primary, #ed1c24); color: light-dark(#111, #fff);
-}
-.ogt-watchlist-pick__button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-.ogt-watchlist-pick__button:disabled { opacity: .6; cursor: default; }
+${titleBarButtonCss("ogt-watchlist-pick__button")}
 .ogt-watchlist-pick__result {
   max-inline-size: 24ch; overflow: hidden; color: var(--color-text, light-dark(#222, #eee));
   font-family: var(--font-headings, inherit); font-size: var(--font-size-list-row-meta, 14px);
@@ -9278,16 +9295,14 @@
     authScoped: true,
     match: (route) => route.name === "watchlist",
     mount(route) {
-      const actions = document.querySelector("section.title-row .title-bar .actions");
-      if (!actions || document.getElementById(ID5)) return null;
+      if (document.getElementById(ID5)) return null;
       const profile = decodePathPart(route.id);
       const button2 = el("button", { type: "button", class: "ogt-watchlist-pick__button", text: "Pick something" });
       const result = el("a", { class: "ogt-watchlist-pick__result", hidden: true });
       const announcer = el("span", { class: "ogt-visually-hidden", role: "status", "aria-live": "polite" });
       const status = el("span", { class: "ogt-watchlist-pick__status", role: "status", "aria-live": "polite" });
       const node = el("div", { id: ID5, class: "ogt-watchlist-pick" }, button2, result, announcer, status);
-      const share = [...actions.children].find((child) => child.classList.contains("share"));
-      actions.insertBefore(node, share ?? null);
+      if (!mountInTitleBar(node)) return null;
       let active2 = true;
       let busy = false;
       let previousKey = null;
@@ -9505,27 +9520,16 @@
   function integer(value, minimum = 0) {
     return Number.isSafeInteger(value) && value >= minimum ? value : "";
   }
-  function titleOf2(entity) {
-    return typeof entity?.title === "string" ? entity.title.trim() : "";
-  }
   function nameOf(entity) {
     const name = typeof entity?.name === "string" ? entity.name.trim() : "";
-    return name || titleOf2(entity);
-  }
-  function yearOf2(entity) {
-    return integer(entity?.year, 1);
-  }
-  function usableId2(value) {
-    if (typeof value === "string" && value.trim()) return value.trim();
-    if (Number.isSafeInteger(value) && value > 0) return String(value);
-    return "";
+    return name || titleOf(entity);
   }
   function idSet(entity) {
     const ids = entity?.ids;
     return {
-      trakt: usableId2(ids?.trakt),
-      imdb: usableId2(ids?.imdb),
-      tmdb: usableId2(ids?.tmdb)
+      trakt: usableId(ids?.trakt) ?? "",
+      imdb: usableId(ids?.imdb) ?? "",
+      tmdb: usableId(ids?.tmdb) ?? ""
     };
   }
   function normalizeExportItem(raw) {
@@ -9540,23 +9544,23 @@
     let episode = "";
     let ids;
     if (kind === "movie" || kind === "show") {
-      title = titleOf2(entity);
-      year = yearOf2(entity);
+      title = titleOf(entity) ?? "";
+      year = yearOf(entity, 1) ?? "";
       ids = idSet(entity);
     } else if (kind === "person") {
-      title = nameOf(entity);
+      title = nameOf(entity) ?? "";
       ids = idSet(entity);
     } else {
       const show = raw.show ?? entity.show;
-      const showTitle = titleOf2(show);
-      const showYear = yearOf2(show);
+      const showTitle = titleOf(show) ?? "";
+      const showYear = yearOf(show, 1) ?? "";
       year = showYear;
       ids = idSet(entity);
       if (kind === "season") {
-        title = showTitle || titleOf2(entity);
+        title = showTitle || (titleOf(entity) ?? "");
         season = integer(entity.number);
       } else {
-        title = [showTitle, titleOf2(entity)].filter(Boolean).join(" — ");
+        title = [showTitle, titleOf(entity)].filter(Boolean).join(" — ");
         season = integer(entity.season);
         episode = integer(entity.number, 1);
       }
@@ -9602,18 +9606,7 @@
   // src/features/csv-export/styles.js
   var CSS10 = String.raw`
 .ogt-csv-export { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-stat, 6px) 10px; min-inline-size: 0; }
-.ogt-csv-export__button {
-  display: inline-flex; align-items: center; justify-content: center; block-size: var(--control-height, 36px);
-  padding: 0 var(--button-padding-inline, 12px); border: 1px solid light-dark(#d4d4d4, #3b3b3b);
-  border-radius: var(--radius-control, 6px); background: light-dark(#f2f2f2, #232323);
-  color: light-dark(#333, #e6e6e6); font: inherit; font-size: var(--font-size-button-secondary, 13px);
-  white-space: nowrap; cursor: pointer;
-}
-.ogt-csv-export__button:is(:hover, :focus-visible):not(:disabled) {
-  border-color: var(--brand-primary, #ed1c24); color: light-dark(#111, #fff);
-}
-.ogt-csv-export__button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-.ogt-csv-export__button:disabled { opacity: .6; cursor: default; }
+${titleBarButtonCss("ogt-csv-export__button")}
 .ogt-csv-export__status { margin: 0; color: var(--color-stat-noun, light-dark(#767676, #9a9a9a)); font-size: 12px; line-height: 1.4; }
 .ogt-csv-export__status:empty { display: none; }
 `;
@@ -9647,8 +9640,7 @@
     authScoped: true,
     match: (route) => route.name === "list" || route.name === "watchlist" || route.name === "official-list",
     mount(route) {
-      const actions = document.querySelector("section.title-row .title-bar .actions");
-      if (!actions || document.getElementById(ID6)) return null;
+      if (document.getElementById(ID6)) return null;
       const watchlist2 = route.name === "watchlist";
       const official = route.name === "official-list";
       const target = watchlist2 ? "watchlist" : "list";
@@ -9662,8 +9654,7 @@
       });
       const status = el("span", { class: "ogt-csv-export__status", role: "status", "aria-live": "polite" });
       const node = el("div", { id: ID6, class: "ogt-csv-export" }, button2, status);
-      const share = [...actions.children].find((child) => child.classList.contains("share"));
-      actions.insertBefore(node, share ?? null);
+      if (!mountInTitleBar(node)) return null;
       let active2 = true;
       let busy = false;
       async function run() {

@@ -1,7 +1,6 @@
-import { rememberNativeResources, nativeRootImports, discoverNativeModule } from './native-modules.js';
+import { nativeRootImports, discoverNativeModule } from './native-modules.js';
 
 let discovery;
-export const rememberToastResources = rememberNativeResources;
 
 export function nativeToastImports(source, layoutUrl, loaded) {
   return nativeRootImports(source, layoutUrl, loaded, alias =>
