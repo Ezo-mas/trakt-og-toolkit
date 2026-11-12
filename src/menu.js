@@ -88,7 +88,7 @@ function canRelabel() {
   return typeof GM_unregisterMenuCommand === 'function';
 }
 
-export function toggleCaption(label, enabled, relabel = canRelabel()) {
+function toggleCaption(label, enabled, relabel = canRelabel()) {
   return relabel ? `${enabled ? ON : OFF} ${label}` : `Toggle ${label}`;
 }
 

@@ -43,7 +43,7 @@ function icon(d, className, { stroke = false } = {}) {
 }
 
 /** The chart itself: a header link to og's stats page, then ten bars with counts above and scores below. */
-export function renderChart(ratings, href) {
+function renderChart(ratings, href) {
   const top = mostGiven(ratings.counts);
   const heights = barHeights(ratings.counts);
 
@@ -87,7 +87,7 @@ export function renderChart(ratings, href) {
 }
 
 /** The stat tiles under the chart, shown only when there is room for them as well. */
-export function renderTiles(ratings, watchers = null) {
+function renderTiles(ratings, watchers = null) {
   return el(
     'ul',
     { class: 'ogt-sr-tiles', 'aria-label': 'Ratings summary' },

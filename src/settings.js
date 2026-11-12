@@ -15,14 +15,10 @@ export function setClientId(value) {
   return clean;
 }
 
-export function hasClientId() {
-  return getClientId().length > 0;
-}
-
 export const SERVER_KEYS = ['jellyfin', 'emby', 'radarr', 'sonarr', 'seerr'];
 
 /** True only for templates that begin with one of the configured server keys. */
-export function isServerTemplateUrl(value) {
+function isServerTemplateUrl(value) {
   const match = String(value || '').trim().match(/^\{([a-z][a-z0-9_-]*)\}\//);
   return Boolean(match && SERVER_KEYS.includes(match[1]));
 }
@@ -145,7 +141,7 @@ export function applyDebugSetting() {
 }
 
 /** New features are enabled unless their id is explicitly stored as disabled. */
-export function getDisabledFeatures() {
+function getDisabledFeatures() {
   const stored = getValue(STORAGE.features, []);
   if (!Array.isArray(stored)) return [];
   return [...new Set(stored.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim()))];

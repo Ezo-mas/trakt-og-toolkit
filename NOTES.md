@@ -2,6 +2,19 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-12: refactor 35a — shared helpers and dead code
+
+- `usableId`, `titleOf` and `yearOf` moved to `src/core/entities.js`; they return null on a miss. csv-export turns
+  them back into `''` cells as it builds a row and asks `yearOf(entity, 1)` for its year ≥ 1 rule, while the
+  watchlist picker keeps accepting any safe integer. `test/entities.test.js` pins both year ranges.
+- `mountInTitleBar(node)` in `src/ui/title-bar.js` now owns the `section.title-row .title-bar .actions` lookup and
+  the insert-before-`.share` rule for both list features; it returns false when the bar is absent.
+- `titleBarButtonCss(className)` emits the button rules the exporter and picker had copied. Each feature passes its
+  existing class, so the markup and the emitted CSS are unchanged (checked byte for byte).
+- Removed exports nothing imported from settings, menu, native-toast, summary-ratings, month-review,
+  custom-links/resolve and csv-export; `hasClientId` and the `rememberToastResources` alias were dead and deleted.
+  The rebuilt bundle is 0.8 kB smaller.
+
 ## 2026-11-11: menu toggle state (feature 37)
 
 - Feature toggles and debug logging read `✅ <feature>` or `⬜ <feature>` in the userscript menu instead of

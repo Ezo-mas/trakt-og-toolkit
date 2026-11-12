@@ -9,6 +9,7 @@ import { debugError } from '../../core/log.js';
 import { parseRoute } from '../../core/router.js';
 import { decodePathPart } from '../../core/text.js';
 import { listReadFailureHint } from '../../core/trakt.js';
+import { mountInTitleBar } from '../../ui/title-bar.js';
 import { exportApi } from './api.js';
 import { exportFilename, exportItems, toCsv } from './data.js';
 import { CSS } from './styles.js';
@@ -46,8 +47,7 @@ export const csvExport = {
   authScoped: true,
   match: (route) => route.name === 'list' || route.name === 'watchlist' || route.name === 'official-list',
   mount(route) {
-    const actions = document.querySelector('section.title-row .title-bar .actions');
-    if (!actions || document.getElementById(ID)) return null;
+    if (document.getElementById(ID)) return null;
 
     const watchlist = route.name === 'watchlist';
     const official = route.name === 'official-list';
@@ -63,8 +63,7 @@ export const csvExport = {
     });
     const status = el('span', { class: 'ogt-csv-export__status', role: 'status', 'aria-live': 'polite' });
     const node = el('div', { id: ID, class: 'ogt-csv-export' }, button, status);
-    const share = [...actions.children].find((child) => child.classList.contains('share'));
-    actions.insertBefore(node, share ?? null);
+    if (!mountInTitleBar(node)) return null;
 
     let active = true;
     let busy = false;
