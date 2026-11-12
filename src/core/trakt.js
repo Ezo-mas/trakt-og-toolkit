@@ -65,13 +65,18 @@ function ogAuth() {
   } : null;
 }
 
+/** The per-sign-in id tells a refresh (kept) from another tab's sign-in to a different account. */
+function ownAuth(tokens) {
+  return {
+    kind: 'own', clientId: tokens.client_id, accessToken: tokens.access_token,
+    expiresAt: tokens.expires_at, accountKey: tokens.session_id ?? null,
+  };
+}
+
 /** The toolkit's own sign-in wins when present; og's session is the automatic fallback. */
 function currentAuth() {
   const tokens = readTokens();
-  if (tokens) return {
-    kind: 'own', clientId: tokens.client_id, accessToken: tokens.access_token,
-    expiresAt: tokens.expires_at, accountKey: null,
-  };
+  if (tokens) return ownAuth(tokens);
   return ogAuth();
 }
 
@@ -85,7 +90,7 @@ function observedGeneration() {
   return getSessionGeneration();
 }
 
-/** A toolkit refresh changes its token but not the session; an og account change is different. */
+/** A toolkit refresh changes its token but not the session; a new sign-in or og account is different. */
 function sameAuth(a, b) {
   return Boolean(a && b) && a.kind === b.kind && a.clientId === b.clientId && a.accountKey === b.accountKey;
 }
@@ -168,7 +173,7 @@ async function ensureAuth() {
   const tokens = readTokens();
   if (tokens) {
     const next = tokens.expires_at <= Date.now() + 60000 ? await refreshTokens() : tokens;
-    return { kind: 'own', clientId: next.client_id, accessToken: next.access_token, accountKey: null };
+    return ownAuth(next);
   }
   const og = ogAuth();
   if (!og) throw signedOutError();

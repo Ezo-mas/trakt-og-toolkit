@@ -2,6 +2,16 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-12: toolkit sign-in replaced by another tab
+
+- Fixes the limitation noted under 35d. Toolkit tokens used to carry no account identity, so `sameAuth` treated
+  any two toolkit sessions with the same client ID as one. If another tab signed out and in again (to the same or
+  another account) before this tab saw the sign-out, an in-flight request could return the old session's data.
+- Each device sign-in now stores a random `session_id` with its tokens. A refresh copies it forward, so it still
+  counts as the same session; a new sign-in in any tab gets a new one, and `sameAuth` compares it like og's account
+  key. In-flight reads and writes then throw the existing "session changed" error.
+- Tokens saved before this change have no id. They keep working, and the protection starts at the next sign-in.
+
 ## 2026-11-12: refactor 35d — authenticated Trakt transport
 
 - `core/write-queue.js` owns FIFO scheduling, dispatch pacing, cancellation waits and the 429 retry policy.
@@ -11,7 +21,7 @@ Working notes and known issues. Newest first.
   `oauth.js`; aborting that timer resolves, while aborting a queued write's timer rejects.
 - Tests grew from 563 to 578 and the live drift output matched the baseline. Local Chromium and Firefox smoke
   checks used mocked Trakt responses and a real cross-tab og storage event. Live Violentmonkey checks are pending.
-- Existing limitation reproduced on main and 35d: if another tab signs out and back in with the same toolkit
+- Existing limitation reproduced on main and 35d (since fixed by a per-sign-in session id; see the entry above): if another tab signs out and back in with the same toolkit
   client ID before a pending request observes the sign-out, the transport generation can stay the same and an
   old response can pass its session check.
 

@@ -442,3 +442,24 @@ test('a write retries after exactly a minute when Retry-After is at the wait lim
   await write;
   assert.deepEqual(calls.map((call) => call.time), [23_000_000, 23_060_000]);
 });
+
+test("another tab's toolkit sign-in to a different account abandons an in-flight request", async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 30_000_000 });
+  reset();
+  storage.set(STORAGE.tokens, { ...storage.get(STORAGE.tokens), session_id: 'account-a' });
+  const pending = [];
+  mockTransport((call) => { pending.push(call); return null; });
+  const read = apiAuth('GET', '/users/me');
+  const write = apiAuth('POST', '/sync/history', {});
+  const readRejection = assert.rejects(read, /session changed/);
+  const writeRejection = assert.rejects(write, /session changed/);
+  await settle();
+  assert.equal(calls.length, 2);
+  // Another tab signs in to account B under the same client ID; this tab never sees a sign-out.
+  storage.set(STORAGE.tokens, {
+    access_token: 'other-access', refresh_token: 'other-refresh', client_id: 'client',
+    expires_at: Date.now() + 3600000, session_id: 'account-b',
+  });
+  for (const call of pending) call.onload({ status: 200, responseText: JSON.stringify({ username: 'account-a' }), responseHeaders: '' });
+  await Promise.all([readRejection, writeRejection]);
+});

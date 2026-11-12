@@ -258,3 +258,21 @@ test('authenticated requests, refresh, sign-out and sanitized failures', async (
     await assert.rejects(apiAuth('GET', '/users/me'), /Signed out/);
   });
 });
+
+test('each device sign-in gets its own session id and a refresh keeps it', async (t) => {
+  reset(); t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 100000 });
+  const signInOnce = async () => {
+    mock((r) => r.url.endsWith('/code') ? { status: 200, body: codes } : { status: 200, body: token() });
+    const flow = oauth.signIn();
+    await settle(); t.mock.timers.tick(2000); await flow;
+    return storage.get(STORAGE.tokens).session_id;
+  };
+  const first = await signInOnce();
+  assert.match(first, /^[0-9a-f]{32}$/);
+  mock(() => ({ status: 200, body: token('rotated-access', 'rotated-refresh') }));
+  await oauth.refreshTokens();
+  assert.equal(storage.get(STORAGE.tokens).access_token, 'rotated-access');
+  assert.equal(storage.get(STORAGE.tokens).session_id, first);
+  const second = await signInOnce();
+  assert.notEqual(second, first);
+});

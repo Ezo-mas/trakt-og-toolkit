@@ -3124,7 +3124,12 @@
   function getSessionGeneration() {
     return readTokens() ? `own:${generation}` : `og:${generation}:${getOgSessionRevision()}`;
   }
-  function saveTokens(text3, clientId) {
+  function newSessionId() {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  function saveTokens(text3, clientId, sessionId) {
     let t;
     try {
       t = JSON.parse(text3);
@@ -3137,6 +3142,7 @@
       access_token: t.access_token,
       refresh_token: t.refresh_token,
       client_id: clientId,
+      session_id: sessionId,
       expires_at: (t.created_at == null ? Date.now() : t.created_at * 1e3) + t.expires_in * 1e3
     };
     setPrivateValue(STORAGE.tokens, tokens);
@@ -3173,7 +3179,7 @@
           throw authError("Signed out; sign in to Trakt.");
         }
         if (r.status !== 200) throw authError("Trakt session expired; sign in again.", r.status);
-        return saveTokens(r.text, t.client_id);
+        return saveTokens(r.text, t.client_id, t.session_id ?? null);
       } catch (error) {
         if (epoch !== generation) {
           if (error?.status === 502) throw authError("Signed out locally; token revocation failed.", 502);
@@ -3251,7 +3257,7 @@
           return;
         }
         if (result.status === 200) {
-          saveTokens(result.text, clientId);
+          saveTokens(result.text, clientId, newSessionId());
           generation += 1;
           notifyAuthChange();
           emit("Signed in to Trakt.");
@@ -3426,15 +3432,18 @@
       accountKey: session.accountKey
     } : null;
   }
-  function currentAuth() {
-    const tokens = readTokens();
-    if (tokens) return {
+  function ownAuth(tokens) {
+    return {
       kind: "own",
       clientId: tokens.client_id,
       accessToken: tokens.access_token,
       expiresAt: tokens.expires_at,
-      accountKey: null
+      accountKey: tokens.session_id ?? null
     };
+  }
+  function currentAuth() {
+    const tokens = readTokens();
+    if (tokens) return ownAuth(tokens);
     return ogAuth();
   }
   function observedGeneration() {
@@ -3504,7 +3513,7 @@
     const tokens = readTokens();
     if (tokens) {
       const next = tokens.expires_at <= Date.now() + 6e4 ? await refreshTokens() : tokens;
-      return { kind: "own", clientId: next.client_id, accessToken: next.access_token, accountKey: null };
+      return ownAuth(next);
     }
     const og = ogAuth();
     if (!og) throw signedOutError();

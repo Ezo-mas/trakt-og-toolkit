@@ -67,7 +67,14 @@ export function isSignedIn() {
 export function getSessionGeneration() {
   return readTokens() ? `own:${generation}` : `og:${generation}:${getOgSessionRevision()}`;
 }
-function saveTokens(text, clientId) {
+/** Identifies one device sign-in, so a different account signed in by another tab under the same
+ * client ID is never mistaken for this session. A refresh keeps it. */
+function newSessionId() {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+function saveTokens(text, clientId, sessionId) {
   let t;
   try { t = JSON.parse(text); } catch { /* sanitized below */ }
   if (!t || typeof t.access_token !== 'string' || !t.access_token ||
@@ -77,7 +84,7 @@ function saveTokens(text, clientId) {
     throw authError('Trakt returned invalid token data; sign in again.');
   }
   const tokens = {
-    access_token: t.access_token, refresh_token: t.refresh_token, client_id: clientId,
+    access_token: t.access_token, refresh_token: t.refresh_token, client_id: clientId, session_id: sessionId,
     expires_at: (t.created_at == null ? Date.now() : t.created_at * 1000) + t.expires_in * 1000,
   };
   setPrivateValue(STORAGE.tokens, tokens);
@@ -113,7 +120,7 @@ export function refreshTokens() {
         throw authError('Signed out; sign in to Trakt.');
       }
       if (r.status !== 200) throw authError('Trakt session expired; sign in again.', r.status);
-      return saveTokens(r.text, t.client_id);
+      return saveTokens(r.text, t.client_id, t.session_id ?? null);
     } catch (error) {
       if (epoch !== generation) {
         if (error?.status === 502) throw authError('Signed out locally; token revocation failed.', 502);
@@ -183,7 +190,7 @@ export async function signIn({ onCode = () => {}, onMessage = () => {} } = {}) {
       if (!current()) return;
       if (Date.now() >= deadline) { emit(DEVICE_MESSAGES[410]); return; }
       if (result.status === 200) {
-        saveTokens(result.text, clientId);
+        saveTokens(result.text, clientId, newSessionId());
         // A new session invalidates writes queued by any earlier one.
         generation += 1;
         notifyAuthChange();
