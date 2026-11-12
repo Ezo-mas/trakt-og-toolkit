@@ -2,6 +2,17 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-13: README with screenshots (item 36)
+
+- The README keeps install and one short section per feature with a screenshot. Custom-link presets and templates,
+  sign-in and API detail, and development moved to `docs/`. Screenshots are crops from a signed-in 1920 px Zen window,
+  cut below og's top bar so no browser chrome or avatar shows. Photo-heavy crops are WebP.
+- List previews have no screenshot yet: the rating corners stopped showing on live og, which is still being looked
+  into.
+- Cloudflare now answers every non-browser request to og.trakt.tv with its "Just a moment…" challenge, from a home
+  connection too. The local drift timer's 2026-11-12 run saved only challenge pages and exited as "unreachable", so
+  `npm run drift` currently checks nothing.
+
 ## 2026-11-12: og sign-in for all Trakt API features (feature 38)
 
 - This replaces the two sign-in paths from features 2 and 30 and refactor 35d. og's session now serves every Trakt API
