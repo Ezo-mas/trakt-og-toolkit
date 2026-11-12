@@ -2,6 +2,15 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-13: list preview corners and month card fanart
+
+- og's list fans now load posters from short URLs (`media.trakt.tv/shows/137178/thumb/poster.webp`) instead of the
+  API's padded `images/shows/000/137/178/posters/…` paths, so list previews matched no slot: no title links and no
+  rating corners. `readPosterRoute` reads both forms. Live check from the console on 2026-11-13: 25 slots, 0 matched.
+- The month card's fanart covered og's full-bleed band, so on a 1920 px window it showed a thin middle strip of the
+  image. It now spans the content column like classic's card, fades at its sides and keeps the top of the image:
+  about half its height shows instead of a third (checked on a labelled test image at 1900 px).
+
 ## 2026-11-12: og sign-in for all Trakt API features (feature 38)
 
 - This replaces the two sign-in paths from features 2 and 30 and refactor 35d. og's session now serves every Trakt API
