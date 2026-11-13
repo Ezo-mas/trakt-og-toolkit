@@ -1,6 +1,7 @@
 /** Tampermonkey/Violentmonkey menu entries. No-ops when the API is absent. */
 import { promptAddCustomLink, promptRemoveCustomLink } from './actions.js';
 import { applyDebugSetting, isDebug, setDebug, getCustomLinks, isFeatureEnabled, setFeatureEnabled } from './settings.js';
+import { driftReports } from './core/drift.js';
 import { cacheSize, clearCache } from './core/http.js';
 import { isSignedIn, ping } from './core/trakt.js';
 import { toast } from './ui/shell.js';
@@ -54,11 +55,15 @@ export function registerMenu(getRouteKey = () => location.pathname, features = [
   GM_registerMenuCommand('Add custom link', promptAddCustomLink);
   GM_registerMenuCommand('Remove custom link', promptRemoveCustomLink);
   GM_registerMenuCommand('Diagnostics', () => {
+    const reports = driftReports();
+    const count = reports.reduce((total, entry) => total + entry.problems.length, 0);
+    const pages = count ? ` (${reports.map((entry) => entry.page).join(', ')})` : '';
     const summary =
       `v${VERSION} · ${getRouteKey()} · og ${isSignedIn() ? 'signed in' : 'signed out'} · ` +
-      `${getCustomLinks().length} custom links · ${cacheSize()} cached responses`;
+      `${getCustomLinks().length} custom links · ${cacheSize()} cached responses · drift: ${count} problems${pages}`;
     toast(summary);
     console.info('[OGT]', summary);
+    if (reports.length) console.table(reports.map((entry) => ({ ...entry, problems: entry.problems.join(' | ') })));
   });
   GM_registerMenuCommand('Clear API cache', () => {
     clearCache();

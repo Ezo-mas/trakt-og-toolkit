@@ -20,6 +20,8 @@ function heart() {
 export const yourRatings = {
   id: 'your-ratings', css: CSS, authScoped: true,
   match: (route) => route.kind === 'show' && ['title', 'seasons'].includes(route.name) && isSignedIn(),
+  // og links a show's seasons in its sidebar only when it has any; without them there is no section to mount on.
+  expectMount: (route) => route.name !== 'title' || Boolean(document.querySelector('a[href="#seasons"]')),
   mount(route) {
     const section = document.querySelector('section.seasons');
     if (!section || document.getElementById('ogt-your-ratings')) return null;

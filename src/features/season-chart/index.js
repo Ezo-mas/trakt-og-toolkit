@@ -1,4 +1,5 @@
 import { el } from '../../core/dom.js';
+import { seasonHasEpisodes } from '../../core/drift-checks.js';
 import { debugError } from '../../core/log.js';
 import {
   averageRating,
@@ -212,6 +213,8 @@ export const seasonChart = {
   match(route) {
     return route.kind === 'show' && route.name === 'season';
   },
+  // An empty season has no episodes section to mount on.
+  expectMount: () => seasonHasEpisodes(document),
   mount(route) {
     if (document.getElementById(PANEL_ID)) return null;
     const episodesSection = document.querySelector('section.episodes');

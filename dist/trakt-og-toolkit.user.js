@@ -33,6 +33,235 @@
   var NAME = "Trakt OG Toolkit";
   var VERSION = "0.4.0";
 
+  // src/core/drift-checks.js
+  function seasonHasEpisodes(document2) {
+    const link = document2.querySelector('a[href="#episodes"]');
+    const count2 = link ? Number.parseInt(link.textContent.replace(/[^\d]/g, ""), 10) : Number.NaN;
+    return count2 !== 0;
+  }
+  var SELECTORS = [
+    { feature: "hydration gate", sampleOnly: true, pages: ["movie", "show", "season", "episode", "person"], selector: "inline script containing node_ids: [", kind: "hydration" },
+    { feature: "custom links", ids: ["custom-links"], pages: ["movie", "show"], selector: ".summary-frame #overview .top" },
+    { feature: "custom links", ids: ["custom-links"], pages: ["movie", "show"], selector: ".summary-title h1" },
+    { feature: "custom links", ids: ["custom-links"], pages: ["movie", "show"], selector: ".summary-title .year" },
+    { feature: "custom links (ids)", ids: ["custom-links"], sampleOnly: true, pages: ["movie", "show"], selector: 'a[href*="themoviedb.org/"]' },
+    { feature: "custom links (ids)", ids: ["custom-links"], sampleOnly: true, pages: ["movie", "show"], selector: 'a[href*="imdb.com/title/"]' },
+    { feature: "custom links (sidebar)", ids: ["custom-links"], pages: ["movie", "show", "season", "episode"], selector: "aside.sidebar .summary-poster" },
+    { feature: "custom links (sidebar)", ids: ["custom-links"], pages: ["movie", "show", "season", "episode"], selector: "aside.sidebar ul.external-links" },
+    { feature: "custom links (watch now)", ids: ["custom-links"], sampleOnly: true, pages: ["movie", "show", "season", "episode"], selector: "aside.sidebar .watch-now + dialog .streaming-links" },
+    { feature: "custom links (phone watch now)", ids: ["custom-links"], sampleOnly: true, pages: ["movie", "show", "season", "episode"], selector: ".summary-frame .watch-now.phone + dialog .streaming-links" },
+    { feature: "custom links (season counts)", ids: ["custom-links"], sampleOnly: true, pages: ["show"], selector: 'a[href*="/seasons/"] span.subtitle' },
+    { feature: "custom links (show link)", ids: ["custom-links"], pages: ["season", "episode"], selector: '.title-tags a[href^="/shows/"]' },
+    { feature: "custom links (show ids)", ids: ["custom-links"], sampleOnly: true, pages: ["season", "episode"], selector: 'a[href*="themoviedb.org/tv/"]' },
+    { feature: "custom links (show ids)", ids: ["custom-links"], sampleOnly: true, pages: ["season"], selector: 'a[href*="imdb.com/title/"][href*="/episodes"]' },
+    { feature: "season chart", ids: ["season-chart"], when: seasonHasEpisodes, pages: ["season"], selector: "section.episodes" },
+    { feature: "season chart", ids: ["season-chart"], sampleOnly: true, pages: ["season"], selector: "section.episodes article.row" },
+    { feature: "season chart", ids: ["season-chart"], when: "section.episodes article.row", pages: ["season"], selector: ".titles h3", firstRow: true },
+    { feature: "season chart", ids: ["season-chart"], when: "section.episodes article.row", pages: ["season"], selector: ".titles .number", firstRow: true },
+    { feature: "season chart", ids: ["season-chart"], sampleOnly: true, when: "section.episodes article.row", pages: ["season"], selector: ".rating-trigger .value", firstRow: true },
+    { feature: "playback badge", ids: ["playback"], signedIn: true, pages: ["movie", "episode"], selector: ".summary-frame #overview .top" },
+    // Feature 31 sits at the end of the details column and measures it against the action stack beside it.
+    { feature: "ratings chart", ids: ["summary-ratings"], signedIn: true, pages: ["movie", "show", "season", "episode"], selector: ".summary-frame #overview .top > .details" },
+    { feature: "ratings chart", ids: ["summary-ratings"], signedIn: true, pages: ["movie", "show", "season", "episode"], selector: ".summary-frame #overview .top > .actions" },
+    { feature: "pronunciation", ids: ["pronunciation"], pages: ["person"], selector: ".summary .summary-title h1", nonEmpty: true },
+    // Features 12 and 13 mount here; the picker trigger is also used for native refreshes.
+    { feature: "title actions", ids: ["library", "watchlist"], signedIn: true, pages: ["movie", "show", "season", "episode"], selector: ".summary-frame #overview .top .actions" },
+    { feature: "watchlist list control", ids: ["watchlist"], signedIn: true, pages: ["movie", "show", "season", "episode"], selector: ".summary-frame #overview .top .actions .list-control.summary" },
+    { feature: "watchlist picker trigger", ids: ["watchlist"], signedIn: true, pages: ["movie", "show", "season", "episode"], selector: '.list-control.summary button[aria-controls][aria-keyshortcuts~="ArrowDown"]' },
+    { feature: "watchlist card list controls", ids: ["watchlist-cards"], signedIn: true, pages: ["listing"], selector: ".quick-icons .list-control.card, .quick-icons button.action.list" },
+    { feature: "watchlist credit toolbar", ids: ["watchlist-credits"], signedIn: true, when: "#credits article", pages: ["person"], selector: "#credits .toolbar .controls" },
+    { feature: "watchlist credit rows", ids: ["watchlist-credits"], signedIn: true, when: "article.credit-row", pages: ["person"], selector: 'article.credit-row a.poster[href^="/movies/"], article.credit-row a.poster[href^="/shows/"]' },
+    { feature: "watchlist credit list controls", ids: ["watchlist-credits"], signedIn: true, when: "article.credit-row", pages: ["person"], selector: "article.credit-row .quick-icons .list-control.card, article.credit-row .quick-icons button.action.list" },
+    // Feature 33 mounts in the list's own title bar; og filters the same page with `?display=`.
+    { feature: "watchlist pick", ids: ["watchlist-pick"], pages: ["watchlist"], selector: "section.title-row .title-bar .actions" },
+    { feature: "watchlist pick (filter)", ids: ["watchlist-pick"], sampleOnly: true, pages: ["watchlist"], selector: 'a[href*="/watchlist?display=movie"]' },
+    { feature: "csv export", ids: ["csv-export"], pages: ["list", "official"], selector: "section.title-row .title-bar .actions" },
+    // Signed-in pages: og redirects these to sign-in without a session, so they come from `--signed-in <dir>`.
+    { feature: "playback overview", ids: ["playback"], signedIn: true, pages: ["progress"], selector: "section.progress" },
+    { feature: "month review", ids: ["month-review"], signedIn: true, pages: ["dashboard"], selector: "nav.ribbon" }
+  ];
+  function checkSelectors(document2, page, live) {
+    return SELECTORS.filter((check) => check.pages.includes(page) && (!live || !check.sampleOnly && (!check.signedIn || live.signedIn) && (!check.ids || check.ids.some(live.isEnabled)) && (!check.when || (typeof check.when === "function" ? check.when(document2) : document2.querySelector(check.when))))).map((check) => {
+      let matched;
+      if (check.kind === "hydration") {
+        matched = [...document2.scripts].some((script) => !script.hasAttribute("src") && /node_ids\s*:\s*\[/.test(script.textContent));
+      } else {
+        const root2 = check.firstRow ? document2.querySelector("section.episodes article.row") : document2;
+        const node = root2?.querySelector(check.selector);
+        matched = Boolean(node && (!check.nonEmpty || node.textContent.trim()));
+      }
+      return { feature: check.feature, selector: check.selector, ok: matched };
+    });
+  }
+  var PAGE_TYPES = /* @__PURE__ */ new Set([
+    ...SELECTORS.flatMap((check) => check.pages),
+    "lists",
+    "lists-collaborations",
+    "liked-lists",
+    "smart-lists",
+    "seasons"
+  ]);
+  function driftPageType(route) {
+    if (route.name === "other" && /^\/lists(?:\/|$)/.test(route.path)) return "lists";
+    const page = { title: route.kind, chart: "listing", "official-list": "official" }[route.name] ?? route.name;
+    return PAGE_TYPES.has(page) ? page : null;
+  }
+
+  // src/core/store.js
+  var NS = "ogt:";
+  function gm() {
+    if (typeof GM_getValue === "function" && typeof GM_setValue === "function") {
+      return {
+        get: (key, fallback) => GM_getValue(key, fallback),
+        set: (key, value) => GM_setValue(key, value),
+        remove: (key) => typeof GM_deleteValue === "function" ? GM_deleteValue(key) : GM_setValue(key, void 0)
+      };
+    }
+    return null;
+  }
+  var backend = gm();
+  function localKey(key) {
+    return NS + key;
+  }
+  function getValue(key, fallback = null) {
+    if (backend) {
+      const value = backend.get(key, fallback);
+      return value === void 0 ? fallback : value;
+    }
+    try {
+      const raw = localStorage.getItem(localKey(key));
+      return raw === null ? fallback : JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
+  }
+  function setValue(key, value) {
+    if (backend) {
+      backend.set(key, value);
+      return;
+    }
+    try {
+      localStorage.setItem(localKey(key), JSON.stringify(value));
+    } catch {
+    }
+  }
+  function removeValue(key) {
+    if (backend) {
+      backend.remove(key);
+      return;
+    }
+    try {
+      localStorage.removeItem(localKey(key));
+    } catch {
+    }
+  }
+  function onRemoteValueChange(key, callback) {
+    if (typeof GM_addValueChangeListener !== "function") return;
+    GM_addValueChangeListener(key, (_key, oldValue, newValue, remote) => {
+      if (remote) callback(oldValue, newValue);
+    });
+  }
+  var STORAGE = {
+    monthReview: (user, month) => `review.${encodeURIComponent(user)}.${month}`,
+    dismissedReview: (user) => `review.dismissed.${encodeURIComponent(user)}`,
+    customLinks: "watch.customLinks",
+    servers: "watch.servers",
+    features: "features.disabled",
+    debug: "debug",
+    drift: "drift.reports",
+    selection: (kind, id) => `selection.${kind}.${id}`
+  };
+  function getPrivateValue(key) {
+    return backend ? backend.get(key, null) : null;
+  }
+  function setPrivateValue(key, value) {
+    if (!backend) throw new Error("Private data requires userscript GM storage.");
+    backend.set(key, value);
+  }
+  function removePrivateValue(key) {
+    backend?.remove(key);
+  }
+
+  // src/core/log.js
+  var PREFIX = "[OGT]";
+  var verbose = false;
+  function setVerbose(value) {
+    verbose = Boolean(value);
+  }
+  function isVerbose() {
+    return verbose;
+  }
+  function info(...args) {
+    console.info(PREFIX, ...args);
+  }
+  function warn(...args) {
+    console.warn(PREFIX, ...args);
+  }
+  function debugError(label, error) {
+    if (verbose) console.warn(PREFIX, label, error);
+  }
+
+  // src/core/drift.js
+  function driftReports() {
+    return Object.values(getPrivateValue(STORAGE.drift) ?? {});
+  }
+  function saveDriftReport(page, problems, time = Date.now()) {
+    if (typeof GM_getValue !== "function" || typeof GM_setValue !== "function") return;
+    const reports = getPrivateValue(STORAGE.drift) ?? {};
+    if (!problems.length && !reports[page]) return;
+    if (problems.length) reports[page] = { page, version: VERSION, time, problems };
+    else delete reports[page];
+    setPrivateValue(STORAGE.drift, reports);
+  }
+  var DRIFT_QUIET_MS = 3e3;
+  var DRIFT_CONFIRM_MS = 1e4;
+  var DRIFT_MAX_WAIT_MS = 2e4;
+  function createDriftMonitor({ collect, report, currentKey }) {
+    const warned = /* @__PURE__ */ new Set();
+    let key;
+    let timer;
+    let cap;
+    let phase;
+    const firstPass = (page, route) => {
+      clearTimeout(timer);
+      clearTimeout(cap);
+      if (phase !== "quiet" || currentKey() !== route.key) return;
+      phase = "confirm";
+      const first = new Set(collect(page, route));
+      timer = setTimeout(() => {
+        if (currentKey() !== route.key) return;
+        phase = "done";
+        const problems = [...new Set(collect(page, route))].filter((problem) => first.has(problem));
+        const fresh = problems.filter((problem) => !warned.has(`${page}: ${problem}`));
+        for (const problem of fresh) warned.add(`${page}: ${problem}`);
+        report(page, problems, fresh);
+      }, DRIFT_CONFIRM_MS);
+    };
+    return (route) => {
+      const page = driftPageType(route);
+      if (route.key !== key) {
+        clearTimeout(timer);
+        clearTimeout(cap);
+        key = route.key;
+        phase = "quiet";
+        if (page) cap = setTimeout(() => firstPass(page, route), DRIFT_MAX_WAIT_MS);
+      }
+      if (phase !== "quiet" || !page) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => firstPass(page, route), DRIFT_QUIET_MS);
+    };
+  }
+  function collectDrift(document2, page, host, route, { headerSignedIn, hasSession, isEnabled }) {
+    const problems = checkSelectors(document2, page, { signedIn: headerSignedIn || hasSession, isEnabled }).filter((check) => !check.ok).map(({ feature, selector }) => `${feature}: ${selector}`);
+    problems.push(...host.problems(route));
+    if (headerSignedIn && !hasSession) problems.push("og session: signed-in header without a session entry");
+    return problems;
+  }
+  function reportDrift(page, problems, fresh) {
+    saveDriftReport(page, problems);
+    for (const problem of fresh) warn(`og drift on ${page} pages: ${problem}`);
+  }
+
   // src/ui/styles.js
   var CSS = String.raw`
 .ogt-panel {
@@ -1411,25 +1640,6 @@
     };
   }
 
-  // src/core/log.js
-  var PREFIX = "[OGT]";
-  var verbose = false;
-  function setVerbose(value) {
-    verbose = Boolean(value);
-  }
-  function isVerbose() {
-    return verbose;
-  }
-  function info(...args) {
-    console.info(PREFIX, ...args);
-  }
-  function warn(...args) {
-    console.warn(PREFIX, ...args);
-  }
-  function debugError(label, error) {
-    if (verbose) console.warn(PREFIX, label, error);
-  }
-
   // src/features/host.js
   var RETRY_AFTER_MS = 400;
   function createFeatureHost(features, { isEnabled = () => true } = {}) {
@@ -1462,7 +1672,7 @@
         if (entry) {
           const sameRoute = entry.routeKey === route.key;
           if (sameRoute && entry.node && !isDetached(entry.node)) continue;
-          if (Date.now() - entry.attemptAt < RETRY_AFTER_MS) continue;
+          if (sameRoute && Date.now() - entry.attemptAt < RETRY_AFTER_MS) continue;
           unmount(feature.id);
           entry = null;
         }
@@ -1507,6 +1717,20 @@
     }
     sync.reset = () => {
       for (const feature of features) if (feature.authScoped) unmount(feature.id, "authchange");
+    };
+    sync.problems = (route) => {
+      const problems = [];
+      for (const feature of features) {
+        if (!isEnabled(feature.id) || !feature.match(route)) continue;
+        const entry = mounted.get(feature.id);
+        if (!entry?.node || entry.routeKey !== route.key || isDetached(entry.node)) {
+          if (feature.expectMount?.(route) !== false) problems.push(`${feature.id}: did not mount`);
+        } else if (feature.health) {
+          const { ok, detail } = feature.health(route);
+          if (!ok) problems.push(`${feature.id}: ${detail}`);
+        }
+      }
+      return problems;
     };
     return sync;
   }
@@ -1659,80 +1883,6 @@
       finished = true;
       cleanup();
     };
-  }
-
-  // src/core/store.js
-  var NS = "ogt:";
-  function gm() {
-    if (typeof GM_getValue === "function" && typeof GM_setValue === "function") {
-      return {
-        get: (key, fallback) => GM_getValue(key, fallback),
-        set: (key, value) => GM_setValue(key, value),
-        remove: (key) => typeof GM_deleteValue === "function" ? GM_deleteValue(key) : GM_setValue(key, void 0)
-      };
-    }
-    return null;
-  }
-  var backend = gm();
-  function localKey(key) {
-    return NS + key;
-  }
-  function getValue(key, fallback = null) {
-    if (backend) {
-      const value = backend.get(key, fallback);
-      return value === void 0 ? fallback : value;
-    }
-    try {
-      const raw = localStorage.getItem(localKey(key));
-      return raw === null ? fallback : JSON.parse(raw);
-    } catch {
-      return fallback;
-    }
-  }
-  function setValue(key, value) {
-    if (backend) {
-      backend.set(key, value);
-      return;
-    }
-    try {
-      localStorage.setItem(localKey(key), JSON.stringify(value));
-    } catch {
-    }
-  }
-  function removeValue(key) {
-    if (backend) {
-      backend.remove(key);
-      return;
-    }
-    try {
-      localStorage.removeItem(localKey(key));
-    } catch {
-    }
-  }
-  function onRemoteValueChange(key, callback) {
-    if (typeof GM_addValueChangeListener !== "function") return;
-    GM_addValueChangeListener(key, (_key, oldValue, newValue, remote) => {
-      if (remote) callback(oldValue, newValue);
-    });
-  }
-  var STORAGE = {
-    monthReview: (user, month) => `review.${encodeURIComponent(user)}.${month}`,
-    dismissedReview: (user) => `review.dismissed.${encodeURIComponent(user)}`,
-    customLinks: "watch.customLinks",
-    servers: "watch.servers",
-    features: "features.disabled",
-    debug: "debug",
-    selection: (kind, id) => `selection.${kind}.${id}`
-  };
-  function getPrivateValue(key) {
-    return backend ? backend.get(key, null) : null;
-  }
-  function setPrivateValue(key, value) {
-    if (!backend) throw new Error("Private data requires userscript GM storage.");
-    backend.set(key, value);
-  }
-  function removePrivateValue(key) {
-    backend?.remove(key);
   }
 
   // src/settings.js
@@ -4162,6 +4312,14 @@ ${generation2}`,
     match(route) {
       return route.kind === "movie" || route.kind === "show" || route.kind === "person";
     },
+    expectMount: (route) => Boolean(route.id) && ["title", "season", "episode", "person"].includes(route.name),
+    health(route) {
+      if (!["title", "season", "episode", "person"].includes(route.name) || !document.querySelector('ul.external-links a[href*="themoviedb.org/"], ul.external-links a[href*="imdb.com/"]')) {
+        return { ok: true };
+      }
+      const meta = route.kind === "person" ? readPersonData(document, route) : readTitleData(document, route);
+      return { ok: Boolean(meta.tmdb || meta.imdb || meta.episodeImdb), detail: "external links found but no TMDb or IMDb ID read" };
+    },
     mount(route) {
       if (document.getElementById(PANEL_ID)) return null;
       const meta = route.kind === "person" ? readPersonData(document, route) : readTitleData(document, route);
@@ -5150,6 +5308,8 @@ ${generation2}`,
     css: CSS4,
     authScoped: true,
     match: (route) => route.kind === "show" && ["title", "seasons"].includes(route.name) && isSignedIn(),
+    // og links a show's seasons in its sidebar only when it has any; without them there is no section to mount on.
+    expectMount: (route) => route.name !== "title" || Boolean(document.querySelector('a[href="#seasons"]')),
     mount(route) {
       const section = document.querySelector("section.seasons");
       if (!section || document.getElementById("ogt-your-ratings")) return null;
@@ -5589,6 +5749,8 @@ ${generation2}`,
     match(route) {
       return route.kind === "show" && route.name === "season";
     },
+    // An empty season has no episodes section to mount on.
+    expectMount: () => seasonHasEpisodes(document),
     mount(route) {
       if (document.getElementById(PANEL_ID2)) return null;
       const episodesSection = document.querySelector("section.episodes");
@@ -7601,6 +7763,10 @@ ${generation2}`,
     match(route) {
       return ["lists", "lists-collaborations", "liked-lists", "smart-lists"].includes(route.name) || /^\/users\/[^/]+\/(?:lists|smart-lists)(?:\/|$)/.test(route.path) || /^\/lists(?:\/|$)/.test(route.path);
     },
+    health() {
+      const slots = [...document.querySelectorAll(SLOT)].filter((slot) => slot.querySelector("img.poster[src]"));
+      return { ok: !slots.length || slots.some(readListPoster), detail: "posters found but none recognised" };
+    },
     mount() {
       if (!document.body || document.getElementById(ID2)) return null;
       const marker = el("span", { id: ID2, hidden: true });
@@ -9508,9 +9674,13 @@ MIT licensed.`);
     GM_registerMenuCommand("Add custom link", promptAddCustomLink);
     GM_registerMenuCommand("Remove custom link", promptRemoveCustomLink);
     GM_registerMenuCommand("Diagnostics", () => {
-      const summary2 = `v${VERSION} · ${getRouteKey()} · og ${isSignedIn() ? "signed in" : "signed out"} · ${getCustomLinks().length} custom links · ${cacheSize()} cached responses`;
+      const reports = driftReports();
+      const count2 = reports.reduce((total, entry) => total + entry.problems.length, 0);
+      const pages = count2 ? ` (${reports.map((entry) => entry.page).join(", ")})` : "";
+      const summary2 = `v${VERSION} · ${getRouteKey()} · og ${isSignedIn() ? "signed in" : "signed out"} · ${getCustomLinks().length} custom links · ${cacheSize()} cached responses · drift: ${count2} problems${pages}`;
       toast(summary2);
       console.info("[OGT]", summary2);
+      if (reports.length) console.table(reports.map((entry) => ({ ...entry, problems: entry.problems.join(" | ") })));
     });
     GM_registerMenuCommand("Clear API cache", () => {
       clearCache();
@@ -9580,6 +9750,25 @@ MIT licensed.`);
     let route = parseRoute();
     let host = null;
     let canMount = false;
+    const monitor = createDriftMonitor({
+      currentKey: () => parseRoute().key,
+      collect: (page, current) => {
+        const hasSession = Boolean(readOgSession());
+        const headerSignedIn = Boolean(document.querySelector("header.top-nav .profile"));
+        return collectDrift(document, page, host, current, {
+          headerSignedIn,
+          hasSession,
+          isEnabled: isFeatureEnabled
+        });
+      },
+      report: (page, problems, fresh) => {
+        reportDrift(page, problems, fresh);
+        if (fresh.length && isDebug()) {
+          const more = fresh.length > 1 ? ` (+${fresh.length - 1} more, see Diagnostics)` : "";
+          toast(`og drift on ${page} pages: ${fresh[0]}${more}`, { duration: 1e4 });
+        }
+      }
+    });
     const sync = () => {
       if (!canMount || !host) return;
       readOgSession();
@@ -9592,6 +9781,7 @@ MIT licensed.`);
     };
     document.addEventListener(OG_SESSION_CHANGE_EVENT, authChanged);
     document.addEventListener("ogt:featurechange", sync);
+    let sveltePage = false;
     const openGate = () => {
       if (canMount) return;
       canMount = true;
@@ -9610,12 +9800,16 @@ MIT licensed.`);
           document.dispatchEvent(new CustomEvent("ogt:querychange", { detail: { route: route2, search } }));
         },
         // Every settled DOM change: re-mounts anything the app re-rendered away.
-        onSettle: sync
+        onSettle() {
+          sync();
+          if (sveltePage) monitor(route);
+        }
       });
       sync();
     };
     const scheduleMount = () => {
-      if (!isSvelteKit()) {
+      sveltePage = isSvelteKit();
+      if (!sveltePage) {
         openGate();
         return;
       }

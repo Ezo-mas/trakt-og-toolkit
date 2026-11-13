@@ -159,6 +159,15 @@ export const customLinks = {
   match(route) {
     return route.kind === 'movie' || route.kind === 'show' || route.kind === 'person';
   },
+  expectMount: (route) => Boolean(route.id) && ['title', 'season', 'episode', 'person'].includes(route.name),
+  health(route) {
+    if (!['title', 'season', 'episode', 'person'].includes(route.name) ||
+      !document.querySelector('ul.external-links a[href*="themoviedb.org/"], ul.external-links a[href*="imdb.com/"]')) {
+      return { ok: true };
+    }
+    const meta = route.kind === 'person' ? readPersonData(document, route) : readTitleData(document, route);
+    return { ok: Boolean(meta.tmdb || meta.imdb || meta.episodeImdb), detail: 'external links found but no TMDb or IMDb ID read' };
+  },
   mount(route) {
     if (document.getElementById(PANEL_ID)) return null;
 
