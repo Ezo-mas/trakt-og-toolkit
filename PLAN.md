@@ -13,13 +13,14 @@ behaviour, never its code. Finished features are listed at the end; their detail
 | 33 | Random pick from your watchlist | public API or og's session | done |
 | 34 | Export a list or watchlist to CSV | public API or og's session | done |
 | 35 | Refactor: simpler code, more reuse | tests and drift as the safety net | done |
-| 36 | Shorter README with a screenshot of every feature | a signed-in og browser | after 35 |
+| 36 | Shorter README with a screenshot of every feature | a signed-in og browser | in progress |
 | 37 | Menu toggles show whether each feature is on | `GM_unregisterMenuCommand` | done |
-| 38 | Use og sign-in for all Trakt API features | 35 and a signed-in og test session | implemented, live check pending |
+| 38 | Use og sign-in for all Trakt API features | 35 and a signed-in og test session | done |
 
 After that, maintenance: the daily drift check on a local systemd timer (Cloudflare blocks GitHub runners, so the
-workflow is manual only), `npm run drift -- --signed-in <dir>` now and then, and fixes when og changes. v0.4.0 released everything shipped before this list. Userscript managers only offer an update when `@version`
-changes, so bump it whenever main should reach users. Re-check og before starting each feature: on 2026-11-10
+workflow is manual only), `npm run drift -- --signed-in <dir>` now and then, and fixes when og changes. v0.4.0
+released everything shipped before this list. Userscript managers only offer an update when `@version` changes, so
+bump it whenever main should reach users. Re-check og before starting each feature: on 2026-11-10
 og's watchlist page had no random pick and its source had no list export.
 
 ## 32. Auto-update URLs

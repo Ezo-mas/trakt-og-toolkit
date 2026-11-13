@@ -2,6 +2,18 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-13: README with screenshots (item 36)
+
+- The README keeps install and one short section per feature with a screenshot. Custom-link presets and templates,
+  sign-in and API detail, and development moved to `docs/`. Screenshots are crops from a signed-in 1920 px Zen window,
+  cut below og's top bar so no browser chrome or avatar shows. Photo-heavy crops are WebP.
+- The list preview and month card shots were retaken after their fixes below. The rating corners sit at each
+  poster's right edge, so on a fan they show for the full-width first poster and for others on hover. Classic put
+  them on the sliver; this matches where the poster's own corner is.
+- Cloudflare now answers every non-browser request to og.trakt.tv with its "Just a moment…" challenge, from a home
+  connection too. The local drift timer's 2026-11-12 run saved only challenge pages and exited as "unreachable", so
+  `npm run drift` currently checks nothing.
+
 ## 2026-11-13: list preview corners and month card fanart
 
 - og's list fans now load posters from short URLs (`media.trakt.tv/shows/137178/thumb/poster.webp`) instead of the
