@@ -11,7 +11,7 @@ const row = (id, title, src) => `<span class="slot" aria-describedby="${id}">
   <span id="${id}" class="tooltip"><span class="text">${title}</span></span>`;
 const HTML = `<main><article class="list-row"><div class="fan-frame">
   <a class="fan" href="/users/test/watchlist" tabindex="-1" aria-hidden="true">
-    ${row('tip-1', 'Three Pines', 'https://media.trakt.tv/images/shows/000/199/343/posters/thumb/a.jpg.webp')}
+    ${row('tip-1', 'Three Pines', 'https://media.trakt.tv/shows/199343/thumb/poster.webp')}
     ${row('tip-2', 'Spider-Man: Beyond the Spider-Verse', 'https://media.trakt.tv/images/movies/000/729/942/posters/thumb/b.jpg.webp')}
   </a></div></article></main>`;
 

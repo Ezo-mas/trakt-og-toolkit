@@ -11,6 +11,22 @@ test('reads show and movie ids from Trakt poster paths', () => {
   assert.equal(readPosterRoute('https://media.trakt.tv/images/movies/000/000/007/posters/full/x.jpg').href, '/movies/7');
 });
 
+test('reads og\'s short poster URLs', () => {
+  // Live og list fans, 2026-11-13.
+  assert.deepEqual(readPosterRoute('https://media.trakt.tv/shows/137178/thumb/poster.webp'),
+    { kind: 'show', id: 137178, href: '/shows/137178' });
+  assert.deepEqual(readPosterRoute('//media.trakt.tv/movies/7/medium/poster.webp'),
+    { kind: 'movie', id: 7, href: '/movies/7' });
+  assert.equal(readPosterRoute('https://media.trakt.tv/movies/729942/full/poster.jpg?v=2').href, '/movies/729942');
+  for (const src of ['https://media.trakt.tv/shows/137178/thumb/fanart.webp',
+    'https://media.trakt.tv/episodes/137178/thumb/poster.webp',
+    'https://media.trakt.tv/shows/0/thumb/poster.webp',
+    'https://media.trakt.tv/shows/137178/huge/poster.webp',
+    'https://media.trakt.tv/shows/137178/thumb/poster.webp/../x']) {
+    assert.equal(readPosterRoute(src), null, src);
+  }
+});
+
 test('rejects non-title images and malformed ids', () => {
   for (const src of [null, 42, '', 'https://example.com/images/shows/000/199/343/posters/x.jpg',
     'https://media.trakt.tv/images/episodes/000/199/343/posters/x.jpg',

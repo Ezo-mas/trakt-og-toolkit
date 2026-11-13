@@ -1,10 +1,13 @@
 export const CSS = `
 .ogt-review { position:relative; isolation:isolate; color:white; background:#181012; font-family:var(--font-body, "Helvetica Neue", Helvetica, Arial, sans-serif); overflow:hidden; }
 .ogt-review[hidden] { display:none; }
-.ogt-review__art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:-2; }
+/* Like classic, the fanart spans the content column rather than og's full-bleed band, so a wide window doesn't crop
+   it to a thin strip. Its sides fade into the band, and the crop keeps the top, where faces usually are. */
+.ogt-review__art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 20%; z-index:-2;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); }
 .ogt-review::before { content:''; position:absolute; inset:0; background:linear-gradient(90deg,rgba(10,8,10,.92),rgba(10,8,10,.45)); z-index:-1; }
 /* Match og's Container so review content lines up with the month ribbon and Up Next. */
-.ogt-review__inner { margin-inline:auto; padding-block:32px; padding-inline:calc(var(--gutter,20px) / 2); box-sizing:border-box; }
+.ogt-review__inner { position:relative; margin-inline:auto; padding-block:32px; padding-inline:calc(var(--gutter,20px) / 2); box-sizing:border-box; }
 @media(min-width:768px) { .ogt-review__inner { inline-size:var(--container-sm,740px); } }
 @media(min-width:992px) { .ogt-review__inner { inline-size:var(--container-md,960px); } }
 @media(min-width:1200px) { .ogt-review__inner { inline-size:var(--container-lg,1160px); } }
