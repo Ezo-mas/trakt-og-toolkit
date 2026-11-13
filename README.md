@@ -1,7 +1,7 @@
 # Trakt OG Toolkit
 
-An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that brings back useful bits of classic Trakt that
-og doesn't have yet. It uses og's session to call the documented Trakt API. Not affiliated with or endorsed by Trakt.
+An **unofficial** userscript for [og.trakt.tv](https://og.trakt.tv) that brings useful bits of classic Trakt and extras
+that og doesn't have. It uses og's session to call the documented Trakt API. Not affiliated with or endorsed by Trakt.
 
 ## Install
 
