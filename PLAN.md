@@ -13,12 +13,13 @@ behaviour, never its code. Finished features are listed at the end; their detail
 | 33 | Random pick from your watchlist | public API or og's session | done |
 | 34 | Export a list or watchlist to CSV | public API or og's session | done |
 | 35 | Refactor: simpler code, more reuse | tests and drift as the safety net | done |
-| 36 | Shorter README with a screenshot of every feature | a signed-in og browser | in progress |
+| 36 | Shorter README with a screenshot of every feature | a signed-in og browser | done |
 | 37 | Menu toggles show whether each feature is on | `GM_unregisterMenuCommand` | done |
 | 38 | Use og sign-in for all Trakt API features | 35 and a signed-in og test session | done |
+| 39 | Drift checks on the pages you browse | nothing; replaces the fetched drift check | planned |
 
-After that, maintenance: the daily drift check on a local systemd timer (Cloudflare blocks GitHub runners, so the
-workflow is manual only), `npm run drift -- --signed-in <dir>` now and then, and fixes when og changes. v0.4.0
+After that, maintenance: drift reports from the pages you browse (39), `npm run drift -- --browser` now and then,
+and fixes when og changes. v0.4.0
 released everything shipped before this list. Userscript managers only offer an update when `@version` changes, so
 bump it whenever main should reach users. Re-check og before starting each feature: on 2026-11-10
 og's watchlist page had no random pick and its source had no list export.
@@ -79,6 +80,58 @@ use the account signed into og.
 Verify the remaining features and representative account reads and writes on a signed-in og account with an
 empty toolkit configuration. Then sign out and check that page-data fallbacks work and API-backed actions give
 sign-in guidance where appropriate. Cover session expiry and account changes with regression checks.
+
+## 39. Drift checks on the pages you browse
+
+Cloudflare answers every non-browser request to og.trakt.tv with a challenge, so `npm run drift` and the daily timer
+no longer see og. Move the checks into the userscript: after og renders a page you visit, check it against the same
+list the drift script uses and report what is missing. It makes no requests, so it works wherever the toolkit works,
+and it sees the rendered page, not the server HTML.
+
+**What it checks**
+
+1. **Selectors.** Move `SELECTORS` and `checkSelectors` from `scripts/og-drift-checks.mjs` to
+   `src/core/drift-checks.js` and import them from both places, so there is one list. Map each check's page names to
+   `parseRoute()` names (`title` + kind, `season`, `episode`, `person`, `chart`, `watchlist`, `list`,
+   `official-list`, `progress`, `dashboard`) and test the map. Mark checks that only hold signed in (title actions,
+   list controls, `progress`, `dashboard`) and skip those while signed out, and skip a disabled feature's checks.
+2. **Features that never mount.** The host already knows when a feature matches the route but `mount()` keeps
+   returning null. Record it when that is still true 10 seconds after the page settles. Audit each `return null` in
+   `src/features/*/index.js` first: some are deliberate (summary ratings that don't fit, a dismissed month card, a
+   picker with no list). A feature marks those with an optional `expectMount(route)` returning false, so only real
+   misses count.
+3. **Data that no longer parses.** An optional `health()` on a feature returns `{ ok, detail }` for checks a selector
+   can't express. Start with list previews (posters found but none recognised, the 2026-11-13 bug) and custom links
+   (og's external-link strip found but no TMDb or IMDb id read). Add others when a bug shows the need.
+4. **og's session.** When og shows its signed-in header (`header.top-nav .profile`) but `readOgSession()` finds no
+   entry, report it: og probably renamed its storage key or changed client ID. The drift script's other session and
+   native-module checks read og's JavaScript and stay script-only.
+
+**When and how it reports**
+
+- Run once per route after the hydration gate opens and the page has been quiet for 3 seconds, and again 10 seconds
+  later. Only a miss seen both times counts, so lazy sections and slow API data don't cause false alarms.
+- On a miss, `console.warn` one line per problem (`[OGT] og drift on season pages: season chart: .titles h3`) for
+  everyone, so bug reports include it. With debug logging on, also show a toast. Report the same problem once per
+  page load.
+- Keep the latest result per page type in GM storage: page type, toolkit version, time, and the failing check names.
+  No URLs, usernames or page content. **Diagnostics** adds "drift: N problems (season, list)" and prints the full
+  table to the console. A page type that passes clears its entry.
+
+**Done means**
+
+- Unit tests for the route map, signed-in and disabled-feature filtering, the two-pass rule and the stored result.
+- Integration tests that boot the built bundle on the existing fixtures: no reports on today's markup, one report when
+  a fixture loses a selector, a never-mounted report with a broken anchor, and the list preview health report on a
+  poster URL it can't read. They use `waitFor` and fake timers, not real 10-second waits.
+- `npm run drift` still works from the shared list, including `--browser` and `--signed-in`.
+- A day of normal browsing in Zen and Chromium with no false reports, and a forced miss (a selector broken in the dev
+  build) reported on the right page.
+- `docs/development.md` explains how to read the reports. NOTES gets the dated entry. The systemd timer and the
+  scheduled drift workflow are retired or repointed in the same change.
+
+**Not in this item:** visiting pages automatically (the `--browser` drift mode covers that), watching og's source on
+GitHub, filing issues, or any request to og beyond what the page already loaded.
 
 ## Rules for every feature
 
