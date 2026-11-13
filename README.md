@@ -75,7 +75,10 @@ Collaborations and liked lists need you *signed in*.
 
 ### List previews
 
-Each poster in a list card's preview opens its title. *Signed in*, posters show your rating.
+Each poster in a list card's preview opens its title. *Signed in*, posters show your rating in their corner, on the
+front poster and on the others as you hover over them.
+
+![List preview posters with your ratings](docs/screenshots/list-preview.webp)
 
 ### Pick something and Export CSV
 

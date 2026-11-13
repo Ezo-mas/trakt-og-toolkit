@@ -7,11 +7,21 @@ Working notes and known issues. Newest first.
 - The README keeps install and one short section per feature with a screenshot. Custom-link presets and templates,
   sign-in and API detail, and development moved to `docs/`. Screenshots are crops from a signed-in 1920 px Zen window,
   cut below og's top bar so no browser chrome or avatar shows. Photo-heavy crops are WebP.
-- List previews have no screenshot yet: the rating corners stopped showing on live og, which is still being looked
-  into.
+- The list preview and month card shots were retaken after their fixes below. The rating corners sit at each
+  poster's right edge, so on a fan they show for the full-width first poster and for others on hover. Classic put
+  them on the sliver; this matches where the poster's own corner is.
 - Cloudflare now answers every non-browser request to og.trakt.tv with its "Just a moment…" challenge, from a home
   connection too. The local drift timer's 2026-11-12 run saved only challenge pages and exited as "unreachable", so
   `npm run drift` currently checks nothing.
+
+## 2026-11-13: list preview corners and month card fanart
+
+- og's list fans now load posters from short URLs (`media.trakt.tv/shows/137178/thumb/poster.webp`) instead of the
+  API's padded `images/shows/000/137/178/posters/…` paths, so list previews matched no slot: no title links and no
+  rating corners. `readPosterRoute` reads both forms. Live check from the console on 2026-11-13: 25 slots, 0 matched.
+- The month card's fanart covered og's full-bleed band, so on a 1920 px window it showed a thin middle strip of the
+  image. It now spans the content column like classic's card, fades at its sides and keeps the top of the image:
+  about half its height shows instead of a third (checked on a labelled test image at 1900 px).
 
 ## 2026-11-12: og sign-in for all Trakt API features (feature 38)
 

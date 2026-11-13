@@ -6309,10 +6309,13 @@ ${generation2}`,
   var CSS7 = `
 .ogt-review { position:relative; isolation:isolate; color:white; background:#181012; font-family:var(--font-body, "Helvetica Neue", Helvetica, Arial, sans-serif); overflow:hidden; }
 .ogt-review[hidden] { display:none; }
-.ogt-review__art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:-2; }
+/* Like classic, the fanart spans the content column rather than og's full-bleed band, so a wide window doesn't crop
+   it to a thin strip. Its sides fade into the band, and the crop keeps the top, where faces usually are. */
+.ogt-review__art { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 20%; z-index:-2;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); }
 .ogt-review::before { content:''; position:absolute; inset:0; background:linear-gradient(90deg,rgba(10,8,10,.92),rgba(10,8,10,.45)); z-index:-1; }
 /* Match og's Container so review content lines up with the month ribbon and Up Next. */
-.ogt-review__inner { margin-inline:auto; padding-block:32px; padding-inline:calc(var(--gutter,20px) / 2); box-sizing:border-box; }
+.ogt-review__inner { position:relative; margin-inline:auto; padding-block:32px; padding-inline:calc(var(--gutter,20px) / 2); box-sizing:border-box; }
 @media(min-width:768px) { .ogt-review__inner { inline-size:var(--container-sm,740px); } }
 @media(min-width:992px) { .ogt-review__inner { inline-size:var(--container-md,960px); } }
 @media(min-width:1200px) { .ogt-review__inner { inline-size:var(--container-lg,1160px); } }
@@ -7508,11 +7511,14 @@ ${generation2}`,
 
   // src/features/list-preview/data.js
   var POSTER_PATH = /^(?:https?:)?\/\/media\.trakt\.tv\/images\/(shows|movies)\/(\d{3})\/(\d{3})\/(\d{3})\/posters\//i;
+  var SHORT_POSTER_PATH = /^(?:https?:)?\/\/media\.trakt\.tv\/(shows|movies)\/(\d{1,12})\/(?:thumb|medium|full)\/poster\.[a-z]+(?:[?#]|$)/i;
   function readPosterRoute(src) {
     if (typeof src !== "string") return null;
-    const match = src.match(POSTER_PATH);
+    const padded = src.match(POSTER_PATH);
+    const short = padded ? null : src.match(SHORT_POSTER_PATH);
+    const match = padded ?? short;
     if (!match) return null;
-    const id = Number(`${match[2]}${match[3]}${match[4]}`);
+    const id = Number(padded ? `${match[2]}${match[3]}${match[4]}` : match[2]);
     if (!Number.isSafeInteger(id) || id <= 0) return null;
     const kind = match[1].toLowerCase() === "shows" ? "show" : "movie";
     return { kind, id, href: `/${kind === "show" ? "shows" : "movies"}/${id}` };
