@@ -48,7 +48,7 @@ export function createFeatureHost(features, { isEnabled = () => true } = {}) {
         const sameRoute = entry.routeKey === route.key;
         if (sameRoute && entry.node && !isDetached(entry.node)) continue;
         // The app re-rendered and dropped our node, or the route changed.
-        if (Date.now() - entry.attemptAt < RETRY_AFTER_MS) continue;
+        if (sameRoute && Date.now() - entry.attemptAt < RETRY_AFTER_MS) continue;
         unmount(feature.id);
         entry = null;
       }
@@ -102,6 +102,21 @@ export function createFeatureHost(features, { isEnabled = () => true } = {}) {
   /** An account change invalidates every feature that loaded the previous account's state. */
   sync.reset = () => {
     for (const feature of features) if (feature.authScoped) unmount(feature.id, 'authchange');
+  };
+
+  sync.problems = (route) => {
+    const problems = [];
+    for (const feature of features) {
+      if (!isEnabled(feature.id) || !feature.match(route)) continue;
+      const entry = mounted.get(feature.id);
+      if (!entry?.node || entry.routeKey !== route.key || isDetached(entry.node)) {
+        if (feature.expectMount?.(route) !== false) problems.push(`${feature.id}: did not mount`);
+      } else if (feature.health) {
+        const { ok, detail } = feature.health(route);
+        if (!ok) problems.push(`${feature.id}: ${detail}`);
+      }
+    }
+    return problems;
   };
 
   return sync;

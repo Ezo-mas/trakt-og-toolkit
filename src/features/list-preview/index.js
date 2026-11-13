@@ -25,6 +25,10 @@ export const listPreview = {
     return ['lists', 'lists-collaborations', 'liked-lists', 'smart-lists'].includes(route.name) ||
       /^\/users\/[^/]+\/(?:lists|smart-lists)(?:\/|$)/.test(route.path) || /^\/lists(?:\/|$)/.test(route.path);
   },
+  health() {
+    const slots = [...document.querySelectorAll(SLOT)].filter((slot) => slot.querySelector('img.poster[src]'));
+    return { ok: !slots.length || slots.some(readListPoster), detail: 'posters found but none recognised' };
+  },
   mount() {
     if (!document.body || document.getElementById(ID)) return null;
     const marker = el('span', { id: ID, hidden: true });

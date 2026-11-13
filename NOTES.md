@@ -2,6 +2,27 @@
 
 Working notes and known issues. Newest first.
 
+## 2026-11-13: in-page og drift checks (item 39)
+
+- After hydration, check the current route following three seconds of DOM quiet and confirm misses ten seconds later.
+  The host checks connected mount handles, so hidden ratings charts and dismissed or empty month cards still count as
+  mounted. Custom links only expect a mount on supported title, season, episode and person pages with an ID.
+- The CLI and userscript share selector definitions. Checks for optional content specific to the CLI's curated pages
+  stay CLI-only. The userscript also checks poster parsing, external IDs and the og session entry.
+- Confirmed misses appear in the console and in a debug toast. Diagnostics keeps problem names by page type in GM
+  storage. Live drift requests, the scheduled workflow and the local systemd units are replaced by in-page reports.
+  A day of normal browsing in Zen and Chromium is pending.
+- A page that never stays quiet for three seconds (a carousel, a live count) is checked 20 seconds after arriving
+  anyway. 20 s, because the hydration gate already uses a 15 s timer.
+- og renders no `section.episodes` for a season without episodes (`EpisodeList.svelte`: `{#if rows.length > 0}`), but
+  its sidebar always says "N Episodes", and a show's sidebar links `#seasons` only when it has seasons. The season
+  chart and your-ratings use those to skip empty seasons and season-less shows. Without the sidebar link the page
+  is still checked.
+- Popular, trending and other `/lists/…` indexes parse as `other` routes; drift maps them to `lists` so list
+  previews' poster check runs there too.
+- The host no longer waits out its 400 ms retry delay when the route changes: the previous route's feature is
+  replaced at once, so a drift pass never sees a mount from the page before.
+
 ## 2026-11-13: README with screenshots (item 36)
 
 - The README keeps install and one short section per feature with a screenshot. Custom-link presets and templates,

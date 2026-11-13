@@ -80,6 +80,7 @@ export const STORAGE = {
   servers: 'watch.servers',
   features: 'features.disabled',
   debug: 'debug',
+  drift: 'drift.reports',
   selection: (kind, id) => `selection.${kind}.${id}`,
 };
 

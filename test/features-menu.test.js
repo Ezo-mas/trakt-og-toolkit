@@ -41,6 +41,29 @@ test('feature host never mounts a disabled feature and removes it when switched 
   window.close();
 });
 
+test('feature host replaces a mounted feature at once when the route changes', () => {
+  const window = new Window();
+  const mounts = [];
+  const feature = {
+    id: 'demo',
+    match: () => true,
+    mount(route) {
+      const node = window.document.createElement('p');
+      node.textContent = route.key;
+      window.document.body.append(node);
+      mounts.push(route.key);
+      return { node, destroy() { node.remove(); } };
+    },
+  };
+  const host = createFeatureHost([feature]);
+  host({ key: '/a' });
+  host({ key: '/b' });
+  assert.deepEqual(mounts, ['/a', '/b'], 'a new route does not wait out the retry delay');
+  assert.deepEqual([...window.document.querySelectorAll('p')].map((p) => p.textContent), ['/b']);
+  assert.deepEqual(host.problems({ key: '/b' }), []);
+  window.close();
+});
+
 function boot(t, { storage = {}, unregister = false, violentmonkey = false } = {}) {
   const window = new Window({ url: 'https://og.trakt.tv/shows/breaking-bad' });
   t.after(() => window.close());

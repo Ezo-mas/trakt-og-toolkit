@@ -16,10 +16,9 @@ behaviour, never its code. Finished features are listed at the end; their detail
 | 36 | Shorter README with a screenshot of every feature | a signed-in og browser | done |
 | 37 | Menu toggles show whether each feature is on | `GM_unregisterMenuCommand` | done |
 | 38 | Use og sign-in for all Trakt API features | 35 and a signed-in og test session | done |
-| 39 | Drift checks on the pages you browse | nothing; replaces the fetched drift check | planned |
+| 39 | Drift checks on the pages you browse | a live browsing check | implemented, live check pending |
 
-After that, maintenance: drift reports from the pages you browse (39), `npm run drift -- --browser` now and then,
-and fixes when og changes. v0.4.0
+After that, maintenance: drift reports from the pages you browse (39) and fixes when og changes. v0.4.0
 released everything shipped before this list. Userscript managers only offer an update when `@version` changes, so
 bump it whenever main should reach users. Re-check og before starting each feature: on 2026-11-10
 og's watchlist page had no random pick and its source had no list export.
@@ -124,13 +123,13 @@ and it sees the rendered page, not the server HTML.
 - Integration tests that boot the built bundle on the existing fixtures: no reports on today's markup, one report when
   a fixture loses a selector, a never-mounted report with a broken anchor, and the list preview health report on a
   poster URL it can't read. They use `waitFor` and fake timers, not real 10-second waits.
-- `npm run drift` still works from the shared list, including `--browser` and `--signed-in`.
+- `npm run drift` still works from the shared list, when og permits direct requests, including `--signed-in`.
 - A day of normal browsing in Zen and Chromium with no false reports, and a forced miss (a selector broken in the dev
   build) reported on the right page.
 - `docs/development.md` explains how to read the reports. NOTES gets the dated entry. The systemd timer and the
   scheduled drift workflow are retired or repointed in the same change.
 
-**Not in this item:** visiting pages automatically (the `--browser` drift mode covers that), watching og's source on
+**Not in this item:** visiting pages automatically, watching og's source on
 GitHub, filing issues, or any request to og beyond what the page already loaded.
 
 ## Rules for every feature

@@ -6,7 +6,8 @@
  * let og show notices and refresh its own signed-in state.
  */
 import { VERSION } from './meta.js';
-import { injectStyles } from './ui/shell.js';
+import { collectDrift, createDriftMonitor, reportDrift } from './core/drift.js';
+import { injectStyles, toast } from './ui/shell.js';
 import { successNotificationCss } from './ui/success-notification-styles.js';
 import { DIALOG_CSS } from './ui/dialog.js';
 import { createRouter, parseRoute } from './core/router.js';
@@ -29,7 +30,7 @@ import { watchlistPick } from './features/watchlist-pick/index.js';
 import { csvExport } from './features/csv-export/index.js';
 import { rememberNativeResources } from './ui/native-modules.js';
 import { registerMenu } from './menu.js';
-import { applyDebugSetting, isFeatureEnabled } from './settings.js';
+import { applyDebugSetting, isDebug, isFeatureEnabled } from './settings.js';
 import { info, warn } from './core/log.js';
 import { cacheSize, clearCache } from './core/http.js';
 import { API } from './config.js';
@@ -62,6 +63,24 @@ function start() {
   let host = null;
   let canMount = false;
 
+  const monitor = createDriftMonitor({
+    currentKey: () => parseRoute().key,
+    collect: (page, current) => {
+      const hasSession = Boolean(readOgSession());
+      const headerSignedIn = Boolean(document.querySelector('header.top-nav .profile'));
+      return collectDrift(document, page, host, current, {
+        headerSignedIn, hasSession, isEnabled: isFeatureEnabled,
+      });
+    },
+    report: (page, problems, fresh) => {
+      reportDrift(page, problems, fresh);
+      if (fresh.length && isDebug()) {
+        const more = fresh.length > 1 ? ` (+${fresh.length - 1} more, see Diagnostics)` : '';
+        toast(`og drift on ${page} pages: ${fresh[0]}${more}`, { duration: 10000 });
+      }
+    },
+  });
+
   const sync = () => {
     if (!canMount || !host) return;
     readOgSession();
@@ -78,6 +97,7 @@ function start() {
   document.addEventListener(OG_SESSION_CHANGE_EVENT, authChanged);
   document.addEventListener('ogt:featurechange', sync);
 
+  let sveltePage = false;
   const openGate = () => {
     if (canMount) return;
     canMount = true;
@@ -99,7 +119,10 @@ function start() {
         document.dispatchEvent(new CustomEvent('ogt:querychange', { detail: { route, search } }));
       },
       // Every settled DOM change: re-mounts anything the app re-rendered away.
-      onSettle: sync,
+      onSettle() {
+        sync();
+        if (sveltePage) monitor(route);
+      },
     });
     sync();
   };
@@ -110,7 +133,8 @@ function start() {
   // the current route's modules to settle instead of guessing a delay.
   // Other pages mount immediately.
   const scheduleMount = () => {
-    if (!isSvelteKit()) {
+    sveltePage = isSvelteKit();
+    if (!sveltePage) {
       openGate();
       return;
     }
