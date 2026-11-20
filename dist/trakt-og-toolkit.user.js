@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Trakt OG Toolkit
 // @namespace    https://github.com/trakt-og-toolkit
-// @version      0.4.0
+// @version      0.4.1
 // @description  Brings back the useful classic-Trakt extras on og.trakt.tv.
 // @author       Ezo-mas
 // @license      MIT
@@ -31,7 +31,7 @@
 (() => {
   // src/meta.js
   var NAME = "Trakt OG Toolkit";
-  var VERSION = "0.4.0";
+  var VERSION = "0.4.1";
 
   // src/core/drift-checks.js
   function seasonHasEpisodes(document2) {
@@ -1891,9 +1891,13 @@
     const match = String(value || "").trim().match(/^\{([a-z][a-z0-9_-]*)\}\//);
     return Boolean(match && SERVER_KEYS.includes(match[1]));
   }
+  var CUSTOM_LINK_URL_ERROR = "Use an HTTP(S) URL, a server placeholder, or a Stremio detail or search link.";
+  function isStremioLink(url) {
+    return /^stremio:\/\/\/(?:detail\/|search\?)[^\s\\]+$/i.test(url);
+  }
   function isCustomLinkUrl(value) {
     const url = String(value || "").trim();
-    return /^https?:\/\//i.test(url) || isServerTemplateUrl(url);
+    return /^https?:\/\//i.test(url) || isServerTemplateUrl(url) || isStremioLink(url);
   }
   function normalizeServerUrl(value) {
     const raw = String(value || "").trim();
@@ -2462,6 +2466,19 @@
       ]
     },
     {
+      label: "Stremio Desktop",
+      url: "stremio:///search?search={title}",
+      icon: "stremio",
+      surface: "watch",
+      kinds: ["movie", "show"],
+      deep: [
+        { url: "stremio:///detail/series/{imdb}/{imdb}:{season}:{episode}", kinds: ["show"] },
+        { url: "stremio:///detail/series/{imdb}?season={season}", kinds: ["show"] },
+        { url: "stremio:///detail/movie/{imdb}/{imdb}", kinds: ["movie"] },
+        { url: "stremio:///detail/series/{imdb}", kinds: ["show"] }
+      ]
+    },
+    {
       label: "Debrid Media Manager",
       url: "https://debridmediamanager.com/search?query={title}",
       icon: "dmm",
@@ -2685,6 +2702,7 @@
     "my anime list": "mal",
     metacritic: "metacritic",
     stremio: "stremio",
+    "stremio desktop": "stremio",
     "debrid media manager": "dmm",
     dmm: "dmm",
     mdblist: "mdblist",
@@ -3051,7 +3069,7 @@
         continue;
       }
       if (!isCustomLinkUrl(link.url)) {
-        errors.push({ index, field: "url", message: "URL must start with http://, https://, or a server placeholder." });
+        errors.push({ index, field: "url", message: CUSTOM_LINK_URL_ERROR });
       }
     }
     return errors;
@@ -3517,7 +3535,7 @@ ${generation2}`,
       {
         class: `ogt-service-link ogt-service-link--${variant}`,
         href: entry.href,
-        target: "_blank",
+        target: isStremioLink(entry.href) ? "_self" : "_blank",
         rel: "noopener noreferrer",
         "aria-label": label,
         "data-ogt-tooltip": label,
@@ -3538,7 +3556,7 @@ ${generation2}`,
       {
         class: "ogt-watch-now-link",
         href: entry.href,
-        target: "_blank",
+        target: isStremioLink(entry.href) ? "_self" : "_blank",
         rel: "noopener noreferrer",
         "aria-label": label,
         "data-ogt-surface": entry.surface,
@@ -9582,7 +9600,7 @@ ${titleBarButtonCss("ogt-csv-export__button")}
     const label = answer.slice(0, separator).trim();
     const url = answer.slice(separator + 1).trim();
     if (!label || !url) return { error: "Both a label and a URL are required." };
-    if (!isCustomLinkUrl(url)) return { error: "The URL must start with http://, https://, or a server placeholder." };
+    if (!isCustomLinkUrl(url)) return { error: CUSTOM_LINK_URL_ERROR };
     return { label, url };
   }
   async function promptAddCustomLink() {

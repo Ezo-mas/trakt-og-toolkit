@@ -10,10 +10,16 @@ function isServerTemplateUrl(value) {
   return Boolean(match && SERVER_KEYS.includes(match[1]));
 }
 
-/** Custom links may be ordinary HTTP(S) URLs or server-template URLs. */
+export const CUSTOM_LINK_URL_ERROR = 'Use an HTTP(S) URL, a server placeholder, or a Stremio detail or search link.';
+
+/** Match Stremio navigation URLs with an empty host. */
+export function isStremioLink(url) {
+  return /^stremio:\/\/\/(?:detail\/|search\?)[^\s\\]+$/i.test(url);
+}
+
 export function isCustomLinkUrl(value) {
   const url = String(value || '').trim();
-  return /^https?:\/\//i.test(url) || isServerTemplateUrl(url);
+  return /^https?:\/\//i.test(url) || isServerTemplateUrl(url) || isStremioLink(url);
 }
 
 /**

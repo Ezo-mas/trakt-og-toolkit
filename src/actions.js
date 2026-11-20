@@ -4,6 +4,7 @@ import {
   removeCustomLink,
   getCustomLinks,
   isCustomLinkUrl,
+  CUSTOM_LINK_URL_ERROR,
 } from './settings.js';
 import { toast } from './ui/shell.js';
 import { promptDialog } from './ui/dialog.js';
@@ -19,7 +20,7 @@ function parseCustomLink(answer) {
   const label = answer.slice(0, separator).trim();
   const url = answer.slice(separator + 1).trim();
   if (!label || !url) return { error: 'Both a label and a URL are required.' };
-  if (!isCustomLinkUrl(url)) return { error: 'The URL must start with http://, https://, or a server placeholder.' };
+  if (!isCustomLinkUrl(url)) return { error: CUSTOM_LINK_URL_ERROR };
   return { label, url };
 }
 

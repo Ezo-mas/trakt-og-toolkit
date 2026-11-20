@@ -419,15 +419,25 @@ test('preset checklist marks existing URLs and adds selected presets to storage'
   }
   assert.equal(Boolean(document.querySelector('.ogt-presets input[aria-label="Letterboxd"]')), false, 'Letterboxd is movie-only');
 
-  const stremio = document.querySelector('.ogt-presets input[aria-label="Stremio"]');
-  stremio.checked = true;
-  stremio.dispatchEvent(new window.Event('change', { bubbles: true }));
+  for (const label of ['Stremio', 'Stremio Desktop']) {
+    const option = document.querySelector(`.ogt-presets input[aria-label="${label}"]`);
+    option.checked = true;
+    option.dispatchEvent(new window.Event('change', { bubbles: true }));
+  }
   document.querySelector('.ogt-presets button').click();
 
   assert.ok(chip(document, 'Stremio'), 'the new link is rendered immediately');
+  const desktop = chip(document, 'Stremio Desktop');
+  assert.ok(desktop);
+  assert.equal(desktop.getAttribute('href'), 'stremio:///detail/series/tt0903747/tt0903747:1:1');
+  assert.equal(desktop.getAttribute('target'), '_self');
+  const watchTile = document.querySelector('.ogt-watch-now-link[aria-label="Stremio Desktop"]');
+  assert.equal(watchTile.getAttribute('href'), desktop.getAttribute('href'));
+  assert.equal(watchTile.getAttribute('target'), '_self');
   assert.deepEqual(JSON.parse(JSON.stringify(store.get('watch.customLinks'))), [
     ...oldLinks,
     { label: 'Stremio', url: 'https://web.stremio.com/#/search?search={title}' },
+    { label: 'Stremio Desktop', url: 'stremio:///search?search={title}' },
   ]);
   assert.ok(document.activeElement === open, 'focus returns to the presets chip when closed');
 });

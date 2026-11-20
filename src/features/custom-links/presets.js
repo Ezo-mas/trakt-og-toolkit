@@ -116,6 +116,19 @@ export const PRESETS = [
     ],
   },
   {
+    label: 'Stremio Desktop',
+    url: 'stremio:///search?search={title}',
+    icon: 'stremio',
+    surface: 'watch',
+    kinds: ['movie', 'show'],
+    deep: [
+      { url: 'stremio:///detail/series/{imdb}/{imdb}:{season}:{episode}', kinds: ['show'] },
+      { url: 'stremio:///detail/series/{imdb}?season={season}', kinds: ['show'] },
+      { url: 'stremio:///detail/movie/{imdb}/{imdb}', kinds: ['movie'] },
+      { url: 'stremio:///detail/series/{imdb}', kinds: ['show'] },
+    ],
+  },
+  {
     label: 'Debrid Media Manager',
     url: 'https://debridmediamanager.com/search?query={title}',
     icon: 'dmm',

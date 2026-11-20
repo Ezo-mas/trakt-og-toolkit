@@ -1,7 +1,7 @@
 /** Pure-ish readers for a title page. They take a Document so they can be tested. */
 import { cleanTitle, fillTemplate, missingPlaceholders, parseYear } from '../../core/text.js';
 import { headingTitle, text } from '../../core/dom.js';
-import { isCustomLinkUrl, SERVER_KEYS } from '../../settings.js';
+import { CUSTOM_LINK_URL_ERROR, isCustomLinkUrl, SERVER_KEYS } from '../../settings.js';
 import { validateDirectUrl } from './resolve.js';
 import { findPreset, presetGenresAllowed, resolvePresetUrl } from './presets.js';
 import { iconKeyForLabel, surfaceForLabel } from './icons.js';
@@ -394,7 +394,7 @@ export function validateCustomLinks(links) {
     }
 
     if (!isCustomLinkUrl(link.url)) {
-      errors.push({ index, field: 'url', message: 'URL must start with http://, https://, or a server placeholder.' });
+      errors.push({ index, field: 'url', message: CUSTOM_LINK_URL_ERROR });
     }
   }
   return errors;
