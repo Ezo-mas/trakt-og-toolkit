@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Trakt OG Toolkit
 // @namespace    https://github.com/trakt-og-toolkit
-// @version      0.4.0
+// @version      0.4.1
 // @description  Brings back the useful classic-Trakt extras on og.trakt.tv.
 // @author       Ezo-mas
 // @license      MIT

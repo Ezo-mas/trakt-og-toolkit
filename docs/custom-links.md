@@ -18,6 +18,8 @@ Back to the [README](../README.md).
 - Person pages offer **YouTube interviews** and the person variables below, using only the profile ids og shows.
 - Self-hosted services (Jellyfin, Emby, Radarr, Sonarr, Seerr) use the base URLs you set under **Servers**.
 - Watch and library services also appear under **Your services** in og's Watch Now dialog.
+- Choose **Stremio Desktop** under **Add presets…** to open your installed app. If the browser prompts you, choose
+  **Open Stremio**. The **Stremio** preset opens Stremio Web.
 - Hidden presets stay saved. Edited and custom templates are never restricted.
 - Logos are bundled [Simple Icons](https://simpleicons.org) (CC0) or the marks og already draws; no favicons are
   fetched.
@@ -50,5 +52,6 @@ My service | https://example.com/watch/{tmdb}?s={season}&e={episode}
 - A link is hidden on pages where one of its placeholders has no value, so one template works for shows and movies.
   Person and title variables are separate for the same reason.
 - On show pages, Season and Episode pickers appear when a link uses `{season}` or `{episode}`.
-- URLs must start with `http://`, `https://` or a server placeholder.
+- Templates support `http://`, `https://`, server placeholders and Stremio detail or search links such as
+  `stremio:///search?search={title}`.
 - Links are stored per browser and are not synced.

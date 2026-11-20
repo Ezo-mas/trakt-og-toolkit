@@ -1,7 +1,7 @@
 import { el } from '../../core/dom.js';
 import { serviceColor, serviceIcon, hasServiceIcon } from './icons.js';
 import { debugError } from '../../core/log.js';
-import { getCustomLinks } from '../../settings.js';
+import { getCustomLinks, isStremioLink } from '../../settings.js';
 import { resolveCustomLinks, watchNowLinks } from './data.js';
 import { presetResolver } from './presets.js';
 import { createLookups } from './lookups.js';
@@ -18,7 +18,7 @@ function compactLink(entry, attachResolver) {
     {
       class: `ogt-service-link ogt-service-link--${variant}`,
       href: entry.href,
-      target: '_blank',
+      target: isStremioLink(entry.href) ? '_self' : '_blank',
       rel: 'noopener noreferrer',
       'aria-label': label,
       'data-ogt-tooltip': label,
@@ -42,7 +42,7 @@ function watchLink(entry, attachResolver) {
     {
       class: 'ogt-watch-now-link',
       href: entry.href,
-      target: '_blank',
+      target: isStremioLink(entry.href) ? '_self' : '_blank',
       rel: 'noopener noreferrer',
       'aria-label': label,
       'data-ogt-surface': entry.surface,

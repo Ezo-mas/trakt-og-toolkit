@@ -18,6 +18,16 @@ const filled = (label, vars, kind) => {
 };
 const stremio = preset('Stremio');
 
+test('Stremio Desktop links to movies, shows, seasons and episodes and falls back to app search', () => {
+  const label = 'Stremio Desktop';
+  const imdb = 'tt0903747';
+  assert.equal(filled(label, { imdb }, 'movie'), 'stremio:///detail/movie/tt0903747/tt0903747');
+  assert.equal(filled(label, { imdb }, 'show'), 'stremio:///detail/series/tt0903747');
+  assert.equal(filled(label, { imdb, season: 2 }, 'show'), 'stremio:///detail/series/tt0903747?season=2');
+  assert.equal(filled(label, { imdb, season: 2, episode: 3 }, 'show'), 'stremio:///detail/series/tt0903747/tt0903747:2:3');
+  assert.equal(filled(label, { title: 'Breaking Bad' }, 'show'), 'stremio:///search?search=Breaking%20Bad');
+});
+
 test('Stremio opens the exact movie, show, season and episode pages', () => {
   assert.equal(
     filled('Stremio', { title: 'The Dark', imdb: 'tt0465676' }, 'movie'),

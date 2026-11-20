@@ -266,25 +266,26 @@ test('template vars include IMDb numbers without tt or leading zeroes', () => {
   assert.equal(imdbNumber(null), null);
 });
 
-test('custom link validation accepts HTTP and configured server-placeholder URLs', () => {
+test('custom link validation accepts HTTP, server placeholders and Stremio navigation links', () => {
   assert.deepEqual(
     validateCustomLinks([
       { label: '  ', url: '' },
       { label: 'Bad URL', url: 'javascript:alert(1)' },
       { label: 'Good', url: 'https://example.test/{title}' },
       { label: 'Jellyfin', url: '{jellyfin}/web/#/search?query={title}' },
+      { label: 'Stremio Desktop', url: 'stremio:///search?search={title}' },
     ]),
     [
       { index: 0, field: 'label', message: 'A label is required.' },
       { index: 0, field: 'url', message: 'A URL is required.' },
-      { index: 1, field: 'url', message: 'URL must start with http://, https://, or a server placeholder.' },
+      { index: 1, field: 'url', message: 'Use an HTTP(S) URL, a server placeholder, or a Stremio detail or search link.' },
     ],
   );
 });
 
-test('custom link validation rejects arbitrary placeholder templates', () => {
-  const message = 'URL must start with http://, https://, or a server placeholder.';
-  for (const url of ['{title}/evil', '{plex}/search', '{Jellyfin}/web']) {
+test('custom link validation rejects arbitrary placeholders and Stremio addon URLs', () => {
+  const message = 'Use an HTTP(S) URL, a server placeholder, or a Stremio detail or search link.';
+  for (const url of ['{title}/evil', '{plex}/search', '{Jellyfin}/web', 'stremio://example.test/manifest.json']) {
     assert.deepEqual(validateCustomLinks([{ label: 'Bad', url }]), [
       { index: 0, field: 'url', message },
     ]);

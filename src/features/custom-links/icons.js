@@ -50,6 +50,7 @@ const LABEL_ICONS = {
   'my anime list': 'mal',
   metacritic: 'metacritic',
   stremio: 'stremio',
+  'stremio desktop': 'stremio',
   'debrid media manager': 'dmm',
   dmm: 'dmm',
   mdblist: 'mdblist',
